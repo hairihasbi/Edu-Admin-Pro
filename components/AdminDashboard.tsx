@@ -1,13 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-// Recharts removed for performance
 import { 
   Users, GraduationCap, TrendingUp, ClipboardList, Layout, CalendarDays, 
   Activity, ShieldAlert, Clock, Server, ChevronRight, CheckCircle, Database, 
   WifiOff, AlertTriangle, RefreshCcw, Megaphone, DatabaseBackup, Settings, Globe
 } from './Icons';
-import { getDashboardStats, getPendingTeachers, getSystemLogs } from '../services/database';
+import { getDashboardStats, getPendingTeachers, getSystemLogs, addSystemLog } from '../services/database';
 import { checkConnection } from '../services/tursoService'; 
 import { User, DashboardStatsData, LogEntry } from '../types';
 
@@ -39,13 +38,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
     
     try {
       // 1. Parallel Fetch for Local/Hybrid Data
-      const [pendingData, logsData] = await Promise.all([
+      let [pendingData, logsData] = await Promise.all([
         getPendingTeachers(),
         getSystemLogs()
       ]);
 
       setPendingCount(pendingData.length);
       
+      // AUTO-LOGGING IF EMPTY: Ensure user sees "Activity" works immediately
+      // This solves the issue of "empty dashboard" for new users
+      if (logsData.length === 0) {
+          await addSystemLog('INFO', 'System', 'SYSTEM', 'Dashboard Init', 'Dashboard initialized. Monitoring active.');
+          // Re-fetch to show the new log immediately
+          logsData = await getSystemLogs();
+      }
+
       const sortedLogs = logsData
         .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
         .slice(0, 5);
@@ -77,7 +84,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
                   });
                   setDbStatus('Turso Cloud');
               } else {
-                  throw new Error(response.status === 404 ? "API Missing (Dev)" : "API Error");
+                  // Fallback without throwing loud error
+                  const localStats = await getDashboardStats(user);
+                  setStats(localStats);
+                  if (response.status === 404) setDbStatus('Mode Lokal');
+                  else setDbStatus('Sync Error');
               }
           } catch (e: any) {
               console.warn("Server stats fetch failed (using local):", e.message);
@@ -235,7 +246,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
         )}
       </div>
 
-      {/* QUICK ACTIONS & DEMOGRAPHICS (Replaces Heavy Charts) */}
+      {/* QUICK ACTIONS & DEMOGRAPHICS */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* Quick Actions Panel */}
@@ -271,7 +282,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
            </div>
         </div>
 
-        {/* Lightweight Demographic Stats */}
+        {/* Demographic Stats */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
            <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
               <GraduationCap size={18} className="text-pink-600" /> Demografi Siswa
@@ -390,15 +401,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
                   <h3 className="font-bold text-gray-800 flex items-center gap-2">
                       <Activity size={18} className="text-blue-600" /> Aktivitas Terkini
                   </h3>
-                  <Link to="/system-logs" className="text-xs text-blue-600 font-medium hover:underline">
-                      Lihat Log Lengkap
-                  </Link>
+                  <div className="flex items-center gap-2">
+                      <button onClick={refreshRealtimeData} className="text-gray-400 hover:text-blue-600 p-1 rounded transition" title="Refresh Log">
+                          <RefreshCcw size={14} />
+                      </button>
+                      <Link to="/system-logs" className="text-xs text-blue-600 font-medium hover:underline">
+                          Lihat Lengkap
+                      </Link>
+                  </div>
               </div>
               <div className="p-4 flex-1 overflow-y-auto min-h-[250px]">
                   {recentLogs.length === 0 ? (
                       <div className="h-full flex flex-col items-center justify-center text-gray-400 text-sm">
                           <Activity size={32} className="mb-2 opacity-20" />
-                          <p>Belum ada aktivitas tercatat hari ini.</p>
+                          <p>Belum ada aktivitas tercatat.</p>
+                          <button onClick={refreshRealtimeData} className="mt-2 text-xs text-blue-500 underline">Refresh Manual</button>
                       </div>
                   ) : (
                       <div className="space-y-4">
@@ -420,8 +437,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
                                               {new Date(log.timestamp).toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'})}
                                           </span>
                                       </div>
-                                      <p className="text-xs text-gray-500 line-clamp-1 group-hover:line-clamp-none transition-all duration-200">
-                                          <span className="font-medium text-gray-700">@{log.actor}:</span> {log.details}
+                                      <p className="text-xs text-gray-500 truncate mt-0.5">
+                                          <span className="font-medium text-gray-700">{log.actor}</span>: {log.details}
                                       </p>
                                   </div>
                               </div>
@@ -430,7 +447,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
                   )}
               </div>
           </div>
-
       </div>
     </div>
   );
