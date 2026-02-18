@@ -21,7 +21,7 @@ const BackupRestore: React.FC<BackupRestoreProps> = ({ user }) => {
   const handleBackup = async () => {
     setIsLoading(true);
     try {
-      const semesterFilter = selectedSemester === 'Semua' ? undefined : selectedSemester;
+      const semesterFilter = (selectedSemester === 'Semua' || selectedSemester === 'FULL_YEAR') ? undefined : selectedSemester;
       const backupData = await createBackup(user, semesterFilter);
       
       if (backupData) {
@@ -32,7 +32,7 @@ const BackupRestore: React.FC<BackupRestoreProps> = ({ user }) => {
         const link = document.createElement('a');
         
         const dateStr = new Date().toISOString().split('T')[0];
-        const fileName = `EduAdmin_Backup_${user.role}_${dateStr}${semesterFilter ? '_' + semesterFilter : ''}.json`;
+        const fileName = `EduAdmin_Backup_${user.role}_${dateStr}${semesterFilter ? '_' + semesterFilter : '_FULL'}.json`;
         
         link.href = url;
         link.download = fileName;
@@ -90,9 +90,15 @@ const BackupRestore: React.FC<BackupRestoreProps> = ({ user }) => {
   const handleDeleteData = async (scope: 'SEMESTER' | 'ALL') => {
       if (user.role !== UserRole.ADMIN) return;
 
-      const confirmMessage = scope === 'ALL' 
-        ? "PERINGATAN KERAS: Anda akan melakukan FACTORY RESET. Semua data Guru, Siswa, Kelas, Nilai, dan Jurnal akan DIHAPUS PERMANEN. Hanya akun Admin Anda yang tersisa.\n\nApakah Anda benar-benar yakin?"
-        : `PERINGATAN: Anda akan menghapus data akademik (Nilai & Lingkup Materi) untuk Semester ${selectedSemester}.\n\nPastikan guru sudah melakukan backup. Lanjutkan?`;
+      let confirmMessage = "";
+      
+      if (scope === 'ALL') {
+          confirmMessage = "PERINGATAN KERAS: Anda akan melakukan FACTORY RESET. Semua data Guru, Siswa, Kelas, Nilai, dan Jurnal akan DIHAPUS PERMANEN. Hanya akun Admin Anda yang tersisa.\n\nApakah Anda benar-benar yakin?";
+      } else if (selectedSemester === 'FULL_YEAR') {
+          confirmMessage = "PERINGATAN: Anda memilih opsi '1 Tahun Penuh'.\n\nTindakan ini akan menghapus:\n1. Seluruh Data KELAS\n2. Seluruh Data SISWA\n3. Seluruh Data AKADEMIK (Nilai, Jurnal, Absensi)\n4. Seluruh Data BK\n\nData Akun Guru TETAP ADA. Gunakan ini saat pergantian tahun ajaran baru.\n\nLanjutkan?";
+      } else {
+          confirmMessage = `PERINGATAN: Anda akan menghapus data akademik (Nilai & Lingkup Materi) untuk Semester ${selectedSemester}.\n\nData Kelas dan Siswa TIDAK dihapus. Pastikan guru sudah melakukan backup. Lanjutkan?`;
+      }
 
       if (window.confirm(confirmMessage)) {
           // Double confirmation for FULL RESET
@@ -100,6 +106,12 @@ const BackupRestore: React.FC<BackupRestoreProps> = ({ user }) => {
               const confirmText = prompt("Ketik 'HAPUS SEMUA' untuk konfirmasi penghapusan total:");
               if (confirmText !== 'HAPUS SEMUA') {
                   alert("Penghapusan dibatalkan. Kode konfirmasi salah.");
+                  return;
+              }
+          } else if (selectedSemester === 'FULL_YEAR') {
+              const confirmText = prompt("Ketik 'GANTI TAHUN' untuk konfirmasi reset tahun ajaran:");
+              if (confirmText !== 'GANTI TAHUN') {
+                  alert("Penghapusan dibatalkan.");
                   return;
               }
           }
@@ -181,7 +193,12 @@ const BackupRestore: React.FC<BackupRestoreProps> = ({ user }) => {
                     >
                        <option value="Ganjil">Semester Ganjil</option>
                        <option value="Genap">Semester Genap</option>
-                       {user.role === UserRole.ADMIN && <option value="Semua">Semua Semester (Full Backup)</option>}
+                       {user.role === UserRole.ADMIN && (
+                           <>
+                               <option value="FULL_YEAR">1 Tahun (Ganjil & Genap)</option>
+                               <option value="Semua">Semua Data (Full Backup)</option>
+                           </>
+                       )}
                     </select>
                     <p className="text-xs text-blue-600 mt-2">
                        *Data Master (User, Kelas, Siswa) akan selalu ikut terunduh untuk menjaga integritas data.
@@ -275,11 +292,11 @@ const BackupRestore: React.FC<BackupRestoreProps> = ({ user }) => {
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {/* Option 1: Per Semester */}
+                          {/* Option 1: Per Semester / Full Year */}
                           <div className="bg-white p-5 rounded-lg border border-red-200 shadow-sm">
-                              <h4 className="font-bold text-gray-800 mb-2">Hapus Data Semester</h4>
+                              <h4 className="font-bold text-gray-800 mb-2">Hapus Data Berkala</h4>
                               <p className="text-xs text-gray-500 mb-4">
-                                  Menghapus data transaksional (Nilai, Lingkup Materi) untuk semester yang dipilih. Data Guru, Siswa, dan Kelas <strong>TIDAK</strong> dihapus.
+                                  Pilih cakupan data yang ingin dihapus.
                               </p>
                               <div className="mb-4">
                                   <select 
@@ -287,23 +304,30 @@ const BackupRestore: React.FC<BackupRestoreProps> = ({ user }) => {
                                     onChange={(e) => setSelectedSemester(e.target.value)}
                                     className="w-full border border-gray-300 rounded p-2 text-sm"
                                   >
-                                      <option value="Ganjil">Semester Ganjil</option>
-                                      <option value="Genap">Semester Genap</option>
+                                      <option value="Ganjil">Semester Ganjil (Hanya Data Nilai & Materi)</option>
+                                      <option value="Genap">Semester Genap (Hanya Data Nilai & Materi)</option>
+                                      <option value="FULL_YEAR" className="font-bold text-red-600 bg-red-50">1 Tahun Penuh (Reset Tahun Ajaran)</option>
                                   </select>
+                              </div>
+                              <div className="bg-yellow-50 p-2 rounded text-[10px] text-yellow-800 mb-3 border border-yellow-200">
+                                {selectedSemester === 'FULL_YEAR' 
+                                    ? "Opsi ini menghapus Kelas, Siswa, Jurnal, Absensi, Nilai, dan BK. Akun Guru TIDAK dihapus." 
+                                    : "Opsi ini hanya menghapus Nilai & Lingkup Materi. Data Siswa & Kelas AMAN."
+                                }
                               </div>
                               <button 
                                 onClick={() => handleDeleteData('SEMESTER')}
                                 disabled={isLoading}
                                 className="w-full bg-red-100 text-red-700 font-bold py-2 rounded border border-red-200 hover:bg-red-200 transition"
                               >
-                                  {isLoading ? 'Memproses...' : `Bersihkan Semester ${selectedSemester}`}
+                                  {isLoading ? 'Memproses...' : `Eksekusi Penghapusan`}
                               </button>
                           </div>
 
                           {/* Option 2: Full Reset */}
                           <div className="bg-white p-5 rounded-lg border border-red-200 shadow-sm relative overflow-hidden">
                               <div className="absolute top-0 right-0 bg-red-600 text-white text-[10px] px-2 py-1 font-bold">FACTORY RESET</div>
-                              <h4 className="font-bold text-gray-800 mb-2">Hapus Total (Reset Sistem)</h4>
+                              <h4 className="font-bold text-gray-800 mb-2">Hapus Total (Instal Ulang)</h4>
                               <p className="text-xs text-gray-500 mb-4">
                                   Menghapus <strong>SEMUA</strong> data: Guru, Siswa, Kelas, Nilai, Jurnal, dan Absensi. Sistem akan kembali kosong seperti baru instalasi (kecuali akun Admin ini).
                               </p>
