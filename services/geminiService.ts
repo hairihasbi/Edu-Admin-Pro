@@ -23,8 +23,8 @@ export const generateLessonPlan = async (
     }
 
     const prompt = `
-      Bertindaklah sebagai Ahli Kurikulum Senior. Tugas Anda adalah menyusun **MODUL AJAR DEEP LEARNING** yang sangat detail, rapi, dan profesional.
-      
+      Bertindaklah sebagai Ahli Kurikulum Senior. Tugas Anda adalah menyusun **MODUL AJAR / RPP** yang SANGAT RAPI, FORMAL, dan TERSTRUKTUR DALAM TABEL agar mudah dibaca dan dicetak.
+
       **DATA INPUT:**
       - Guru: ${request.teacherName} (NIP: ${request.teacherNip})
       - Sekolah: ${request.schoolName}
@@ -38,60 +38,109 @@ export const generateLessonPlan = async (
       - Profil Pelajar: ${request.graduateProfileDimensions.join(', ')}
       - ${cpInstruction}
 
-      **INSTRUKSI STRUKTUR OUTPUT (WAJIB IKUTI URUTAN INI):**
-      Gunakan format Markdown. Gunakan Heading 3 (###) untuk Judul Bagian (A, B, C...). Jangan gunakan Heading 1 atau 2.
+      **INSTRUKSI FORMAT OUTPUT (WAJIB IKUTI PERSIS):**
+      Gunakan format Markdown. Bagian yang saya minta dalam **TABEL** wajib dibuat menggunakan sintaks tabel Markdown.
 
-      **JUDUL DOKUMEN:**
-      Tuliskan judul besar: "MODUL AJAR DEEP LEARNING" diikuti MATA PELAJARAN dan BAB.
+      --- MULAI DOKUMEN ---
+
+      ## MODUL AJAR ${request.subject.toUpperCase()}
+      ## ${request.topic.toUpperCase()}
+
+      ### I. INFORMASI UMUM
 
       **A. IDENTITAS MODUL**
-      Buatkan tabel atau list rapi berisi: Nama Sekolah, Nama Penyusun, Mata Pelajaran, Elemen (jika ada), Fase/Kelas/Semester, Alokasi Waktu, dan Tahun Pelajaran.
+      (Buat dalam TABEL dengan 2 kolom: Atribut dan Keterangan)
+      | Atribut | Keterangan |
+      | :--- | :--- |
+      | Penyusun | ${request.teacherName} |
+      | Instansi | ${request.schoolName} |
+      | Tahun Penyusunan | ${new Date().getFullYear()} |
+      | Jenjang Sekolah | SMA/SMK |
+      | Mata Pelajaran | ${request.subject} |
+      | Fase / Kelas | ${request.phase} / ${request.grade} |
+      | Bab / Tema | ${request.topic} |
+      | Alokasi Waktu | ${request.timeAllocation} |
 
-      **B. IDENTIFIKASI KESIAPAN PESERTA DIDIK**
-      Tuliskan narasi analisis kesiapan siswa. Contoh: "Peserta didik pada umumnya telah memiliki pengetahuan dasar tentang... Minat peserta didik bervariasi... Kebutuhan belajar yang mungkin muncul adalah..."
+      **B. KOMPETENSI AWAL**
+      (Tuliskan paragraf singkat tentang kompetensi yang perlu dimiliki siswa sebelum mempelajari materi ini)
 
-      **C. KARAKTERISTIK MATERI PELAJARAN**
-      Jelaskan karakteristik materi ${request.topic} secara konseptual dan prosedural. Jelaskan relevansinya dengan kehidupan nyata dan tingkat kesulitannya.
+      **C. PROFIL PELAJAR PANCASILA**
+      (Sebutkan dimensi: ${request.graduateProfileDimensions.join(', ')} dan jelaskan singkat penerapannya)
 
-      **D. DIMENSI PROFIL LULUSAN PEMBELAJARAN**
-      Sebutkan dimensi profil (seperti ${request.graduateProfileDimensions.join(', ')}) dan jelaskan perilaku singkat yang diharapkan.
+      **D. SARANA DAN PRASARANA**
+      *   Media: (Laptop, LCD, LKPD, dll)
+      *   Sumber Belajar: (Buku Paket, Youtube, dll)
 
-      **E. DESAIN PEMBELAJARAN**
-      Jelaskan pendekatan pembelajaran yang digunakan (${request.learningModel} dan ${request.learningStrategy}) serta bagaimana metode ini memfasilitasi Deep Learning.
+      **E. TARGET PESERTA DIDIK**
+      *   Peserta didik reguler/tipikal.
+      *   Peserta didik dengan kesulitan belajar.
+      *   Peserta didik dengan pencapaian tinggi.
 
-      **F. CAPAIAN PEMBELAJARAN (CP)**
-      Tuliskan Capaian Pembelajaran lengkap.
+      **F. MODEL PEMBELAJARAN**
+      (Buat dalam TABEL 1 baris)
+      | Model Pembelajaran | Metode |
+      | :--- | :--- |
+      | ${request.learningModel} | ${request.learningStrategy} |
 
-      **G. LINTAS DISIPLIN ILMU**
-      Sebutkan minimal 2 disiplin ilmu lain (misal: Fisika, Seni, TIK, Bahasa) yang terintegrasi dengan materi ini.
+      ---
 
-      **H. TUJUAN PEMBELAJARAN**
-      Rumuskan Tujuan Pembelajaran (TP) yang spesifik. Jika memungkinkan, bagi menjadi Pertemuan 1 dan Pertemuan 2 beserta Indikator Keberhasilannya.
+      ### II. KOMPONEN INTI
 
-      **I. TOPIK PEMBELAJARAN KONTEKSTUAL**
-      Sebutkan 3 topik penerapan materi dalam kehidupan sehari-hari / isu terkini.
+      **A. TUJUAN PEMBELAJARAN**
+      1.  (Rumuskan TP 1)
+      2.  (Rumuskan TP 2)
 
-      **J. KERANGKA PEMBELAJARAN**
-      Buatkan poin-poin untuk:
-      1. Praktik Pedagogik (Model & Strategi).
-      2. Kemitraan Pembelajaran (Lingkungan Sekolah, Luar Sekolah, Masyarakat).
-      3. Lingkungan Belajar (Ruang Fisik, Virtual, Budaya Belajar).
-      4. Pemanfaatan Digital (Aplikasi/Platform yang dipakai).
+      **B. PEMAHAMAN BERMAKNA**
+      (Jelaskan manfaat pembelajaran ini dalam kehidupan nyata)
 
-      **K. LANGKAH-LANGKAH PEMBELAJARAN**
-      Uraikan langkah pembelajaran (Pendahuluan, Inti, Penutup). 
-      **SANGAT PENTING:** Pada Kegiatan Inti, berikan label eksplisit **[MINDFUL]**, **[MEANINGFUL]**, dan **[JOYFUL]** pada aktivitas yang relevan.
-      Contoh: "Guru mengajak siswa melakukan ice breaking... [JOYFUL]"
+      **C. PERTANYAAN PEMANTIK**
+      *   (Tuliskan 2-3 pertanyaan pemantik yang menarik minat siswa)
 
-      **L. ASESMEN PEMBELAJARAN**
-      1. Asesmen Awal (Diagnostik): Pertanyaan pemantik/kuis.
-      2. Asesmen Proses (Formatif): Observasi/LKPD.
-      3. Asesmen Akhir (Sumatif): Tes tertulis/Proyek.
+      **D. KEGIATAN PEMBELAJARAN**
+      (Bagian ini WAJIB menggunakan TABEL 3 Kolom: Tahap, Kegiatan, Alokasi Waktu. Sertakan tag **[Deep Learning]** atau **[Diferensiasi]** pada kegiatan yang relevan)
 
-      **TANDA TANGAN**
-      Buatkan tempat tanda tangan untuk Mengetahui Kepala Sekolah dan Guru Mata Pelajaran (Gunakan Nama & NIP dari data input), sertakan Kota (${request.city}) dan Tanggal (${request.date}).
+      | Tahap | Kegiatan Pembelajaran | Waktu |
+      | :--- | :--- | :--- |
+      | **Pendahuluan** | 1. Guru membuka salam dan doa bersama.<br>2. Guru mengecek kehadiran.<br>3. Apersepsi: ... | 15 Menit |
+      | **Inti** | **Langkah 1: Orientasi Masalah**<br>...<br><br>**Langkah 2: Organisasi Belajar**<br>... | 60 Menit |
+      | **Penutup** | 1. Peserta didik menyimpulkan materi.<br>2. Guru memberikan refleksi dan apresiasi.<br>3. Doa penutup. | 15 Menit |
 
-      Gunakan bahasa Indonesia yang baku, edukatif, dan format yang rapi (gunakan bold untuk penekanan).
+      **E. ASESMEN**
+      (Buat dalam TABEL)
+      | Jenis Asesmen | Bentuk | Instrumen |
+      | :--- | :--- | :--- |
+      | Diagnostik | Lisan / Kuis | Pertanyaan Pemantik |
+      | Formatif | Observasi / LKPD | Rubrik Penilaian Sikap & Keterampilan |
+      | Sumatif | Tes Tertulis | Soal Pilihan Ganda / Essay |
+
+      **F. PENGAYAAN DAN REMEDIAL**
+      *   **Pengayaan:** (Untuk siswa nilai di atas rata-rata)
+      *   **Remedial:** (Untuk siswa nilai di bawah rata-rata)
+
+      ---
+
+      ### III. LAMPIRAN
+
+      **A. LEMBAR KERJA PESERTA DIDIK (LKPD)**
+      (Berikan contoh judul atau kerangka LKPD singkat)
+
+      **B. BAHAN BACAAN GURU & PESERTA DIDIK**
+      (Daftar referensi)
+
+      **C. GLOSARIUM**
+      (Daftar istilah penting)
+
+      **D. DAFTAR PUSTAKA**
+      (Daftar pustaka format APA)
+
+      <br><br>
+      (Buat area tanda tangan dalam TABEL TANPA GARIS atau format rapi rata kanan kiri)
+      
+      |   |   |
+      | :---: | :---: |
+      | Mengetahui,<br>Kepala Sekolah<br><br><br><br>**${request.headmasterName}**<br>NIP. ${request.headmasterNip} | ${request.city}, ${request.date}<br>Guru Mata Pelajaran<br><br><br><br>**${request.teacherName}**<br>NIP. ${request.teacherNip} |
+
+      --- SELESAI ---
     `;
 
     const response = await fetch('/api/gemini', {
@@ -119,13 +168,13 @@ export const generateLessonPlan = async (
 
     // Mapping progress yang lebih akurat sesuai struktur A-L
     const progressMap = [
-        { key: "A. IDENTITAS", percent: 10, status: "Menyusun Identitas..." },
-        { key: "B. IDENTIFIKASI", percent: 20, status: "Analisis Peserta Didik..." },
-        { key: "F. CAPAIAN", percent: 40, status: "Menentukan CP & TP..." },
-        { key: "J. KERANGKA", percent: 60, status: "Menyusun Kerangka..." },
-        { key: "K. LANGKAH", percent: 75, status: "Merancang Aktivitas Deep Learning..." },
-        { key: "L. ASESMEN", percent: 90, status: "Menyusun Asesmen..." },
-        { key: "TANDA TANGAN", percent: 95, status: "Finalisasi Dokumen..." }
+        { key: "INFORMASI UMUM", percent: 10, status: "Menyusun Identitas..." },
+        { key: "KOMPETENSI AWAL", percent: 20, status: "Analisis Kompetensi..." },
+        { key: "KOMPONEN INTI", percent: 40, status: "Merancang Tujuan & Pemahaman..." },
+        { key: "KEGIATAN PEMBELAJARAN", percent: 60, status: "Menyusun Langkah Kegiatan..." },
+        { key: "ASESMEN", percent: 80, status: "Membuat Instrumen Penilaian..." },
+        { key: "LAMPIRAN", percent: 90, status: "Menambahkan Lampiran..." },
+        { key: "Kepala Sekolah", percent: 95, status: "Finalisasi Dokumen..." }
     ];
     let currentProgressIndex = -1;
 
