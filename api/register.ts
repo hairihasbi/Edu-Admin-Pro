@@ -1,0 +1,72 @@
+
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { createClient } from "@libsql/client/web";
+
+const cleanEnv = (val: string | undefined) => {
+    if (!val) return "";
+    return val.replace(/^["']|["']$/g, '').trim();
+};
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method Not Allowed' });
+  }
+
+  const { id, username, password, fullName, email, phone, schoolNpsn, schoolName, role, status, subject, avatar, lastModified } = req.body;
+
+  if (!username || !password || !schoolNpsn) {
+      return res.status(400).json({ error: "Missing required fields" });
+  }
+
+  let rawUrl = cleanEnv(process.env.TURSO_DB_URL);
+  if (rawUrl && rawUrl.startsWith('libsql://')) {
+      rawUrl = rawUrl.replace('libsql://', 'https://');
+  }
+  const url = rawUrl;
+  const authToken = cleanEnv(process.env.TURSO_AUTH_TOKEN);
+
+  if (!url || !authToken) {
+     return res.status(503).json({ error: "Database config missing" });
+  }
+
+  const client = createClient({ 
+      url, 
+      authToken,
+      // @ts-ignore
+      fetch: fetch 
+  });
+
+  try {
+    // Cek username duplikat di server
+    const check = await client.execute({
+        sql: "SELECT id FROM users WHERE username = ?",
+        args: [username]
+    });
+
+    if (check.rows.length > 0) {
+        return res.status(409).json({ error: "Username sudah digunakan." });
+    }
+
+    // Insert User Baru
+    await client.execute({
+        sql: `INSERT INTO users (
+            id, username, password, full_name, email, phone, 
+            school_npsn, school_name, role, status, subject, 
+            avatar, last_modified, version
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [
+            id, username, password, fullName, email, phone,
+            schoolNpsn, schoolName, role, status, subject,
+            avatar, lastModified, 1
+        ]
+    });
+
+    return res.status(200).json({ success: true });
+
+  } catch (e: any) {
+      console.error("Register Error:", e);
+      return res.status(500).json({ error: e.message });
+  } finally {
+      client.close();
+  }
+}

@@ -1,0 +1,114 @@
+
+// api/send-email.ts
+// This file assumes a Node.js environment on Vercel
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+import nodemailer from 'nodemailer';
+
+// Helper for MailerSend API
+async function sendMailerSend(config: any, to: string, subject: string, html: string) {
+  const response = await fetch('https://api.mailersend.com/v1/email', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${config.apiKey}`
+    },
+    body: JSON.stringify({
+      from: { email: config.fromEmail, name: config.fromName },
+      to: [{ email: to }],
+      subject: subject,
+      html: html
+    })
+  });
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`MailerSend Error: ${errorText}`);
+  }
+  return true;
+}
+
+// Helper for Brevo API (SMTP API)
+async function sendBrevo(config: any, to: string, subject: string, html: string) {
+  const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'api-key': config.apiKey
+    },
+    body: JSON.stringify({
+      sender: { email: config.fromEmail, name: config.fromName },
+      to: [{ email: to }],
+      subject: subject,
+      htmlContent: html
+    })
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Brevo Error: ${errorText}`);
+  }
+  return true;
+}
+
+// Helper for SMTP (Nodemailer)
+async function sendSMTP(config: any, to: string, subject: string, html: string) {
+  const transporter = nodemailer.createTransport({
+    host: config.smtpHost,
+    port: config.smtpPort,
+    secure: config.smtpPort === 465, // true for 465, false for other ports
+    auth: {
+      user: config.smtpUser,
+      pass: config.smtpPass,
+    },
+  });
+
+  await transporter.sendMail({
+    from: `"${config.fromName}" <${config.fromEmail}>`,
+    to: to,
+    subject: subject,
+    html: html,
+  });
+  return true;
+}
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method Not Allowed' });
+  }
+
+  const { user, config } = req.body;
+
+  if (!user || !config || !config.isActive) {
+    return res.status(400).json({ error: 'Missing user data or email config is inactive' });
+  }
+
+  const subject = `Selamat! Akun Guru Anda Telah Disetujui`;
+  const html = `
+    <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+      <h2 style="color: #2563eb;">Selamat Bergabung, ${user.fullName}!</h2>
+      <p>Pendaftaran akun guru Anda di <strong>${user.schoolName}</strong> telah disetujui oleh Administrator.</p>
+      <p>Anda sekarang dapat masuk ke aplikasi EduAdmin Pro menggunakan username dan password yang Anda buat saat pendaftaran.</p>
+      <br/>
+      <a href="${req.headers.origin || 'https://eduadmin-pro.vercel.app'}/login" style="background-color: #2563eb; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Masuk Sekarang</a>
+      <br/><br/>
+      <p>Terima kasih,<br/>Tim EduAdmin</p>
+    </div>
+  `;
+
+  try {
+    if (config.method === 'API') {
+      if (config.provider === 'MAILERSEND') {
+        await sendMailerSend(config, user.email, subject, html);
+      } else if (config.provider === 'BREVO') {
+        await sendBrevo(config, user.email, subject, html);
+      }
+    } else {
+      await sendSMTP(config, user.email, subject, html);
+    }
+    
+    return res.status(200).json({ success: true, message: 'Email sent successfully' });
+  } catch (error: any) {
+    console.error('Email Sending Error:', error);
+    return res.status(500).json({ error: error.message });
+  }
+}
