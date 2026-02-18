@@ -14,7 +14,7 @@ import bcrypt from 'bcryptjs';
 import { db } from './db'; 
 import { Table } from 'dexie';
 
-// ... existing tables mapping ...
+// ... existing code ... (MIGRATION_MAP, helper functions, etc. - keep unchanged)
 const MIGRATION_MAP: Record<string, Table<any, any>> = {
   'eduadmin_users': db.users,
   'eduadmin_classes': db.classes,
@@ -53,7 +53,7 @@ const chunkArray = (array: any[], size: number) => {
     return chunks;
 };
 
-// ... existing sync implementations ...
+// ... existing sync implementations (checkUnsavedChanges, getSyncStats, etc.) ...
 export const checkUnsavedChanges = async () => {
   let hasUnsaved = false;
   for (const table of Object.values(MIGRATION_MAP)) {
@@ -161,6 +161,7 @@ const softDeleteFromDB = async <T extends {id: string, lastModified?: number, is
 };
 
 export const runManualSync = async (mode: 'PUSH' | 'PULL' | 'FULL', onLog: (msg: string) => void) => {
+    // ... existing manual sync code ...
     if (!navigator.onLine) { onLog("[ERROR] Tidak ada koneksi internet."); return; }
     const isConnected = await checkConnection();
     if (!isConnected) { onLog("[ERROR] Gagal terhubung ke Server Database."); return; }
@@ -207,11 +208,8 @@ export const initDatabase = async () => {
     }
 };
 
-// --- FIX: ROBUST SEEDING (ADMIN, GURU, BK) ---
-// Fungsi ini memastikan user default selalu ada di database lokal
 export const seedDatabase = async () => { 
     const now = Date.now();
-    
     // 1. Seed Admin
     const adminCount = await db.users.where('username').equals('admin').count();
     if (adminCount === 0) {
@@ -222,7 +220,6 @@ export const seedDatabase = async () => {
         });
         console.log("Seeded: admin/admin");
     }
-
     // 2. Seed Guru Mapel
     const guruCount = await db.users.where('username').equals('guru').count();
     if (guruCount === 0) {
@@ -233,7 +230,6 @@ export const seedDatabase = async () => {
         });
         console.log("Seeded: guru/guru");
     }
-
     // 3. Seed Guru BK
     const bkCount = await db.users.where('username').equals('bk').count();
     if (bkCount === 0) {
@@ -246,7 +242,7 @@ export const seedDatabase = async () => {
     }
 };
 
-// --- FIX: ROBUST LOGIN (DEV/OFFLINE SUPPORT) ---
+// --- FIX: ROBUST LOGIN (Prevent Password Overwrite) ---
 export const loginUser = async (u: string, p: string): Promise<User | null> => { 
     // 1. Try Server Login First if Online
     if (navigator.onLine) {
@@ -258,14 +254,11 @@ export const loginUser = async (u: string, p: string): Promise<User | null> => {
                 credentials: 'include'
             });
             
-            // CRITICAL FIX: Check Content-Type for JSON
             const contentType = response.headers.get("content-type");
             if (!contentType || !contentType.includes("application/json")) {
-                // This catches HTML 404s in Dev and forces local fallback
                 throw new Error("Server API not ready (Dev Mode)");
             }
 
-            // Check for Hard Bans (Deleted users)
             if (response.status === 403) {
                 const errData = await response.json();
                 throw new Error(errData.error || 'Akun dinonaktifkan.');
@@ -278,8 +271,22 @@ export const loginUser = async (u: string, p: string): Promise<User | null> => {
                     const serverVersion = data.user.version || 0;
                     const localVersion = localUser?.version || 0;
 
+                    // Only update local if server version is newer or equal
+                    // CRITICAL FIX: Preserve existing local password if API returns stripped user object
                     if (!localUser || serverVersion >= localVersion) {
-                         await db.users.put({ ...data.user, isSynced: true });
+                         const userToSave = { ...data.user, isSynced: true };
+                         
+                         // If we have a local user with a password, but the new API data has no password (which is expected),
+                         // we MUST copy the old password over so it doesn't get saved as 'undefined'
+                         if (localUser && localUser.password && !userToSave.password) {
+                             userToSave.password = localUser.password;
+                         } else if (!userToSave.password) {
+                             // If it's a fresh login on a new device, we don't have the hash.
+                             // We should NOT save 'undefined' if possible, but we have no choice here.
+                             // The backend protection (api/turso.ts) handles this by ignoring null passwords on push.
+                         }
+
+                         await db.users.put(userToSave);
                     }
                     return data.user;
                 }
@@ -287,7 +294,6 @@ export const loginUser = async (u: string, p: string): Promise<User | null> => {
                 console.warn("Server login failed (401/500). Falling back to local...");
             }
         } catch (e: any) { 
-            // Only rethrow if user is explicitly banned
             if (e.message.includes('dinonaktifkan') || e.message.includes('dihapus')) {
                 throw e;
             }
@@ -296,7 +302,6 @@ export const loginUser = async (u: string, p: string): Promise<User | null> => {
     }
 
     // 2. Fallback to Local Login (Dexie)
-    // Automatically happens if offline OR if server returns HTML/Error in dev
     const user = await db.users.where('username').equals(u).first();
     
     if (user && !user.deleted) { 
@@ -305,7 +310,6 @@ export const loginUser = async (u: string, p: string): Promise<User | null> => {
         if (user.password && user.password.startsWith('$2')) {
             isValid = await bcrypt.compare(p, user.password);
         } else {
-            // Check plain text (for default seeded users)
             isValid = user.password === p; 
         }
 
@@ -321,7 +325,7 @@ export const loginUser = async (u: string, p: string): Promise<User | null> => {
     throw new Error('Username atau password salah.');
 };
 
-// ... (Export fungsi lainnya tetap ada seperti sebelumnya) ...
+// ... (Export fungsi lainnya tetap ada sama seperti sebelumnya) ...
 export const logoutUser = async () => {
     try {
         if (navigator.onLine) {
@@ -349,90 +353,10 @@ export const checkSession = async (): Promise<User | null> => {
     return null;
 };
 
-export const checkSchoolNameByNpsn = async (npsn: string): Promise<{found: boolean, schoolName?: string}> => {
-    if (!navigator.onLine) return { found: false };
-    try {
-        const response = await fetch(`/api/check-npsn?npsn=${npsn}`, { method: 'GET' });
-        if (response.ok) {
-            return await response.json();
-        }
-    } catch (e) { console.warn("NPSN check failed:", e); }
-    return { found: false };
-};
-
-export const registerUser = async (f: string, u: string, p: string, e: string, ph: string, npsn: string, schoolName: string, initialSubject?: string) => { 
-    const existing = await db.users.where('username').equals(u).first(); 
-    if (existing && !existing.deleted) return { success: false, message: 'Username sudah dipakai.' }; 
-    
-    const hashedPassword = await hashPassword(p); 
-    const newUser: User = { 
-        id: 'user-' + Date.now(), 
-        fullName: f, 
-        username: u, 
-        password: hashedPassword, 
-        email: e, 
-        phone: ph,
-        schoolNpsn: npsn, 
-        schoolName: schoolName, 
-        role: UserRole.GURU, 
-        status: 'PENDING', 
-        subject: initialSubject || '', 
-        avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(f)}&background=random`, 
-        lastModified: Date.now(), 
-        version: 1, 
-        isSynced: false,
-        deleted: false 
-    }; 
-    if (navigator.onLine) {
-        try {
-            const res = await fetch('/api/register', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(newUser)
-            });
-            if (res.ok) {
-                newUser.isSynced = true;
-                await db.users.put(newUser);
-                return { success: true, message: 'Pendaftaran berhasil! Tunggu persetujuan admin.' };
-            } else {
-                const data = await res.json();
-                if (res.status === 409) return { success: false, message: 'Username sudah dipakai (Server).' };
-                throw new Error(data.error || 'Server error');
-            }
-        } catch (err) {
-            console.error("Online registration failed, fallback to local:", err);
-        }
-    }
-    await saveToDB(db.users, newUser, 'eduadmin_users'); 
-    return { success: true, message: 'Pendaftaran tersimpan lokal! Data akan dikirim saat online.' }; 
-};
-
-export const getStudentsServerSide = async (page: number, limit: number, search: string = '', school: string = '', teacherId: string = '') => {
-    if (navigator.onLine) {
-        try {
-            const userStr = localStorage.getItem('eduadmin_user');
-            let authHeader = {};
-            if (userStr) {
-                const user = JSON.parse(userStr);
-                if (user.id) {
-                    authHeader = { 'Authorization': `Bearer ${user.id}` };
-                }
-            }
-            const queryParams = new URLSearchParams({ page: page.toString(), limit: limit.toString(), search, school, teacherId });
-            const response = await fetch(`/api/students?${queryParams}`, { 
-                method: 'GET', 
-                headers: { 'Content-Type': 'application/json', ...authHeader }, 
-                credentials: 'include' 
-            });
-            if (response.ok) return await response.json();
-            if (response.status === 401) {
-                return { error: 'Unauthorized', status: 401, data: [], meta: { total: 0, page: 1, totalPages: 0 } };
-            }
-        } catch (e) { console.warn("Server side fetch failed."); }
-    }
-    return { data: [], meta: { total: 0, page: 1, totalPages: 0 }, filters: { schools: [], teachers: [] } };
-};
-
+// ... (Rest of the functions: checkSchoolNameByNpsn, registerUser, etc. -> NO CHANGE) ...
+export const checkSchoolNameByNpsn = async (npsn: string): Promise<{found: boolean, schoolName?: string}> => { if (!navigator.onLine) return { found: false }; try { const response = await fetch(`/api/check-npsn?npsn=${npsn}`, { method: 'GET' }); if (response.ok) { return await response.json(); } } catch (e) { console.warn("NPSN check failed:", e); } return { found: false }; };
+export const registerUser = async (f: string, u: string, p: string, e: string, ph: string, npsn: string, schoolName: string, initialSubject?: string) => { const existing = await db.users.where('username').equals(u).first(); if (existing && !existing.deleted) return { success: false, message: 'Username sudah dipakai.' }; const hashedPassword = await hashPassword(p); const newUser: User = { id: 'user-' + Date.now(), fullName: f, username: u, password: hashedPassword, email: e, phone: ph, schoolNpsn: npsn, schoolName: schoolName, role: UserRole.GURU, status: 'PENDING', subject: initialSubject || '', avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(f)}&background=random`, lastModified: Date.now(), version: 1, isSynced: false, deleted: false }; if (navigator.onLine) { try { const res = await fetch('/api/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newUser) }); if (res.ok) { newUser.isSynced = true; await db.users.put(newUser); return { success: true, message: 'Pendaftaran berhasil! Tunggu persetujuan admin.' }; } else { const data = await res.json(); if (res.status === 409) return { success: false, message: 'Username sudah dipakai (Server).' }; throw new Error(data.error || 'Server error'); } } catch (err) { console.error("Online registration failed, fallback to local:", err); } } await saveToDB(db.users, newUser, 'eduadmin_users'); return { success: true, message: 'Pendaftaran tersimpan lokal! Data akan dikirim saat online.' }; };
+export const getStudentsServerSide = async (page: number, limit: number, search: string = '', school: string = '', teacherId: string = '') => { if (navigator.onLine) { try { const userStr = localStorage.getItem('eduadmin_user'); let authHeader = {}; if (userStr) { const user = JSON.parse(userStr); if (user.id) { authHeader = { 'Authorization': `Bearer ${user.id}` }; } } const queryParams = new URLSearchParams({ page: page.toString(), limit: limit.toString(), search, school, teacherId }); const response = await fetch(`/api/students?${queryParams}`, { method: 'GET', headers: { 'Content-Type': 'application/json', ...authHeader }, credentials: 'include' }); if (response.ok) return await response.json(); if (response.status === 401) { return { error: 'Unauthorized', status: 401, data: [], meta: { total: 0, page: 1, totalPages: 0 } }; } } catch (e) { console.warn("Server side fetch failed."); } } return { data: [], meta: { total: 0, page: 1, totalPages: 0 }, filters: { schools: [], teachers: [] } }; };
 export const resetPassword = async (u: string, n: string) => { const user = await db.users.where('username').equals(u).first(); if (!user) return false; const hashedPassword = await hashPassword(n); await saveToDB(db.users, { ...user, password: hashedPassword }, 'eduadmin_users'); return true; };
 export const updateUserProfile = async (id: string, d: Partial<User>) => { const user = await db.users.get(id); if (!user) return false; await saveToDB(db.users, { ...user, ...d }, 'eduadmin_users'); return true; };
 export const updateUserPassword = async (id: string, n: string) => { const hashedPassword = await hashPassword(n); return await updateUserProfile(id, { password: hashedPassword }); };
@@ -441,38 +365,18 @@ export const getPendingTeachers = async (): Promise<User[]> => { return await db
 export const approveTeacher = async (id: string): Promise<boolean> => { const user = await db.users.get(id); if (!user) return false; await saveToDB(db.users, { ...user, status: 'ACTIVE' }, 'eduadmin_users'); return true; };
 export const rejectTeacher = async (id: string): Promise<boolean> => { await softDeleteFromDB(db.users, id, 'eduadmin_users'); return true; };
 export const deleteTeacher = async (id: string): Promise<boolean> => { await softDeleteFromDB(db.users, id, 'eduadmin_users'); return true; };
-export const getClasses = async (id: string): Promise<ClassRoom[]> => { 
-    const user = await db.users.get(id);
-    let classes = [];
-    if (!user || !user.schoolNpsn) { classes = await db.classes.where('userId').equals(id).toArray(); } else { classes = await db.classes.where('schoolNpsn').equals(user.schoolNpsn).toArray(); }
-    return classes.filter(c => !c.deleted);
-};
+export const getClasses = async (id: string): Promise<ClassRoom[]> => { const user = await db.users.get(id); let classes = []; if (!user || !user.schoolNpsn) { classes = await db.classes.where('userId').equals(id).toArray(); } else { classes = await db.classes.where('schoolNpsn').equals(user.schoolNpsn).toArray(); } return classes.filter(c => !c.deleted); };
 export const getAllClasses = async (): Promise<ClassRoom[]> => { return (await db.classes.toArray()).filter(c => !c.deleted); };
-export const addClass = async (uid: string, n: string, d: string): Promise<ClassRoom | null> => { 
-    const user = await db.users.get(uid);
-    const npsn = user?.schoolNpsn || 'DEFAULT';
-    const existing = await db.classes.where({ schoolNpsn: npsn, name: n }).first();
-    if (existing && !existing.deleted) { alert(`Kelas "${n}" sudah ada.`); return existing; }
-    const newClass: ClassRoom = { id: 'class-' + Date.now(), userId: uid, schoolNpsn: npsn, name: n, description: d, studentCount: 0, lastModified: Date.now(), version: 1, deleted: false }; 
-    await saveToDB(db.classes, newClass, 'eduadmin_classes'); return newClass; 
-};
+export const addClass = async (uid: string, n: string, d: string): Promise<ClassRoom | null> => { const user = await db.users.get(uid); const npsn = user?.schoolNpsn || 'DEFAULT'; const existing = await db.classes.where({ schoolNpsn: npsn, name: n }).first(); if (existing && !existing.deleted) { alert(`Kelas "${n}" sudah ada.`); return existing; } const newClass: ClassRoom = { id: 'class-' + Date.now(), userId: uid, schoolNpsn: npsn, name: n, description: d, studentCount: 0, lastModified: Date.now(), version: 1, deleted: false }; await saveToDB(db.classes, newClass, 'eduadmin_classes'); return newClass; };
 export const deleteClass = async (id: string): Promise<void> => { await softDeleteFromDB(db.classes, id, 'eduadmin_classes'); const students = await db.students.where('classId').equals(id).toArray(); await softDeleteFromDB(db.students, students.map(s => s.id), 'eduadmin_students'); };
 export const getStudents = async (id: string): Promise<Student[]> => { const students = await db.students.where('classId').equals(id).toArray(); return students.filter(s => !s.deleted).sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase())); };
 export const getAllStudentsWithDetails = async (): Promise<StudentWithDetails[]> => { const students = (await db.students.toArray()).filter(s => !s.deleted); const classes = await db.classes.toArray(); const users = await db.users.toArray(); const classMap = new Map<string, ClassRoom>(classes.map(c => [c.id, c])); const userMap = new Map<string, User>(users.map(u => [u.id, u])); return students.map(s => { const cls = classMap.get(s.classId); const teacher = cls ? userMap.get(cls.userId) : null; return { ...s, className: cls?.name || 'Unknown', teacherName: teacher?.fullName || 'Unknown', schoolName: teacher?.schoolName || 'Unknown' }; }).sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase())); };
-export const addStudent = async (classId: string, name: string, nis: string, gender: 'L'|'P', phone?: string): Promise<Student> => { 
-    const cleanName = sanitizeInput(name); const cleanNis = sanitizeInput(nis); const cleanPhone = sanitizeInput(phone); const cls = await db.classes.get(classId); const npsn = cls?.schoolNpsn || 'DEFAULT'; const existing = await db.students.where({ schoolNpsn: npsn, nis: cleanNis }).first();
-    if (existing) { if (!existing.deleted) { if (window.confirm(`Siswa dengan NIS ${cleanNis} (${existing.name}) sudah ada. Gunakan data tersebut?`)) { await saveToDB(db.students, { ...existing, classId, deleted: false }, 'eduadmin_students'); await updateClassCount(classId, 1); if (existing.classId !== classId) await updateClassCount(existing.classId, -1); return { ...existing, classId }; } else { throw new Error("Input dibatalkan."); } } else { const revived = { ...existing, classId, name: cleanName, gender, phone: cleanPhone, deleted: false, lastModified: Date.now() }; await saveToDB(db.students, revived, 'eduadmin_students'); await updateClassCount(classId, 1); return revived; } }
-    const newStudent: Student = { id: 'student-' + Date.now() + Math.random().toString(36).substr(2, 5), classId, schoolNpsn: npsn, name: cleanName, nis: cleanNis, gender, phone: cleanPhone, lastModified: Date.now(), version: 1, deleted: false }; await saveToDB(db.students, newStudent, 'eduadmin_students'); await updateClassCount(classId, 1); return newStudent; 
-};
+export const addStudent = async (classId: string, name: string, nis: string, gender: 'L'|'P', phone?: string): Promise<Student> => { const cleanName = sanitizeInput(name); const cleanNis = sanitizeInput(nis); const cleanPhone = sanitizeInput(phone); const cls = await db.classes.get(classId); const npsn = cls?.schoolNpsn || 'DEFAULT'; const existing = await db.students.where({ schoolNpsn: npsn, nis: cleanNis }).first(); if (existing) { if (!existing.deleted) { if (window.confirm(`Siswa dengan NIS ${cleanNis} (${existing.name}) sudah ada. Gunakan data tersebut?`)) { await saveToDB(db.students, { ...existing, classId, deleted: false }, 'eduadmin_students'); await updateClassCount(classId, 1); if (existing.classId !== classId) await updateClassCount(existing.classId, -1); return { ...existing, classId }; } else { throw new Error("Input dibatalkan."); } } else { const revived = { ...existing, classId, name: cleanName, gender, phone: cleanPhone, deleted: false, lastModified: Date.now() }; await saveToDB(db.students, revived, 'eduadmin_students'); await updateClassCount(classId, 1); return revived; } } const newStudent: Student = { id: 'student-' + Date.now() + Math.random().toString(36).substr(2, 5), classId, schoolNpsn: npsn, name: cleanName, nis: cleanNis, gender, phone: cleanPhone, lastModified: Date.now(), version: 1, deleted: false }; await saveToDB(db.students, newStudent, 'eduadmin_students'); await updateClassCount(classId, 1); return newStudent; };
 export const importStudentsFromCSV = async (classId: string, csvText: string): Promise<{success: boolean, count: number, errors: string[]}> => { const cls = await db.classes.get(classId); let npsn = cls?.schoolNpsn; if (!npsn || npsn === 'DEFAULT') { if (cls?.userId) { const user = await db.users.get(cls.userId); npsn = user?.schoolNpsn || 'DEFAULT'; } else { npsn = 'DEFAULT'; } } const lines = csvText.split('\n'); const errors: string[] = []; const newStudents: Student[] = []; const cleanCSVField = (val: string) => val ? val.replace(/^["']|["']$/g, '').trim() : ''; for (let i = 1; i < lines.length; i++) { const line = lines[i].trim(); if (!line) continue; const parts = line.split(','); if (parts.length < 3) { errors.push(`Baris ${i+1}: Format salah`); continue; } const name = sanitizeInput(cleanCSVField(parts[0])); const nis = sanitizeInput(cleanCSVField(parts[1])); let genderRaw = cleanCSVField(parts[2]).toUpperCase(); let gender: 'L' | 'P' = 'L'; if (genderRaw.startsWith('L')) gender = 'L'; else if (genderRaw.startsWith('P')) gender = 'P'; else { errors.push(`Baris ${i+1}: Gender tidak valid (${genderRaw})`); continue; } const phoneRaw = parts[3] ? cleanCSVField(parts[3]) : ''; const phone = sanitizeInput(phoneRaw); if (!name || !nis) { errors.push(`Baris ${i+1}: Nama/NIS kosong`); continue; } const existing = await db.students.where({ schoolNpsn: npsn, nis }).first(); if (!existing || existing.deleted) { newStudents.push({ id: existing ? existing.id : 'student-' + Date.now() + Math.random(), classId, schoolNpsn: npsn, name, nis, gender, phone, lastModified: Date.now(), version: (existing?.version || 0) + 1, deleted: false }); } else { errors.push(`Baris ${i+1}: NIS ${nis} sudah ada (Dilewati)`); } } if (newStudents.length > 0) { await saveToDB(db.students, newStudents, 'eduadmin_students'); await updateClassCount(classId, newStudents.length); } return { success: true, count: newStudents.length, errors }; };
 export const deleteStudent = async (id: string) => { const student = await db.students.get(id); if (student) { await softDeleteFromDB(db.students, id, 'eduadmin_students'); await updateClassCount(student.classId, -1); } };
 export const bulkDeleteStudents = async (ids: string[]) => { const students = await db.students.bulkGet(ids); const classCounts: Record<string, number> = {}; students.forEach(s => { if (s) classCounts[s.classId] = (classCounts[s.classId] || 0) - 1; }); await softDeleteFromDB(db.students, ids, 'eduadmin_students'); for (const [classId, count] of Object.entries(classCounts)) { await updateClassCount(classId, count); } };
 const updateClassCount = async (id: string, d: number) => { const cls = await db.classes.get(id); if (cls) { await saveToDB(db.classes, { ...cls, studentCount: Math.max(0, cls.studentCount + d) }, 'eduadmin_classes'); } };
-export const getScopeMaterials = async (classId: string, semester: string, userId?: string): Promise<ScopeMaterial[]> => { 
-    // Filter by class, semester AND user (privacy)
-    const items = await db.scopeMaterials.where({ classId, semester }).toArray();
-    return items.filter(x => !x.deleted && (userId ? x.userId === userId : true)); 
-};
+export const getScopeMaterials = async (classId: string, semester: string, userId?: string): Promise<ScopeMaterial[]> => { const items = await db.scopeMaterials.where({ classId, semester }).toArray(); return items.filter(x => !x.deleted && (userId ? x.userId === userId : true)); };
 export const addScopeMaterial = async (material: Omit<ScopeMaterial, 'id' | 'lastModified' | 'version' | 'isSynced' | 'deleted'>) => { const newItem: ScopeMaterial = { id: 'mat-' + Date.now(), ...material, lastModified: Date.now(), version: 1, isSynced: false, deleted: false }; await saveToDB(db.scopeMaterials, newItem, 'eduadmin_materials'); return newItem; };
 export const copyScopeMaterials = async (sourceClassId: string, targetClassId: string, sourceSemester: string, targetSemester: string, userId: string, subject: string) => { const sources = await getScopeMaterials(sourceClassId, sourceSemester, userId); if (sources.length === 0) return false; const newItems = sources.map(s => ({ id: 'mat-' + Date.now() + Math.random(), classId: targetClassId, userId: userId, subject: subject, semester: targetSemester, code: s.code, phase: s.phase, content: s.content, lastModified: Date.now(), version: 1, isSynced: false, deleted: false })); await saveToDB(db.scopeMaterials, newItems, 'eduadmin_materials'); return true; };
 export const deleteScopeMaterial = async (id: string) => { await softDeleteFromDB(db.scopeMaterials, id, 'eduadmin_materials'); };
