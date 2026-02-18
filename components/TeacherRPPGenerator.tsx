@@ -174,7 +174,7 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
       let html = md
         // Headers: ### A. -> <h3>A. </h3>
         .replace(/###\s+(.*?)\n/g, '<h3 style="margin-top:15pt; margin-bottom:5pt; font-size:12pt; font-weight:bold; text-transform:uppercase;">$1</h3>')
-        .replace(/##\s+(.*?)\n/g, '<h2 style="margin-top:15pt; margin-bottom:5pt; font-size:14pt; font-weight:bold;">$1</h2>')
+        .replace(/##\s+(.*?)\n/g, '<h2 style="margin-top:20pt; margin-bottom:10pt; font-size:14pt; font-weight:bold; text-align:center; text-transform:uppercase;">$1</h2>')
         // Bold: **text** -> <b>text</b>
         .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
         // Italic: *text* -> <i>text</i>
@@ -182,16 +182,24 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
         // Bullet points
         .replace(/^\s*-\s+(.*)$/gm, '<ul><li>$1</li></ul>')
         .replace(/<\/ul>\s*<ul>/g, '') // Merge adjacent lists
-        // Tables (Basic)
+        // Ordered lists
+        .replace(/^\s*\d+\.\s+(.*)$/gm, '<ol><li>$1</li></ol>')
+        .replace(/<\/ol>\s*<ol>/g, '')
+        // Tables (Standard Markdown)
         .replace(/\|(.+)\|/g, (match) => {
-            return '<tr>' + match.split('|').filter(s => s.trim() !== '').map(cell => `<td style="border:1px solid #000; padding:5px;">${cell.trim()}</td>`).join('') + '</tr>';
+            return '<tr>' + match.split('|').filter(s => s.trim() !== '').map(cell => {
+                // Check if header row (---)
+                if (cell.includes('---')) return ''; 
+                return `<td>${cell.trim()}</td>`;
+            }).join('') + '</tr>';
         })
         // Newlines to break
         .replace(/\n/g, '<br/>');
 
-      // Wrap tables if any rows detected
+      // Wrap tables if any rows detected and remove empty header marker rows
       if (html.includes('<tr>')) {
-          html = html.replace(/((<tr>.*?<\/tr>)+)/g, '<table style="width:100%; border-collapse:collapse; margin-bottom:10px;">$1</table>');
+          html = html.replace(/<tr>\s*<\/tr>/g, ''); // Remove empty rows from markdown separator lines
+          html = html.replace(/((<tr>.*?<\/tr>)+)/g, '<table border="1" cellspacing="0" cellpadding="5" style="width:100%; border-collapse:collapse; margin-bottom:10px; border: 1px solid black;">$1</table>');
       }
 
       return html;
@@ -211,8 +219,8 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
         <style>
           body { font-family: 'Times New Roman', serif; font-size: 11pt; line-height: 1.15; text-align: justify; margin: 2cm; }
           h1, h2, h3, h4, h5, h6 { color: #000; margin-top: 10pt; margin-bottom: 5pt; }
-          table { border-collapse: collapse; width: 100%; margin-bottom: 10pt; }
-          td, th { border: 1px solid #000; padding: 4pt 6pt; vertical-align: top; }
+          table { border-collapse: collapse; width: 100%; margin-bottom: 10pt; border: 1px solid black; }
+          td, th { border: 1px solid black; padding: 4pt 6pt; vertical-align: top; }
           ul, ol { margin-top: 0; margin-bottom: 5pt; padding-left: 20pt; }
           li { margin-bottom: 2pt; }
           p { margin-top: 0; margin-bottom: 8pt; }
@@ -245,12 +253,15 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
     // Create a temporary container with improved styles for PDF
     const element = document.createElement('div');
     element.innerHTML = `
-      <div style="font-family: 'Times New Roman', serif; padding: 20px; color: #000; font-size: 12px; text-align: justify; line-height: 1.5;">
+      <div style="font-family: 'Times New Roman', serif; padding: 25px; color: #000; font-size: 11pt; text-align: justify; line-height: 1.3;">
         <style>
-           h1, h2, h3 { color: #000; font-weight: bold; margin-top: 15px; margin-bottom: 5px; }
-           table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
-           td, th { border: 1px solid #000; padding: 4px; vertical-align: top; }
-           ul, ol { padding-left: 20px; margin-bottom: 5px; }
+           h1, h2 { text-align: center; font-weight: bold; text-transform: uppercase; margin-bottom: 15px; font-size: 14pt; }
+           h3 { font-weight: bold; margin-top: 15px; margin-bottom: 5px; font-size: 12pt; text-transform: uppercase; }
+           table { width: 100%; border-collapse: collapse; margin-bottom: 10px; margin-top: 5px; border: 1px solid #000; }
+           td, th { border: 1px solid #000; padding: 6px; vertical-align: top; }
+           ul, ol { padding-left: 20px; margin-bottom: 5px; margin-top: 0; }
+           li { margin-bottom: 3px; }
+           p { margin-bottom: 8px; margin-top: 0; }
            .page-break { page-break-before: always; }
         </style>
         ${formattedBody}
@@ -286,12 +297,16 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
         <head>
           <title>Cetak RPP</title>
           <style>
-            body { font-family: 'Times New Roman', serif; padding: 40px; font-size: 12pt; line-height: 1.5; }
-            table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+            body { font-family: 'Times New Roman', serif; padding: 40px; font-size: 12pt; line-height: 1.5; color: #000; }
+            h2 { text-align: center; font-weight: bold; text-transform: uppercase; margin-bottom: 20px; }
+            h3 { font-weight: bold; margin-top: 20px; margin-bottom: 10px; text-transform: uppercase; }
+            table { width: 100%; border-collapse: collapse; margin: 10px 0; border: 1px solid #000; }
             td, th { border: 1px solid #000; padding: 8px; vertical-align: top; }
-            h3 { text-transform: uppercase; border-bottom: 1px solid #ccc; padding-bottom: 5px; }
+            ul, ol { padding-left: 25px; margin-top: 0; }
             @media print {
                button { display: none; }
+               body { margin: 0; padding: 0; }
+               @page { margin: 2cm; }
             }
           </style>
         </head>
