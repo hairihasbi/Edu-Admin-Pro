@@ -371,7 +371,7 @@ const getTableConfig = (collection: string) => {
     case 'eduadmin_bk_counseling': return { 
         table: 'bk_counseling', 
         columns: ['id', 'student_id', 'date', 'issue', 'notes', 'follow_up', 'status', 'last_modified', 'version', 'deleted'], 
-        mapFn: (item: any) => [s(item.id), s(item.studentId), s(item.date), s(item.issue), s(item.notes), s(item.followUp), s(item.status), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] 
+        mapFn: (item: any) => [s(item.id), s(item.studentId), s(item.date), s(item.issue), s(item.notes), s(item.follow_up), s(item.status), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] 
     };
     case 'eduadmin_tickets': return { 
         table: 'tickets', 
@@ -531,7 +531,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             }
 
             // 2. MIGRATIONS (Column Additions - idempotent)
-            // (Disimpan untuk backward compatibility jika ada kolom baru)
             const migrations = [
                 { table: 'students', col: 'phone TEXT' },
                 { table: 'users', col: 'email TEXT' },
@@ -552,7 +551,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 { table: 'scores', col: 'deleted INTEGER DEFAULT 0' },
                 { table: 'api_keys', col: 'deleted INTEGER DEFAULT 0' },
                 { table: 'system_settings', col: 'deleted INTEGER DEFAULT 0' },
-                { table: 'bk_reductions', col: 'deleted INTEGER DEFAULT 0' }, // Updated table name
+                { table: 'bk_reductions', col: 'deleted INTEGER DEFAULT 0' },
                 { table: 'sync_store', col: 'deleted INTEGER DEFAULT 0' },
             ];
 
@@ -593,7 +592,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             try {
                 for (const item of items) {
                     // --- HARD DELETE LOGIC ---
-                    // Jika item ditandai sebagai deleted oleh frontend, lakukan DELETE fisik.
                     const isDeleted = item.deleted === true || item.deleted === 1;
 
                     if (isDeleted) {
@@ -608,10 +606,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                                 args: [collection, item.id]
                             });
                         }
-                        continue; // Lanjut ke item berikutnya
+                        continue; 
                     }
 
-                    // --- CONFLICT & INSERT LOGIC (Untuk item non-delete) ---
+                    // --- CONFLICT & INSERT LOGIC ---
                     if (!force) {
                         let existing = null;
                         try {
@@ -627,13 +625,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                         if (existing && (existing.version as number) > (item.version || 1)) continue; 
                     }
 
+                    // --- PASSWORD PRESERVATION LOGIC (SECURITY FIX) ---
+                    // If client sends user object without password (because of client-side stripping),
+                    // we must NOT overwrite existing password with NULL.
+                    if (collection === 'eduadmin_users' && !item.password && !isDeleted) {
+                         const existingRes = await transaction.execute({
+                             sql: "SELECT password FROM users WHERE id = ?",
+                             args: [item.id]
+                         });
+                         if (existingRes.rows.length > 0) {
+                             item.password = existingRes.rows[0].password;
+                         }
+                    }
+
                     if (tableConfig) {
-                        // SQL Table Insert
                         const placeholders = tableConfig.columns.map(() => '?').join(', ');
                         const sql = `INSERT OR REPLACE INTO ${tableConfig.table} (${tableConfig.columns.join(', ')}) VALUES (${placeholders})`;
                         await transaction.execute({ sql, args: tableConfig.mapFn(item) });
                     } else {
-                        // Generic JSON Insert
                         const userId = item.userId || null;
                         const schoolNpsn = item.schoolNpsn || null;
                         const isDeletedGeneric = 0; 
@@ -701,17 +710,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                             args = [userId];
                         }
                     } else if (tableConfig.table === 'scores' || tableConfig.table === 'journals' || tableConfig.table === 'schedules' || tableConfig.table === 'materials') {
-                        // User-owned items
                         query += " AND user_id = ?";
                         args = [userId];
                     } else if (['bk_violations', 'bk_reductions', 'bk_achievements', 'bk_counseling'].includes(tableConfig.table)) {
-                        // BK items linked via student's NPSN
                         if (userNpsn) {
                             query += " AND student_id IN (SELECT id FROM students WHERE school_npsn = ?)";
                             args = [userNpsn];
                         }
                     } else if (tableConfig.table === 'attendance') {
-                        // Attendance is shared per class, so if teacher owns class OR class is in same school
                         if (userNpsn) {
                              query += " AND class_id IN (SELECT id FROM classes WHERE school_npsn = ?)";
                              args = [userNpsn];
@@ -730,7 +736,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     version: row.version
                 }));
             } else {
-                // Fallback to sync_store
                 let query = `SELECT id, data, updated_at, version, deleted FROM ${GENERIC_TABLE} WHERE collection = ? AND (deleted = 0 OR deleted IS NULL)`;
                 let args: any[] = [collection];
 
