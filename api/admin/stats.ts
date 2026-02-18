@@ -37,22 +37,60 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         fetch: fetch 
     });
 
-    // 2. Aggregate Queries (Filtered by deleted = 0)
-    const [classesRes, studentsRes, journalsRes, attendanceTotalRes, attendancePresentRes, genderRes] = await Promise.all([
-        client.execute("SELECT COUNT(*) as count FROM classes WHERE deleted = 0 OR deleted IS NULL"),
-        client.execute("SELECT COUNT(*) as count FROM students WHERE deleted = 0 OR deleted IS NULL"),
-        client.execute("SELECT COUNT(*) as count FROM sync_store WHERE collection = 'eduadmin_journals' AND (deleted = 0 OR deleted IS NULL)"),
-        client.execute("SELECT COUNT(*) as count FROM sync_store WHERE collection = 'eduadmin_attendance' AND (deleted = 0 OR deleted IS NULL)"),
-        client.execute("SELECT COUNT(*) as count FROM sync_store WHERE collection = 'eduadmin_attendance' AND (deleted = 0 OR deleted IS NULL) AND data LIKE '%\"status\":\"H\"%'"),
-        client.execute("SELECT gender, COUNT(*) as count FROM students WHERE deleted = 0 OR deleted IS NULL GROUP BY gender")
+    // Helper untuk menjalankan query dengan fallback aman
+    const safeCount = async (table: string, collectionName?: string) => {
+        try {
+            // Coba query dengan filter deleted (Soft Delete Support)
+            if (collectionName) {
+                const res = await client.execute({
+                    sql: `SELECT COUNT(*) as count FROM sync_store WHERE collection = ? AND (deleted = 0 OR deleted IS NULL)`,
+                    args: [collectionName]
+                });
+                return res.rows[0].count as number;
+            } else {
+                const res = await client.execute(`SELECT COUNT(*) as count FROM ${table} WHERE deleted = 0 OR deleted IS NULL`);
+                return res.rows[0].count as number;
+            }
+        } catch (e: any) {
+            // Jika gagal (misal kolom deleted belum ada), fallback ke hitung total biasa
+            try {
+                if (collectionName) {
+                    const res = await client.execute({
+                        sql: `SELECT COUNT(*) as count FROM sync_store WHERE collection = ?`,
+                        args: [collectionName]
+                    });
+                    return res.rows[0].count as number;
+                } else {
+                    const res = await client.execute(`SELECT COUNT(*) as count FROM ${table}`);
+                    return res.rows[0].count as number;
+                }
+            } catch (innerE) {
+                console.warn(`Failed to count ${table}:`, innerE);
+                return 0;
+            }
+        }
+    };
+
+    // 2. Aggregate Queries
+    const [totalClasses, totalStudents, filledJournals, totalAttendance] = await Promise.all([
+        safeCount('classes'),
+        safeCount('students'),
+        safeCount('', 'eduadmin_journals'),
+        safeCount('', 'eduadmin_attendance')
     ]);
 
-    const totalClasses = classesRes.rows[0].count as number;
-    const totalStudents = studentsRes.rows[0].count as number;
-    const filledJournals = journalsRes.rows[0].count as number;
-    
-    const totalAttendance = attendanceTotalRes.rows[0].count as number;
-    const presentAttendance = attendancePresentRes.rows[0].count as number;
+    // Hitung Kehadiran (Agak kompleks karena filter JSON di sync_store)
+    let presentAttendance = 0;
+    try {
+        const res = await client.execute("SELECT COUNT(*) as count FROM sync_store WHERE collection = 'eduadmin_attendance' AND (deleted = 0 OR deleted IS NULL) AND data LIKE '%\"status\":\"H\"%'");
+        presentAttendance = res.rows[0].count as number;
+    } catch {
+        // Fallback
+        try {
+            const res = await client.execute("SELECT COUNT(*) as count FROM sync_store WHERE collection = 'eduadmin_attendance' AND data LIKE '%\"status\":\"H\"%'");
+            presentAttendance = res.rows[0].count as number;
+        } catch {}
+    }
     
     const attendanceRate = totalAttendance > 0 
         ? Math.round((presentAttendance / totalAttendance) * 100) 
@@ -62,10 +100,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let males = 0;
     let females = 0;
     
-    genderRes.rows.forEach((row: any) => {
-        if (row.gender === 'L') males = row.count as number;
-        if (row.gender === 'P') females = row.count as number;
-    });
+    try {
+        const genderRes = await client.execute("SELECT gender, COUNT(*) as count FROM students WHERE (deleted = 0 OR deleted IS NULL) GROUP BY gender");
+        genderRes.rows.forEach((row: any) => {
+            if (row.gender === 'L') males = row.count as number;
+            if (row.gender === 'P') females = row.count as number;
+        });
+    } catch (e) {
+        // Fallback simple
+        try {
+             const genderRes = await client.execute("SELECT gender, COUNT(*) as count FROM students GROUP BY gender");
+             genderRes.rows.forEach((row: any) => {
+                if (row.gender === 'L') males = row.count as number;
+                if (row.gender === 'P') females = row.count as number;
+            });
+        } catch {}
+    }
 
     const genderDistribution = [
         { name: 'Laki-laki', value: males },
