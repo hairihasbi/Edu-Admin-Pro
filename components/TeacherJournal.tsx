@@ -44,6 +44,10 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
 
   // Constants
   const monthNames = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+  
+  // Dynamic Year List (Realtime)
+  const currentRealYear = new Date().getFullYear();
+  const yearsList = [currentRealYear - 1, currentRealYear, currentRealYear + 1];
 
   // --- INIT ---
   useEffect(() => {
@@ -461,9 +465,9 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
                     onChange={(e) => setFilterYear(parseInt(e.target.value))}
                     className="w-full sm:w-28 px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white text-sm font-medium"
                  >
-                    <option value={2023}>2023</option>
-                    <option value={2024}>2024</option>
-                    <option value={2025}>2025</option>
+                    {yearsList.map(y => (
+                       <option key={y} value={y}>{y}</option>
+                    ))}
                  </select>
              </div>
 

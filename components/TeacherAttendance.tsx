@@ -43,6 +43,10 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   const monthNames = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 
+  // Dynamic Year List (Realtime)
+  const currentRealYear = new Date().getFullYear();
+  const yearsList = [currentRealYear - 1, currentRealYear, currentRealYear + 1];
+
   // Stats
   const [maleCount, setMaleCount] = useState(0);
   const [femaleCount, setFemaleCount] = useState(0);
@@ -460,9 +464,9 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
                   value={selectedYear}
                   onChange={(e) => setSelectedYear(Number(e.target.value))}
                 >
-                  <option value={2023}>2023</option>
-                  <option value={2024}>2024</option>
-                  <option value={2025}>2025</option>
+                  {yearsList.map(y => (
+                      <option key={y} value={y}>{y}</option>
+                  ))}
                 </select>
               </div>
 
