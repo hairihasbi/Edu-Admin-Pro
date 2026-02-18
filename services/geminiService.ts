@@ -10,71 +10,95 @@ export const generateLessonPlan = async (
   try {
     let curriculumText = "";
     if (request.curriculumType === 'MERDEKA') {
-        curriculumText = "Kurikulum Merdeka berdasarkan Permendikdasmen No. 13 Tahun 2025";
+        curriculumText = "Kurikulum Merdeka (Permendikdasmen No. 13 Tahun 2025)";
     } else {
-        curriculumText = "Kurikulum Berbasis Cinta berdasarkan KEPUTUSAN DIREKTUR JENDERAL PENDIDIKAN ISLAM NOMOR 6077 TAHUN 2025 TENTANG PANDUAN KURIKULUM BERBASIS CINTA";
+        curriculumText = "Kurikulum Berbasis Cinta (Kepdirjen Pendis No. 6077 Th 2025)";
     }
 
     let cpInstruction = "";
     if (request.cpMode === 'AUTO') {
-        cpInstruction = `Tolong generate Capaian Pembelajaran (CP) secara otomatis yang sesuai dengan Keputusan Kepala BSKAP Nomor 046/H/KR/2025 untuk Mata Pelajaran ${request.subject} Fase ${request.phase}. Gunakan CP ini sebagai dasar tujuan pembelajaran.`;
+        cpInstruction = `Tentukan Capaian Pembelajaran (CP) yang sesuai regulasi terbaru untuk mapel ${request.subject} Fase ${request.phase}.`;
     } else {
-        cpInstruction = `Gunakan Capaian Pembelajaran (CP) berikut yang telah ditentukan oleh guru: "${request.cpManualContent}".`;
+        cpInstruction = `Gunakan CP berikut: "${request.cpManualContent}".`;
     }
 
     const prompt = `
-      Bertindaklah sebagai ahli kurikulum dan konsultan pendidikan senior.
-      Buatkan MODUL AJAR / RPP yang lengkap, detail, dan profesional.
+      Bertindaklah sebagai Ahli Kurikulum Senior. Tugas Anda adalah menyusun **MODUL AJAR DEEP LEARNING** yang sangat detail, rapi, dan profesional.
+      
+      **DATA INPUT:**
+      - Guru: ${request.teacherName} (NIP: ${request.teacherNip})
+      - Sekolah: ${request.schoolName}
+      - Kepala Sekolah: ${request.headmasterName} (NIP: ${request.headmasterNip})
+      - Mapel: ${request.subject}
+      - Fase/Kelas: ${request.phase} / ${request.grade}
+      - Materi/Bab: ${request.topic}
+      - Alokasi Waktu: ${request.timeAllocation}
+      - Semester/Thn: ${request.semester} / ${request.academicYear}
+      - Model: ${request.learningModel}
+      - Profil Pelajar: ${request.graduateProfileDimensions.join(', ')}
+      - ${cpInstruction}
 
-      **I. IDENTITAS MODUL**
-      Kurikulum: ${curriculumText}
-      Nama Penyusun: ${request.teacherName} (NIP: ${request.teacherNip})
-      Instansi: ${request.schoolName}
-      Kepala Sekolah: ${request.headmasterName} (NIP: ${request.headmasterNip})
-      Mata Pelajaran: ${request.subject}
-      Kelas / Fase: ${request.grade} / ${request.phase}
-      Semester: ${request.semester}
-      Tahun Ajaran: ${request.academicYear}
-      Alokasi Waktu: ${request.timeAllocation}
-      Tempat, Tanggal: ${request.city}, ${request.date}
+      **INSTRUKSI STRUKTUR OUTPUT (WAJIB IKUTI URUTAN INI):**
+      Gunakan format Markdown. Gunakan Heading 3 (###) untuk Judul Bagian (A, B, C...). Jangan gunakan Heading 1 atau 2.
 
-      **II. DETAIL PEMBELAJARAN**
-      Topik / Materi Pokok: ${request.topic}
-      Model Pembelajaran: ${request.learningModel}
-      Strategi Pembelajaran: ${request.learningStrategy}
-      Dimensi Profil Lulusan: ${request.graduateProfileDimensions.join(', ')}
-      ${cpInstruction}
+      **JUDUL DOKUMEN:**
+      Tuliskan judul besar: "MODUL AJAR DEEP LEARNING" diikuti MATA PELAJARAN dan BAB.
 
-      **III. PENDEKATAN DEEP LEARNING (WAJIB)**
-      Rancang kegiatan pembelajaran yang secara eksplisit memenuhi 3 aspek DEEP LEARNING:
-      1. **MINDFUL (Berkesadaran)**: Guru hadir utuh, menyadari keberagaman/keunikan murid, dan membangun fokus.
-      2. **MEANINGFUL (Bermakna)**: Pembelajaran relevan dengan kehidupan nyata, memberikan pengalaman mendalam (bukan sekadar hafal), dan berdampak.
-      3. **JOYFUL (Menyenangkan)**: Suasana belajar yang positif, membahagiakan, dan memantik antusiasme murid.
+      **A. IDENTITAS MODUL**
+      Buatkan tabel atau list rapi berisi: Nama Sekolah, Nama Penyusun, Mata Pelajaran, Elemen (jika ada), Fase/Kelas/Semester, Alokasi Waktu, dan Tahun Pelajaran.
 
-      **IV. ASESMEN**
-      Jenis Asesmen: ${request.assessmentType}
-      Bentuk Instrumen: ${request.assessmentInstrument}
+      **B. IDENTIFIKASI KESIAPAN PESERTA DIDIK**
+      Tuliskan narasi analisis kesiapan siswa. Contoh: "Peserta didik pada umumnya telah memiliki pengetahuan dasar tentang... Minat peserta didik bervariasi... Kebutuhan belajar yang mungkin muncul adalah..."
 
-      **INSTRUKSI OUTPUT:**
-      Buat dokumen dalam format Markdown yang rapi. Struktur dokumen harus mencakup:
-      1.  **Informasi Umum** (Identitas Modul, Kompetensi Awal, Profil Pelajar, Sarana Prasarana, Target Peserta Didik).
-      2.  **Komponen Inti**:
-          *   Capaian Pembelajaran & Tujuan Pembelajaran.
-          *   Pemahaman Bermakna & Pertanyaan Pemantik.
-          *   **Kegiatan Pembelajaran**: Uraikan langkah-langkah (Pendahuluan, Inti, Penutup) secara spesifik sesuai Model ${request.learningModel}. 
-              *   *PENTING*: Berikan label atau catatan kecil di dalam langkah pembelajaran yang menunjukkan penerapan aspek **[Mindful]**, **[Meaningful]**, dan **[Joyful]**.
-      3.  **Asesmen**: Buat rubrik atau instrumen penilaian sederhana sesuai jenis ${request.assessmentType}.
-      4.  **Lampiran**: Lembar Kerja Peserta Didik (LKPD) sederhana, Pengayaan & Remedial, Bahan Bacaan.
-      5.  **Tanda Tangan**: Sertakan slot tanda tangan untuk Guru Mata Pelajaran dan Kepala Sekolah di bagian akhir.
+      **C. KARAKTERISTIK MATERI PELAJARAN**
+      Jelaskan karakteristik materi ${request.topic} secara konseptual dan prosedural. Jelaskan relevansinya dengan kehidupan nyata dan tingkat kesulitannya.
 
-      Gunakan bahasa Indonesia yang formal, edukatif, namun mengalir dan mudah dipahami.
+      **D. DIMENSI PROFIL LULUSAN PEMBELAJARAN**
+      Sebutkan dimensi profil (seperti ${request.graduateProfileDimensions.join(', ')}) dan jelaskan perilaku singkat yang diharapkan.
+
+      **E. DESAIN PEMBELAJARAN**
+      Jelaskan pendekatan pembelajaran yang digunakan (${request.learningModel} dan ${request.learningStrategy}) serta bagaimana metode ini memfasilitasi Deep Learning.
+
+      **F. CAPAIAN PEMBELAJARAN (CP)**
+      Tuliskan Capaian Pembelajaran lengkap.
+
+      **G. LINTAS DISIPLIN ILMU**
+      Sebutkan minimal 2 disiplin ilmu lain (misal: Fisika, Seni, TIK, Bahasa) yang terintegrasi dengan materi ini.
+
+      **H. TUJUAN PEMBELAJARAN**
+      Rumuskan Tujuan Pembelajaran (TP) yang spesifik. Jika memungkinkan, bagi menjadi Pertemuan 1 dan Pertemuan 2 beserta Indikator Keberhasilannya.
+
+      **I. TOPIK PEMBELAJARAN KONTEKSTUAL**
+      Sebutkan 3 topik penerapan materi dalam kehidupan sehari-hari / isu terkini.
+
+      **J. KERANGKA PEMBELAJARAN**
+      Buatkan poin-poin untuk:
+      1. Praktik Pedagogik (Model & Strategi).
+      2. Kemitraan Pembelajaran (Lingkungan Sekolah, Luar Sekolah, Masyarakat).
+      3. Lingkungan Belajar (Ruang Fisik, Virtual, Budaya Belajar).
+      4. Pemanfaatan Digital (Aplikasi/Platform yang dipakai).
+
+      **K. LANGKAH-LANGKAH PEMBELAJARAN**
+      Uraikan langkah pembelajaran (Pendahuluan, Inti, Penutup). 
+      **SANGAT PENTING:** Pada Kegiatan Inti, berikan label eksplisit **[MINDFUL]**, **[MEANINGFUL]**, dan **[JOYFUL]** pada aktivitas yang relevan.
+      Contoh: "Guru mengajak siswa melakukan ice breaking... [JOYFUL]"
+
+      **L. ASESMEN PEMBELAJARAN**
+      1. Asesmen Awal (Diagnostik): Pertanyaan pemantik/kuis.
+      2. Asesmen Proses (Formatif): Observasi/LKPD.
+      3. Asesmen Akhir (Sumatif): Tes tertulis/Proyek.
+
+      **TANDA TANGAN**
+      Buatkan tempat tanda tangan untuk Mengetahui Kepala Sekolah dan Guru Mata Pelajaran (Gunakan Nama & NIP dari data input), sertakan Kota (${request.city}) dan Tanggal (${request.date}).
+
+      Gunakan bahasa Indonesia yang baku, edukatif, dan format yang rapi (gunakan bold untuk penekanan).
     `;
 
     const response = await fetch('/api/gemini', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${userId}` // AUTH HEADER ADDED
+        'Authorization': `Bearer ${userId}`
       },
       body: JSON.stringify({ prompt, userId }),
     });
@@ -89,20 +113,19 @@ export const generateLessonPlan = async (
 
     if (!response.body) throw new Error("ReadableStream not supported");
 
-    // --- STREAM READER LOGIC ---
     const reader = response.body.getReader();
     const decoder = new TextDecoder("utf-8");
     let fullTextAccumulated = "";
 
-    // Progress checkpoints mapping
+    // Mapping progress yang lebih akurat sesuai struktur A-L
     const progressMap = [
-        { key: "I. IDENTITAS", percent: 10, status: "Menyusun Identitas Modul..." },
-        { key: "II. DETAIL", percent: 25, status: "Merancang Detail & Tujuan..." },
-        { key: "III. PENDEKATAN", percent: 45, status: "Integrasi Deep Learning..." },
-        { key: "Kegiatan Pembelajaran", percent: 60, status: "Menulis Langkah Pembelajaran..." },
-        { key: "IV. ASESMEN", percent: 80, status: "Membuat Instrumen Penilaian..." },
-        { key: "Lampiran", percent: 90, status: "Menambahkan LKPD & Bahan Bacaan..." },
-        { key: "Tanda Tangan", percent: 95, status: "Finalisasi Dokumen..." }
+        { key: "A. IDENTITAS", percent: 10, status: "Menyusun Identitas..." },
+        { key: "B. IDENTIFIKASI", percent: 20, status: "Analisis Peserta Didik..." },
+        { key: "F. CAPAIAN", percent: 40, status: "Menentukan CP & TP..." },
+        { key: "J. KERANGKA", percent: 60, status: "Menyusun Kerangka..." },
+        { key: "K. LANGKAH", percent: 75, status: "Merancang Aktivitas Deep Learning..." },
+        { key: "L. ASESMEN", percent: 90, status: "Menyusun Asesmen..." },
+        { key: "TANDA TANGAN", percent: 95, status: "Finalisasi Dokumen..." }
     ];
     let currentProgressIndex = -1;
 
@@ -113,11 +136,10 @@ export const generateLessonPlan = async (
         const chunk = decoder.decode(value, { stream: true });
         fullTextAccumulated += chunk;
         
-        // Progress Detection Logic
         if (onProgress) {
             for (let i = currentProgressIndex + 1; i < progressMap.length; i++) {
                 const checkpoint = progressMap[i];
-                if (fullTextAccumulated.includes(checkpoint.key) || fullTextAccumulated.includes(checkpoint.key.toUpperCase())) {
+                if (fullTextAccumulated.includes(checkpoint.key)) {
                     onProgress(checkpoint.percent, checkpoint.status);
                     currentProgressIndex = i;
                 }
@@ -127,7 +149,6 @@ export const generateLessonPlan = async (
         onUpdate(chunk);
     }
     
-    // Finish
     if (onProgress) onProgress(100, "Selesai!");
 
   } catch (error: any) {
@@ -148,7 +169,7 @@ export const generateAnnouncement = async (topic: string, userId?: string): Prom
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${userId}` // AUTH HEADER ADDED
+        'Authorization': `Bearer ${userId}` 
       },
       body: JSON.stringify({ prompt, userId }),
     });
