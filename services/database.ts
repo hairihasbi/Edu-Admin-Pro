@@ -833,7 +833,6 @@ export const getSyncStats = async (user: User) => {
 };
 
 export const syncAllData = async (force = false) => {
-    // ... existing implementation ...
     if (!navigator.onLine) return;
     
     // List of tables to sync (Order matters for foreign keys)
@@ -864,17 +863,17 @@ export const syncAllData = async (force = false) => {
         const unsynced = await col.table.filter(i => !i.isSynced).toArray();
         if (unsynced.length > 0 || force) {
             await pushToTurso(col.name, unsynced, force);
-            // Mark as synced locally if success
-            // Note: Dexie bulkUpdate needs primary keys
-            // Some tables have 'id' as key, 'whatsappConfigs' has 'userId'.
-            const keyName = col.name === 'eduadmin_wa_configs' ? 'userId' : 'id';
-            await col.table.bulkUpdate(unsynced.map(i => ({ key: i[keyName], changes: { isSynced: true } })));
+            
+            // Fix: Use bulkPut instead of bulkUpdate
+            const updatedItems = unsynced.map(item => ({ ...item, isSynced: true }));
+            await (col.table as any).bulkPut(updatedItems);
         }
 
         // PULL
-        const { items, hasChanges } = await pullFromTurso(col.name, await col.table.toArray());
+        const localItems = await col.table.toArray();
+        const { items, hasChanges } = await pullFromTurso(col.name, localItems);
         if (hasChanges) {
-            await col.table.bulkPut(items);
+            await (col.table as any).bulkPut(items);
         }
     }
     
