@@ -17,6 +17,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   let successCount = 0;
   let failCount = 0;
+  const errors: string[] = [];
 
   // Default URL: https://scan.flowkirim.com/api/whatsapp/messages/text
   const baseUrl = config.baseUrl || 'https://scan.flowkirim.com/api/whatsapp/messages/text';
@@ -76,21 +77,50 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             if (config.provider === 'FLOWKIRIM' && responseData.success === false) {
                  console.error(`WA API Logic Error for ${phone}:`, responseData);
                  failCount++;
+                 errors.push(`${recipient.name}: ${responseData.message || 'Unknown logic error'}`);
             } else {
                  successCount++;
             }
         } else {
-            console.error(`WA Send Failed for ${phone}:`, await response.text());
+            // Handle non-200 responses (including HTML error pages from Laravel/Nginx)
+            const contentType = response.headers.get("content-type");
+            let errorDetails = `HTTP ${response.status}`;
+
+            if (contentType && contentType.includes("application/json")) {
+                const jsonErr = await response.json();
+                errorDetails += ` - ${JSON.stringify(jsonErr)}`;
+            } else {
+                const text = await response.text();
+                if (text.includes("<!DOCTYPE html>")) {
+                    const titleMatch = text.match(/<title>(.*?)<\/title>/i);
+                    // Extract Laravel exception message if possible
+                    const exceptionMatch = text.match(/class="exception-message[^>]*>(.*?)<\/span>/s) || text.match(/<h1 class="break-long-words exception-message">(.*?)<\/h1>/);
+                    
+                    if (exceptionMatch) {
+                         errorDetails += ` - Server Error: ${exceptionMatch[1].trim()}`;
+                    } else if (titleMatch) {
+                         errorDetails += ` - HTML Error: ${titleMatch[1].trim()}`;
+                    } else {
+                         errorDetails += " - Unknown HTML Error";
+                    }
+                } else {
+                    errorDetails += ` - ${text.substring(0, 100)}`;
+                }
+            }
+            
+            console.error(`WA Send Failed for ${phone}: ${errorDetails}`);
             failCount++;
+            errors.push(`${recipient.name}: ${errorDetails}`);
         }
-    } catch (e) {
+    } catch (e: any) {
         console.error(`WA Connection Error for ${phone}:`, e);
         failCount++;
+        errors.push(`${recipient.name}: Connection Error (${e.message})`);
     }
     
     // Slight delay to be nice to the API
     await new Promise(r => setTimeout(r, 500));
   }
 
-  return res.status(200).json({ success: successCount, failed: failCount });
+  return res.status(200).json({ success: successCount, failed: failCount, errors });
 }
