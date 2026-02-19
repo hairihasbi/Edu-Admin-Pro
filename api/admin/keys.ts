@@ -7,6 +7,7 @@ const KEY_PREFIX = 'GEMINI_KEY_';
 const REDIS_KEY_USAGE = 'gemini:usage';
 const REDIS_KEY_STATUS = 'gemini:status'; 
 const REDIS_KEY_ERRORS = 'gemini:errors';
+const REDIS_COOLDOWN_PREFIX = 'gemini:cooldown:';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Only allow Admin operations
@@ -66,8 +67,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (action === 'reset_status') {
           // Set status back to ACTIVE
           await redis.hset(REDIS_KEY_STATUS, { [keyName]: 'ACTIVE' });
-          // Optional: Reset error count on revive
-          // await redis.hset(REDIS_KEY_ERRORS, { [keyName]: 0 }); 
+          // Remove cooldown lock so it can be used immediately
+          await redis.del(REDIS_COOLDOWN_PREFIX + keyName);
           return res.status(200).json({ success: true, message: `Key ${keyName} reactivated.` });
       }
 
@@ -75,6 +76,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           // Reset usage counter
           await redis.hset(REDIS_KEY_USAGE, { [keyName]: 0 });
           return res.status(200).json({ success: true, message: `Usage count for ${keyName} reset.` });
+      }
+
+      if (action === 'reset_errors') {
+          // Reset error counter
+          await redis.hset(REDIS_KEY_ERRORS, { [keyName]: 0 });
+          return res.status(200).json({ success: true, message: `Error count for ${keyName} reset.` });
       }
 
       return res.status(400).json({ error: "Invalid action" });
