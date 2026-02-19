@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { User, LessonPlanRequest, SystemSettings } from '../types';
 import { generateLessonPlan } from '../services/geminiService';
@@ -187,105 +188,95 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
       
       let html = md
         // --- LATEX PARSING ---
-        // Block math: $$ ... $$
         .replace(/\$\$(.*?)\$\$/gs, (match, tex) => {
-            return `<div style="text-align:center; margin: 10px 0;">${renderMath(tex, true)}</div>`;
+            return `<div style="text-align:center; margin: 5px 0;">${renderMath(tex, true)}</div>`;
         })
-        // Inline math: $ ... $ (excluding typical currency usage like $100)
         .replace(/\$([^$]+?)\$/g, (match, tex) => {
-            // Check if it looks like currency (digit follows $) or just empty
             if (!tex || /^\d/.test(tex)) return match;
             return renderMath(tex, false);
         })
 
-        // --- MARKDOWN PARSING ---
-        // Headers
-        .replace(/###\s+(.*?)\n/g, '<h3 style="margin-top:15pt; margin-bottom:5pt; font-size:12pt; font-weight:bold; text-transform:uppercase;">$1</h3>')
-        .replace(/##\s+(.*?)\n/g, '<h2 style="margin-top:20pt; margin-bottom:10pt; font-size:14pt; font-weight:bold; text-align:center; text-transform:uppercase;">$1</h2>')
-        .replace(/#\s+(.*?)\n/g, '<h1 style="margin-top:20pt; margin-bottom:10pt; font-size:16pt; font-weight:bold; text-align:center; text-transform:uppercase; text-decoration: underline;">$1</h1>')
-        // Bold: **text** -> <b>text</b>
+        // --- MARKDOWN PARSING (TIGHTER SPACING) ---
+        // Headers with reduced margins
+        .replace(/###\s+(.*?)\n/g, '<h3 style="margin-top:10pt; margin-bottom:3pt; font-size:12pt; font-weight:bold; text-transform:uppercase;">$1</h3>')
+        .replace(/##\s+(.*?)\n/g, '<h2 style="margin-top:12pt; margin-bottom:5pt; font-size:14pt; font-weight:bold; text-align:center; text-transform:uppercase;">$1</h2>')
+        .replace(/#\s+(.*?)\n/g, '<h1 style="margin-top:12pt; margin-bottom:8pt; font-size:16pt; font-weight:bold; text-align:center; text-transform:uppercase; text-decoration: underline;">$1</h1>')
+        // Bold & Italic
         .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
-        // Italic: *text* -> <i>text</i>
         .replace(/\*(.*?)\*/g, '<i>$1</i>')
-        // Bullet points
+        // Lists
         .replace(/^\s*-\s+(.*)$/gm, '<li style="text-align: justify;">$1</li>')
-        .replace(/((<li.*>.*<\/li>\n?)+)/g, '<ul>$1</ul>')
-        // Ordered lists
+        .replace(/((<li.*>.*<\/li>\n?)+)/g, '<ul style="margin-top: 0; margin-bottom: 5px;">$1</ul>')
         .replace(/^\s*\d+\.\s+(.*)$/gm, '<li style="text-align: justify;">$1</li>')
-        .replace(/((<li.*>.*<\/li>\n?)+)/g, '<ol>$1</ol>')
-        // Tables (Standard Markdown with FIXED COLUMN WIDTH & SIGNATURE LOGIC)
+        .replace(/((<li.*>.*<\/li>\n?)+)/g, '<ol style="margin-top: 0; margin-bottom: 5px;">$1</ol>')
+        // Tables (TRANSPARENT & TIGHT)
         .replace(/\|(.+)\|/g, (match) => {
             const cells = match.split('|').filter((s, i, arr) => {
-                // Filter out empty strings that come from splitting | at start/end
                 return !(s.trim() === '' && (i === 0 || i === arr.length - 1));
             });
-            // Check if it's a separator row (---)
             if (cells.some(c => c.includes('---'))) return ''; 
 
             const colCount = cells.length;
-            
-            // Check if this row belongs to the Signature Section
             const rowContent = cells.join(' ');
             const isSignature = rowContent.includes('Mengetahui') || rowContent.includes('Guru Mata Pelajaran') || rowContent.includes('NIP.');
 
             return '<tr>' + cells.map((cell, index) => {
-                let style = 'padding: 5px; vertical-align: top; border: 1px solid black;';
+                // Change: border: none, padding reduced to 3px
+                let style = 'padding: 3px 5px; vertical-align: top; border: none;'; // Transparent cell border
                 
                 if (isSignature) {
-                    style = 'padding: 5px; vertical-align: top; border: none; width: 50%;'; // Transparent border & 50% width
+                    style = 'padding: 5px; vertical-align: top; border: none; width: 50%;'; 
                 } else {
-                    // Specific Widths based on Column Count
                     if (colCount === 2) {
-                        // Identitas, Pendekatan, Model
                         if (index === 0) style += ' width: 25%; text-align: left; font-weight: bold;'; 
                         else style += ' width: 75%; text-align: justify;'; 
                     } 
                     else if (colCount === 4) {
-                        // KEGIATAN PENDAHULUAN & PENUTUP (Waktu, Aktivitas, Deskripsi, Deep Learning)
-                        if (index === 0) style += ' width: 10%; text-align: center;'; // Waktu
-                        else if (index === 1) style += ' width: 20%; text-align: left; font-weight: bold;'; // Aktivitas
-                        else if (index === 2) style += ' width: 55%; text-align: justify;'; // Deskripsi
-                        else style += ' width: 15%; text-align: center; font-style: italic;'; // Deep Learning
+                        if (index === 0) style += ' width: 10%; text-align: center;'; 
+                        else if (index === 1) style += ' width: 20%; text-align: left; font-weight: bold;'; 
+                        else if (index === 2) style += ' width: 55%; text-align: justify;'; 
+                        else style += ' width: 15%; text-align: center; font-style: italic;'; 
                     }
                     else if (colCount === 5) {
-                        // KEGIATAN INTI (Fase, Waktu, Guru, Siswa, Deep Learning)
-                        if (index === 0) style += ' width: 15%; text-align: left; font-weight: bold;'; // Fase
-                        else if (index === 1) style += ' width: 10%; text-align: center;'; // Waktu
-                        else if (index === 2) style += ' width: 30%; text-align: justify;'; // Guru
-                        else if (index === 3) style += ' width: 30%; text-align: justify;'; // Siswa
-                        else style += ' width: 15%; text-align: center; font-style: italic;'; // Deep Learning
+                        if (index === 0) style += ' width: 15%; text-align: left; font-weight: bold;';
+                        else if (index === 1) style += ' width: 10%; text-align: center;';
+                        else if (index === 2) style += ' width: 30%; text-align: justify;';
+                        else if (index === 3) style += ' width: 30%; text-align: justify;';
+                        else style += ' width: 15%; text-align: center; font-style: italic;';
                     }
                     else {
-                        // Fallback generic justify
                         style += ' text-align: justify;';
                     }
+                }
+
+                // Optional: Add very subtle bottom border for readability if not signature, otherwise completely transparent
+                if (!isSignature) {
+                    style += ' border-bottom: 1px solid #f0f0f0;'; // Very light gray separator
                 }
 
                 return `<td style="${style}">${cell.trim() || '&nbsp;'}</td>`;
             }).join('') + '</tr>';
         })
-        // Newlines to paragraph with justify
-        .replace(/\n\n/g, '</p><p style="text-align: justify; margin-bottom: 8pt;">')
+        // Newlines to paragraph with reduced margin
+        .replace(/\n\n/g, '</p><p style="text-align: justify; margin-bottom: 4pt;">')
         .replace(/\n/g, '<br/>');
 
-      // Wrap tables if any rows detected and remove empty header marker rows
+      // Wrap tables
       if (html.includes('<tr>')) {
-          html = html.replace(/<tr>\s*<\/tr>/g, ''); // Remove empty rows from markdown separator lines
+          html = html.replace(/<tr>\s*<\/tr>/g, ''); 
           
-          // Custom wrapper for Signature Table vs Normal Table
           html = html.replace(/((<tr>.*?<\/tr>)+)/g, (match) => {
               if (match.includes('Mengetahui') || match.includes('Guru Mata Pelajaran')) {
-                  // Signature Table: No border, margin top
-                  return `<table border="0" style="width:100%; border-collapse:collapse; margin-top:30px; border: none;">${match}</table>`;
+                  // Signature Table: Transparent, Top Margin
+                  return `<table border="0" style="width:100%; border-collapse:collapse; margin-top:20px; border: none;">${match}</table>`;
               }
-              // Normal Table: Bordered
-              return `<table border="1" cellspacing="0" cellpadding="5" style="width:100%; border-collapse:collapse; margin-bottom:15px; border: 1px solid black;">${match}</table>`;
+              // Normal Table: Transparent Border (border="0"), Tighter Bottom Margin
+              return `<table border="0" cellspacing="0" cellpadding="3" style="width:100%; border-collapse:collapse; margin-bottom:10px; border: none;">${match}</table>`;
           });
       }
       
-      // Wrap content in p if not already started
       if (!html.startsWith('<')) {
-          html = '<p style="text-align: justify; margin-bottom: 8pt;">' + html + '</p>';
+          html = '<p style="text-align: justify; margin-bottom: 4pt;">' + html + '</p>';
       }
 
       return html;
@@ -303,14 +294,13 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
         <meta charset='utf-8'>
         <title>Modul Ajar - ${rppData.subject}</title>
         <style>
-          body { font-family: 'Arial', sans-serif; font-size: 11pt; line-height: 1.5; text-align: justify; margin: 2cm; }
+          body { font-family: 'Arial', sans-serif; font-size: 11pt; line-height: 1.3; text-align: justify; margin: 1.5cm; }
           h1, h2, h3 { color: #000; font-weight: bold; }
-          table { border-collapse: collapse; width: 100%; margin-bottom: 10pt; }
-          td, th { padding: 5pt; vertical-align: top; text-align: justify; }
-          ul, ol { margin-top: 0; margin-bottom: 5pt; padding-left: 20pt; }
-          li { margin-bottom: 2pt; }
-          p { margin-top: 0; margin-bottom: 8pt; text-align: justify; }
-          /* Minimal KaTeX styles for Word compat */
+          table { border-collapse: collapse; width: 100%; margin-bottom: 5pt; border: none; }
+          td, th { padding: 3pt; vertical-align: top; text-align: justify; border: none; }
+          ul, ol { margin-top: 0; margin-bottom: 3pt; padding-left: 15pt; }
+          li { margin-bottom: 1pt; }
+          p { margin-top: 0; margin-bottom: 4pt; text-align: justify; }
           .katex { font-size: 1.1em; font-family: 'Times New Roman', serif; }
         </style>
       </head>
@@ -333,31 +323,28 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
   const handleExportPDF = async () => {
     if (!rppResult) return;
     
-    // We need to format the HTML first, forcing Math rendering
     const formattedBody = formatMarkdownToWordHTML(rppResult);
     
-    // Create a temporary container with improved styles for PDF
     const element = document.createElement('div');
     element.innerHTML = `
-      <div style="font-family: 'Arial', sans-serif; padding: 25px; color: #000; font-size: 11pt; text-align: justify; line-height: 1.5;">
+      <div style="font-family: 'Arial', sans-serif; padding: 25px; color: #000; font-size: 11pt; text-align: justify; line-height: 1.3;">
         <style>
-           h1, h2 { text-align: center; font-weight: bold; text-transform: uppercase; margin-bottom: 15px; font-size: 14pt; }
-           h3 { font-weight: bold; margin-top: 15px; margin-bottom: 5px; font-size: 12pt; text-transform: uppercase; }
-           table { width: 100%; border-collapse: collapse; margin-bottom: 10px; margin-top: 5px; }
-           td, th { padding: 6px; vertical-align: top; text-align: justify; }
-           ul, ol { padding-left: 20px; margin-bottom: 5px; margin-top: 0; }
-           li { margin-bottom: 3px; }
-           p { margin-bottom: 8px; margin-top: 0; text-align: justify; }
+           h1, h2 { text-align: center; font-weight: bold; text-transform: uppercase; margin-bottom: 10px; font-size: 14pt; }
+           h3 { font-weight: bold; margin-top: 10px; margin-bottom: 3px; font-size: 12pt; text-transform: uppercase; }
+           table { width: 100%; border-collapse: collapse; margin-bottom: 8px; margin-top: 3px; border: none; }
+           td, th { padding: 4px; vertical-align: top; text-align: justify; border: none; border-bottom: 1px solid #f0f0f0; }
+           ul, ol { padding-left: 20px; margin-bottom: 4px; margin-top: 0; }
+           li { margin-bottom: 2px; }
+           p { margin-bottom: 5px; margin-top: 0; text-align: justify; }
            .page-break { page-break-before: always; }
-           .katex { font-size: 1em !important; } /* Fix math size in PDF */
+           .katex { font-size: 1em !important; }
         </style>
         ${formattedBody}
       </div>
     `;
     
-    // PDF Options
     const opt = {
-      margin:       15, // mm
+      margin:       15,
       filename:     `RPP_${rppData.subject.replace(/\s+/g, '_')}_${rppData.grade}.pdf`,
       image:        { type: 'jpeg' as const, quality: 0.98 },
       html2canvas:  { scale: 2, useCORS: true },
@@ -388,13 +375,13 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
           <title>Cetak RPP</title>
           <link rel="stylesheet" href="${katexLink}" crossorigin="anonymous">
           <style>
-            body { font-family: 'Arial', sans-serif; padding: 40px; font-size: 12pt; line-height: 1.5; color: #000; text-align: justify; }
-            h2 { text-align: center; font-weight: bold; text-transform: uppercase; margin-bottom: 20px; }
-            h3 { font-weight: bold; margin-top: 20px; margin-bottom: 10px; text-transform: uppercase; }
-            table { width: 100%; border-collapse: collapse; margin: 10px 0; }
-            td, th { padding: 8px; vertical-align: top; text-align: justify; }
-            ul, ol { padding-left: 25px; margin-top: 0; }
-            p { text-align: justify; }
+            body { font-family: 'Arial', sans-serif; padding: 40px; font-size: 12pt; line-height: 1.3; color: #000; text-align: justify; }
+            h2 { text-align: center; font-weight: bold; text-transform: uppercase; margin-bottom: 15px; }
+            h3 { font-weight: bold; margin-top: 15px; margin-bottom: 5px; text-transform: uppercase; }
+            table { width: 100%; border-collapse: collapse; margin: 5px 0; border: none; }
+            td, th { padding: 4px; vertical-align: top; text-align: justify; border: none; border-bottom: 1px solid #f0f0f0; }
+            ul, ol { padding-left: 25px; margin-top: 0; margin-bottom: 5px; }
+            p { text-align: justify; margin-bottom: 5px; }
             @media print {
                button { display: none; }
                body { margin: 0; padding: 0; }
