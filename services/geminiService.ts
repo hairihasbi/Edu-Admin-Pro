@@ -23,7 +23,7 @@ export const generateLessonPlan = async (
     }
 
     const prompt = `
-      Bertindaklah sebagai Ahli Kurikulum Senior. Tugas Anda adalah menyusun **MODUL AJAR / RPP** yang SANGAT RAPI, FORMAL, dan TERSTRUKTUR DALAM TABEL agar mudah dibaca dan dicetak.
+      Bertindaklah sebagai Ahli Kurikulum Senior dan Spesialis Deep Learning. Tugas Anda adalah menyusun **MODUL AJAR KURIKULUM MERDEKA** dengan struktur yang SANGAT SPESIFIK dan DETIL.
 
       **DATA INPUT:**
       - Guru: ${request.teacherName} (NIP: ${request.teacherNip})
@@ -35,107 +35,104 @@ export const generateLessonPlan = async (
       - Alokasi Waktu: ${request.timeAllocation}
       - Semester/Thn: ${request.semester} / ${request.academicYear}
       - Model: ${request.learningModel}
+      - Strategi: ${request.learningStrategy}
       - Profil Pelajar: ${request.graduateProfileDimensions.join(', ')}
       - ${cpInstruction}
+      - Asesmen: ${request.assessmentType} (${request.assessmentInstrument})
 
-      **INSTRUKSI FORMAT OUTPUT (WAJIB IKUTI PERSIS):**
-      Gunakan format Markdown. Bagian yang saya minta dalam **TABEL** wajib dibuat menggunakan sintaks tabel Markdown.
+      **INSTRUKSI STRUKTUR OUTPUT (WAJIB IKUTI PERSIS):**
+      Gunakan format Markdown. Pastikan semua tabel dibuat rapi. Gunakan bahasa Indonesia formal dan pedagogis.
 
       --- MULAI DOKUMEN ---
 
-      ## MODUL AJAR ${request.subject.toUpperCase()}
-      ## ${request.topic.toUpperCase()}
+      # MODUL AJAR KURIKULUM MERDEKA
+      ## ${request.subject.toUpperCase()} - ${request.topic.toUpperCase()}
 
       ### I. INFORMASI UMUM
 
       **A. IDENTITAS MODUL**
-      (Buat dalam TABEL dengan 2 kolom: Atribut dan Keterangan)
-      | Atribut | Keterangan |
+      (Buat dalam TABEL rapi, isi rata kiri)
+      | Komponen | Keterangan |
       | :--- | :--- |
       | Penyusun | ${request.teacherName} |
       | Instansi | ${request.schoolName} |
-      | Tahun Penyusunan | ${new Date().getFullYear()} |
+      | Tahun Pelajaran | ${request.academicYear} |
       | Jenjang Sekolah | SMA/SMK |
       | Mata Pelajaran | ${request.subject} |
       | Fase / Kelas | ${request.phase} / ${request.grade} |
-      | Bab / Tema | ${request.topic} |
+      | Topik / Materi | ${request.topic} |
       | Alokasi Waktu | ${request.timeAllocation} |
+      | Pendekatan | **Deep Learning** |
 
-      **B. KOMPETENSI AWAL**
-      (Tuliskan paragraf singkat tentang kompetensi yang perlu dimiliki siswa sebelum mempelajari materi ini)
-
-      **C. PROFIL PELAJAR PANCASILA**
-      (Sebutkan dimensi: ${request.graduateProfileDimensions.join(', ')} dan jelaskan singkat penerapannya)
-
-      **D. SARANA DAN PRASARANA**
-      *   Media: (Laptop, LCD, LKPD, dll)
-      *   Sumber Belajar: (Buku Paket, Youtube, dll)
-
-      **E. TARGET PESERTA DIDIK**
-      *   Peserta didik reguler/tipikal.
-      *   Peserta didik dengan kesulitan belajar.
-      *   Peserta didik dengan pencapaian tinggi.
-
-      **F. MODEL PEMBELAJARAN**
-      (Buat dalam TABEL 1 baris)
-      | Model Pembelajaran | Metode |
+      **B. PENDEKATAN DEEP LEARNING**
+      (Jelaskan implementasi Mindful, Meaningful, Joyful yang akan dilakukan dalam materi ini. Tulisan harus justify/rata kanan kiri dalam tabel).
+      | Aspek | Deskripsi Implementasi |
       | :--- | :--- |
-      | ${request.learningModel} | ${request.learningStrategy} |
+      | **MINDFUL** (Kesadaran Penuh) | (Jelaskan bagaimana guru membangun kesadaran dan fokus siswa pada materi ini) |
+      | **MEANINGFUL** (Bermakna) | (Jelaskan relevansi materi ini dengan kehidupan nyata siswa agar pembelajaran bermakna) |
+      | **JOYFUL** (Menyenangkan) | (Jelaskan strategi agar suasana belajar menjadi positif dan menyenangkan bagi siswa) |
+
+      **C. KOMPETENSI AWAL**
+      (Tuliskan 1-2 paragraf yang menjelaskan pengetahuan atau keterampilan prasyarat yang perlu dimiliki siswa sebelum mempelajari materi ini. Penulisan justify).
+
+      **D. PROFIL LULUSAN YANG DIKEMBANGKAN**
+      (Jelaskan secara rinci bagaimana dimensi: **${request.graduateProfileDimensions.join(', ')}** dikembangkan melalui materi ini secara berkesinambungan).
+
+      **E. SARANA DAN PRASARANA**
+      (Sebutkan alat, bahan, media, dan sumber belajar yang RELEVAN dengan materi "${request.topic}" dan model "${request.learningModel}").
+
+      **F. TARGET PESERTA DIDIK**
+      (Jelaskan target peserta didik, misal: Peserta didik reguler, dengan kesulitan belajar, dan pencapaian tinggi).
+
+      **G. MODEL DAN STRATEGI PEMBELAJARAN**
+      | Komponen | Deskripsi Rinci |
+      | :--- | :--- |
+      | **Model Pembelajaran** | **${request.learningModel}**.<br>(Jelaskan alasan pemilihan model ini dan bagaimana kecocokannya dengan materi). |
+      | **Strategi Pembelajaran** | **${request.learningStrategy}**.<br>(Jelaskan langkah taktis operasional strategi ini dalam kelas). |
 
       ---
 
       ### II. KOMPONEN INTI
 
-      **A. TUJUAN PEMBELAJARAN**
-      1.  (Rumuskan TP 1)
-      2.  (Rumuskan TP 2)
+      **A. CAPAIAN PEMBELAJARAN (CP)**
+      (Tuliskan narasi CP lengkap).
 
-      **B. PEMAHAMAN BERMAKNA**
-      (Jelaskan manfaat pembelajaran ini dalam kehidupan nyata)
+      **B. KEGIATAN PEMBELAJARAN**
 
-      **C. PERTANYAAN PEMANTIK**
-      *   (Tuliskan 2-3 pertanyaan pemantik yang menarik minat siswa)
+      **1. KEGIATAN PENDAHULUAN (Durasi Total: 7 Menit)**
+      (Pecah durasi 7 menit ke aktivitas di bawah. Kolom Deskripsi Detail harus rinci).
+      | Waktu | Aktivitas | Deskripsi Detail Aktivitas | Deep Learning |
+      | :--- | :--- | :--- | :--- |
+      | ... menit | Pembukaan | Guru memberi salam, menyapa siswa... | Joyful |
+      | ... menit | Mindful Moment | Teknik STOP / Bernafas sejenak... | Mindful |
+      | ... menit | Apersepsi | Mengaitkan materi dengan... | Meaningful |
+      | ... menit | Ice Breaker | (Aktivitas singkat semangat)... | Joyful |
+      | ... menit | Tujuan | Menyampaikan tujuan pembelajaran... | Meaningful |
 
-      **D. KEGIATAN PEMBELAJARAN**
-      (Bagian ini WAJIB menggunakan TABEL 3 Kolom: Tahap, Kegiatan, Alokasi Waktu. Sertakan tag **[Deep Learning]** atau **[Diferensiasi]** pada kegiatan yang relevan)
+      **2. KEGIATAN INTI (Durasi Total: 31 Menit)**
+      (Tabel ini memuat sintaks model **${request.learningModel}**. Pastikan total waktu 31 menit terbagi proporsional. Jelaskan aktivitas guru dan siswa secara detail).
+      | Fase / Sintaks | Waktu | Aktivitas Guru | Aktivitas Siswa | Deep Learning |
+      | :--- | :--- | :--- | :--- | :--- |
+      | (Sintaks 1) | ... menit | (Detail...) | (Detail...) | ... |
+      | (Sintaks 2) | ... menit | (Detail...) | (Detail...) | ... |
+      | (Sintaks dst) | ... menit | (Detail...) | (Detail...) | ... |
 
-      | Tahap | Kegiatan Pembelajaran | Waktu |
-      | :--- | :--- | :--- |
-      | **Pendahuluan** | 1. Guru membuka salam dan doa bersama.<br>2. Guru mengecek kehadiran.<br>3. Apersepsi: ... | 15 Menit |
-      | **Inti** | **Langkah 1: Orientasi Masalah**<br>...<br><br>**Langkah 2: Organisasi Belajar**<br>... | 60 Menit |
-      | **Penutup** | 1. Peserta didik menyimpulkan materi.<br>2. Guru memberikan refleksi dan apresiasi.<br>3. Doa penutup. | 15 Menit |
+      **3. KEGIATAN PENUTUP (Durasi Total: 7 Menit)**
+      (Pecah durasi 7 menit ke aktivitas di bawah).
+      | Waktu | Aktivitas | Deskripsi Detail Aktivitas | Deep Learning |
+      | :--- | :--- | :--- | :--- |
+      | ... menit | Refleksi | Guru mengajak siswa merefleksikan... | Mindful |
+      | ... menit | Kesimpulan | Menyimpulkan poin utama materi... | Meaningful |
+      | ... menit | Apresiasi & Doa | Memberikan penghargaan dan menutup... | Joyful |
 
-      **E. ASESMEN**
-      (Buat dalam TABEL)
-      | Jenis Asesmen | Bentuk | Instrumen |
-      | :--- | :--- | :--- |
-      | Diagnostik | Lisan / Kuis | Pertanyaan Pemantik |
-      | Formatif | Observasi / LKPD | Rubrik Penilaian Sikap & Keterampilan |
-      | Sumatif | Tes Tertulis | Soal Pilihan Ganda / Essay |
-
-      **F. PENGAYAAN DAN REMEDIAL**
-      *   **Pengayaan:** (Untuk siswa nilai di atas rata-rata)
-      *   **Remedial:** (Untuk siswa nilai di bawah rata-rata)
-
-      ---
-
-      ### III. LAMPIRAN
-
-      **A. LEMBAR KERJA PESERTA DIDIK (LKPD)**
-      (Berikan contoh judul atau kerangka LKPD singkat)
-
-      **B. BAHAN BACAAN GURU & PESERTA DIDIK**
-      (Daftar referensi)
-
-      **C. GLOSARIUM**
-      (Daftar istilah penting)
-
-      **D. DAFTAR PUSTAKA**
-      (Daftar pustaka format APA)
+      **C. ASESMEN**
+      (Jelaskan detail asesmen sesuai jenis: ${request.assessmentType} dan instrumen: ${request.assessmentInstrument}).
+      
+      **1. Instrumen Asesmen**
+      (Buatkan contoh/draft instrumen penilaiannya secara konkret di sini, bisa berupa rubrik tabel, daftar soal, atau lembar ceklis sesuai pilihan user).
 
       <br><br>
-      (Buat area tanda tangan dalam TABEL TANPA GARIS atau format rapi rata kanan kiri)
-      
+      (Area Tanda Tangan)
       |   |   |
       | :---: | :---: |
       | Mengetahui,<br>Kepala Sekolah<br><br><br><br>**${request.headmasterName}**<br>NIP. ${request.headmasterNip} | ${request.city}, ${request.date}<br>Guru Mata Pelajaran<br><br><br><br>**${request.teacherName}**<br>NIP. ${request.teacherNip} |
@@ -166,14 +163,13 @@ export const generateLessonPlan = async (
     const decoder = new TextDecoder("utf-8");
     let fullTextAccumulated = "";
 
-    // Mapping progress yang lebih akurat sesuai struktur A-L
     const progressMap = [
-        { key: "INFORMASI UMUM", percent: 10, status: "Menyusun Identitas..." },
-        { key: "KOMPETENSI AWAL", percent: 20, status: "Analisis Kompetensi..." },
-        { key: "KOMPONEN INTI", percent: 40, status: "Merancang Tujuan & Pemahaman..." },
-        { key: "KEGIATAN PEMBELAJARAN", percent: 60, status: "Menyusun Langkah Kegiatan..." },
-        { key: "ASESMEN", percent: 80, status: "Membuat Instrumen Penilaian..." },
-        { key: "LAMPIRAN", percent: 90, status: "Menambahkan Lampiran..." },
+        { key: "INFORMASI UMUM", percent: 15, status: "Menyusun Identitas & Pendekatan..." },
+        { key: "KOMPETENSI AWAL", percent: 30, status: "Analisis Kompetensi & Profil..." },
+        { key: "MODEL DAN STRATEGI", percent: 45, status: "Menentukan Strategi..." },
+        { key: "KOMPONEN INTI", percent: 60, status: "Menyusun Kegiatan Inti..." },
+        { key: "KEGIATAN PENUTUP", percent: 80, status: "Finalisasi Pembelajaran..." },
+        { key: "ASESMEN", percent: 90, status: "Membuat Instrumen Penilaian..." },
         { key: "Kepala Sekolah", percent: 95, status: "Finalisasi Dokumen..." }
     ];
     let currentProgressIndex = -1;
