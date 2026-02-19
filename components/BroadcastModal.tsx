@@ -11,9 +11,9 @@ interface BroadcastModalProps {
 }
 
 const BroadcastModal: React.FC<BroadcastModalProps> = ({ user, recipients, onClose }) => {
-  const [message, setMessage] = useState('Halo {{name}}, berikut informasi terbaru dari sekolah...');
+  const [message, setMessage] = useState('Halo {{name}},\n\nBerikut informasi dari sekolah:\n...');
   const [status, setStatus] = useState<'idle' | 'sending' | 'success' | 'error'>('idle');
-  const [result, setResult] = useState<{success: number, failed: number} | null>(null);
+  const [result, setResult] = useState<{success: number, failed: number, errors?: string[]} | null>(null);
   const [configMissing, setConfigMissing] = useState(false);
 
   useEffect(() => {
@@ -64,8 +64,8 @@ const BroadcastModal: React.FC<BroadcastModalProps> = ({ user, recipients, onClo
                     </div>
                     <h3 className="text-lg font-bold text-gray-800 mb-2">WhatsApp Belum Dikonfigurasi</h3>
                     <p className="text-gray-600 text-sm mb-6">
-                        Fitur Broadcast memerlukan konfigurasi API (FlowKirim/Fonnte). 
-                        Silakan atur di menu <strong>{user.role === 'ADMIN' ? 'Pengaturan Sistem' : 'Profil & Akun'}</strong>.
+                        Fitur Broadcast memerlukan konfigurasi API Gateway (FlowKirim/Fonnte). 
+                        Silakan atur API Token dan Device ID terlebih dahulu.
                     </p>
                     <button onClick={onClose} className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 px-6 rounded-lg transition">
                         Tutup
@@ -92,15 +92,27 @@ const BroadcastModal: React.FC<BroadcastModalProps> = ({ user, recipients, onClo
         {/* Content */}
         <div className="p-6 overflow-y-auto">
             {status === 'success' && result ? (
-                <div className="text-center py-6">
+                <div className="text-center py-2">
                     <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
                         <CheckCircle className="text-green-600" size={32} />
                     </div>
                     <h4 className="text-xl font-bold text-gray-800 mb-2">Pesan Terkirim!</h4>
-                    <p className="text-gray-600 mb-6">
+                    <p className="text-gray-600 mb-4">
                         Sukses: <strong className="text-green-600">{result.success}</strong> | 
                         Gagal: <strong className="text-red-600">{result.failed}</strong>
                     </p>
+                    
+                    {result.errors && result.errors.length > 0 && (
+                        <div className="bg-red-50 p-3 rounded-lg border border-red-100 text-left text-xs text-red-700 mb-6 max-h-32 overflow-y-auto">
+                            <strong>Detail Kegagalan:</strong>
+                            <ul className="list-disc pl-4 mt-1 space-y-1">
+                                {result.errors.map((err, i) => (
+                                    <li key={i}>{err}</li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+
                     <button onClick={onClose} className="bg-blue-600 text-white font-bold py-2.5 px-8 rounded-lg hover:bg-blue-700">
                         Selesai
                     </button>
