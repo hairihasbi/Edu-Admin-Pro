@@ -153,7 +153,7 @@ const AdminSettings: React.FC = () => {
       }
   };
 
-  const handleKeyAction = async (keyName: string, action: 'reset_status' | 'reset_usage') => {
+  const handleKeyAction = async (keyName: string, action: 'reset_status' | 'reset_usage' | 'reset_errors') => {
       try {
           const res = await fetch('/api/admin/keys', {
               method: 'POST',
@@ -683,7 +683,6 @@ const AdminSettings: React.FC = () => {
       {/* API KEYS TAB */}
       {activeTab === 'keys' && (
           <div className="space-y-6 animate-in fade-in zoom-in duration-200">
-              {/* ... (Existing Keys Tab Content) ... */}
               {/* Stats Section */}
               <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
                   <div className="flex justify-between items-center mb-6">
@@ -724,7 +723,9 @@ const AdminSettings: React.FC = () => {
                                           </td>
                                           <td className="p-4">
                                               <span className={`px-2 py-1 rounded text-xs font-bold ${
-                                                  key.status === 'ACTIVE' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                                                  key.status === 'ACTIVE' ? 'bg-green-100 text-green-700' : 
+                                                  key.status === 'RATE_LIMITED' ? 'bg-yellow-100 text-yellow-700' :
+                                                  'bg-red-100 text-red-700'
                                               }`}>
                                                   {key.status}
                                               </span>
@@ -733,12 +734,24 @@ const AdminSettings: React.FC = () => {
                                               <span className="bg-gray-100 px-2 py-1 rounded font-mono">{key.usageCount}</span>
                                           </td>
                                           <td className="p-4 text-center">
-                                              {key.errorCount > 0 && <span className="text-red-500 font-bold">{key.errorCount}</span>}
-                                              {key.errorCount === 0 && <span className="text-gray-400">-</span>}
+                                              {key.errorCount > 0 ? (
+                                                  <div className="flex items-center justify-center gap-1">
+                                                      <span className="text-red-500 font-bold">{key.errorCount}</span>
+                                                      <button 
+                                                          onClick={() => handleKeyAction(key.keyName, 'reset_errors')}
+                                                          className="text-gray-400 hover:text-red-600 p-1 rounded-full hover:bg-red-50 transition"
+                                                          title="Reset Errors"
+                                                      >
+                                                          <Trash2 size={12} />
+                                                      </button>
+                                                  </div>
+                                              ) : (
+                                                  <span className="text-gray-400">-</span>
+                                              )}
                                           </td>
                                           <td className="p-4 text-right">
                                               <div className="flex justify-end gap-2">
-                                                  {key.status === 'DEAD' && (
+                                                  {(key.status === 'DEAD' || key.status === 'RATE_LIMITED') && (
                                                       <button 
                                                           onClick={() => handleKeyAction(key.keyName, 'reset_status')}
                                                           className="text-xs bg-green-50 text-green-700 border border-green-200 px-2 py-1 rounded hover:bg-green-100"
