@@ -15,14 +15,61 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const { config, recipients, message } = parseResult.data;
 
+  // Default URL for sending messages
+  const baseUrl = config.baseUrl || 'https://scan.flowkirim.com/api/whatsapp/messages/text';
+  let flowKirimSessionId = '';
+
+  // --- STEP 1: SPECIFIC FLOWKIRIM PRE-CHECK (GET SESSION) ---
+  if (config.provider === 'FLOWKIRIM') {
+      try {
+          // Construct Session URL: Extract origin (e.g., https://scan.flowkirim.com) and append session endpoint
+          const urlObj = new URL(baseUrl);
+          const host = urlObj.origin; 
+          const sessionUrl = `${host}/api/whatsapp/sessions/${config.deviceId}`;
+
+          console.log(`[FlowKirim] Fetching session from: ${sessionUrl}`);
+
+          const sessionRes = await fetch(sessionUrl, {
+              method: 'GET',
+              headers: {
+                  'Authorization': `Bearer ${config.apiKey}`,
+                  'Content-Type': 'application/json'
+              }
+          });
+
+          if (!sessionRes.ok) {
+              const errText = await sessionRes.text();
+              console.error(`[FlowKirim] Session Fetch Failed: ${sessionRes.status}`, errText);
+              return res.status(500).json({ 
+                  error: 'Gagal mengambil sesi WhatsApp aktif.', 
+                  details: `FlowKirim Error: ${sessionRes.statusText}` 
+              });
+          }
+
+          const sessionData = await sessionRes.json();
+          // Try to extract ID from standard response formats (data.id or direct id)
+          flowKirimSessionId = sessionData.data?.id || sessionData.id;
+
+          if (!flowKirimSessionId) {
+              return res.status(500).json({ error: 'Session ID tidak ditemukan pada respon Provider.' });
+          }
+          
+          console.log(`[FlowKirim] Active Session ID: ${flowKirimSessionId}`);
+
+      } catch (error: any) {
+          console.error("FlowKirim Init Error:", error);
+          return res.status(500).json({ 
+              error: 'Gagal menghubungkan ke FlowKirim.', 
+              details: error.message 
+          });
+      }
+  }
+
+  // --- STEP 2: BROADCAST LOOP ---
   let successCount = 0;
   let failCount = 0;
   const errors: string[] = [];
 
-  // Default URL: https://scan.flowkirim.com/api/whatsapp/messages/text
-  const baseUrl = config.baseUrl || 'https://scan.flowkirim.com/api/whatsapp/messages/text';
-
-  // Iterate sequentially to avoid rate limiting
   for (const recipient of recipients) {
     if (!recipient.phone) {
         failCount++;
@@ -42,10 +89,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         // Construct Payload based on Provider
         if (config.provider === 'FLOWKIRIM') {
-            // FlowKirim Specific Format
+            // New FlowKirim Logic: Use session_id fetched above
             payload = {
-                device_id: config.deviceId, 
-                to: `${phone}@s.whatsapp.net`, // Requires @s.whatsapp.net suffix
+                session_id: flowKirimSessionId, 
+                to: `${phone}@s.whatsapp.net`, // Requires suffix
                 message: personalizedMessage
             };
         } else {
@@ -69,42 +116,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             body: JSON.stringify(payload)
         });
 
-        // FlowKirim returns 200 OK with success: true inside body usually, 
-        // but fetch.ok checks 200-299 status code.
         if (response.ok) {
             const responseData = await response.json();
-            // Check specific provider success flag if needed
-            if (config.provider === 'FLOWKIRIM' && responseData.success === false) {
+            // Check logical success flag inside JSON if available
+            // FlowKirim usually returns success: true
+            if (responseData.status === false || responseData.success === false) {
                  console.error(`WA API Logic Error for ${phone}:`, responseData);
                  failCount++;
-                 errors.push(`${recipient.name}: ${responseData.message || 'Unknown logic error'}`);
+                 errors.push(`${recipient.name}: ${responseData.message || 'Gagal mengirim (Logic Error)'}`);
             } else {
                  successCount++;
             }
         } else {
             // Handle non-200 responses (including HTML error pages from Laravel/Nginx)
-            const contentType = response.headers.get("content-type");
+            const text = await response.text();
             let errorDetails = `HTTP ${response.status}`;
 
-            if (contentType && contentType.includes("application/json")) {
-                const jsonErr = await response.json();
-                errorDetails += ` - ${JSON.stringify(jsonErr)}`;
-            } else {
-                const text = await response.text();
-                if (text.includes("<!DOCTYPE html>")) {
-                    const titleMatch = text.match(/<title>(.*?)<\/title>/i);
-                    // Extract Laravel exception message if possible
-                    const exceptionMatch = text.match(/class="exception-message[^>]*>(.*?)<\/span>/s) || text.match(/<h1 class="break-long-words exception-message">(.*?)<\/h1>/);
-                    
-                    if (exceptionMatch) {
-                         errorDetails += ` - Server Error: ${exceptionMatch[1].trim()}`;
-                    } else if (titleMatch) {
-                         errorDetails += ` - HTML Error: ${titleMatch[1].trim()}`;
-                    } else {
-                         errorDetails += " - Unknown HTML Error";
-                    }
+            if (text.includes("<!DOCTYPE html>")) {
+                // Try to grab title from HTML error
+                const titleMatch = text.match(/<title>(.*?)<\/title>/i);
+                if (titleMatch) {
+                     errorDetails += ` - Server Error: ${titleMatch[1].trim()}`;
                 } else {
-                    errorDetails += ` - ${text.substring(0, 100)}`;
+                     errorDetails += " - Unknown HTML Error";
+                }
+            } else {
+                try {
+                    const jsonErr = JSON.parse(text);
+                    errorDetails += ` - ${jsonErr.message || JSON.stringify(jsonErr)}`;
+                } catch {
+                    errorDetails += ` - ${text.substring(0, 50)}`;
                 }
             }
             
@@ -118,8 +159,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         errors.push(`${recipient.name}: Connection Error (${e.message})`);
     }
     
-    // Slight delay to be nice to the API
-    await new Promise(r => setTimeout(r, 500));
+    // Slight delay to avoid rate limiting
+    await new Promise(r => setTimeout(r, 800));
   }
 
   return res.status(200).json({ success: successCount, failed: failCount, errors });
