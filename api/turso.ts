@@ -304,6 +304,24 @@ const DB_SCHEMAS = [
         last_modified INTEGER,
         version INTEGER DEFAULT 1,
         deleted INTEGER DEFAULT 0
+    )`,
+
+    // 21. SYSTEM: EMAIL CONFIG
+    `CREATE TABLE IF NOT EXISTS email_config (
+        id TEXT PRIMARY KEY,
+        provider TEXT,
+        method TEXT,
+        api_key TEXT,
+        smtp_host TEXT,
+        smtp_port INTEGER,
+        smtp_user TEXT,
+        smtp_pass TEXT,
+        from_email TEXT,
+        from_name TEXT,
+        is_active BOOLEAN,
+        last_modified INTEGER,
+        version INTEGER DEFAULT 1,
+        deleted INTEGER DEFAULT 0
     )`
 ];
 
@@ -408,6 +426,11 @@ const getTableConfig = (collection: string) => {
         columns: ['id', 'name', 'category', 'level', 'last_modified', 'version', 'deleted'], 
         mapFn: (item: any) => [s(item.id), s(item.name), s(item.category), s(item.level), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] 
     };
+    case 'eduadmin_email_config': return { 
+        table: 'email_config', 
+        columns: ['id', 'provider', 'method', 'api_key', 'smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass', 'from_email', 'from_name', 'is_active', 'last_modified', 'version', 'deleted'], 
+        mapFn: (item: any) => [s(item.id), s(item.provider), s(item.method), s(item.apiKey), s(item.smtpHost), s(item.smtpPort), s(item.smtpUser), s(item.smtpPass), s(item.fromEmail), s(item.fromName), item.isActive ? 1 : 0, s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] 
+    };
     default: return null;
   }
 };
@@ -434,6 +457,7 @@ const mapRowToJSON = (collection: string, row: any) => {
         case 'eduadmin_notifications': return { ...base, id: row.id, title: row.title, message: row.message, type: row.type, targetRole: row.target_role, isRead: row.is_read === 1, isPopup: row.is_popup === 1, createdAt: row.created_at, lastModified: row.last_modified };
         case 'eduadmin_logs': return { ...base, id: row.id, timestamp: row.timestamp, level: row.level, actor: row.actor, role: row.role, action: row.action, details: row.details, lastModified: row.last_modified };
         case 'eduadmin_master_subjects': return { ...base, id: row.id, name: row.name, category: row.category, level: row.level, lastModified: row.last_modified };
+        case 'eduadmin_email_config': return { ...base, id: row.id, provider: row.provider, method: row.method, apiKey: row.api_key, smtpHost: row.smtp_host, smtpPort: row.smtp_port, smtpUser: row.smtp_user, smtpPass: row.smtp_pass, fromEmail: row.from_email, fromName: row.from_name, isActive: row.is_active === 1, lastModified: row.last_modified };
         default: return null;
     }
 };
@@ -696,7 +720,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const isGuru = currentUser?.role === 'GURU';
             const userId = currentUser?.userId || null; 
 
-            if (isGuru && (collection === 'eduadmin_api_keys' || collection === 'eduadmin_email_config')) {
+            if (isGuru && (collection === 'eduadmin_api_keys')) {
                 return res.status(200).json({ rows: [] });
             }
 
@@ -746,12 +770,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                              query += " AND class_id IN (SELECT id FROM classes WHERE user_id = ?)";
                              args = [userId];
                         }
+                    } else if (tableConfig.table === 'wa_configs') {
+                        // FIX: Only sync own config for teachers
+                        query += " AND user_id = ?";
+                        args = [userId];
                     }
                 }
 
                 const result = await client.execute({ sql: query, args });
                 rows = result.rows.map(row => ({
-                    id: row.id,
+                    id: tableConfig.table === 'wa_configs' ? row.user_id : row.id, // WA uses user_id as PK
                     data: mapRowToJSON(collection, row),
                     updated_at: row.last_modified,
                     version: row.version
