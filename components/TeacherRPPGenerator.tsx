@@ -167,7 +167,7 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
     });
   };
 
-  // --- HELPER: CONVERT MARKDOWN TO HTML FOR WORD/PDF (UPDATED FOR JUSTIFY) ---
+  // --- HELPER: CONVERT MARKDOWN TO HTML FOR WORD/PDF (FIXED TABLE ALIGNMENT) ---
   const formatMarkdownToWordHTML = (md: string) => {
       if (!md) return '';
       
@@ -186,13 +186,31 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
         // Ordered lists
         .replace(/^\s*\d+\.\s+(.*)$/gm, '<li style="text-align: justify;">$1</li>')
         .replace(/((<li.*>.*<\/li>\n?)+)/g, '<ol>$1</ol>')
-        // Tables (Standard Markdown)
+        // Tables (Standard Markdown with FIXED COLUMN WIDTH LOGIC)
         .replace(/\|(.+)\|/g, (match) => {
-            return '<tr>' + match.split('|').filter(s => s.trim() !== '').map(cell => {
-                // Check if header row (---)
-                if (cell.includes('---')) return ''; 
-                // Special: If cell is empty, keep it
-                return `<td style="border: 1px solid black; padding: 5px; vertical-align: top; text-align: justify;">${cell.trim() || '&nbsp;'}</td>`;
+            const cells = match.split('|').filter(s => s.trim() !== '');
+            // Check if it's a separator row (---)
+            if (cells.some(c => c.includes('---'))) return ''; 
+
+            const isTwoColumn = cells.length === 2;
+
+            return '<tr>' + cells.map((cell, index) => {
+                let style = 'border: 1px solid black; padding: 5px; vertical-align: top;';
+                
+                // FIX: Force width for Identity Module Table (2 Columns)
+                // This ensures "Keterangan" starts at the exact same vertical line for all rows.
+                if (isTwoColumn) {
+                    if (index === 0) {
+                        style += ' width: 25%; text-align: left; font-weight: bold;'; // Label Column
+                    } else {
+                        style += ' width: 75%; text-align: left;'; // Value Column
+                    }
+                } else {
+                    // For other tables (3+ cols like Activities), justify is okay
+                    style += ' text-align: justify;';
+                }
+
+                return `<td style="${style}">${cell.trim() || '&nbsp;'}</td>`;
             }).join('') + '</tr>';
         })
         // Newlines to paragraph with justify
@@ -202,6 +220,7 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
       // Wrap tables if any rows detected and remove empty header marker rows
       if (html.includes('<tr>')) {
           html = html.replace(/<tr>\s*<\/tr>/g, ''); // Remove empty rows from markdown separator lines
+          // Ensure table takes full width
           html = html.replace(/((<tr>.*?<\/tr>)+)/g, '<table border="1" cellspacing="0" cellpadding="5" style="width:100%; border-collapse:collapse; margin-bottom:15px; border: 1px solid black;">$1</table>');
       }
       
