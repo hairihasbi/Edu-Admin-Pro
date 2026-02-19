@@ -175,7 +175,7 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
           return katex.renderToString(latex, {
               throwOnError: false,
               displayMode: displayMode,
-              output: 'html' // Use HTML for better compatibility
+              output: 'html' // Use HTML+CSS for PDF/Print fidelity
           });
       } catch (e) {
           return latex;
@@ -187,14 +187,14 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
       if (!md) return '';
       
       let html = md
-        // --- LATEX PARSING (Improved Regex for Multi-line) ---
-        // Block math: $$ ... $$ (Handling newlines inside)
-        .replace(/\$\$([\s\S]*?)\$\$/g, (match, tex) => {
-            return `<div style="text-align:center; margin: 5px 0;">${renderMath(tex, true)}</div>`;
+        // --- LATEX PARSING ---
+        // Block math: $$ ... $$
+        .replace(/\$\$(.*?)\$\$/gs, (match, tex) => {
+            return `<div style="text-align:center; margin: 10px 0;">${renderMath(tex, true)}</div>`;
         })
-        // Inline math: $ ... $ (Avoiding matches that are just currency)
-        .replace(/\$([^$\n]+?)\$/g, (match, tex) => {
-            // Check if it looks like currency (digit follows $ or empty)
+        // Inline math: $ ... $ (excluding typical currency usage like $100)
+        .replace(/\$([^$]+?)\$/g, (match, tex) => {
+            // Check if it looks like currency (digit follows $) or just empty
             if (!tex || /^\d/.test(tex)) return match;
             return renderMath(tex, false);
         })
@@ -230,10 +230,11 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
             const isSignature = rowContent.includes('Mengetahui') || rowContent.includes('Guru Mata Pelajaran') || rowContent.includes('NIP.');
 
             return '<tr>' + cells.map((cell, index) => {
+                // Default styles (Bordered) - will be overridden by table wrapper for specific tables
                 let style = 'padding: 5px; vertical-align: top; border: 1px solid black;';
                 
                 if (isSignature) {
-                    style = 'padding: 5px; vertical-align: top; border: none; width: 50%;'; // Transparent border & 50% width
+                    style = 'padding: 5px; vertical-align: top; border: none; width: 50%;'; 
                 } else {
                     // Specific Widths based on Column Count
                     if (colCount === 2) {
@@ -273,13 +274,24 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
       if (html.includes('<tr>')) {
           html = html.replace(/<tr>\s*<\/tr>/g, ''); // Remove empty rows from markdown separator lines
           
-          // Custom wrapper for Signature Table vs Normal Table
+          // Custom wrapper logic
           html = html.replace(/((<tr>.*?<\/tr>)+)/g, (match) => {
+              // 1. Signature Table (Mengetahui)
               if (match.includes('Mengetahui') || match.includes('Guru Mata Pelajaran')) {
-                  // Signature Table: No border, margin top
                   return `<table border="0" style="width:100%; border-collapse:collapse; margin-top:30px; border: none;">${match}</table>`;
               }
-              // Normal Table: Bordered
+              
+              // 2. Identity Module Table (Penyusun + Instansi) -> Transparent Borders & Tight Padding
+              if (match.includes('Penyusun') && match.includes('Instansi')) {
+                  // Replace the default bordered td styles for this specific table block
+                  const cleanMatch = match.replace(/border: 1px solid black;/g, 'border: none; border-bottom: 1px solid #eee;');
+                  // Tighten padding for Identity
+                  const tightMatch = cleanMatch.replace(/padding: 5px;/g, 'padding: 2px;');
+                  
+                  return `<table border="0" style="width:100%; border-collapse:collapse; margin-bottom:15px; border: none;">${tightMatch}</table>`;
+              }
+
+              // 3. Normal Tables (Bordered)
               return `<table border="1" cellspacing="0" cellpadding="5" style="width:100%; border-collapse:collapse; margin-bottom:15px; border: 1px solid black;">${match}</table>`;
           });
       }
@@ -334,9 +346,6 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
   const handleExportPDF = async () => {
     if (!rppResult) return;
     
-    // Grab KaTeX CSS link from main document to ensure styles carry over
-    const katexLink = (document.querySelector('link[href*="katex"]') as HTMLLinkElement)?.href || 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css';
-
     // We need to format the HTML first, forcing Math rendering
     const formattedBody = formatMarkdownToWordHTML(rppResult);
     
@@ -344,7 +353,6 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
     const element = document.createElement('div');
     element.innerHTML = `
       <div style="font-family: 'Arial', sans-serif; padding: 25px; color: #000; font-size: 11pt; text-align: justify; line-height: 1.5;">
-        <link rel="stylesheet" href="${katexLink}" crossorigin="anonymous">
         <style>
            h1, h2 { text-align: center; font-weight: bold; text-transform: uppercase; margin-bottom: 15px; font-size: 14pt; }
            h3 { font-weight: bold; margin-top: 15px; margin-bottom: 5px; font-size: 12pt; text-transform: uppercase; }
@@ -365,7 +373,7 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
       margin:       15, // mm
       filename:     `RPP_${rppData.subject.replace(/\s+/g, '_')}_${rppData.grade}.pdf`,
       image:        { type: 'jpeg' as const, quality: 0.98 },
-      html2canvas:  { scale: 2, useCORS: true, logging: true },
+      html2canvas:  { scale: 2, useCORS: true },
       jsPDF:        { unit: 'mm' as const, format: 'a4' as const, orientation: 'portrait' as const },
       pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
     };
@@ -410,16 +418,7 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
         <body>${formattedBody}</body>
       </html>
     `);
-    
-    // IMPORTANT: Wait for resources (KaTeX fonts) to load before printing
     printWindow.document.close();
-    printWindow.onload = () => {
-        setTimeout(() => {
-            printWindow.focus();
-            printWindow.print();
-            printWindow.close();
-        }, 500); // 500ms delay to ensure rendering
-    };
   };
 
   if (loadingSettings) {
