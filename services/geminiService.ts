@@ -53,12 +53,11 @@ export const generateLessonPlan = async (
       --- MULAI DOKUMEN ---
 
       # MODUL AJAR KURIKULUM MERDEKA
-      ## ${request.subject.toUpperCase()} - ${request.topic.toUpperCase()}
 
       ### I. INFORMASI UMUM
 
       **A. IDENTITAS MODUL**
-      (WAJIB: Buat tabel di bawah ini sebagai SATU BLOK TABEL Markdown yang menyatu. Jangan dipisah-pisah).
+      (WAJIB: Buat tabel di bawah ini dalam format Markdown standar. JANGAN ada spasi antar baris tabel. Tulis serapat mungkin).
       | Komponen | Keterangan |
       | :--- | :--- |
       | **Penyusun** | ${request.teacherName} |
