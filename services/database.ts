@@ -16,8 +16,8 @@ import { Table } from 'dexie';
 // --- INITIALIZATION ---
 
 export const initDatabase = async () => {
-  if (!db.isOpen()) {
-    await db.open();
+  if (!(db as any).isOpen()) {
+    await (db as any).open();
   }
   
   // Try to sync on init if online
@@ -210,8 +210,9 @@ export const getAllStudentsWithDetails = async (): Promise<StudentWithDetails[]>
     const classes = await db.classes.toArray();
     const teachers = await db.users.toArray();
     
-    const classMap = new Map(classes.map(c => [c.id, c]));
-    const teacherMap = new Map(teachers.map(t => [t.id, t]));
+    // Explicitly type maps to avoid 'unknown' errors
+    const classMap = new Map<string, ClassRoom>(classes.map(c => [c.id, c] as [string, ClassRoom]));
+    const teacherMap = new Map<string, User>(teachers.map(t => [t.id, t] as [string, User]));
 
     return students.map(s => {
         const cls = classMap.get(s.classId);
@@ -930,7 +931,8 @@ export const resetSystemData = async (scope: 'SEMESTER' | 'ALL', semester?: stri
             const admins = await db.users.where('role').equals(UserRole.ADMIN).toArray(); 
             
             // Clear Local - No Soft Delete Needed as Server is Wiped
-            await Promise.all(db.tables.map(table => table.clear()));
+            // Fix: cast db to any to access tables property if types are missing
+            await Promise.all((db as any).tables.map((table: Table) => table.clear()));
             
             // Restore Admin
             await db.users.bulkAdd(admins); 
