@@ -99,10 +99,16 @@ export const generateLessonPlan = async (
       ### II. KOMPONEN INTI
 
       **A. CAPAIAN PEMBELAJARAN (CP)**
-      (Tuliskan narasi CP lengkap dan rinci sesuai fase. JANGAN menyertakan kalimat "Berdasarkan Keputusan..." atau nomor regulasi. Langsung ke isi materi).
+      1. **Narasi CP**: (Tuliskan narasi CP lengkap dan rinci sesuai fase. JANGAN menyertakan kalimat "Berdasarkan Keputusan..." atau nomor regulasi. Langsung ke isi materi).
+      2. **Indikator Pencapaian**: (WAJIB: Tuliskan penjelasan rinci mengenai indikator pencapaian yang digunakan untuk mencapai CP ini. Jelaskan kriteria keberhasilan yang spesifik dan terukur).
 
-      **B. TUJUAN PEMBELAJARAN**
-      (Rumuskan tujuan pembelajaran yang spesifik berdasarkan CP dan Materi).
+      **B. TUJUAN PEMBELAJARAN (TP)**
+      1. **Tujuan Pembelajaran**: (Rumuskan tujuan yang spesifik, terukur, dan relevan dengan materi).
+      2. **Indikator Ketercapaian Tujuan Pembelajaran (IKTP/KKTP)**: 
+         (Jabarkan indikator keberhasilan secara rinci. Apa bukti spesifik siswa telah mencapai tujuan? Gunakan kata kerja operasional).
+         - Indikator 1: ...
+         - Indikator 2: ...
+         - Indikator 3: ...
 
       **C. KEGIATAN PEMBELAJARAN**
 
@@ -142,7 +148,11 @@ export const generateLessonPlan = async (
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${userId}`
       },
-      body: JSON.stringify({ prompt, userId }),
+      body: JSON.stringify({ 
+          prompt, 
+          userId,
+          useSearch: request.useSearch || false // Activate Fact Check if requested
+      }),
     });
 
     if (!response.ok) {
