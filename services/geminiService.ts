@@ -17,7 +17,7 @@ export const generateLessonPlan = async (
 
     let cpInstruction = "";
     if (request.cpMode === 'AUTO') {
-        cpInstruction = `Tentukan Capaian Pembelajaran (CP) yang sesuai regulasi terbaru untuk mapel ${request.subject} Fase ${request.phase}.`;
+        cpInstruction = `Tentukan Capaian Pembelajaran (CP) secara rinci untuk mapel ${request.subject} Fase ${request.phase}. PENTING: Langsung jelaskan detail CP tanpa menuliskan kalimat pembuka 'Berdasarkan Keputusan Kepala BSKAP...' atau nomor regulasi.`;
     } else {
         cpInstruction = `Gunakan CP berikut: "${request.cpManualContent}".`;
     }
@@ -57,20 +57,21 @@ export const generateLessonPlan = async (
       ### I. INFORMASI UMUM
 
       **A. IDENTITAS MODUL**
-      (WAJIB: Tuliskan data di bawah ini dalam format teks daftar biasa (Plain Text List). JANGAN GUNAKAN TABEL. Gunakan format **Label:** Isi. Tulis baris demi baris tanpa spasi kosong/enter antar baris agar hemat tempat).
-
-      **Penyusun:** ${request.teacherName}
-      **NIP:** ${request.teacherNip}
-      **Instansi:** ${request.schoolName}
-      **Tahun Pelajaran:** ${request.academicYear}
-      **Jenjang Sekolah:** SMA/SMK
-      **Mata Pelajaran:** ${request.subject}
-      **Fase / Kelas:** ${request.phase} / ${request.grade}
-      **Topik / Materi:** ${request.topic}
-      **Alokasi Waktu:** ${request.timeAllocation}
-      **Pendekatan:** Deep Learning (Mindful, Meaningful, Joyful)
-      **Model Pembelajaran:** ${request.learningModel}
-      **Strategi:** ${request.learningStrategy}
+      (WAJIB: Gunakan tabel Markdown di bawah ini. Kolom 1 adalah Label, Kolom 2 diawali dengan titik dua (:) lalu isi data. Ini agar tampilan sejajar rapi).
+      | Komponen | Keterangan |
+      | :--- | :--- |
+      | **Penyusun** | : ${request.teacherName} |
+      | **NIP** | : ${request.teacherNip} |
+      | **Instansi** | : ${request.schoolName} |
+      | **Tahun Pelajaran** | : ${request.academicYear} |
+      | **Jenjang Sekolah** | : SMA/SMK |
+      | **Mata Pelajaran** | : ${request.subject} |
+      | **Fase / Kelas** | : ${request.phase} / ${request.grade} |
+      | **Topik / Materi** | : ${request.topic} |
+      | **Alokasi Waktu** | : ${request.timeAllocation} |
+      | **Pendekatan** | : Deep Learning (Mindful, Meaningful, Joyful) |
+      | **Model Pembelajaran** | : ${request.learningModel} |
+      | **Strategi** | : ${request.learningStrategy} |
 
       **B. PENDEKATAN DEEP LEARNING**
       (Jelaskan implementasi Mindful, Meaningful, Joyful dalam bentuk tabel).
@@ -97,7 +98,7 @@ export const generateLessonPlan = async (
       ### II. KOMPONEN INTI
 
       **A. CAPAIAN PEMBELAJARAN (CP)**
-      (Tuliskan narasi CP lengkap).
+      (Tuliskan narasi CP lengkap dan rinci sesuai fase. JANGAN menyertakan kalimat "Berdasarkan Keputusan..." atau nomor regulasi. Langsung ke isi materi).
 
       **B. TUJUAN PEMBELAJARAN**
       (Rumuskan tujuan pembelajaran yang spesifik berdasarkan CP dan Materi).
