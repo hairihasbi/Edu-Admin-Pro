@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { User, LessonPlanRequest, SystemSettings } from '../types';
 import { generateLessonPlan } from '../services/geminiService';
@@ -174,7 +175,7 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
           return katex.renderToString(latex, {
               throwOnError: false,
               displayMode: displayMode,
-              output: 'html' // Use HTML+CSS for PDF/Print fidelity
+              output: 'html' // Use HTML for better compatibility
           });
       } catch (e) {
           return latex;
@@ -186,14 +187,14 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
       if (!md) return '';
       
       let html = md
-        // --- LATEX PARSING ---
-        // Block math: $$ ... $$
-        .replace(/\$\$(.*?)\$\$/gs, (match, tex) => {
-            return `<div style="text-align:center; margin: 10px 0;">${renderMath(tex, true)}</div>`;
+        // --- LATEX PARSING (Improved Regex for Multi-line) ---
+        // Block math: $$ ... $$ (Handling newlines inside)
+        .replace(/\$\$([\s\S]*?)\$\$/g, (match, tex) => {
+            return `<div style="text-align:center; margin: 5px 0;">${renderMath(tex, true)}</div>`;
         })
-        // Inline math: $ ... $ (excluding typical currency usage like $100)
-        .replace(/\$([^$]+?)\$/g, (match, tex) => {
-            // Check if it looks like currency (digit follows $) or just empty
+        // Inline math: $ ... $ (Avoiding matches that are just currency)
+        .replace(/\$([^$\n]+?)\$/g, (match, tex) => {
+            // Check if it looks like currency (digit follows $ or empty)
             if (!tex || /^\d/.test(tex)) return match;
             return renderMath(tex, false);
         })
@@ -333,6 +334,9 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
   const handleExportPDF = async () => {
     if (!rppResult) return;
     
+    // Grab KaTeX CSS link from main document to ensure styles carry over
+    const katexLink = (document.querySelector('link[href*="katex"]') as HTMLLinkElement)?.href || 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css';
+
     // We need to format the HTML first, forcing Math rendering
     const formattedBody = formatMarkdownToWordHTML(rppResult);
     
@@ -340,6 +344,7 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
     const element = document.createElement('div');
     element.innerHTML = `
       <div style="font-family: 'Arial', sans-serif; padding: 25px; color: #000; font-size: 11pt; text-align: justify; line-height: 1.5;">
+        <link rel="stylesheet" href="${katexLink}" crossorigin="anonymous">
         <style>
            h1, h2 { text-align: center; font-weight: bold; text-transform: uppercase; margin-bottom: 15px; font-size: 14pt; }
            h3 { font-weight: bold; margin-top: 15px; margin-bottom: 5px; font-size: 12pt; text-transform: uppercase; }
@@ -360,7 +365,7 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
       margin:       15, // mm
       filename:     `RPP_${rppData.subject.replace(/\s+/g, '_')}_${rppData.grade}.pdf`,
       image:        { type: 'jpeg' as const, quality: 0.98 },
-      html2canvas:  { scale: 2, useCORS: true },
+      html2canvas:  { scale: 2, useCORS: true, logging: true },
       jsPDF:        { unit: 'mm' as const, format: 'a4' as const, orientation: 'portrait' as const },
       pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
     };
@@ -405,7 +410,16 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
         <body>${formattedBody}</body>
       </html>
     `);
+    
+    // IMPORTANT: Wait for resources (KaTeX fonts) to load before printing
     printWindow.document.close();
+    printWindow.onload = () => {
+        setTimeout(() => {
+            printWindow.focus();
+            printWindow.print();
+            printWindow.close();
+        }, 500); // 500ms delay to ensure rendering
+    };
   };
 
   if (loadingSettings) {
