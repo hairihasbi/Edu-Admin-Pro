@@ -239,14 +239,12 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
                 if (isSignature) {
                     style = 'padding: 5px; vertical-align: top; border: none; width: 50%;'; 
                 } else if (isIdentity) {
-                    // Identity specific: NO BORDER, ULTRA TIGHT PADDING, TIGHT LINE HEIGHT
-                    // Using line-height: 1.2 to compress vertical space
-                    style = 'padding: 2px 5px; vertical-align: top; border: none; line-height: 1.2;';
+                    // Identity specific: Bordered (as requested), but TIGHT padding and line-height
+                    style = 'padding: 3px 5px; vertical-align: top; border: 1px solid black; line-height: 1.15;';
                     
                     if (index === 0) {
                         // Label Column
-                        style += ' width: 25%; white-space: nowrap; font-weight: normal;'; 
-                        // Note: Bolding is handled by Markdown **text** usually, but we ensure structure here
+                        style += ' width: 25%; font-weight: bold;'; 
                     } else {
                         // Value Column
                         style += ' width: 75%;';
@@ -299,18 +297,15 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
                   return `<table border="0" style="width:100%; border-collapse:collapse; margin-top:30px; border: none;">${match}</table>`;
               }
               
-              // 2. Identity Module Table (Strict Check) - COMPACT & TRANSPARENT & NO-BREAK
+              // 2. Identity Module Table (Strict Check) - COMPACT & BORDERED & NO-BREAK
               if (match.includes('Penyusun') || match.includes('Instansi') || match.includes('Mata Pelajaran')) {
-                  // Ensure inner styles are cleaned up for transparency
-                  // Remove any residual border styles from <td> just in case, though handled above
-                  const cleanMatch = match.replace(/border: 1px solid black;/g, 'border: none;');
-                  
                   // WRAP IN DIV with page-break-inside: avoid
-                  // Use cellpadding=0 for tightness
+                  // Use cellpadding=2 for tightness
+                  // Restore Border style: 1px solid black
                   return `
-                    <div style="page-break-inside: avoid; margin-bottom: 5px;">
-                        <table border="0" cellspacing="0" cellpadding="0" style="width:100%; border-collapse:collapse; border: none;">
-                            ${cleanMatch}
+                    <div style="page-break-inside: avoid; margin-bottom: 10px;">
+                        <table border="1" cellspacing="0" cellpadding="2" style="width:100%; border-collapse:collapse; border: 1px solid black;">
+                            ${match}
                         </table>
                     </div>`;
               }
