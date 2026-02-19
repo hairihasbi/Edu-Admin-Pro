@@ -48,7 +48,6 @@ export const generateLessonPlan = async (
 
       **INSTRUKSI STRUKTUR OUTPUT (WAJIB IKUTI PERSIS):**
       Gunakan format Markdown. 
-      **JANGAN GUNAKAN TABEL UNTUK BAGIAN IDENTITAS.** Gunakan format list/teks biasa.
       Gunakan bahasa Indonesia formal dan pedagogis.
 
       --- MULAI DOKUMEN ---
@@ -59,15 +58,19 @@ export const generateLessonPlan = async (
       ### I. INFORMASI UMUM
 
       **A. IDENTITAS MODUL**
-      Penyusun : ${request.teacherName}
-      Instansi : ${request.schoolName}
-      Tahun Pelajaran : ${request.academicYear}
-      Jenjang Sekolah : SMA/SMK
-      Mata Pelajaran : ${request.subject}
-      Fase / Kelas : ${request.phase} / ${request.grade}
-      Topik / Materi : ${request.topic}
-      Alokasi Waktu : ${request.timeAllocation}
-      Pendekatan : **Deep Learning**
+      (Buat dalam TABEL 2 Kolom. Kolom 1: Komponen, Kolom 2: Keterangan. Jangan gunakan header tabel).
+      | Komponen | Keterangan |
+      | :--- | :--- |
+      | Penyusun | ${request.teacherName} |
+      | NIP | ${request.teacherNip} |
+      | Instansi | ${request.schoolName} |
+      | Tahun Pelajaran | ${request.academicYear} |
+      | Jenjang Sekolah | SMA/SMK |
+      | Mata Pelajaran | ${request.subject} |
+      | Fase / Kelas | ${request.phase} / ${request.grade} |
+      | Topik / Materi | ${request.topic} |
+      | Alokasi Waktu | ${request.timeAllocation} |
+      | Pendekatan | **Deep Learning** |
 
       **B. PENDEKATAN DEEP LEARNING**
       (Jelaskan implementasi Mindful, Meaningful, Joyful yang akan dilakukan dalam materi ini. Tulisan harus justify/rata kanan kiri dalam tabel).
