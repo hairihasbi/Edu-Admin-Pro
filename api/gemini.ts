@@ -170,7 +170,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           genConfig.tools = [{ googleSearch: {} }];
       }
 
-      // Try Primary Model
+      // SETTING UTAMA: GEMINI 3 FLASH PREVIEW
       let modelName = 'gemini-3-flash-preview'; 
       let result;
 
@@ -183,26 +183,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } catch (primaryErr: any) {
           console.warn(`Model ${modelName} failed, trying fallback...`, primaryErr.message);
           
-          // Fallback Strategy
-          // 1. Try gemini-2.0-flash (Stable)
-          // 2. Try gemini-3-pro-preview (If flash is unavailable)
-          
-          try {
-              modelName = 'gemini-2.0-flash';
-              result = await ai.models.generateContentStream({
-                model: modelName,
-                contents: prompt,
-                config: genConfig
-              });
-          } catch (secondaryErr: any) {
-              console.warn(`Fallback ${modelName} failed, trying next...`, secondaryErr.message);
-              modelName = 'gemini-3-pro-preview';
-              result = await ai.models.generateContentStream({
-                model: modelName,
-                contents: prompt,
-                config: genConfig
-              });
-          }
+          // Fallback Strategy: gemini-2.0-flash (Stable)
+          // Hanya satu level fallback untuk mengurangi latensi dan error 404 pada model eksperimental
+          modelName = 'gemini-2.0-flash';
+          result = await ai.models.generateContentStream({
+            model: modelName,
+            contents: prompt,
+            config: genConfig
+          });
       }
 
       streamStarted = true;
