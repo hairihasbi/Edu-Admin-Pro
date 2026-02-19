@@ -1,5 +1,4 @@
 
-
 export enum UserRole {
   ADMIN = 'ADMIN',
   GURU = 'GURU',
@@ -192,6 +191,9 @@ export interface LessonPlanRequest {
   // Tahap 3: Asesmen
   assessmentType: string;
   assessmentInstrument: string;
+  
+  // Fitur Tambahan
+  useSearch?: boolean; // NEW: AI Fact Check / Grounding
 }
 
 export interface Notification extends Syncable {
@@ -304,7 +306,8 @@ export interface BackupData {
 export type EmailProvider = 'MAILERSEND' | 'BREVO';
 export type EmailMethod = 'API' | 'SMTP';
 
-export interface EmailConfig {
+// Fixed: Extend Syncable
+export interface EmailConfig extends Syncable {
   provider: EmailProvider;
   method: EmailMethod;
   apiKey?: string;
