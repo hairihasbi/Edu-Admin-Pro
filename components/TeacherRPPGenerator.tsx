@@ -167,7 +167,7 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
     });
   };
 
-  // --- HELPER: CONVERT MARKDOWN TO HTML FOR WORD/PDF (FIXED TABLE ALIGNMENT + SIGNATURE) ---
+  // --- HELPER: CONVERT MARKDOWN TO HTML FOR WORD/PDF (FIXED TABLE ALIGNMENT & WIDTHS) ---
   const formatMarkdownToWordHTML = (md: string) => {
       if (!md) return '';
       
@@ -195,28 +195,41 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
             // Check if it's a separator row (---)
             if (cells.some(c => c.includes('---'))) return ''; 
 
-            const isTwoColumn = cells.length === 2;
+            const colCount = cells.length;
             
             // Check if this row belongs to the Signature Section
             const rowContent = cells.join(' ');
             const isSignature = rowContent.includes('Mengetahui') || rowContent.includes('Guru Mata Pelajaran') || rowContent.includes('NIP.');
 
             return '<tr>' + cells.map((cell, index) => {
-                let style = 'padding: 5px; vertical-align: top;';
+                let style = 'padding: 5px; vertical-align: top; border: 1px solid black;';
                 
                 if (isSignature) {
-                    style += ' border: none; width: 50%;'; // Transparent border & 50% width
+                    style = 'padding: 5px; vertical-align: top; border: none; width: 50%;'; // Transparent border & 50% width
                 } else {
-                    style += ' border: 1px solid black;';
-                    // FIX: Force width for Identity Module Table (2 Columns)
-                    if (isTwoColumn) {
-                        if (index === 0) {
-                            style += ' width: 25%; text-align: left; font-weight: bold;'; // Label Column
-                        } else {
-                            style += ' width: 75%; text-align: left;'; // Value Column
-                        }
-                    } else {
-                        // For other tables (3+ cols like Activities), justify is okay
+                    // Specific Widths based on Column Count
+                    if (colCount === 2) {
+                        // Identitas, Pendekatan, Model
+                        if (index === 0) style += ' width: 25%; text-align: left; font-weight: bold;'; 
+                        else style += ' width: 75%; text-align: justify;'; 
+                    } 
+                    else if (colCount === 4) {
+                        // KEGIATAN PENDAHULUAN & PENUTUP (Waktu, Aktivitas, Deskripsi, Deep Learning)
+                        if (index === 0) style += ' width: 10%; text-align: center;'; // Waktu
+                        else if (index === 1) style += ' width: 20%; text-align: left; font-weight: bold;'; // Aktivitas
+                        else if (index === 2) style += ' width: 55%; text-align: justify;'; // Deskripsi
+                        else style += ' width: 15%; text-align: center; font-style: italic;'; // Deep Learning
+                    }
+                    else if (colCount === 5) {
+                        // KEGIATAN INTI (Fase, Waktu, Guru, Siswa, Deep Learning)
+                        if (index === 0) style += ' width: 15%; text-align: left; font-weight: bold;'; // Fase
+                        else if (index === 1) style += ' width: 10%; text-align: center;'; // Waktu
+                        else if (index === 2) style += ' width: 30%; text-align: justify;'; // Guru
+                        else if (index === 3) style += ' width: 30%; text-align: justify;'; // Siswa
+                        else style += ' width: 15%; text-align: center; font-style: italic;'; // Deep Learning
+                    }
+                    else {
+                        // Fallback generic justify
                         style += ' text-align: justify;';
                     }
                 }
