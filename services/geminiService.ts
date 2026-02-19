@@ -128,9 +128,8 @@ export const generateLessonPlan = async (
       (Buatkan contoh konkret instrumen penilaian di sini).
 
       <br><br>
-      |   |   |
-      | :---: | :---: |
       | Mengetahui,<br>Kepala Sekolah<br><br><br><br>**${request.headmasterName}**<br>NIP. ${request.headmasterNip} | ${request.city}, ${request.date}<br>Guru Mata Pelajaran<br><br><br><br>**${request.teacherName}**<br>NIP. ${request.teacherNip} |
+      | :---: | :---: |
 
       --- SELESAI ---
     `;
