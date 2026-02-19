@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { User, LessonPlanRequest, SystemSettings } from '../types';
 import { generateLessonPlan } from '../services/geminiService';
@@ -6,6 +5,8 @@ import { getSystemSettings } from '../services/database';
 import { BrainCircuit, ChevronLeft, ChevronRight, CheckCircle, BookOpen, Save, Printer, FileText, ShieldCheck, RefreshCcw, Trash2, Cloud, AlertTriangle, Download } from './Icons';
 // @ts-ignore
 import html2pdf from 'html2pdf.js';
+// @ts-ignore
+import katex from 'katex';
 
 interface TeacherRPPGeneratorProps {
   user: User;
@@ -167,11 +168,37 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
     });
   };
 
-  // --- HELPER: CONVERT MARKDOWN TO HTML FOR WORD/PDF (FIXED TABLE ALIGNMENT & WIDTHS) ---
+  // --- HELPER: RENDER LATEX ---
+  const renderMath = (latex: string, displayMode: boolean) => {
+      try {
+          return katex.renderToString(latex, {
+              throwOnError: false,
+              displayMode: displayMode,
+              output: 'html' // Use HTML+CSS for PDF/Print fidelity
+          });
+      } catch (e) {
+          return latex;
+      }
+  };
+
+  // --- HELPER: CONVERT MARKDOWN TO HTML FOR WORD/PDF (FIXED TABLE ALIGNMENT & WIDTHS + LATEX) ---
   const formatMarkdownToWordHTML = (md: string) => {
       if (!md) return '';
       
       let html = md
+        // --- LATEX PARSING ---
+        // Block math: $$ ... $$
+        .replace(/\$\$(.*?)\$\$/gs, (match, tex) => {
+            return `<div style="text-align:center; margin: 10px 0;">${renderMath(tex, true)}</div>`;
+        })
+        // Inline math: $ ... $ (excluding typical currency usage like $100)
+        .replace(/\$([^$]+?)\$/g, (match, tex) => {
+            // Check if it looks like currency (digit follows $) or just empty
+            if (!tex || /^\d/.test(tex)) return match;
+            return renderMath(tex, false);
+        })
+
+        // --- MARKDOWN PARSING ---
         // Headers
         .replace(/###\s+(.*?)\n/g, '<h3 style="margin-top:15pt; margin-bottom:5pt; font-size:12pt; font-weight:bold; text-transform:uppercase;">$1</h3>')
         .replace(/##\s+(.*?)\n/g, '<h2 style="margin-top:20pt; margin-bottom:10pt; font-size:14pt; font-weight:bold; text-align:center; text-transform:uppercase;">$1</h2>')
@@ -283,6 +310,8 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
           ul, ol { margin-top: 0; margin-bottom: 5pt; padding-left: 20pt; }
           li { margin-bottom: 2pt; }
           p { margin-top: 0; margin-bottom: 8pt; text-align: justify; }
+          /* Minimal KaTeX styles for Word compat */
+          .katex { font-size: 1.1em; font-family: 'Times New Roman', serif; }
         </style>
       </head>
       <body>
@@ -304,7 +333,7 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
   const handleExportPDF = async () => {
     if (!rppResult) return;
     
-    // We need to format the HTML first
+    // We need to format the HTML first, forcing Math rendering
     const formattedBody = formatMarkdownToWordHTML(rppResult);
     
     // Create a temporary container with improved styles for PDF
@@ -320,6 +349,7 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
            li { margin-bottom: 3px; }
            p { margin-bottom: 8px; margin-top: 0; text-align: justify; }
            .page-break { page-break-before: always; }
+           .katex { font-size: 1em !important; } /* Fix math size in PDF */
         </style>
         ${formattedBody}
       </div>
@@ -349,10 +379,14 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
     if (!printWindow) return;
     const formattedBody = formatMarkdownToWordHTML(rppResult);
     
+    // Grab KaTeX CSS link from main document to ensure styles carry over to print window
+    const katexLink = (document.querySelector('link[href*="katex"]') as HTMLLinkElement)?.href || 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css';
+
     printWindow.document.write(`
       <html>
         <head>
           <title>Cetak RPP</title>
+          <link rel="stylesheet" href="${katexLink}" crossorigin="anonymous">
           <style>
             body { font-family: 'Arial', sans-serif; padding: 40px; font-size: 12pt; line-height: 1.5; color: #000; text-align: justify; }
             h2 { text-align: center; font-weight: bold; text-transform: uppercase; margin-bottom: 20px; }
@@ -368,7 +402,7 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
             }
           </style>
         </head>
-        <body>${formattedBody}<script>window.onload = function() { window.print(); }</script></body>
+        <body>${formattedBody}</body>
       </html>
     `);
     printWindow.document.close();
@@ -400,7 +434,7 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
                 <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
                     <BrainCircuit className="text-purple-600" /> AI RPP Generator (Deep Learning)
                 </h2>
-                <p className="text-sm text-gray-500 mt-1">Buat Modul Ajar lengkap struktur A-L sesuai standar terbaru.</p>
+                <p className="text-sm text-gray-500 mt-1">Buat Modul Ajar lengkap struktur A-L sesuai standar terbaru. Mendukung Rumus Matematika (LaTeX).</p>
             </div>
             <div className="flex flex-col items-end gap-2">
                <div className="hidden md:flex items-center gap-2 bg-green-50 text-green-700 px-3 py-1.5 rounded-lg text-xs font-medium border border-green-100">
@@ -571,9 +605,11 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
                 </div>
               ) : rppResult ? (
                 <>
-                    <div className="prose prose-sm max-w-none whitespace-pre-wrap font-sans text-gray-700 leading-relaxed text-justify">
-                        {rppResult}
-                    </div>
+                    {/* Rendered HTML Container */}
+                    <div 
+                        className="prose prose-sm max-w-none whitespace-pre-wrap font-sans text-gray-700 leading-relaxed text-justify"
+                        dangerouslySetInnerHTML={{ __html: formatMarkdownToWordHTML(rppResult) }}
+                    ></div>
                     <div ref={resultEndRef}></div>
                 </>
               ) : (
