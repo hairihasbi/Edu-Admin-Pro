@@ -57,21 +57,20 @@ export const generateLessonPlan = async (
       ### I. INFORMASI UMUM
 
       **A. IDENTITAS MODUL**
-      (WAJIB: Gunakan tabel Markdown di bawah ini. Kolom 1 adalah Label, Kolom 2 diawali dengan titik dua (:) lalu isi data. Ini agar tampilan sejajar rapi).
-      | Komponen | Keterangan |
-      | :--- | :--- |
-      | **Penyusun** | : ${request.teacherName} |
-      | **NIP** | : ${request.teacherNip} |
-      | **Instansi** | : ${request.schoolName} |
-      | **Tahun Pelajaran** | : ${request.academicYear} |
-      | **Jenjang Sekolah** | : SMA/SMK |
-      | **Mata Pelajaran** | : ${request.subject} |
-      | **Fase / Kelas** | : ${request.phase} / ${request.grade} |
-      | **Topik / Materi** | : ${request.topic} |
-      | **Alokasi Waktu** | : ${request.timeAllocation} |
-      | **Pendekatan** | : Deep Learning (Mindful, Meaningful, Joyful) |
-      | **Model Pembelajaran** | : ${request.learningModel} |
-      | **Strategi** | : ${request.learningStrategy} |
+      (WAJIB: Tuliskan data di bawah ini dalam format teks daftar biasa (Plain Text List). JANGAN GUNAKAN TABEL. Gunakan format **Label:** Isi. Tulis baris demi baris tanpa spasi kosong/enter antar baris agar hemat tempat).
+
+      **Penyusun:** ${request.teacherName}
+      **NIP:** ${request.teacherNip}
+      **Instansi:** ${request.schoolName}
+      **Tahun Pelajaran:** ${request.academicYear}
+      **Jenjang Sekolah:** SMA/SMK
+      **Mata Pelajaran:** ${request.subject}
+      **Fase / Kelas:** ${request.phase} / ${request.grade}
+      **Topik / Materi:** ${request.topic}
+      **Alokasi Waktu:** ${request.timeAllocation}
+      **Pendekatan:** Deep Learning (Mindful, Meaningful, Joyful)
+      **Model Pembelajaran:** ${request.learningModel}
+      **Strategi:** ${request.learningStrategy}
 
       **B. PENDEKATAN DEEP LEARNING**
       (Jelaskan implementasi Mindful, Meaningful, Joyful dalam bentuk tabel).
