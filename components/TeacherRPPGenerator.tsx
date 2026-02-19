@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { User, LessonPlanRequest, SystemSettings } from '../types';
 import { generateLessonPlan } from '../services/geminiService';
@@ -225,40 +224,43 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
 
             const colCount = cells.length;
             
-            // Check if this row belongs to the Signature Section
+            // Check content to determine style
             const rowContent = cells.join(' ');
             const isSignature = rowContent.includes('Mengetahui') || rowContent.includes('Guru Mata Pelajaran') || rowContent.includes('NIP.');
+            const isIdentity = rowContent.includes('Penyusun') || rowContent.includes('Instansi') || rowContent.includes('Mata Pelajaran') || rowContent.includes('Alokasi Waktu');
 
             return '<tr>' + cells.map((cell, index) => {
-                // Default styles (Bordered) - will be overridden by table wrapper for specific tables
+                // Default styles (Bordered)
                 let style = 'padding: 5px; vertical-align: top; border: 1px solid black;';
                 
                 if (isSignature) {
                     style = 'padding: 5px; vertical-align: top; border: none; width: 50%;'; 
+                } else if (isIdentity) {
+                    // Identity specific: Transparent border, tight padding
+                    // We'll strip the border in the wrapper phase too, but set basics here
+                    style = 'padding: 2px 5px; vertical-align: top; border: none;';
+                    if (index === 0) style += ' width: 25%; font-weight: bold;';
+                    else style += ' width: 75%;';
                 } else {
-                    // Specific Widths based on Column Count
+                    // Normal Table Widths
                     if (colCount === 2) {
-                        // Identitas, Pendekatan, Model
                         if (index === 0) style += ' width: 25%; text-align: left; font-weight: bold;'; 
                         else style += ' width: 75%; text-align: justify;'; 
                     } 
                     else if (colCount === 4) {
-                        // KEGIATAN PENDAHULUAN & PENUTUP (Waktu, Aktivitas, Deskripsi, Deep Learning)
-                        if (index === 0) style += ' width: 10%; text-align: center;'; // Waktu
-                        else if (index === 1) style += ' width: 20%; text-align: left; font-weight: bold;'; // Aktivitas
-                        else if (index === 2) style += ' width: 55%; text-align: justify;'; // Deskripsi
-                        else style += ' width: 15%; text-align: center; font-style: italic;'; // Deep Learning
+                        if (index === 0) style += ' width: 10%; text-align: center;';
+                        else if (index === 1) style += ' width: 20%; text-align: left; font-weight: bold;';
+                        else if (index === 2) style += ' width: 55%; text-align: justify;';
+                        else style += ' width: 15%; text-align: center; font-style: italic;';
                     }
                     else if (colCount === 5) {
-                        // KEGIATAN INTI (Fase, Waktu, Guru, Siswa, Deep Learning)
-                        if (index === 0) style += ' width: 15%; text-align: left; font-weight: bold;'; // Fase
-                        else if (index === 1) style += ' width: 10%; text-align: center;'; // Waktu
-                        else if (index === 2) style += ' width: 30%; text-align: justify;'; // Guru
-                        else if (index === 3) style += ' width: 30%; text-align: justify;'; // Siswa
-                        else style += ' width: 15%; text-align: center; font-style: italic;'; // Deep Learning
+                        if (index === 0) style += ' width: 15%; text-align: left; font-weight: bold;';
+                        else if (index === 1) style += ' width: 10%; text-align: center;';
+                        else if (index === 2) style += ' width: 30%; text-align: justify;';
+                        else if (index === 3) style += ' width: 30%; text-align: justify;';
+                        else style += ' width: 15%; text-align: center; font-style: italic;';
                     }
                     else {
-                        // Fallback generic justify
                         style += ' text-align: justify;';
                     }
                 }
@@ -281,14 +283,13 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
                   return `<table border="0" style="width:100%; border-collapse:collapse; margin-top:30px; border: none;">${match}</table>`;
               }
               
-              // 2. Identity Module Table (Penyusun + Instansi) -> Transparent Borders & Tight Padding
-              if (match.includes('Penyusun') && match.includes('Instansi')) {
-                  // Replace the default bordered td styles for this specific table block
-                  const cleanMatch = match.replace(/border: 1px solid black;/g, 'border: none; border-bottom: 1px solid #eee;');
-                  // Tighten padding for Identity
-                  const tightMatch = cleanMatch.replace(/padding: 5px;/g, 'padding: 2px;');
-                  
-                  return `<table border="0" style="width:100%; border-collapse:collapse; margin-bottom:15px; border: none;">${tightMatch}</table>`;
+              // 2. Identity Module Table (Strict Check)
+              // If it contains "Penyusun" AND "Instansi", it's likely the identity table.
+              if ((match.includes('Penyusun') && match.includes('Instansi')) || (match.includes('Mata Pelajaran') && match.includes('Alokasi Waktu'))) {
+                  // Ensure inner styles are cleaned up for transparency
+                  // Regex to replace any existing border: 1px solid black with border: none
+                  const cleanMatch = match.replace(/border: 1px solid black;/g, 'border: none;');
+                  return `<table border="0" cellspacing="0" cellpadding="2" style="width:100%; border-collapse:collapse; margin-bottom:10px; border: none;">${cleanMatch}</table>`;
               }
 
               // 3. Normal Tables (Bordered)
@@ -356,7 +357,8 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
         <style>
            h1, h2 { text-align: center; font-weight: bold; text-transform: uppercase; margin-bottom: 15px; font-size: 14pt; }
            h3 { font-weight: bold; margin-top: 15px; margin-bottom: 5px; font-size: 12pt; text-transform: uppercase; }
-           table { width: 100%; border-collapse: collapse; margin-bottom: 10px; margin-top: 5px; }
+           table { width: 100%; border-collapse: collapse; margin-bottom: 10px; margin-top: 5px; page-break-inside: avoid !important; }
+           tr { page-break-inside: avoid !important; page-break-after: auto; }
            td, th { padding: 6px; vertical-align: top; text-align: justify; }
            ul, ol { padding-left: 20px; margin-bottom: 5px; margin-top: 0; }
            li { margin-bottom: 3px; }
@@ -404,7 +406,7 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
             body { font-family: 'Arial', sans-serif; padding: 40px; font-size: 12pt; line-height: 1.5; color: #000; text-align: justify; }
             h2 { text-align: center; font-weight: bold; text-transform: uppercase; margin-bottom: 20px; }
             h3 { font-weight: bold; margin-top: 20px; margin-bottom: 10px; text-transform: uppercase; }
-            table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+            table { width: 100%; border-collapse: collapse; margin: 10px 0; page-break-inside: avoid; }
             td, th { padding: 8px; vertical-align: top; text-align: justify; }
             ul, ol { padding-left: 25px; margin-top: 0; }
             p { text-align: justify; }
@@ -412,6 +414,8 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
                button { display: none; }
                body { margin: 0; padding: 0; }
                @page { margin: 2cm; }
+               table { page-break-inside: avoid; }
+               tr { page-break-inside: avoid; }
             }
           </style>
         </head>
