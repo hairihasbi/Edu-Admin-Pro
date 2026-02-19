@@ -85,7 +85,7 @@ export const generateLessonPlan = async (
       **C. KOMPETENSI AWAL**
       (Tuliskan 1-2 paragraf singkat tentang prasyarat pengetahuan).
 
-      **D. PROFIL PELAJAR PANCASILA**
+      **D. DIMENSI PROFIL LULUSAN**
       (Jelaskan dimensi: **${request.graduateProfileDimensions.join(', ')}**).
 
       **E. SARANA DAN PRASARANA**
