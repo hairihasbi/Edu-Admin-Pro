@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { User, LessonPlanRequest, SystemSettings } from '../types';
 import { generateLessonPlan } from '../services/geminiService';
@@ -227,7 +228,8 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
             // Check content to determine style
             const rowContent = cells.join(' ');
             const isSignature = rowContent.includes('Mengetahui') || rowContent.includes('Guru Mata Pelajaran') || rowContent.includes('NIP.');
-            const isIdentity = rowContent.includes('Penyusun') || rowContent.includes('Instansi') || rowContent.includes('Mata Pelajaran') || rowContent.includes('Alokasi Waktu');
+            // Detect Identity table rows strictly
+            const isIdentity = rowContent.includes('Penyusun') || rowContent.includes('Instansi') || rowContent.includes('Mata Pelajaran') || rowContent.includes('Alokasi Waktu') || rowContent.includes('Fase / Kelas');
 
             return '<tr>' + cells.map((cell, index) => {
                 // Default styles (Bordered)
@@ -236,10 +238,9 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
                 if (isSignature) {
                     style = 'padding: 5px; vertical-align: top; border: none; width: 50%;'; 
                 } else if (isIdentity) {
-                    // Identity specific: Transparent border, tight padding
-                    // We'll strip the border in the wrapper phase too, but set basics here
-                    style = 'padding: 2px 5px; vertical-align: top; border: none;';
-                    if (index === 0) style += ' width: 25%; font-weight: bold;';
+                    // Identity specific: NO BORDER, TIGHT PADDING (1px)
+                    style = 'padding: 1px 5px; vertical-align: top; border: none;';
+                    if (index === 0) style += ' width: 25%; font-weight: bold; white-space: nowrap;';
                     else style += ' width: 75%;';
                 } else {
                     // Normal Table Widths
@@ -283,13 +284,19 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
                   return `<table border="0" style="width:100%; border-collapse:collapse; margin-top:30px; border: none;">${match}</table>`;
               }
               
-              // 2. Identity Module Table (Strict Check)
-              // If it contains "Penyusun" AND "Instansi", it's likely the identity table.
-              if ((match.includes('Penyusun') && match.includes('Instansi')) || (match.includes('Mata Pelajaran') && match.includes('Alokasi Waktu'))) {
+              // 2. Identity Module Table (Strict Check) - COMPACT & TRANSPARENT & NO-BREAK
+              if (match.includes('Penyusun') || match.includes('Instansi')) {
                   // Ensure inner styles are cleaned up for transparency
-                  // Regex to replace any existing border: 1px solid black with border: none
+                  // Remove any residual border styles
                   const cleanMatch = match.replace(/border: 1px solid black;/g, 'border: none;');
-                  return `<table border="0" cellspacing="0" cellpadding="2" style="width:100%; border-collapse:collapse; margin-bottom:10px; border: none;">${cleanMatch}</table>`;
+                  
+                  // WRAP IN DIV with page-break-inside: avoid
+                  return `
+                    <div style="page-break-inside: avoid; margin-bottom: 10px;">
+                        <table border="0" cellspacing="0" cellpadding="0" style="width:100%; border-collapse:collapse; border: none;">
+                            ${cleanMatch}
+                        </table>
+                    </div>`;
               }
 
               // 3. Normal Tables (Bordered)
@@ -357,6 +364,7 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
         <style>
            h1, h2 { text-align: center; font-weight: bold; text-transform: uppercase; margin-bottom: 15px; font-size: 14pt; }
            h3 { font-weight: bold; margin-top: 15px; margin-bottom: 5px; font-size: 12pt; text-transform: uppercase; }
+           /* Default Table Styles */
            table { width: 100%; border-collapse: collapse; margin-bottom: 10px; margin-top: 5px; page-break-inside: avoid !important; }
            tr { page-break-inside: avoid !important; page-break-after: auto; }
            td, th { padding: 6px; vertical-align: top; text-align: justify; }
