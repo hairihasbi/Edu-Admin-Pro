@@ -132,7 +132,6 @@ export const generateLessonPlan = async (
       (Buatkan contoh/draft instrumen penilaiannya secara konkret di sini, bisa berupa rubrik tabel, daftar soal, atau lembar ceklis sesuai pilihan user).
 
       <br><br>
-      (Area Tanda Tangan)
       |   |   |
       | :---: | :---: |
       | Mengetahui,<br>Kepala Sekolah<br><br><br><br>**${request.headmasterName}**<br>NIP. ${request.headmasterNip} | ${request.city}, ${request.date}<br>Guru Mata Pelajaran<br><br><br><br>**${request.teacherName}**<br>NIP. ${request.teacherNip} |
