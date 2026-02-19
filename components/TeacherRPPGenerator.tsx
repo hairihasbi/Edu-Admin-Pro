@@ -228,13 +228,22 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
             // Check content to determine style
             const rowContent = cells.join(' ');
             const isSignature = rowContent.includes('Mengetahui') || rowContent.includes('Guru Mata Pelajaran') || rowContent.includes('NIP.');
-            
+            const isIdentity = rowContent.includes('Penyusun') || rowContent.includes('Instansi') || rowContent.includes('Mata Pelajaran') || rowContent.includes('Alokasi Waktu');
+
             return '<tr>' + cells.map((cell, index) => {
                 // Default styles (Bordered)
                 let style = 'padding: 5px; vertical-align: top; border: 1px solid black;';
                 
                 if (isSignature) {
                     style = 'padding: 5px; vertical-align: top; border: none; width: 50%; text-align: center;'; 
+                } else if (isIdentity) {
+                    // Identity specific: NO BORDER, FIXED LABEL WIDTH
+                    style = 'padding: 2px 5px; vertical-align: top; border: none;';
+                    if (index === 0) {
+                        style += ' width: 220px; font-weight: bold; white-space: nowrap;'; // Fixed width for label
+                    } else {
+                        style += ' width: auto;'; // Rest for value
+                    }
                 } else {
                     // Normal Table Widths (Activities etc)
                     if (colCount === 2) {
@@ -282,6 +291,11 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
               // 1. Signature Table (Mengetahui)
               if (match.includes('Mengetahui') || match.includes('Guru Mata Pelajaran')) {
                   return `<table border="0" style="width:100%; border-collapse:collapse; margin-top:30px; border: none;">${match}</table>`;
+              }
+              
+              // 2. Identity Table (No Border)
+              if (match.includes('Penyusun') || match.includes('Instansi')) {
+                  return `<table border="0" style="width:100%; border-collapse:collapse; margin-bottom:10px; border: none;">${match}</table>`;
               }
               
               // 3. Normal Tables (Bordered) - Fallback for other tables
