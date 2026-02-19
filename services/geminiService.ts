@@ -57,21 +57,22 @@ export const generateLessonPlan = async (
       ### I. INFORMASI UMUM
 
       **A. IDENTITAS MODUL**
-      (WAJIB: Gunakan tabel Markdown di bawah ini. Kolom 1 adalah Label, Kolom 2 diawali dengan titik dua (:) lalu isi data. Ini agar tampilan sejajar rapi).
-      | Komponen | Keterangan |
-      | :--- | :--- |
-      | **Penyusun** | : ${request.teacherName} |
-      | **NIP** | : ${request.teacherNip} |
-      | **Instansi** | : ${request.schoolName} |
-      | **Tahun Pelajaran** | : ${request.academicYear} |
-      | **Jenjang Sekolah** | : SMA/SMK |
-      | **Mata Pelajaran** | : ${request.subject} |
-      | **Fase / Kelas** | : ${request.phase} / ${request.grade} |
-      | **Topik / Materi** | : ${request.topic} |
-      | **Alokasi Waktu** | : ${request.timeAllocation} |
-      | **Pendekatan** | : Deep Learning (Mindful, Meaningful, Joyful) |
-      | **Model Pembelajaran** | : ${request.learningModel} |
-      | **Strategi** | : ${request.learningStrategy} |
+      (Gunakan format HTML berikut persis untuk membuat tampilan sejajar rapi seperti menggunakan Tab. JANGAN GUNAKAN TABEL).
+      
+      <div style="font-family: Arial, sans-serif; line-height: 1.5;">
+        <div><span style="display:inline-block; min-width:180px; font-weight:bold;">Penyusun</span>: ${request.teacherName}</div>
+        <div><span style="display:inline-block; min-width:180px; font-weight:bold;">NIP</span>: ${request.teacherNip}</div>
+        <div><span style="display:inline-block; min-width:180px; font-weight:bold;">Instansi</span>: ${request.schoolName}</div>
+        <div><span style="display:inline-block; min-width:180px; font-weight:bold;">Tahun Pelajaran</span>: ${request.academicYear}</div>
+        <div><span style="display:inline-block; min-width:180px; font-weight:bold;">Jenjang Sekolah</span>: SMA/SMK</div>
+        <div><span style="display:inline-block; min-width:180px; font-weight:bold;">Mata Pelajaran</span>: ${request.subject}</div>
+        <div><span style="display:inline-block; min-width:180px; font-weight:bold;">Fase / Kelas</span>: ${request.phase} / ${request.grade}</div>
+        <div><span style="display:inline-block; min-width:180px; font-weight:bold;">Topik / Materi</span>: ${request.topic}</div>
+        <div><span style="display:inline-block; min-width:180px; font-weight:bold;">Alokasi Waktu</span>: ${request.timeAllocation}</div>
+        <div><span style="display:inline-block; min-width:180px; font-weight:bold;">Pendekatan</span>: Deep Learning (Mindful, Meaningful, Joyful)</div>
+        <div><span style="display:inline-block; min-width:180px; font-weight:bold;">Model Pembelajaran</span>: ${request.learningModel}</div>
+        <div><span style="display:inline-block; min-width:180px; font-weight:bold;">Strategi</span>: ${request.learningStrategy}</div>
+      </div>
 
       **B. PENDEKATAN DEEP LEARNING**
       (Jelaskan implementasi Mindful, Meaningful, Joyful dalam bentuk tabel).
