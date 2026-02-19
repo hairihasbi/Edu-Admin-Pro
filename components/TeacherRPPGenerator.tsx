@@ -234,7 +234,7 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
                 let style = 'padding: 5px; vertical-align: top; border: 1px solid black;';
                 
                 if (isSignature) {
-                    style = 'padding: 5px; vertical-align: top; border: none; width: 50%;'; 
+                    style = 'padding: 5px; vertical-align: top; border: none; width: 50%; text-align: center;'; 
                 } else {
                     // Normal Table Widths (Activities etc)
                     if (colCount === 2) {
