@@ -11,8 +11,8 @@ interface WhatsAppSettingsProps {
 const WhatsAppSettings: React.FC<WhatsAppSettingsProps> = ({ user }) => {
   const [config, setConfig] = useState<WhatsAppConfig>({
     userId: user.id,
-    provider: 'FLOWKIRIM',
-    baseUrl: 'https://scan.flowkirim.com/api/whatsapp/messages/text',
+    provider: 'FONNTE',
+    baseUrl: 'https://api.fonnte.com/send',
     apiKey: '',
     deviceId: '',
     isActive: false
@@ -28,12 +28,26 @@ const WhatsAppSettings: React.FC<WhatsAppSettingsProps> = ({ user }) => {
     load();
   }, [user.id]);
 
+  const handleProviderChange = (provider: 'FLOWKIRIM' | 'FONNTE' | 'OTHER') => {
+      let newUrl = config.baseUrl;
+      if (provider === 'FONNTE') newUrl = 'https://api.fonnte.com/send';
+      if (provider === 'FLOWKIRIM') newUrl = 'https://scan.flowkirim.com/api/whatsapp/messages/text';
+      
+      setConfig({ ...config, provider, baseUrl: newUrl });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setStatus({ type: null, message: '' });
     try {
-      await saveWhatsAppConfig(config);
+      // Ensure clean data for Fonnte
+      const configToSave = { ...config };
+      if (config.provider === 'FONNTE') {
+          configToSave.deviceId = ''; // Clear device ID for Fonnte
+      }
+
+      await saveWhatsAppConfig(configToSave);
       setStatus({ type: 'success', message: 'Konfigurasi WhatsApp berhasil disimpan!' });
     } catch (e) {
       setStatus({ type: 'error', message: 'Gagal menyimpan konfigurasi.' });
@@ -76,10 +90,10 @@ const WhatsAppSettings: React.FC<WhatsAppSettingsProps> = ({ user }) => {
               <select 
                 className="w-full border border-gray-300 rounded-lg p-2.5 text-sm"
                 value={config.provider}
-                onChange={(e) => setConfig({...config, provider: e.target.value as any})}
+                onChange={(e) => handleProviderChange(e.target.value as any)}
               >
-                 <option value="FLOWKIRIM">FlowKirim (scan.flowkirim.com)</option>
-                 <option value="FONNTE">Fonnte</option>
+                 <option value="FONNTE">Fonnte (Gratis & Mudah)</option>
+                 <option value="FLOWKIRIM">FlowKirim</option>
                  <option value="OTHER">Lainnya (Custom)</option>
               </select>
            </div>
@@ -93,7 +107,7 @@ const WhatsAppSettings: React.FC<WhatsAppSettingsProps> = ({ user }) => {
                    className="w-full pl-9 pr-4 py-2.5 border border-gray-300 rounded-lg text-sm"
                    value={config.baseUrl}
                    onChange={(e) => setConfig({...config, baseUrl: e.target.value})}
-                   placeholder="https://scan.flowkirim.com/api/whatsapp/messages/text"
+                   placeholder="https://api.fonnte.com/send"
                  />
               </div>
            </div>
@@ -108,35 +122,48 @@ const WhatsAppSettings: React.FC<WhatsAppSettingsProps> = ({ user }) => {
                 className="w-full pl-9 pr-4 py-2.5 border border-gray-300 rounded-lg text-sm"
                 value={config.apiKey}
                 onChange={(e) => setConfig({...config, apiKey: e.target.value})}
-                placeholder="Paste API Key di sini"
+                placeholder="Paste API Key / Token di sini"
               />
            </div>
         </div>
 
-        <div>
-           <div className="flex items-center gap-1 mb-1">
-              <label className="block text-sm font-medium text-gray-700">
-                Device ID
-              </label>
-              <span className="text-gray-400 text-xs">(Wajib diisi)</span>
-           </div>
-           <input 
-             type="text"
-             className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm"
-             value={config.deviceId}
-             onChange={(e) => setConfig({...config, deviceId: e.target.value})}
-             placeholder={config.provider === 'FLOWKIRIM' ? "Contoh: device-xxxx" : "Contoh: device_123"}
-           />
-        </div>
+        {/* Device ID HIDDEN for Fonnte */}
+        {config.provider !== 'FONNTE' && (
+            <div>
+            <div className="flex items-center gap-1 mb-1">
+                <label className="block text-sm font-medium text-gray-700">
+                    Device ID / Session ID
+                </label>
+                <span className="text-gray-400 text-xs">(Wajib untuk FlowKirim)</span>
+            </div>
+            <input 
+                type="text"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm"
+                value={config.deviceId}
+                onChange={(e) => setConfig({...config, deviceId: e.target.value})}
+                placeholder="Contoh: device-xxxx"
+            />
+            </div>
+        )}
 
         <div className="bg-blue-50 p-3 rounded-lg flex gap-2 items-start text-xs text-blue-700 border border-blue-100">
            <HelpCircle size={16} className="shrink-0 mt-0.5" />
-           <p>
-              <strong>Panduan FlowKirim:</strong><br/>
-              1. Base URL (API Endpoint): <code>https://scan.flowkirim.com/api/whatsapp/messages/text</code><br/>
-              2. <strong>Device ID</strong> digunakan untuk proses pengiriman pesan.<br/>
-              3. Pastikan API Key sesuai dengan yang ada di dashboard FlowKirim.
-           </p>
+           {config.provider === 'FONNTE' ? (
+               <p>
+                   <strong>Panduan Fonnte:</strong><br/>
+                   1. Daftar & Login di <a href="https://fonnte.com" target="_blank" className="underline font-bold">fonnte.com</a><br/>
+                   2. Hubungkan WhatsApp (Scan QR) di dashboard Fonnte.<br/>
+                   3. Salin <strong>API Token</strong> dan tempel di kolom API Key di atas.<br/>
+                   4. <strong>Device ID tidak diperlukan</strong> untuk Fonnte.
+               </p>
+           ) : (
+               <p>
+                   <strong>Panduan FlowKirim / Lainnya:</strong><br/>
+                   Pastikan URL mengarah ke endpoint pengiriman pesan (POST).<br/>
+                   Masukkan Token Authorization ke API Key.<br/>
+                   Masukkan Device ID / Session ID jika provider mewajibkan.
+               </p>
+           )}
         </div>
 
         <div className="flex justify-end">
