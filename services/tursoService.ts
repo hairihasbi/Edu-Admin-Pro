@@ -210,8 +210,12 @@ export const pullFromTurso = async (collection: string, localItems: any[]): Prom
     remoteMap.forEach((remote, id) => {
       const localIndex = mergedItems.findIndex(i => i.id === id);
       
+      // CRITICAL FIX: Ensure ID is present in the object spread
+      // Dexie requires the Primary Key field (id) to be present in the object being saved.
+      const safeRemoteData = { ...remote.data, id: id, isSynced: true };
+
       if (localIndex === -1) {
-        mergedItems.push({ ...remote.data, isSynced: true });
+        mergedItems.push(safeRemoteData);
         hasChanges = true;
       } else {
         const local = mergedItems[localIndex];
@@ -219,7 +223,7 @@ export const pullFromTurso = async (collection: string, localItems: any[]): Prom
         const localVer = local.version || 1;
 
         if (remoteVer > localVer) {
-          mergedItems[localIndex] = { ...remote.data, isSynced: true };
+          mergedItems[localIndex] = safeRemoteData;
           hasChanges = true;
         } 
       }
