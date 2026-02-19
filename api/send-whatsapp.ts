@@ -15,19 +15,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const { config, recipients, message } = parseResult.data;
 
-  // Default URL for sending messages
-  const baseUrl = config.baseUrl || 'https://scan.flowkirim.com/api/whatsapp/messages/text';
+  // FlowKirim Session Handling
   let flowKirimSessionId = '';
-
-  // --- STEP 1: SPECIFIC FLOWKIRIM PRE-CHECK (GET SESSION) ---
   if (config.provider === 'FLOWKIRIM') {
       try {
-          // Construct Session URL: Extract origin (e.g., https://scan.flowkirim.com) and append session endpoint
-          const urlObj = new URL(baseUrl);
+          const urlObj = new URL(config.baseUrl || 'https://scan.flowkirim.com');
           const host = urlObj.origin; 
           const sessionUrl = `${host}/api/whatsapp/sessions/${config.deviceId}`;
-
-          console.log(`[FlowKirim] Fetching session from: ${sessionUrl}`);
 
           const sessionRes = await fetch(sessionUrl, {
               method: 'GET',
@@ -37,35 +31,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               }
           });
 
-          if (!sessionRes.ok) {
-              const errText = await sessionRes.text();
-              console.error(`[FlowKirim] Session Fetch Failed: ${sessionRes.status}`, errText);
-              return res.status(500).json({ 
-                  error: 'Gagal mengambil sesi WhatsApp aktif.', 
-                  details: `FlowKirim Error: ${sessionRes.statusText}` 
-              });
+          if (sessionRes.ok) {
+              const sessionData = await sessionRes.json();
+              flowKirimSessionId = sessionData.data?.id || sessionData.id;
           }
-
-          const sessionData = await sessionRes.json();
-          // Try to extract ID from standard response formats (data.id or direct id)
-          flowKirimSessionId = sessionData.data?.id || sessionData.id;
-
-          if (!flowKirimSessionId) {
-              return res.status(500).json({ error: 'Session ID tidak ditemukan pada respon Provider.' });
-          }
-          
-          console.log(`[FlowKirim] Active Session ID: ${flowKirimSessionId}`);
-
-      } catch (error: any) {
+      } catch (error) {
           console.error("FlowKirim Init Error:", error);
-          return res.status(500).json({ 
-              error: 'Gagal menghubungkan ke FlowKirim.', 
-              details: error.message 
-          });
       }
   }
 
-  // --- STEP 2: BROADCAST LOOP ---
+  // --- BROADCAST LOOP ---
   let successCount = 0;
   let failCount = 0;
   const errors: string[] = [];
@@ -85,82 +60,81 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!phone.startsWith('62')) phone = '62' + phone;
 
     try {
-        let payload: any = {};
+        let fetchUrl = config.baseUrl;
+        let headers: any = {
+            'Content-Type': 'application/json'
+        };
+        let bodyPayload: any = {};
 
-        // Construct Payload based on Provider
-        if (config.provider === 'FLOWKIRIM') {
-            // New FlowKirim Logic: Use session_id fetched above
-            payload = {
+        // --- PROVIDER SPECIFIC LOGIC ---
+        if (config.provider === 'FONNTE') {
+            // FONNTE Logic
+            // URL: https://api.fonnte.com/send
+            // Header: Authorization: TOKEN
+            fetchUrl = config.baseUrl || 'https://api.fonnte.com/send';
+            headers['Authorization'] = config.apiKey; // Fonnte uses Authorization header directly
+            bodyPayload = {
+                target: phone,
+                message: personalizedMessage,
+                countryCode: '62' // Optional but good practice
+            };
+        } else if (config.provider === 'FLOWKIRIM') {
+            // FLOWKIRIM Logic
+            headers['Authorization'] = `Bearer ${config.apiKey}`;
+            bodyPayload = {
                 session_id: flowKirimSessionId, 
-                to: `${phone}@s.whatsapp.net`, // Requires suffix
+                to: `${phone}@s.whatsapp.net`, 
                 message: personalizedMessage
             };
         } else {
-            // Generic / Fonnte Fallback
-            payload = {
+            // GENERIC Logic
+            headers['Authorization'] = `Bearer ${config.apiKey}`;
+            bodyPayload = {
                 target: phone,
-                to: phone,
                 phone: phone,
                 message: personalizedMessage,
-                text: personalizedMessage,
-                device_id: config.deviceId
+                text: personalizedMessage
             };
         }
 
-        const response = await fetch(baseUrl, {
+        const response = await fetch(fetchUrl, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${config.apiKey}`
-            },
-            body: JSON.stringify(payload)
+            headers: headers,
+            body: JSON.stringify(bodyPayload)
         });
 
+        const responseText = await response.text();
+        
         if (response.ok) {
-            const responseData = await response.json();
-            // Check logical success flag inside JSON if available
-            // FlowKirim usually returns success: true
-            if (responseData.status === false || responseData.success === false) {
-                 console.error(`WA API Logic Error for ${phone}:`, responseData);
-                 failCount++;
-                 errors.push(`${recipient.name}: ${responseData.message || 'Gagal mengirim (Logic Error)'}`);
-            } else {
-                 successCount++;
+            // Parse JSON safely
+            try {
+                const responseData = JSON.parse(responseText);
+                // Fonnte returns { status: true/false, detail: ... }
+                if (config.provider === 'FONNTE' && responseData.status === false) {
+                     console.error(`Fonnte Logic Error for ${phone}:`, responseData);
+                     failCount++;
+                     errors.push(`${recipient.name}: ${responseData.reason || 'Fonnte Error'}`);
+                } else {
+                     successCount++;
+                }
+            } catch {
+                // If text response but OK status, assume success
+                successCount++;
             }
         } else {
-            // Handle non-200 responses (including HTML error pages from Laravel/Nginx)
-            const text = await response.text();
-            let errorDetails = `HTTP ${response.status}`;
-
-            if (text.includes("<!DOCTYPE html>")) {
-                // Try to grab title from HTML error
-                const titleMatch = text.match(/<title>(.*?)<\/title>/i);
-                if (titleMatch) {
-                     errorDetails += ` - Server Error: ${titleMatch[1].trim()}`;
-                } else {
-                     errorDetails += " - Unknown HTML Error";
-                }
-            } else {
-                try {
-                    const jsonErr = JSON.parse(text);
-                    errorDetails += ` - ${jsonErr.message || JSON.stringify(jsonErr)}`;
-                } catch {
-                    errorDetails += ` - ${text.substring(0, 50)}`;
-                }
-            }
-            
-            console.error(`WA Send Failed for ${phone}: ${errorDetails}`);
+            // Handle HTTP Errors
+            console.error(`WA Send Failed for ${phone}: ${response.status} - ${responseText}`);
             failCount++;
-            errors.push(`${recipient.name}: ${errorDetails}`);
+            errors.push(`${recipient.name}: HTTP ${response.status}`);
         }
     } catch (e: any) {
         console.error(`WA Connection Error for ${phone}:`, e);
         failCount++;
-        errors.push(`${recipient.name}: Connection Error (${e.message})`);
+        errors.push(`${recipient.name}: Connection Error`);
     }
     
-    // Slight delay to avoid rate limiting
-    await new Promise(r => setTimeout(r, 800));
+    // Slight delay to be polite to the API (especially free tier)
+    await new Promise(r => setTimeout(r, 1000));
   }
 
   return res.status(200).json({ success: successCount, failed: failCount, errors });
