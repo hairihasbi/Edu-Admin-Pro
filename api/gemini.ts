@@ -80,6 +80,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const { prompt, useSearch } = parseResult.data;
 
+  // 1. Setup Redis (Fail-safe)
   const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
   const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
   let redis: Redis | null = null;
@@ -99,10 +100,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(429).json({ error: `Terlalu banyak permintaan AI. Silakan tunggu beberapa saat.` });
       }
     } catch (e) {
-      console.error("Redis Connection Error:", e);
+      console.error("Redis Connection Error (Rate Limit Skipped):", e);
     }
   }
 
+  // 2. Gather Keys
   let allKeys: { name: string, value: string }[] = [];
   Object.keys(process.env).forEach(key => {
     if (key.startsWith(KEY_PREFIX)) {
@@ -112,53 +114,82 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (allKeys.length === 0 && process.env.API_KEY) {
     allKeys.push({ name: 'API_KEY', value: process.env.API_KEY });
   }
-  const dbKeys = await getDatabaseKeys(redis);
-  allKeys = [...allKeys, ...dbKeys];
+  
+  // Add DB Keys
+  try {
+      const dbKeys = await getDatabaseKeys(redis);
+      allKeys = [...allKeys, ...dbKeys];
+  } catch(e) {
+      console.error("Error fetching DB keys:", e);
+  }
 
-  if (allKeys.length === 0) return res.status(500).json({ error: "No API Keys configured." });
+  if (allKeys.length === 0) {
+      console.error("CRITICAL: No API Keys found in ENV or DB.");
+      return res.status(500).json({ error: "Sistem AI belum dikonfigurasi (API Key Missing)." });
+  }
 
   allKeys = shuffleArray(allKeys);
 
+  // Sort by status if Redis available
   if (redis) {
-    const statuses = await redis.hgetall(REDIS_KEY_STATUS) || {};
-    allKeys.sort((a, b) => {
-        const statusA = statuses[a.name] || 'ACTIVE';
-        const statusB = statuses[b.name] || 'ACTIVE';
-        if (statusA === 'DEAD' && statusB !== 'DEAD') return 1;
-        if (statusA !== 'DEAD' && statusB === 'DEAD') return -1;
-        return 0;
-    });
+    try {
+        const statuses = await redis.hgetall(REDIS_KEY_STATUS) || {};
+        allKeys.sort((a, b) => {
+            const statusA = statuses[a.name] || 'ACTIVE';
+            const statusB = statuses[b.name] || 'ACTIVE';
+            if (statusA === 'DEAD' && statusB !== 'DEAD') return 1;
+            if (statusA !== 'DEAD' && statusB === 'DEAD') return -1;
+            return 0;
+        });
+    } catch (e) { console.error("Redis sorting error:", e); }
   }
 
   let lastError = null;
   let streamStarted = false;
 
+  // 3. Try Keys
   for (const keyObj of allKeys) {
+    // Skip if cooling down
     if (redis) {
-       const isCoolingDown = await redis.exists(REDIS_COOLDOWN_PREFIX + keyObj.name);
-       if (isCoolingDown) continue;
+       try {
+           const isCoolingDown = await redis.exists(REDIS_COOLDOWN_PREFIX + keyObj.name);
+           if (isCoolingDown) continue;
+       } catch (e) {}
     }
 
     try {
       const ai = new GoogleGenAI({ apiKey: keyObj.value });
       
-      // Prepare Config
       const genConfig: any = {
           temperature: 0.7,
           topK: 40,
           topP: 0.95,
       };
 
-      // Enable Grounding if requested
       if (useSearch) {
           genConfig.tools = [{ googleSearch: {} }];
       }
 
-      const result = await ai.models.generateContentStream({
-        model: 'gemini-3-flash-preview',
-        contents: prompt,
-        config: genConfig
-      });
+      // Try Primary Model
+      let modelName = 'gemini-3-flash-preview'; 
+      let result;
+
+      try {
+          result = await ai.models.generateContentStream({
+            model: modelName,
+            contents: prompt,
+            config: genConfig
+          });
+      } catch (primaryErr: any) {
+          console.warn(`Model ${modelName} failed, trying fallback...`, primaryErr.message);
+          // Fallback Model if primary fails (e.g. 3-flash not available)
+          modelName = 'gemini-2.0-flash-exp';
+          result = await ai.models.generateContentStream({
+            model: modelName,
+            contents: prompt,
+            config: genConfig
+          });
+      }
 
       streamStarted = true;
       
@@ -171,31 +202,44 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       if (redis) {
-        await redis.hincrby(REDIS_KEY_USAGE, keyObj.name, 1);
-        await redis.hset(REDIS_KEY_STATUS, { [keyObj.name]: 'ACTIVE' });
+        // Fire and forget stats updates
+        redis.hincrby(REDIS_KEY_USAGE, keyObj.name, 1).catch(() => {});
+        redis.hset(REDIS_KEY_STATUS, { [keyObj.name]: 'ACTIVE' }).catch(() => {});
       }
       
       res.end(); 
       return;
 
     } catch (error: any) {
-      console.warn(`Key ${keyObj.name} failed:`, error.message);
+      console.error(`Key ${keyObj.name} failed with error:`, error.message);
       lastError = error;
-      const isKeyIssue = error.message?.includes('429') || error.message?.includes('401') || error.message?.includes('Quota') || error.status === 429;
+      
+      // Determine if it's a key issue
+      const isKeyIssue = error.message?.includes('429') || // Rate limit
+                         error.message?.includes('403') || // Permission
+                         error.message?.includes('401') || // Invalid key
+                         error.message?.includes('Quota') || 
+                         error.status === 429;
 
       if (isKeyIssue && redis) {
-         await redis.set(REDIS_COOLDOWN_PREFIX + keyObj.name, '1', { ex: 300 });
-         await redis.hset(REDIS_KEY_STATUS, { [keyObj.name]: 'DEAD' });
-         await redis.hincrby(REDIS_KEY_ERRORS, keyObj.name, 1);
+         try {
+             await redis.set(REDIS_COOLDOWN_PREFIX + keyObj.name, '1', { ex: 300 }); // Cooldown 5 mins
+             await redis.hset(REDIS_KEY_STATUS, { [keyObj.name]: 'DEAD' });
+             await redis.hincrby(REDIS_KEY_ERRORS, keyObj.name, 1);
+         } catch(e) {}
       } 
+      
+      // If it's a Bad Request (400), retrying won't help (e.g. prompt too long)
       if (error.status === 400) break;
     }
   }
 
   if (!streamStarted) {
+      console.error("All AI keys failed. Last error:", lastError);
       return res.status(500).json({ 
-        error: 'Sistem AI sedang sibuk.',
-        details: lastError?.message 
+        error: 'Sistem AI sedang sibuk atau mengalami gangguan.',
+        details: lastError?.message || "No available keys",
+        troubleshoot: "Periksa Vercel Logs untuk detail error."
       });
   }
 }
