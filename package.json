@@ -20,6 +20,7 @@
     "dexie": "^3.2.4",
     "dompurify": "^3.1.2",
     "html2pdf.js": "^0.10.1",
+    "katex": "^0.16.9",
     "lucide-react": "^0.378.0",
     "nodemailer": "^6.9.13",
     "react": "^18.2.0",
