@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { User, LessonPlanRequest, SystemSettings } from '../types';
 import { generateLessonPlan } from '../services/geminiService';
 import { getSystemSettings } from '../services/database';
-import { BrainCircuit, ChevronLeft, ChevronRight, CheckCircle, BookOpen, Save, Printer, FileText, ShieldCheck, RefreshCcw, Trash2, Cloud, AlertTriangle, Download } from './Icons';
+import { BrainCircuit, ChevronLeft, ChevronRight, CheckCircle, BookOpen, Save, Printer, FileText, ShieldCheck, RefreshCcw, Trash2, Cloud, AlertTriangle, Download, Globe } from './Icons';
 // @ts-ignore
 import html2pdf from 'html2pdf.js';
 // @ts-ignore
@@ -70,7 +70,8 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
     cpManualContent: '',
     graduateProfileDimensions: [],
     assessmentType: ASSESSMENT_TYPES[0],
-    assessmentInstrument: ASSESSMENT_INSTRUMENTS[0]
+    assessmentInstrument: ASSESSMENT_INSTRUMENTS[0],
+    useSearch: false // Default to false
   };
 
   const [rppData, setRppData] = useState<LessonPlanRequest>(initialRppData);
@@ -134,7 +135,7 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
     setIsGenerating(true);
     setRppResult(''); 
     setGenProgress(0);
-    setGenStatus('Menghubungkan ke Gemini AI...');
+    setGenStatus(rppData.useSearch ? 'Menghubungkan ke Google Search...' : 'Menghubungkan ke Gemini AI...');
     
     await generateLessonPlan(
         rppData, 
@@ -567,6 +568,35 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
                             <p><strong>Model:</strong> {rppData.learningModel}</p>
                          </div>
                       </div>
+
+                      {/* AI Fact Check Toggle */}
+                      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-center justify-between">
+                          <div>
+                              <h4 className="text-blue-800 font-bold flex items-center gap-2">
+                                  <Globe size={16} /> AI Fact Check (Google Search)
+                              </h4>
+                              <p className="text-xs text-blue-600 mt-1">
+                                  Aktifkan untuk mencari data terkini dan fakta relevan dari Google.
+                              </p>
+                          </div>
+                          <label className="flex items-center cursor-pointer">
+                              <div className="relative">
+                                  <input 
+                                    type="checkbox" 
+                                    className="sr-only"
+                                    checked={rppData.useSearch || false}
+                                    onChange={(e) => handleRppChange('useSearch', e.target.checked)}
+                                  />
+                                  <div className={`block w-12 h-7 rounded-full transition ${
+                                      rppData.useSearch ? 'bg-blue-600' : 'bg-gray-300'
+                                  }`}></div>
+                                  <div className={`dot absolute left-1 top-1 bg-white w-5 h-5 rounded-full transition transform ${
+                                      rppData.useSearch ? 'translate-x-5' : 'translate-x-0'
+                                  }`}></div>
+                              </div>
+                          </label>
+                      </div>
+
                       {isGenerating ? (
                           <div className="w-full bg-white border border-gray-200 rounded-xl p-4 shadow-sm text-center">
                               <div className="text-sm font-bold text-purple-700 mb-2">{genStatus} ({genProgress}%)</div>
