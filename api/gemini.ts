@@ -78,7 +78,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Invalid Input', details: parseResult.error.format() });
   }
 
-  const { prompt } = parseResult.data;
+  const { prompt, useSearch } = parseResult.data;
 
   const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
   const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
@@ -142,14 +142,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try {
       const ai = new GoogleGenAI({ apiKey: keyObj.value });
       
-      const result = await ai.models.generateContentStream({
-        model: 'gemini-3-flash-preview',
-        contents: prompt,
-        config: {
+      // Prepare Config
+      const genConfig: any = {
           temperature: 0.7,
           topK: 40,
           topP: 0.95,
-        }
+      };
+
+      // Enable Grounding if requested
+      if (useSearch) {
+          genConfig.tools = [{ googleSearch: {} }];
+      }
+
+      const result = await ai.models.generateContentStream({
+        model: 'gemini-3-flash-preview',
+        contents: prompt,
+        config: genConfig
       });
 
       streamStarted = true;

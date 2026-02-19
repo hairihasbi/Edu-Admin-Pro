@@ -20,6 +20,7 @@ export const TursoSyncSchema = z.object({
 export const GeminiRequestSchema = z.object({
   prompt: z.string().min(1, "Prompt cannot be empty"),
   userId: z.string().optional().nullable(),
+  useSearch: z.boolean().optional(), // NEW: AI Fact Check
 });
 
 // --- API: STUDENTS FETCH ---
