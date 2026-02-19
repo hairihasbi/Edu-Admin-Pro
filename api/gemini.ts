@@ -182,13 +182,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           });
       } catch (primaryErr: any) {
           console.warn(`Model ${modelName} failed, trying fallback...`, primaryErr.message);
-          // Fallback Model if primary fails (e.g. 3-flash not available)
-          modelName = 'gemini-2.0-flash-exp';
-          result = await ai.models.generateContentStream({
-            model: modelName,
-            contents: prompt,
-            config: genConfig
-          });
+          
+          // Fallback Strategy
+          // 1. Try gemini-2.0-flash (Stable)
+          // 2. Try gemini-3-pro-preview (If flash is unavailable)
+          
+          try {
+              modelName = 'gemini-2.0-flash';
+              result = await ai.models.generateContentStream({
+                model: modelName,
+                contents: prompt,
+                config: genConfig
+              });
+          } catch (secondaryErr: any) {
+              console.warn(`Fallback ${modelName} failed, trying next...`, secondaryErr.message);
+              modelName = 'gemini-3-pro-preview';
+              result = await ai.models.generateContentStream({
+                model: modelName,
+                contents: prompt,
+                config: genConfig
+              });
+          }
       }
 
       streamStarted = true;
@@ -221,16 +235,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                          error.message?.includes('Quota') || 
                          error.status === 429;
 
-      if (isKeyIssue && redis) {
+      // 404 means model not found, don't kill the key, just try next key/model logic (loop continues)
+      // but here we already tried fallbacks for the model. If it still fails, it might be the key doesn't have access.
+      const isModelIssue = error.message?.includes('404') || error.status === 404;
+
+      if ((isKeyIssue || isModelIssue) && redis) {
          try {
-             await redis.set(REDIS_COOLDOWN_PREFIX + keyObj.name, '1', { ex: 300 }); // Cooldown 5 mins
+             // If 404, maybe key is old and doesn't support new models? Treat as 'DEAD' for this session.
+             const cooldown = isModelIssue ? 600 : 300; 
+             await redis.set(REDIS_COOLDOWN_PREFIX + keyObj.name, '1', { ex: cooldown }); 
              await redis.hset(REDIS_KEY_STATUS, { [keyObj.name]: 'DEAD' });
              await redis.hincrby(REDIS_KEY_ERRORS, keyObj.name, 1);
          } catch(e) {}
       } 
       
       // If it's a Bad Request (400), retrying won't help (e.g. prompt too long)
-      if (error.status === 400) break;
+      if (error.status === 400 && !isKeyIssue && !isModelIssue) break;
     }
   }
 
