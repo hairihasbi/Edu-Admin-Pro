@@ -44,10 +44,12 @@ export const generateLessonPlan = async (
       - Jika materi melibatkan rumus matematika, fisika, atau kimia, **WAJIB** menuliskannya menggunakan format **LaTeX**.
       - Gunakan tanda dollar tunggal \`$ ... $\` untuk rumus inline (dalam kalimat). Contoh: Energi adalah $E=mc^2$.
       - Gunakan tanda dollar ganda \`$$ ... $$\` untuk rumus blok (baris sendiri). Contoh: $$x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}$$
-      - Pastikan penulisan LaTeX valid.
+      - Pastikan penulisan LaTeX valid dan tidak terpotong.
 
       **INSTRUKSI STRUKTUR OUTPUT (WAJIB IKUTI PERSIS):**
-      Gunakan format Markdown. Pastikan semua tabel dibuat rapi. Gunakan bahasa Indonesia formal dan pedagogis.
+      Gunakan format Markdown. 
+      **JANGAN GUNAKAN TABEL UNTUK BAGIAN IDENTITAS.** Gunakan format list/teks biasa.
+      Gunakan bahasa Indonesia formal dan pedagogis.
 
       --- MULAI DOKUMEN ---
 
@@ -57,18 +59,15 @@ export const generateLessonPlan = async (
       ### I. INFORMASI UMUM
 
       **A. IDENTITAS MODUL**
-      (Buat dalam TABEL rapi, isi rata kiri)
-      | Komponen | Keterangan |
-      | :--- | :--- |
-      | Penyusun | ${request.teacherName} |
-      | Instansi | ${request.schoolName} |
-      | Tahun Pelajaran | ${request.academicYear} |
-      | Jenjang Sekolah | SMA/SMK |
-      | Mata Pelajaran | ${request.subject} |
-      | Fase / Kelas | ${request.phase} / ${request.grade} |
-      | Topik / Materi | ${request.topic} |
-      | Alokasi Waktu | ${request.timeAllocation} |
-      | Pendekatan | **Deep Learning** |
+      Penyusun : ${request.teacherName}
+      Instansi : ${request.schoolName}
+      Tahun Pelajaran : ${request.academicYear}
+      Jenjang Sekolah : SMA/SMK
+      Mata Pelajaran : ${request.subject}
+      Fase / Kelas : ${request.phase} / ${request.grade}
+      Topik / Materi : ${request.topic}
+      Alokasi Waktu : ${request.timeAllocation}
+      Pendekatan : **Deep Learning**
 
       **B. PENDEKATAN DEEP LEARNING**
       (Jelaskan implementasi Mindful, Meaningful, Joyful yang akan dilakukan dalam materi ini. Tulisan harus justify/rata kanan kiri dalam tabel).
