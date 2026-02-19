@@ -228,8 +228,9 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
             // Check content to determine style
             const rowContent = cells.join(' ');
             const isSignature = rowContent.includes('Mengetahui') || rowContent.includes('Guru Mata Pelajaran') || rowContent.includes('NIP.');
-            // Detect Identity table rows strictly
-            const isIdentity = rowContent.includes('Penyusun') || rowContent.includes('Instansi') || rowContent.includes('Mata Pelajaran') || rowContent.includes('Alokasi Waktu') || rowContent.includes('Fase / Kelas');
+            
+            // STRICT IDENTITY CHECK: Contains typical identity keys
+            const isIdentity = (rowContent.includes('Penyusun') || rowContent.includes('Instansi') || rowContent.includes('Mata Pelajaran') || rowContent.includes('Alokasi Waktu') || rowContent.includes('Fase / Kelas') || rowContent.includes('Tahun Pelajaran'));
 
             return '<tr>' + cells.map((cell, index) => {
                 // Default styles (Bordered)
@@ -238,16 +239,30 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
                 if (isSignature) {
                     style = 'padding: 5px; vertical-align: top; border: none; width: 50%;'; 
                 } else if (isIdentity) {
-                    // Identity specific: NO BORDER, TIGHT PADDING (1px)
-                    style = 'padding: 1px 5px; vertical-align: top; border: none;';
-                    if (index === 0) style += ' width: 25%; font-weight: bold; white-space: nowrap;';
-                    else style += ' width: 75%;';
+                    // Identity specific: NO BORDER, ULTRA TIGHT PADDING, TIGHT LINE HEIGHT
+                    // Using line-height: 1.2 to compress vertical space
+                    style = 'padding: 2px 5px; vertical-align: top; border: none; line-height: 1.2;';
+                    
+                    if (index === 0) {
+                        // Label Column
+                        style += ' width: 25%; white-space: nowrap; font-weight: normal;'; 
+                        // Note: Bolding is handled by Markdown **text** usually, but we ensure structure here
+                    } else {
+                        // Value Column
+                        style += ' width: 75%;';
+                    }
                 } else {
-                    // Normal Table Widths
+                    // Normal Table Widths (Activities etc)
                     if (colCount === 2) {
                         if (index === 0) style += ' width: 25%; text-align: left; font-weight: bold;'; 
                         else style += ' width: 75%; text-align: justify;'; 
                     } 
+                    else if (colCount === 3) {
+                         // e.g. Waktu | Aktivitas | DL
+                         if (index === 0) style += ' width: 15%; text-align: center;';
+                         else if (index === 1) style += ' width: 65%; text-align: justify;';
+                         else style += ' width: 20%; text-align: center; font-style: italic;';
+                    }
                     else if (colCount === 4) {
                         if (index === 0) style += ' width: 10%; text-align: center;';
                         else if (index === 1) style += ' width: 20%; text-align: left; font-weight: bold;';
@@ -285,14 +300,15 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
               }
               
               // 2. Identity Module Table (Strict Check) - COMPACT & TRANSPARENT & NO-BREAK
-              if (match.includes('Penyusun') || match.includes('Instansi')) {
+              if (match.includes('Penyusun') || match.includes('Instansi') || match.includes('Mata Pelajaran')) {
                   // Ensure inner styles are cleaned up for transparency
-                  // Remove any residual border styles
+                  // Remove any residual border styles from <td> just in case, though handled above
                   const cleanMatch = match.replace(/border: 1px solid black;/g, 'border: none;');
                   
                   // WRAP IN DIV with page-break-inside: avoid
+                  // Use cellpadding=0 for tightness
                   return `
-                    <div style="page-break-inside: avoid; margin-bottom: 10px;">
+                    <div style="page-break-inside: avoid; margin-bottom: 5px;">
                         <table border="0" cellspacing="0" cellpadding="0" style="width:100%; border-collapse:collapse; border: none;">
                             ${cleanMatch}
                         </table>
