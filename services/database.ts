@@ -479,7 +479,18 @@ export const getEmailConfig = async (): Promise<EmailConfig | undefined> => {
 };
 
 export const saveEmailConfig = async (config: EmailConfig): Promise<boolean> => {
-    await db.emailConfig.put({ ...config, id: 'default' });
+    // Add lastModified and isSynced flags for proper sync tracking
+    const configToSave = { 
+        ...config, 
+        id: 'default',
+        lastModified: Date.now(),
+        isSynced: false 
+    };
+    await db.emailConfig.put(configToSave);
+    
+    // Trigger sync immediately if online
+    if(navigator.onLine) syncAllData();
+    
     return true;
 };
 
@@ -488,6 +499,7 @@ export const getWhatsAppConfig = async (userId: string): Promise<WhatsAppConfig 
 };
 
 export const saveWhatsAppConfig = async (config: WhatsAppConfig): Promise<void> => {
+    // Ensure all changes trigger sync
     await db.whatsappConfigs.put({ ...config, lastModified: Date.now(), isSynced: false });
     if(navigator.onLine) syncAllData();
 };
@@ -837,6 +849,7 @@ export const syncAllData = async (force = false) => {
     if (!navigator.onLine) return;
     
     // List of tables to sync (Order matters for foreign keys)
+    // ADDED: eduadmin_wa_configs, eduadmin_system_settings, eduadmin_api_keys, eduadmin_master_subjects, eduadmin_email_config
     const collections = [
         { table: db.users, name: 'eduadmin_users' },
         { table: db.classes, name: 'eduadmin_classes' },
@@ -856,7 +869,8 @@ export const syncAllData = async (force = false) => {
         { table: db.whatsappConfigs, name: 'eduadmin_wa_configs' },
         { table: db.apiKeys, name: 'eduadmin_api_keys' },
         { table: db.logs, name: 'eduadmin_logs' },
-        { table: db.masterSubjects, name: 'eduadmin_master_subjects' }
+        { table: db.masterSubjects, name: 'eduadmin_master_subjects' },
+        { table: db.emailConfig, name: 'eduadmin_email_config' } 
     ];
 
     for (const col of collections) {
