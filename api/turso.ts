@@ -7,11 +7,9 @@ import { authorize } from './_utils/auth.js';
 // --- CONFIGURATION ---
 const GENERIC_TABLE = "sync_store";
 
-// ... (SCHEMA DEFINITIONS - Tetap sama, tidak perlu diubah) ...
 // SCHEMA DEFINITIONS
 // Menggunakan tipe data SQLite (TEXT, INTEGER, REAL)
 const DB_SCHEMAS = [
-    // ... existing schemas ...
     // 1. GENERIC SYNC STORE (Fallback Table)
     `CREATE TABLE IF NOT EXISTS sync_store (
         collection TEXT,
@@ -313,7 +311,6 @@ const DB_SCHEMAS = [
 const s = (val: any) => (val === undefined ? null : val);
 
 // --- MAPPING CONFIGURATION ---
-// (Tetap sama seperti file asli)
 const getTableConfig = (collection: string) => {
   switch (collection) {
     case 'eduadmin_users': return { 
@@ -416,14 +413,27 @@ const getTableConfig = (collection: string) => {
 };
 
 const mapRowToJSON = (collection: string, row: any) => {
-    // ... (Sama seperti sebelumnya) ...
     const base = { version: row.version || 1, deleted: row.deleted === 1 };
     switch (collection) {
-        // ... (Mapping Row to JSON - Sama) ...
         case 'eduadmin_users': return { ...base, id: row.id, username: row.username, password: row.password, fullName: row.full_name, role: row.role, status: row.status, schoolName: row.school_name, schoolNpsn: row.school_npsn, nip: row.nip, email: row.email, phone: row.phone, subject: row.subject, avatar: row.avatar, additionalRole: row.additional_role, homeroomClassId: row.homeroom_class_id, lastModified: row.last_modified };
-        // ... (sisanya sama, potong untuk brevity, tapi saat implementasi tetap gunakan semua) ...
-        // Untuk context update ini, hanya fungsi mapRowToJSON yang eksis di file asli yang relevan.
-        // Saya akan menyertakan logic mapRowToJSON default yang ada di file asli.
+        case 'eduadmin_classes': return { ...base, id: row.id, userId: row.user_id, schoolNpsn: row.school_npsn, name: row.name, description: row.description, studentCount: row.student_count, lastModified: row.last_modified };
+        case 'eduadmin_students': return { ...base, id: row.id, classId: row.class_id, schoolNpsn: row.school_npsn, name: row.name, nis: row.nis, gender: row.gender, phone: row.phone, lastModified: row.last_modified };
+        case 'eduadmin_scores': return { ...base, id: row.id, userId: row.user_id, studentId: row.student_id, classId: row.class_id, semester: row.semester, subject: row.subject, category: row.category, materialId: row.material_id, score: row.score, lastModified: row.last_modified };
+        case 'eduadmin_attendance': return { ...base, id: row.id, studentId: row.student_id, classId: row.class_id, date: row.date, status: row.status, lastModified: row.last_modified };
+        case 'eduadmin_journals': return { ...base, id: row.id, userId: row.user_id, classId: row.class_id, date: row.date, materialId: row.material_id, learningObjective: row.learning_objective, meetingNo: row.meeting_no, activities: row.activities, reflection: row.reflection, followUp: row.follow_up, lastModified: row.last_modified };
+        case 'eduadmin_materials': return { ...base, id: row.id, classId: row.class_id, userId: row.user_id, subject: row.subject, semester: row.semester, code: row.code, phase: row.phase, content: row.content, lastModified: row.last_modified };
+        case 'eduadmin_schedules': return { ...base, id: row.id, userId: row.user_id, day: row.day, timeStart: row.time_start, timeEnd: row.time_end, className: row.class_name, subject: row.subject, lastModified: row.last_modified };
+        case 'eduadmin_bk_violations': return { ...base, id: row.id, studentId: row.student_id, date: row.date, violationName: row.violation_name, points: row.points, description: row.description, reportedBy: row.reported_by, lastModified: row.last_modified };
+        case 'eduadmin_bk_reductions': return { ...base, id: row.id, studentId: row.student_id, date: row.date, activityName: row.activity_name, pointsRemoved: row.points_removed, description: row.description, lastModified: row.last_modified };
+        case 'eduadmin_bk_achievements': return { ...base, id: row.id, studentId: row.student_id, date: row.date, title: row.title, level: row.level, description: row.description, lastModified: row.last_modified };
+        case 'eduadmin_bk_counseling': return { ...base, id: row.id, studentId: row.student_id, date: row.date, issue: row.issue, notes: row.notes, followUp: row.follow_up, status: row.status, lastModified: row.last_modified };
+        case 'eduadmin_tickets': return { ...base, id: row.id, userId: row.user_id, teacherName: row.teacher_name, subject: row.subject, status: row.status, lastUpdated: row.last_updated, messages: JSON.parse(row.messages || '[]'), lastModified: row.last_modified };
+        case 'eduadmin_api_keys': return { ...base, id: row.id, key: row.key_value, provider: row.provider, status: row.status, addedAt: row.added_at, lastModified: row.last_modified };
+        case 'eduadmin_system_settings': return { ...base, id: row.id, featureRppEnabled: row.feature_rpp_enabled === 1, maintenanceMessage: row.maintenance_message, appName: row.app_name, schoolName: row.school_name, appDescription: row.app_description, appKeywords: row.app_keywords, logoUrl: row.logo_url, faviconUrl: row.favicon_url, timezone: row.timezone, footerText: row.footer_text, lastModified: row.last_modified };
+        case 'eduadmin_wa_configs': return { ...base, userId: row.user_id, provider: row.provider, baseUrl: row.base_url, apiKey: row.api_key, deviceId: row.device_id, isActive: row.is_active === 1, lastModified: row.last_modified };
+        case 'eduadmin_notifications': return { ...base, id: row.id, title: row.title, message: row.message, type: row.type, targetRole: row.target_role, isRead: row.is_read === 1, isPopup: row.is_popup === 1, createdAt: row.created_at, lastModified: row.last_modified };
+        case 'eduadmin_logs': return { ...base, id: row.id, timestamp: row.timestamp, level: row.level, actor: row.actor, role: row.role, action: row.action, details: row.details, lastModified: row.last_modified };
+        case 'eduadmin_master_subjects': return { ...base, id: row.id, name: row.name, category: row.category, level: row.level, lastModified: row.last_modified };
         default: return null;
     }
 };
@@ -463,7 +473,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         try {
             currentUser = await authorize(req, ['ADMIN', 'GURU']);
         } catch (err: any) {
-            // ... (Fallback auth logic same as before) ...
             const isUserPush = action === 'push' && collection === 'eduadmin_users';
             const isAuthError = err.status === 401 || (err.message && err.message.includes('User not found'));
             
@@ -504,7 +513,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
 
         if (action === 'init') {
-            // ... (Init logic remains same) ...
             const results = [];
             for (const schema of DB_SCHEMAS) {
                 try {
@@ -514,7 +522,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     results.push({ success: false, error: e.message });
                 }
             }
-            // Seed Admin
             try {
                 const checkAdmin = await client.execute("SELECT id FROM users WHERE role='ADMIN' LIMIT 1");
                 if (checkAdmin.rows.length === 0) {
@@ -528,13 +535,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             return res.status(200).json({ success: true, message: "Database Initialized & Migrated.", details: results });
         }
 
-        // --- NEW ACTION: RESET (HARD DELETE) ---
         if (action === 'reset') {
             if (currentUser?.role !== 'ADMIN') {
                 return res.status(403).json({ error: "Unauthorized: Only Admin can reset data." });
             }
 
-            // Get NPSN of the Admin to ensure we only wipe their school's data
             const adminRes = await client.execute({ sql: "SELECT school_npsn FROM users WHERE id = ?", args: [currentUser.userId] });
             const adminNpsn = adminRes.rows[0]?.school_npsn;
 
@@ -545,14 +550,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const transaction = await client.transaction();
             try {
                 if (scope === 'ALL') {
-                    // FACTORY RESET (Wipe Everything Except Users) based on NPSN
-                    
-                    // 1. Delete Students & Classes
                     await transaction.execute({ sql: "DELETE FROM students WHERE school_npsn = ?", args: [adminNpsn] });
                     await transaction.execute({ sql: "DELETE FROM classes WHERE school_npsn = ?", args: [adminNpsn] });
 
-                    // 2. Delete Transactional Data based on Users in that school
-                    // Find all user IDs in this school to wipe their owned data
                     const schoolUsersRes = await client.execute({ sql: "SELECT id FROM users WHERE school_npsn = ?", args: [adminNpsn] });
                     const userIds = schoolUsersRes.rows.map(r => r.id);
                     
@@ -564,26 +564,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                         await transaction.execute({ sql: `DELETE FROM journals WHERE user_id IN (${placeholders})`, args: argsIds });
                         await transaction.execute({ sql: `DELETE FROM materials WHERE user_id IN (${placeholders})`, args: argsIds });
                         await transaction.execute({ sql: `DELETE FROM schedules WHERE user_id IN (${placeholders})`, args: argsIds });
-                        await transaction.execute({ sql: `DELETE FROM attendance WHERE class_id IN (SELECT id FROM classes WHERE school_npsn = ?)`, args: [adminNpsn] }); // Safer via class
-                        
-                        // Delete BK Data linked to students (who are already deleted, but for safety)
-                        // BK tables rely on student_id, which we just wiped. But to be sure:
-                        // "DELETE FROM bk_violations WHERE student_id NOT IN (SELECT id FROM students)" would work after student delete.
-                        // Or wipe by class/school association if needed.
-                        // Since we deleted students first, BK data is now orphaned. Ideally we delete them too.
-                        // However, Turso/SQLite might not cascade unless configured. Let's try to delete based on students list snapshot if needed,
-                        // or just rely on 'orphaned' cleanup later. 
-                        // Better: Delete where student_id was in the deleted set. 
-                        // Simplest for now: Delete ALL BK data if we assume single tenant per DB, but we are multi-tenant.
-                        // We will rely on Application logic: If student is gone, data is hidden.
-                        // BUT request demands "Database kosong".
-                        // Let's use a subquery delete:
-                        // DELETE FROM bk_violations WHERE student_id IN (SELECT id FROM students WHERE school_npsn = ?) -- But we deleted students already!
-                        // So we must do this BEFORE deleting students.
+                        await transaction.execute({ sql: `DELETE FROM attendance WHERE class_id IN (SELECT id FROM classes WHERE school_npsn = ?)`, args: [adminNpsn] }); 
                     }
                 } else if (scope === 'FULL_YEAR') {
-                    // RESET TAHUN AJARAN (Wipe Students, Classes, Grades, Journals) - Keeps Users/Teachers
-                    // 1. Delete dependent BK & Academic Data first
                     await transaction.execute({ sql: `DELETE FROM bk_violations WHERE student_id IN (SELECT id FROM students WHERE school_npsn = ?)`, args: [adminNpsn] });
                     await transaction.execute({ sql: `DELETE FROM bk_reductions WHERE student_id IN (SELECT id FROM students WHERE school_npsn = ?)`, args: [adminNpsn] });
                     await transaction.execute({ sql: `DELETE FROM bk_achievements WHERE student_id IN (SELECT id FROM students WHERE school_npsn = ?)`, args: [adminNpsn] });
@@ -592,7 +575,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     await transaction.execute({ sql: `DELETE FROM scores WHERE class_id IN (SELECT id FROM classes WHERE school_npsn = ?)`, args: [adminNpsn] });
                     await transaction.execute({ sql: `DELETE FROM attendance WHERE class_id IN (SELECT id FROM classes WHERE school_npsn = ?)`, args: [adminNpsn] });
                     
-                    // Delete Journals/Materials (Owned by users in this school)
                     const schoolUsersRes = await client.execute({ sql: "SELECT id FROM users WHERE school_npsn = ?", args: [adminNpsn] });
                     const userIds = schoolUsersRes.rows.map(r => r.id);
                     if (userIds.length > 0) {
@@ -602,14 +584,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                         await transaction.execute({ sql: `DELETE FROM schedules WHERE user_id IN (${placeholders})`, args: userIds });
                     }
 
-                    // 2. Delete Core Structure
                     await transaction.execute({ sql: "DELETE FROM students WHERE school_npsn = ?", args: [adminNpsn] });
                     await transaction.execute({ sql: "DELETE FROM classes WHERE school_npsn = ?", args: [adminNpsn] });
 
                 } else if (scope === 'SEMESTER' && semester) {
-                    // RESET SEMESTER (Only Scores & Materials for that semester)
-                    // We need to target scores within classes of this school
-                    
                     await transaction.execute({ 
                         sql: `DELETE FROM scores WHERE semester = ? AND class_id IN (SELECT id FROM classes WHERE school_npsn = ?)`, 
                         args: [semester, adminNpsn] 
@@ -619,10 +597,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                         sql: `DELETE FROM materials WHERE semester = ? AND class_id IN (SELECT id FROM classes WHERE school_npsn = ?)`, 
                         args: [semester, adminNpsn] 
                     });
-                    
-                    // Journals don't have explicit semester column usually (date based).
-                    // We leave journals intact or user deletes manually, unless we want to query by date range.
-                    // Request says: "Menghapus data Nilai, Lingkup Materi".
                 }
 
                 await transaction.commit();
@@ -635,7 +609,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
 
         if (action === 'push') {
-            // ... (Existing Push Logic) ...
             if (collection === 'eduadmin_api_keys' && currentUser?.role !== 'ADMIN') {
                 return res.status(403).json({ error: "Only Admin can modify API Keys" });
             }
@@ -720,7 +693,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
 
         if (action === 'pull') {
-            // ... (Existing Pull Logic) ...
             const isGuru = currentUser?.role === 'GURU';
             const userId = currentUser?.userId || null; 
 
