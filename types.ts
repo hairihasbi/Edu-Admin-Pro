@@ -1,4 +1,5 @@
 
+
 export enum UserRole {
   ADMIN = 'ADMIN',
   GURU = 'GURU',
@@ -318,7 +319,7 @@ export interface EmailConfig {
 
 export interface WhatsAppConfig extends Syncable {
   userId: string; // Link to specific user (Admin/Guru)
-  provider: 'FLOWKIRIM' | 'OTHER';
+  provider: 'FLOWKIRIM' | 'OTHER' | 'FONNTE';
   baseUrl: string; // API Endpoint
   apiKey: string;
   deviceId?: string; // Optional device ID for some providers
