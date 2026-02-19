@@ -200,10 +200,10 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
         })
 
         // --- MARKDOWN PARSING ---
-        // Headers
-        .replace(/###\s+(.*?)\n/g, '<h3 style="margin-top:15pt; margin-bottom:5pt; font-size:12pt; font-weight:bold; text-transform:uppercase;">$1</h3>')
-        .replace(/##\s+(.*?)\n/g, '<h2 style="margin-top:20pt; margin-bottom:10pt; font-size:14pt; font-weight:bold; text-align:center; text-transform:uppercase;">$1</h2>')
-        .replace(/#\s+(.*?)\n/g, '<h1 style="margin-top:20pt; margin-bottom:10pt; font-size:16pt; font-weight:bold; text-align:center; text-transform:uppercase; text-decoration: underline;">$1</h1>')
+        // Headers (Reduced Margins for Compactness)
+        .replace(/###\s+(.*?)\n/g, '<h3 style="margin-top:10pt; margin-bottom:2pt; font-size:12pt; font-weight:bold; text-transform:uppercase;">$1</h3>')
+        .replace(/##\s+(.*?)\n/g, '<h2 style="margin-top:15pt; margin-bottom:5pt; font-size:14pt; font-weight:bold; text-align:center; text-transform:uppercase;">$1</h2>')
+        .replace(/#\s+(.*?)\n/g, '<h1 style="margin-top:15pt; margin-bottom:5pt; font-size:16pt; font-weight:bold; text-align:center; text-transform:uppercase; text-decoration: underline;">$1</h1>')
         // Bold: **text** -> <b>text</b>
         .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
         // Italic: *text* -> <i>text</i>
@@ -229,26 +229,12 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
             const rowContent = cells.join(' ');
             const isSignature = rowContent.includes('Mengetahui') || rowContent.includes('Guru Mata Pelajaran') || rowContent.includes('NIP.');
             
-            // STRICT IDENTITY CHECK: Contains typical identity keys
-            const isIdentity = (rowContent.includes('Penyusun') || rowContent.includes('Instansi') || rowContent.includes('Mata Pelajaran') || rowContent.includes('Alokasi Waktu') || rowContent.includes('Fase / Kelas') || rowContent.includes('Tahun Pelajaran'));
-
             return '<tr>' + cells.map((cell, index) => {
                 // Default styles (Bordered)
                 let style = 'padding: 5px; vertical-align: top; border: 1px solid black;';
                 
                 if (isSignature) {
                     style = 'padding: 5px; vertical-align: top; border: none; width: 50%;'; 
-                } else if (isIdentity) {
-                    // Identity specific: Bordered (as requested), but TIGHT padding and line-height
-                    style = 'padding: 3px 5px; vertical-align: top; border: 1px solid black; line-height: 1.15;';
-                    
-                    if (index === 0) {
-                        // Label Column
-                        style += ' width: 25%; font-weight: bold;'; 
-                    } else {
-                        // Value Column
-                        style += ' width: 75%;';
-                    }
                 } else {
                     // Normal Table Widths (Activities etc)
                     if (colCount === 2) {
@@ -282,8 +268,9 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
                 return `<td style="${style}">${cell.trim() || '&nbsp;'}</td>`;
             }).join('') + '</tr>';
         })
-        // Newlines to paragraph with justify
-        .replace(/\n\n/g, '</p><p style="text-align: justify; margin-bottom: 8pt;">')
+        // Newlines: Check for double newlines first (Paragraphs), then single (Line break)
+        // Adjust spacing for compactness
+        .replace(/\n\n/g, '</p><p style="text-align: justify; margin-bottom: 6pt;">')
         .replace(/\n/g, '<br/>');
 
       // Wrap tables if any rows detected and remove empty header marker rows
@@ -297,27 +284,14 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
                   return `<table border="0" style="width:100%; border-collapse:collapse; margin-top:30px; border: none;">${match}</table>`;
               }
               
-              // 2. Identity Module Table (Strict Check) - COMPACT & BORDERED & NO-BREAK
-              if (match.includes('Penyusun') || match.includes('Instansi') || match.includes('Mata Pelajaran')) {
-                  // WRAP IN DIV with page-break-inside: avoid
-                  // Use cellpadding=2 for tightness
-                  // Restore Border style: 1px solid black
-                  return `
-                    <div style="page-break-inside: avoid; margin-bottom: 10px;">
-                        <table border="1" cellspacing="0" cellpadding="2" style="width:100%; border-collapse:collapse; border: 1px solid black;">
-                            ${match}
-                        </table>
-                    </div>`;
-              }
-
-              // 3. Normal Tables (Bordered)
+              // 3. Normal Tables (Bordered) - Fallback for other tables
               return `<table border="1" cellspacing="0" cellpadding="5" style="width:100%; border-collapse:collapse; margin-bottom:15px; border: 1px solid black;">${match}</table>`;
           });
       }
       
       // Wrap content in p if not already started
       if (!html.startsWith('<')) {
-          html = '<p style="text-align: justify; margin-bottom: 8pt;">' + html + '</p>';
+          html = '<p style="text-align: justify; margin-bottom: 6pt;">' + html + '</p>';
       }
 
       return html;
@@ -335,13 +309,13 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
         <meta charset='utf-8'>
         <title>Modul Ajar - ${rppData.subject}</title>
         <style>
-          body { font-family: 'Arial', sans-serif; font-size: 11pt; line-height: 1.5; text-align: justify; margin: 2cm; }
+          body { font-family: 'Arial', sans-serif; font-size: 11pt; line-height: 1.3; text-align: justify; margin: 2cm; }
           h1, h2, h3 { color: #000; font-weight: bold; }
           table { border-collapse: collapse; width: 100%; margin-bottom: 10pt; }
           td, th { padding: 5pt; vertical-align: top; text-align: justify; }
           ul, ol { margin-top: 0; margin-bottom: 5pt; padding-left: 20pt; }
           li { margin-bottom: 2pt; }
-          p { margin-top: 0; margin-bottom: 8pt; text-align: justify; }
+          p { margin-top: 0; margin-bottom: 6pt; text-align: justify; }
           /* Minimal KaTeX styles for Word compat */
           .katex { font-size: 1.1em; font-family: 'Times New Roman', serif; }
         </style>
@@ -371,17 +345,17 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
     // Create a temporary container with improved styles for PDF
     const element = document.createElement('div');
     element.innerHTML = `
-      <div style="font-family: 'Arial', sans-serif; padding: 25px; color: #000; font-size: 11pt; text-align: justify; line-height: 1.5;">
+      <div style="font-family: 'Arial', sans-serif; padding: 25px; color: #000; font-size: 11pt; text-align: justify; line-height: 1.3;">
         <style>
-           h1, h2 { text-align: center; font-weight: bold; text-transform: uppercase; margin-bottom: 15px; font-size: 14pt; }
-           h3 { font-weight: bold; margin-top: 15px; margin-bottom: 5px; font-size: 12pt; text-transform: uppercase; }
+           h1, h2 { text-align: center; font-weight: bold; text-transform: uppercase; margin-bottom: 10px; font-size: 14pt; }
+           h3 { font-weight: bold; margin-top: 10px; margin-bottom: 5px; font-size: 12pt; text-transform: uppercase; }
            /* Default Table Styles */
            table { width: 100%; border-collapse: collapse; margin-bottom: 10px; margin-top: 5px; page-break-inside: avoid !important; }
            tr { page-break-inside: avoid !important; page-break-after: auto; }
-           td, th { padding: 6px; vertical-align: top; text-align: justify; }
+           td, th { padding: 5px; vertical-align: top; text-align: justify; }
            ul, ol { padding-left: 20px; margin-bottom: 5px; margin-top: 0; }
            li { margin-bottom: 3px; }
-           p { margin-bottom: 8px; margin-top: 0; text-align: justify; }
+           p { margin-bottom: 6px; margin-top: 0; text-align: justify; }
            .page-break { page-break-before: always; }
            .katex { font-size: 1em !important; } /* Fix math size in PDF */
         </style>
@@ -422,13 +396,13 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
           <title>Cetak RPP</title>
           <link rel="stylesheet" href="${katexLink}" crossorigin="anonymous">
           <style>
-            body { font-family: 'Arial', sans-serif; padding: 40px; font-size: 12pt; line-height: 1.5; color: #000; text-align: justify; }
-            h2 { text-align: center; font-weight: bold; text-transform: uppercase; margin-bottom: 20px; }
-            h3 { font-weight: bold; margin-top: 20px; margin-bottom: 10px; text-transform: uppercase; }
+            body { font-family: 'Arial', sans-serif; padding: 40px; font-size: 12pt; line-height: 1.3; color: #000; text-align: justify; }
+            h2 { text-align: center; font-weight: bold; text-transform: uppercase; margin-bottom: 10px; }
+            h3 { font-weight: bold; margin-top: 15px; margin-bottom: 5px; text-transform: uppercase; }
             table { width: 100%; border-collapse: collapse; margin: 10px 0; page-break-inside: avoid; }
-            td, th { padding: 8px; vertical-align: top; text-align: justify; }
+            td, th { padding: 6px; vertical-align: top; text-align: justify; }
             ul, ol { padding-left: 25px; margin-top: 0; }
-            p { text-align: justify; }
+            p { text-align: justify; margin-bottom: 6px; }
             @media print {
                button { display: none; }
                body { margin: 0; padding: 0; }
