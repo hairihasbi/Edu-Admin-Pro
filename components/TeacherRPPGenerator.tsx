@@ -167,7 +167,7 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
     });
   };
 
-  // --- HELPER: CONVERT MARKDOWN TO HTML FOR WORD/PDF (FIXED TABLE ALIGNMENT) ---
+  // --- HELPER: CONVERT MARKDOWN TO HTML FOR WORD/PDF (FIXED TABLE ALIGNMENT + SIGNATURE) ---
   const formatMarkdownToWordHTML = (md: string) => {
       if (!md) return '';
       
@@ -186,28 +186,39 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
         // Ordered lists
         .replace(/^\s*\d+\.\s+(.*)$/gm, '<li style="text-align: justify;">$1</li>')
         .replace(/((<li.*>.*<\/li>\n?)+)/g, '<ol>$1</ol>')
-        // Tables (Standard Markdown with FIXED COLUMN WIDTH LOGIC)
+        // Tables (Standard Markdown with FIXED COLUMN WIDTH & SIGNATURE LOGIC)
         .replace(/\|(.+)\|/g, (match) => {
-            const cells = match.split('|').filter(s => s.trim() !== '');
+            const cells = match.split('|').filter((s, i, arr) => {
+                // Filter out empty strings that come from splitting | at start/end
+                return !(s.trim() === '' && (i === 0 || i === arr.length - 1));
+            });
             // Check if it's a separator row (---)
             if (cells.some(c => c.includes('---'))) return ''; 
 
             const isTwoColumn = cells.length === 2;
+            
+            // Check if this row belongs to the Signature Section
+            const rowContent = cells.join(' ');
+            const isSignature = rowContent.includes('Mengetahui') || rowContent.includes('Guru Mata Pelajaran') || rowContent.includes('NIP.');
 
             return '<tr>' + cells.map((cell, index) => {
-                let style = 'border: 1px solid black; padding: 5px; vertical-align: top;';
+                let style = 'padding: 5px; vertical-align: top;';
                 
-                // FIX: Force width for Identity Module Table (2 Columns)
-                // This ensures "Keterangan" starts at the exact same vertical line for all rows.
-                if (isTwoColumn) {
-                    if (index === 0) {
-                        style += ' width: 25%; text-align: left; font-weight: bold;'; // Label Column
-                    } else {
-                        style += ' width: 75%; text-align: left;'; // Value Column
-                    }
+                if (isSignature) {
+                    style += ' border: none; width: 50%;'; // Transparent border & 50% width
                 } else {
-                    // For other tables (3+ cols like Activities), justify is okay
-                    style += ' text-align: justify;';
+                    style += ' border: 1px solid black;';
+                    // FIX: Force width for Identity Module Table (2 Columns)
+                    if (isTwoColumn) {
+                        if (index === 0) {
+                            style += ' width: 25%; text-align: left; font-weight: bold;'; // Label Column
+                        } else {
+                            style += ' width: 75%; text-align: left;'; // Value Column
+                        }
+                    } else {
+                        // For other tables (3+ cols like Activities), justify is okay
+                        style += ' text-align: justify;';
+                    }
                 }
 
                 return `<td style="${style}">${cell.trim() || '&nbsp;'}</td>`;
@@ -220,8 +231,16 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
       // Wrap tables if any rows detected and remove empty header marker rows
       if (html.includes('<tr>')) {
           html = html.replace(/<tr>\s*<\/tr>/g, ''); // Remove empty rows from markdown separator lines
-          // Ensure table takes full width
-          html = html.replace(/((<tr>.*?<\/tr>)+)/g, '<table border="1" cellspacing="0" cellpadding="5" style="width:100%; border-collapse:collapse; margin-bottom:15px; border: 1px solid black;">$1</table>');
+          
+          // Custom wrapper for Signature Table vs Normal Table
+          html = html.replace(/((<tr>.*?<\/tr>)+)/g, (match) => {
+              if (match.includes('Mengetahui') || match.includes('Guru Mata Pelajaran')) {
+                  // Signature Table: No border, margin top
+                  return `<table border="0" style="width:100%; border-collapse:collapse; margin-top:30px; border: none;">${match}</table>`;
+              }
+              // Normal Table: Bordered
+              return `<table border="1" cellspacing="0" cellpadding="5" style="width:100%; border-collapse:collapse; margin-bottom:15px; border: 1px solid black;">${match}</table>`;
+          });
       }
       
       // Wrap content in p if not already started
@@ -246,8 +265,8 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
         <style>
           body { font-family: 'Arial', sans-serif; font-size: 11pt; line-height: 1.5; text-align: justify; margin: 2cm; }
           h1, h2, h3 { color: #000; font-weight: bold; }
-          table { border-collapse: collapse; width: 100%; margin-bottom: 10pt; border: 1px solid black; }
-          td, th { border: 1px solid black; padding: 5pt; vertical-align: top; text-align: justify; }
+          table { border-collapse: collapse; width: 100%; margin-bottom: 10pt; }
+          td, th { padding: 5pt; vertical-align: top; text-align: justify; }
           ul, ol { margin-top: 0; margin-bottom: 5pt; padding-left: 20pt; }
           li { margin-bottom: 2pt; }
           p { margin-top: 0; margin-bottom: 8pt; text-align: justify; }
@@ -282,8 +301,8 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
         <style>
            h1, h2 { text-align: center; font-weight: bold; text-transform: uppercase; margin-bottom: 15px; font-size: 14pt; }
            h3 { font-weight: bold; margin-top: 15px; margin-bottom: 5px; font-size: 12pt; text-transform: uppercase; }
-           table { width: 100%; border-collapse: collapse; margin-bottom: 10px; margin-top: 5px; border: 1px solid #000; }
-           td, th { border: 1px solid #000; padding: 6px; vertical-align: top; text-align: justify; }
+           table { width: 100%; border-collapse: collapse; margin-bottom: 10px; margin-top: 5px; }
+           td, th { padding: 6px; vertical-align: top; text-align: justify; }
            ul, ol { padding-left: 20px; margin-bottom: 5px; margin-top: 0; }
            li { margin-bottom: 3px; }
            p { margin-bottom: 8px; margin-top: 0; text-align: justify; }
@@ -325,8 +344,8 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
             body { font-family: 'Arial', sans-serif; padding: 40px; font-size: 12pt; line-height: 1.5; color: #000; text-align: justify; }
             h2 { text-align: center; font-weight: bold; text-transform: uppercase; margin-bottom: 20px; }
             h3 { font-weight: bold; margin-top: 20px; margin-bottom: 10px; text-transform: uppercase; }
-            table { width: 100%; border-collapse: collapse; margin: 10px 0; border: 1px solid #000; }
-            td, th { border: 1px solid #000; padding: 8px; vertical-align: top; text-align: justify; }
+            table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+            td, th { padding: 8px; vertical-align: top; text-align: justify; }
             ul, ol { padding-left: 25px; margin-top: 0; }
             p { text-align: justify; }
             @media print {
