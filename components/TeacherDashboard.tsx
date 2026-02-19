@@ -1,5 +1,4 @@
 
-// ... existing imports ...
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { BookOpen, School, User, IdCard, CalendarDays, Layout, Users, ClipboardList, TrendingUp, Plus, Trash2, X, Settings, Heart, Coffee, Megaphone, AlertCircle, Info, Zap, DatabaseBackup, AlertTriangle, Database, WifiOff, RefreshCcw, Cloud, ArrowRight } from './Icons';
@@ -14,7 +13,6 @@ interface TeacherDashboardProps {
 const DAYS = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
 
 const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
-// ... existing state ...
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(true);
   
@@ -51,7 +49,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
   // Donation Popup State
   const [showDonationModal, setShowDonationModal] = useState(false);
   const [dontShowAgain, setDontShowAgain] = useState(false);
-  const [donationClosed, setDonationClosed] = useState(false); // Track if user closed donation to trigger announcement
 
   // Announcement Banner State
   const [announcement, setAnnouncement] = useState<Notification | null>(null);
@@ -102,8 +99,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
     if (!hidePopup) {
       const timer = setTimeout(() => setShowDonationModal(true), 1500);
       return () => clearTimeout(timer);
-    } else {
-        setDonationClosed(true); // If hidden, mark as closed immediately to allow announcement check
     }
   }, [user]);
 
@@ -158,35 +153,68 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
         window.removeEventListener('online', checkDb);
         window.removeEventListener('offline', () => setDbStatus('Mode Lokal'));
     };
-  }, [user]); // Add user to dependency array
+  }, [user]); 
 
-// ... existing code ...
-  // Announcement Logic: Runs when donation modal is closed
+  // --- LIVE ANNOUNCEMENT LOGIC (CHANGED) ---
+  // Runs independently of donation modal, polls every 30s
   useEffect(() => {
-    if (donationClosed) {
-        checkAnnouncements();
-    }
-  }, [donationClosed]);
+    // Initial check
+    checkAnnouncements();
+
+    // Polling interval for "Live" feel
+    const intervalId = setInterval(checkAnnouncements, 30000); // Check every 30 seconds
+
+    return () => clearInterval(intervalId);
+  }, []);
 
   const checkAnnouncements = async () => {
+      // Prevent fetching if modal is already open to avoid overwriting current view
+      // We check the state inside the async flow logic below, but React state inside setInterval closure
+      // might be stale. Ideally we trust the effect dependencies or use functional updates, 
+      // but for simple polling, re-fetching is okay.
+      
       const activeAnnouncements = await getActiveAnnouncements();
+      
       if (activeAnnouncements.length > 0) {
           // Take the most recent one
           const latest = activeAnnouncements[0];
-          // Check if already seen locally
-          const isSeen = localStorage.getItem(`announcement_seen_${latest.id}`);
-          if (!isSeen) {
-              setAnnouncement(latest);
-              setShowAnnouncementModal(true);
+          const storageKey = `announcement_view_count_${latest.id}`;
+          
+          // Get current view count (Default 0)
+          const currentCount = parseInt(localStorage.getItem(storageKey) || '0');
+          const MAX_VIEWS = 2;
+
+          // Logic: Show if view count < 2
+          // We also check if we are NOT currently showing it (to prevent interval re-triggering animation)
+          if (currentCount < MAX_VIEWS) {
+              setAnnouncement(prev => {
+                  // Only update state if it's a new announcement or different from current
+                  if (prev?.id !== latest.id) {
+                      // Increment view count immediately upon deciding to show
+                      localStorage.setItem(storageKey, (currentCount + 1).toString());
+                      setShowAnnouncementModal(true);
+                      return latest;
+                  }
+                  return prev; // No change if already showing same ID
+              });
+              
+              // If state was null (first load), ensure modal opens
+              if (!showAnnouncementModal) {
+                   setShowAnnouncementModal(true);
+                   // Ensure we increment if we force open, handling the closure staleness slightly
+                   const updatedCount = parseInt(localStorage.getItem(storageKey) || '0');
+                   if (updatedCount === currentCount) {
+                        localStorage.setItem(storageKey, (currentCount + 1).toString());
+                   }
+              }
           }
       }
   };
 
   const closeAnnouncementModal = () => {
-      if (announcement) {
-          localStorage.setItem(`announcement_seen_${announcement.id}`, 'true');
-      }
       setShowAnnouncementModal(false);
+      // We don't clear announcement state immediately to allow fade out animation if implemented
+      setTimeout(() => setAnnouncement(null), 300);
   };
 
   // Update schedule subject when user profile changes
@@ -233,7 +261,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
       localStorage.setItem('eduadmin_hide_donation_popup', 'true');
     }
     setShowDonationModal(false);
-    setDonationClosed(true); // Trigger announcement check
   };
 
   const navigateToDonation = () => {
@@ -241,7 +268,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
       localStorage.setItem('eduadmin_hide_donation_popup', 'true');
     }
     setShowDonationModal(false);
-    setDonationClosed(true);
     navigate('/donation');
   };
 
