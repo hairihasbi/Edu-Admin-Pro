@@ -97,7 +97,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (count === 1) await redis.expire(ratelimitKey, window);
 
       if (count > limit) {
-        return res.status(429).json({ error: `Terlalu banyak permintaan AI. Silakan tunggu beberapa saat.` });
+        return res.status(429).json({ error: `Terlalu banyak permintaan AI dari akun Anda. Tunggu 1 menit.` });
       }
     } catch (e) {
       console.error("Redis Connection Error (Rate Limit Skipped):", e);
@@ -228,27 +228,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.error(`Key ${keyObj.name} failed with error:`, error.message);
       lastError = error;
       
-      // Determine if it's a key issue
-      const isKeyIssue = error.message?.includes('429') || // Rate limit
+      // Determine if it's a key/quota issue
+      // 429 = Too Many Requests / Quota Exceeded
+      const isRateLimit = error.message?.includes('429') || 
+                          error.status === 429 || 
+                          error.code === 429;
+
+      const isKeyIssue = isRateLimit ||
                          error.message?.includes('403') || // Permission
                          error.message?.includes('401') || // Invalid key
-                         error.message?.includes('Quota') || 
-                         error.status === 429;
+                         error.message?.includes('Quota');
 
-      // 404 means model not found, don't kill the key, just try next key/model logic (loop continues)
-      // but here we already tried fallbacks for the model. If it still fails, it might be the key doesn't have access.
+      // 404 means model not found
       const isModelIssue = error.message?.includes('404') || error.status === 404;
 
       if ((isKeyIssue || isModelIssue) && redis) {
          try {
-             // If 404, maybe key is old and doesn't support new models? Treat as 'DEAD' for this session.
-             const cooldown = isModelIssue ? 600 : 300; 
+             // If Rate Limit (429), cooldown shorter (1 min). If Dead/Invalid, cooldown longer (5 mins).
+             const cooldown = isRateLimit ? 60 : 300; 
              await redis.set(REDIS_COOLDOWN_PREFIX + keyObj.name, '1', { ex: cooldown }); 
-             await redis.hset(REDIS_KEY_STATUS, { [keyObj.name]: 'DEAD' });
+             await redis.hset(REDIS_KEY_STATUS, { [keyObj.name]: isRateLimit ? 'RATE_LIMITED' : 'DEAD' });
              await redis.hincrby(REDIS_KEY_ERRORS, keyObj.name, 1);
          } catch(e) {}
       } 
       
+      // Add delay before retrying next key to allow server to breathe if it's a rate limit
+      if (isRateLimit) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+
       // If it's a Bad Request (400), retrying won't help (e.g. prompt too long)
       if (error.status === 400 && !isKeyIssue && !isModelIssue) break;
     }
@@ -256,10 +264,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (!streamStarted) {
       console.error("All AI keys failed. Last error:", lastError);
-      return res.status(500).json({ 
-        error: 'Sistem AI sedang sibuk atau mengalami gangguan.',
+      
+      // Check if last error was 429
+      const isQuotaError = lastError?.message?.includes('429') || lastError?.status === 429 || lastError?.code === 429;
+      
+      const errorMessage = isQuotaError 
+        ? "Kuota API AI sedang penuh (Rate Limit). Mohon tunggu 1 menit atau tambahkan API Key cadangan di pengaturan."
+        : "Sistem AI sedang sibuk atau mengalami gangguan. Coba lagi nanti.";
+
+      return res.status(isQuotaError ? 429 : 500).json({ 
+        error: errorMessage,
         details: lastError?.message || "No available keys",
-        troubleshoot: "Periksa Vercel Logs untuk detail error."
+        troubleshoot: "Admin: Cek Log Vercel / Tambah Key."
       });
   }
 }
