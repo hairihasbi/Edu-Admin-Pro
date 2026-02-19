@@ -40,6 +40,12 @@ export const generateLessonPlan = async (
       - ${cpInstruction}
       - Asesmen: ${request.assessmentType} (${request.assessmentInstrument})
 
+      **INSTRUKSI FORMAT MATEMATIKA & SAINS (PENTING):**
+      - Jika materi melibatkan rumus matematika, fisika, atau kimia, **WAJIB** menuliskannya menggunakan format **LaTeX**.
+      - Gunakan tanda dollar tunggal \`$ ... $\` untuk rumus inline (dalam kalimat). Contoh: Energi adalah $E=mc^2$.
+      - Gunakan tanda dollar ganda \`$$ ... $$\` untuk rumus blok (baris sendiri). Contoh: $$x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}$$
+      - Pastikan penulisan LaTeX valid.
+
       **INSTRUKSI STRUKTUR OUTPUT (WAJIB IKUTI PERSIS):**
       Gunakan format Markdown. Pastikan semua tabel dibuat rapi. Gunakan bahasa Indonesia formal dan pedagogis.
 
@@ -129,7 +135,7 @@ export const generateLessonPlan = async (
       (Jelaskan detail asesmen sesuai jenis: ${request.assessmentType} dan instrumen: ${request.assessmentInstrument}).
       
       **1. Instrumen Asesmen**
-      (Buatkan contoh/draft instrumen penilaiannya secara konkret di sini, bisa berupa rubrik tabel, daftar soal, atau lembar ceklis sesuai pilihan user).
+      (Buatkan contoh/draft instrumen penilaiannya secara konkret di sini, bisa berupa rubrik tabel, daftar soal, atau lembar ceklis sesuai pilihan user. Jika berupa soal hitungan, gunakan LaTeX).
 
       <br><br>
       |   |   |
