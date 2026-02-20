@@ -351,7 +351,19 @@ export const addScopeMaterial = async (data: any) => {
 };
 
 export const getScopeMaterials = async (classId: string, semester: string, userId: string) => {
-    return await db.scopeMaterials.where({ classId, semester }).filter(m => m.userId === userId).toArray();
+    // If classId is empty, fetch all for user & semester
+    if (!classId) {
+        return await db.scopeMaterials
+            .where('userId').equals(userId)
+            .filter(m => m.semester === semester)
+            .toArray();
+    }
+    
+    // If classId provided
+    return await db.scopeMaterials
+        .where('classId').equals(classId)
+        .filter(m => m.semester === semester && m.userId === userId)
+        .toArray();
 };
 
 export const deleteScopeMaterial = async (id: string) => {
