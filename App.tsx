@@ -244,12 +244,20 @@ const AppContent: React.FC = () => {
     };
   }, []);
 
+  // --- AUTOMATIC SYNC HEARTBEAT ---
+  // Runs every 15 seconds to ensure data flows between Guru <-> Admin
   useEffect(() => {
       if (!currentUser) return;
-      const interval = setInterval(() => {
-          refreshNotifications(currentUser.role);
-      }, 30000); 
-      return () => clearInterval(interval);
+      
+      const syncInterval = setInterval(() => {
+          if (navigator.onLine) {
+              console.log("Auto-Sync Triggered");
+              syncAllData(false).catch(() => {}); // Silent sync
+              refreshNotifications(currentUser.role);
+          }
+      }, 15000); // 15 Seconds Interval
+
+      return () => clearInterval(syncInterval);
   }, [currentUser]);
 
   const handleLogout = useCallback(() => {
