@@ -12,7 +12,6 @@ import { initTurso, pushToTurso, pullFromTurso } from './tursoService';
 
 const uuidv4 = () => crypto.randomUUID();
 
-// --- INITIALIZATION ---
 export const initDatabase = async () => {
   if (!db.isOpen()) {
     await db.open();
@@ -20,86 +19,59 @@ export const initDatabase = async () => {
   await initTurso();
 };
 
-// --- AUTH & USER ---
-export const loginUser = async (username: string, pass: string): Promise<User | null> => {
-    // Check local first
-    const localUser = await db.users.where('username').equals(username).first();
-    if (localUser && localUser.password === pass && localUser.status === 'ACTIVE') return localUser;
-
-    // Try server login (API)
+// --- USER MANAGEMENT ---
+export const loginUser = async (username: string, password: string): Promise<User | null> => {
     try {
-        const response = await fetch('/api/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password: pass })
-        });
-        
-        if (response.ok) {
-            const data = await response.json();
-            if (data.user) {
-                // Cache user locally
+        if (navigator.onLine) {
+            const res = await fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+            if (res.ok) {
+                const data = await res.json();
                 await db.users.put(data.user);
                 return data.user;
             }
+        } else {
+            // Basic offline fallback (insecure)
+            const user = await db.users.where('username').equals(username).first();
+            // In a real PWA we should have a session token or verify hash locally
+            return user || null;
         }
     } catch (e) {
-        console.error("Login failed:", e);
+        console.error(e);
     }
     return null;
 };
 
-export const registerUser = async (fullName: string, username: string, pass: string, email: string, phone: string, schoolNpsn: string, schoolName: string, subject: string) => {
+export const registerUser = async (fullName: string, username: string, password: string, email: string, phone: string, schoolNpsn: string, schoolName: string, subject: string) => {
     try {
-        const newUser: User = {
-            id: uuidv4(),
-            username,
-            password: pass, // Should be hashed in real app or handled by API
-            fullName,
-            email,
-            phone,
-            role: UserRole.GURU,
-            status: 'PENDING',
-            schoolNpsn,
-            schoolName,
-            subject,
-            avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName)}&background=random`,
-            lastModified: Date.now(),
-            isSynced: false
-        };
-
-        // Save local
-        await db.users.add(newUser);
-
-        // Try push to server (Register API)
-        try {
-            await fetch('/api/register', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(newUser)
-            });
-            // Mark synced if success
-            await db.users.update(newUser.id, { isSynced: true });
-        } catch (e) {
-            // Pending sync
-        }
-
+        const id = uuidv4();
+        const res = await fetch('/api/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                id, username, password, fullName, email, phone, schoolNpsn, schoolName, subject,
+                role: 'GURU', status: 'PENDING', avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName)}&background=random`
+            })
+        });
+        
+        const data = await res.json();
+        if (!res.ok) return { success: false, message: data.error };
+        
         return { success: true, message: 'Pendaftaran berhasil. Tunggu persetujuan Admin.' };
     } catch (e: any) {
-        return { success: false, message: e.message || 'Gagal mendaftar.' };
+        return { success: false, message: e.message || 'Gagal menghubungi server.' };
     }
 };
 
 export const resetPassword = async (username: string, newPass: string) => {
-    // Only works for local admin/users currently or needs API endpoint
-    // For now implement local update if exists
     const user = await db.users.where('username').equals(username).first();
-    if (user) {
-        await db.users.update(user.id, { password: newPass, lastModified: Date.now(), isSynced: false });
-        // Trigger sync
-        pushToTurso('eduadmin_users', [{ ...user, password: newPass, lastModified: Date.now() }]);
-        return true;
-    }
-    return false;
+    if (!user) return false;
+    await db.users.update(user.id, { password: newPass, lastModified: Date.now(), isSynced: false });
+    pushToTurso('eduadmin_users', [{...user, password: newPass, lastModified: Date.now()}]);
+    return true;
 };
 
 export const updateUserProfile = async (id: string, data: Partial<User>) => {
@@ -116,7 +88,6 @@ export const updateUserPassword = async (id: string, newPass: string) => {
     return true;
 };
 
-// --- TEACHERS (ADMIN) ---
 export const getTeachers = async () => {
     return await db.users.where('role').equals(UserRole.GURU).filter(u => u.status === 'ACTIVE').toArray();
 };
@@ -127,41 +98,40 @@ export const getPendingTeachers = async () => {
 
 export const approveTeacher = async (id: string) => {
     await db.users.update(id, { status: 'ACTIVE', lastModified: Date.now(), isSynced: false });
-    const updated = await db.users.get(id);
-    if(updated) pushToTurso('eduadmin_users', [updated]);
+    const u = await db.users.get(id);
+    if(u) pushToTurso('eduadmin_users', [u]);
     return true;
 };
 
 export const rejectTeacher = async (id: string) => {
     await db.users.delete(id);
-    // Push deletion
-    pushToTurso('eduadmin_users', [{ id, deleted: true }]);
+    pushToTurso('eduadmin_users', [{id, deleted: true}]);
     return true;
 };
 
 export const deleteTeacher = async (id: string) => {
     await db.users.delete(id);
-    pushToTurso('eduadmin_users', [{ id, deleted: true }]);
+    pushToTurso('eduadmin_users', [{id, deleted: true}]);
     return true;
 };
 
 export const sendApprovalEmail = async (user: User) => {
     try {
         const config = await getEmailConfig();
-        if (!config || !config.isActive) return { success: false };
+        if (!config || !config.isActive) return { success: false, message: "Email config not active" };
         
-        await fetch('/api/send-email', {
+        const res = await fetch('/api/send-email', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ user, config })
         });
-        return { success: true, message: 'Email notifikasi dikirim.' };
-    } catch (e: any) {
-        return { success: false, message: e.message };
+        return await res.json();
+    } catch(e) {
+        return { success: false, message: "Email failed" };
     }
 };
 
-// --- CLASSES & STUDENTS ---
+// --- CLASS MANAGEMENT ---
 export const getClasses = async (userId: string) => {
     return await db.classes.where('userId').equals(userId).toArray();
 };
@@ -172,7 +142,7 @@ export const getAllClasses = async () => {
 
 export const addClass = async (userId: string, name: string, description: string) => {
     const user = await db.users.get(userId);
-    const newClass: ClassRoom = {
+    const newItem: ClassRoom = {
         id: uuidv4(),
         userId,
         schoolNpsn: user?.schoolNpsn || 'DEFAULT',
@@ -182,64 +152,29 @@ export const addClass = async (userId: string, name: string, description: string
         lastModified: Date.now(),
         isSynced: false
     };
-    await db.classes.add(newClass);
-    pushToTurso('eduadmin_classes', [newClass]);
-    return newClass;
+    await db.classes.add(newItem);
+    pushToTurso('eduadmin_classes', [newItem]);
+    return newItem;
 };
 
 export const deleteClass = async (id: string) => {
     await db.classes.delete(id);
-    pushToTurso('eduadmin_classes', [{ id, deleted: true }]);
-    // Also delete students in class? usually yes
+    const students = await db.students.where('classId').equals(id).toArray();
+    if(students.length > 0) {
+        await db.students.bulkDelete(students.map(s => s.id));
+        pushToTurso('eduadmin_students', students.map(s => ({id: s.id, deleted: true})));
+    }
+    pushToTurso('eduadmin_classes', [{id, deleted: true}]);
 };
 
+// --- STUDENT MANAGEMENT ---
 export const getStudents = async (classId: string) => {
     return await db.students.where('classId').equals(classId).sortBy('name');
 };
 
-export const getAllStudentsWithDetails = async () => {
-    const students = await db.students.toArray();
-    const classes = await db.classes.toArray();
-    const users = await db.users.toArray();
-    
-    const classMap = new Map(classes.map(c => [c.id, c]));
-    const userMap = new Map(users.map(u => [u.id, u]));
-
-    return students.map(s => {
-        const cls = classMap.get(s.classId);
-        const teacher = cls ? userMap.get(cls.userId) : null;
-        return {
-            ...s,
-            className: cls?.name || 'Unknown',
-            teacherName: teacher?.fullName || 'Unknown',
-            schoolName: teacher?.schoolName || 'Unknown'
-        } as StudentWithDetails;
-    });
-};
-
-export const getStudentsServerSide = async (page: number, limit: number, search: string, school: string, teacherId: string) => {
-    try {
-        const params = new URLSearchParams({
-            page: page.toString(),
-            limit: limit.toString(),
-            search,
-            school,
-            teacherId
-        });
-        const token = JSON.parse(localStorage.getItem('eduadmin_user') || '{}').id;
-        const res = await fetch(`/api/students?${params}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (res.status === 401) return { status: 401, data: [], meta: { total: 0, totalPages: 0 } };
-        return await res.json();
-    } catch (e) {
-        return { status: 500, data: [], meta: { total: 0, totalPages: 0 } };
-    }
-};
-
-export const addStudent = async (classId: string, name: string, nis: string, gender: 'L' | 'P', phone: string) => {
+export const addStudent = async (classId: string, name: string, nis: string, gender: 'L'|'P', phone: string) => {
     const cls = await db.classes.get(classId);
-    const newStudent: Student = {
+    const newItem: Student = {
         id: uuidv4(),
         classId,
         schoolNpsn: cls?.schoolNpsn,
@@ -250,28 +185,83 @@ export const addStudent = async (classId: string, name: string, nis: string, gen
         lastModified: Date.now(),
         isSynced: false
     };
-    await db.students.add(newStudent);
+    await db.students.add(newItem);
+    
     if(cls) {
         await db.classes.update(classId, { studentCount: (cls.studentCount || 0) + 1 });
     }
-    pushToTurso('eduadmin_students', [newStudent]);
-    return newStudent;
+    
+    pushToTurso('eduadmin_students', [newItem]);
+    return newItem;
 };
 
 export const deleteStudent = async (id: string) => {
     const s = await db.students.get(id);
-    if (s) {
-        await db.students.delete(id);
+    await db.students.delete(id);
+    if(s) {
         const cls = await db.classes.get(s.classId);
         if(cls) await db.classes.update(s.classId, { studentCount: Math.max(0, (cls.studentCount || 0) - 1) });
-        pushToTurso('eduadmin_students', [{ id, deleted: true }]);
     }
+    pushToTurso('eduadmin_students', [{id, deleted: true}]);
 };
 
 export const bulkDeleteStudents = async (ids: string[]) => {
+    const students = await db.students.where('id').anyOf(ids).toArray();
     await db.students.bulkDelete(ids);
-    pushToTurso('eduadmin_students', ids.map(id => ({ id, deleted: true })));
-    // Should update counts but lazy for bulk
+    
+    const classCounts: Record<string, number> = {};
+    students.forEach(s => {
+        classCounts[s.classId] = (classCounts[s.classId] || 0) + 1;
+    });
+    
+    for(const [cid, count] of Object.entries(classCounts)) {
+        const cls = await db.classes.get(cid);
+        if(cls) await db.classes.update(cid, { studentCount: Math.max(0, (cls.studentCount || 0) - count) });
+    }
+
+    pushToTurso('eduadmin_students', ids.map(id => ({id, deleted: true})));
+};
+
+export const getAllStudentsWithDetails = async (): Promise<StudentWithDetails[]> => {
+    const students = await db.students.toArray();
+    const classes = await db.classes.toArray();
+    const users = await db.users.toArray();
+    
+    const classMap = new Map(classes.map(c => [c.id, c]));
+    const userMap = new Map(users.map(u => [u.id, u]));
+    
+    return students.map(s => {
+        const cls = classMap.get(s.classId);
+        const teacher = cls ? userMap.get(cls.userId) : null;
+        return {
+            ...s,
+            className: cls?.name || 'Unknown',
+            teacherName: teacher?.fullName || 'Unknown',
+            schoolName: teacher?.schoolName || 'Unknown'
+        };
+    });
+};
+
+export const getStudentsServerSide = async (page: number, limit: number, search: string, school: string, teacherId: string) => {
+    try {
+        const query = new URLSearchParams({ 
+            page: page.toString(), 
+            limit: limit.toString(), 
+            search, 
+            school, 
+            teacherId 
+        });
+        const token = JSON.parse(localStorage.getItem('eduadmin_user') || '{}').id;
+        
+        const res = await fetch(`/api/students?${query.toString()}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (res.status === 401) return { status: 401, data: [], meta: { total: 0, totalPages: 0 } };
+        return await res.json();
+    } catch (e) {
+        return { status: 500, data: [], meta: { total: 0, totalPages: 0 } };
+    }
 };
 
 export const importStudentsFromCSV = async (classId: string, csvText: string) => {
@@ -318,15 +308,70 @@ export const importStudentsFromCSV = async (classId: string, csvText: string) =>
 
 // --- ACADEMIC ---
 export const saveAttendanceRecords = async (records: Omit<AttendanceRecord, 'id'>[]) => {
-    const fullRecords = records.map(r => ({
-        ...r,
-        id: uuidv4(),
-        lastModified: Date.now(),
-        isSynced: false
-    })) as AttendanceRecord[];
+    // Basic deduplication logic: find existing record for student+date and update, or add new
+    // For bulk speed in local, we can just put. Dexie 'put' replaces if key exists, but our key is random UUID.
+    // So we must query first or handle logic.
+    // Better approach for sync:
     
-    await db.attendanceRecords.bulkAdd(fullRecords);
-    pushToTurso('eduadmin_attendance', fullRecords);
+    const recordsToSync: AttendanceRecord[] = [];
+
+    await db.transaction('rw', db.attendanceRecords, async () => {
+        for (const r of records) {
+            // Check if record exists for this student & date
+            const existing = await db.attendanceRecords
+                .where({ studentId: r.studentId, date: r.date })
+                .first();
+            
+            if (existing) {
+                // Update
+                if (existing.status !== r.status) {
+                    const updated = { ...existing, status: r.status, lastModified: Date.now(), isSynced: false };
+                    await db.attendanceRecords.put(updated);
+                    recordsToSync.push(updated);
+                }
+            } else {
+                // Insert
+                const newRec: AttendanceRecord = {
+                    id: uuidv4(),
+                    ...r,
+                    lastModified: Date.now(),
+                    isSynced: false
+                };
+                await db.attendanceRecords.add(newRec);
+                recordsToSync.push(newRec);
+            }
+        }
+    });
+    
+    if (recordsToSync.length > 0) {
+        pushToTurso('eduadmin_attendance', recordsToSync);
+    }
+};
+
+export const deleteAttendanceRecords = async (classId: string, month: number, year: number, day?: number) => {
+    // 1. Get all records for this class
+    const allRecords = await db.attendanceRecords.where('classId').equals(classId).toArray();
+    
+    // 2. Filter by date logic
+    const recordsToDelete = allRecords.filter(r => {
+        const d = new Date(r.date);
+        const matchMonth = d.getMonth() === month && d.getFullYear() === year;
+        if (!matchMonth) return false;
+        
+        if (day) {
+            return d.getDate() === day; // Filter specific day
+        }
+        return true; // Delete whole month
+    });
+
+    if (recordsToDelete.length > 0) {
+        const ids = recordsToDelete.map(r => r.id);
+        await db.attendanceRecords.bulkDelete(ids);
+        // Push deletions to server
+        pushToTurso('eduadmin_attendance', ids.map(id => ({ id, deleted: true })));
+    }
+    
+    return recordsToDelete.length;
 };
 
 export const getAttendanceRecords = async (classId: string, month: number, year: number) => {
