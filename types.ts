@@ -124,7 +124,8 @@ export interface ScopeMaterial extends Syncable {
   semester: string;
   code: string; 
   phase: string; 
-  content: string; 
+  content: string;
+  subScopes?: string[]; // NEW: Array of sub-column names e.g. ["Tugas", "Praktik"]
 }
 
 export interface AssessmentScore extends Syncable {
@@ -137,6 +138,7 @@ export interface AssessmentScore extends Syncable {
   category: 'LM' | 'STS' | 'SAS'; 
   materialId?: string; 
   score: number;
+  scoreDetails?: Record<string, number>; // NEW: Store sub-scores e.g. {"Tugas": 80, "Praktik": 90}
 }
 
 export interface TeachingJournal extends Syncable {
