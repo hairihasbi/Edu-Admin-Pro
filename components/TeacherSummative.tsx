@@ -47,6 +47,22 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
     if (selectedClassId) fetchData();
   }, [selectedClassId, selectedSemester]);
 
+  // Helper to parse subScopes safely
+  const parseSubScopes = (item: any): string[] => {
+      if (!item.subScopes) return [];
+      if (Array.isArray(item.subScopes)) return item.subScopes;
+      // Handle case where sync might store it as JSON string
+      if (typeof item.subScopes === 'string') {
+          try {
+              const parsed = JSON.parse(item.subScopes);
+              return Array.isArray(parsed) ? parsed : [];
+          } catch {
+              return [];
+          }
+      }
+      return [];
+  };
+
   const fetchData = async () => {
     setLoading(true);
     // PASS user.id to getScopeMaterials to fetch correct data
@@ -57,7 +73,13 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
     ]);
 
     setStudents(stData);
-    setMaterials(matData);
+    
+    // Normalize materials data immediately
+    const cleanMaterials = matData.map(m => ({
+        ...m,
+        subScopes: parseSubScopes(m)
+    }));
+    setMaterials(cleanMaterials);
 
     // Map Scores to State Dictionary
     const scoreDict: {[key: string]: number} = {};
@@ -73,10 +95,18 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
 
           // 2. Sub Scores (if any)
           if (s.scoreDetails) {
-              Object.entries(s.scoreDetails).forEach(([subName, val]) => {
-                  const subKey = `${s.studentId}-LM-${s.materialId}-${subName}`;
-                  subScoreDict[subKey] = val;
-              });
+              // Handle potential stringified scoreDetails from DB
+              let details = s.scoreDetails;
+              if (typeof details === 'string') {
+                  try { details = JSON.parse(details); } catch {}
+              }
+
+              if (details && typeof details === 'object') {
+                  Object.entries(details).forEach(([subName, val]) => {
+                      const subKey = `${s.studentId}-LM-${s.materialId}-${subName}`;
+                      subScoreDict[subKey] = val as number;
+                  });
+              }
           }
       }
     });
@@ -113,18 +143,12 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
                 // Use existing subscore otherwise
                 let valToCheck = (sName === subName) ? numVal : (newSubScores[sKey]);
                 
-                // Logic: Count all columns for average, treating empty/undefined as 0 if they haven't been entered yet?
-                // OR: Only count entered values? usually for Rapor, it's average of filled columns or 0.
-                // Let's assume treat undefined as 0 for sum, but we count the column count to divide properly.
-                // If we want real average, we divide by the number of SubScopes defined.
-                
                 if (valToCheck === undefined) valToCheck = 0;
                 total += valToCheck;
                 count++;
             });
             
             // Divide by total number of sub-scopes defined for this material
-            // This forces teacher to fill all sub-columns to get accurate average
             const avg = count > 0 ? Math.round(total / count) : numVal;
             
             setScores(prev => ({
