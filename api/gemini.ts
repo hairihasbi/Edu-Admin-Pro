@@ -93,8 +93,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const limit = 20; 
       const window = 60;
 
+      // SOLUSI PENYEBAB 1: Redis Key Nyangkut (Stuck Key)
+      // Kita cek TTL. Jika -1 (Persist), kita paksa expire.
       const count = await redis.incr(ratelimitKey);
-      if (count === 1) await redis.expire(ratelimitKey, window);
+      
+      if (count === 1) {
+          await redis.expire(ratelimitKey, window);
+      } else {
+          // Double check TTL for stuck keys
+          const ttl = await redis.ttl(ratelimitKey);
+          if (ttl === -1) {
+              await redis.expire(ratelimitKey, window);
+          }
+      }
 
       if (count > limit) {
         return res.status(429).json({ error: `Terlalu banyak permintaan AI dari akun Anda. Tunggu 1 menit.` });
@@ -115,39 +126,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     allKeys.push({ name: 'API_KEY', value: process.env.API_KEY });
   }
   
-  // Add DB Keys
   try {
       const dbKeys = await getDatabaseKeys(redis);
       allKeys = [...allKeys, ...dbKeys];
-  } catch(e) {
-      console.error("Error fetching DB keys:", e);
-  }
+  } catch(e) {}
 
   if (allKeys.length === 0) {
-      console.error("CRITICAL: No API Keys found in ENV or DB.");
       return res.status(500).json({ error: "Sistem AI belum dikonfigurasi (API Key Missing)." });
   }
 
   allKeys = shuffleArray(allKeys);
 
-  // Sort by status if Redis available
+  // Smart Sorting based on Redis Status
   if (redis) {
     try {
         const statuses = await redis.hgetall(REDIS_KEY_STATUS) || {};
         allKeys.sort((a, b) => {
             const statusA = statuses[a.name] || 'ACTIVE';
             const statusB = statuses[b.name] || 'ACTIVE';
-            if (statusA === 'DEAD' && statusB !== 'DEAD') return 1;
-            if (statusA !== 'DEAD' && statusB === 'DEAD') return -1;
+            // Prioritize ACTIVE keys, push DEAD/LIMITED to bottom
+            if (statusA === 'ACTIVE' && statusB !== 'ACTIVE') return -1;
+            if (statusA !== 'ACTIVE' && statusB === 'ACTIVE') return 1;
             return 0;
         });
-    } catch (e) { console.error("Redis sorting error:", e); }
+    } catch (e) {}
   }
 
   let lastError = null;
   let streamStarted = false;
 
-  // 3. Try Keys
+  // 3. Try Keys (Failover Strategy)
   for (const keyObj of allKeys) {
     // Skip if cooling down
     if (redis) {
@@ -170,7 +178,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           genConfig.tools = [{ googleSearch: {} }];
       }
 
-      // SETTING UTAMA: GEMINI 3 FLASH PREVIEW
+      // PRIMARY: Gemini 3 Flash
       let modelName = 'gemini-3-flash-preview'; 
       let result;
 
@@ -181,10 +189,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             config: genConfig
           });
       } catch (primaryErr: any) {
-          console.warn(`Model ${modelName} failed, trying fallback...`, primaryErr.message);
-          
-          // Fallback Strategy: gemini-2.0-flash (Stable)
-          // Hanya satu level fallback untuk mengurangi latensi dan error 404 pada model eksperimental
+          // Fallback: Gemini 2.0 Flash
+          console.warn(`Model ${modelName} failed, trying fallback...`);
           modelName = 'gemini-2.0-flash';
           result = await ai.models.generateContentStream({
             model: modelName,
@@ -197,14 +203,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       
       res.setHeader('Content-Type', 'text/plain; charset=utf-8');
       res.setHeader('Transfer-Encoding', 'chunked');
-      res.setHeader('X-Content-Type-Options', 'nosniff');
       
       for await (const chunk of result) {
         if (chunk.text) res.write(chunk.text);
       }
 
       if (redis) {
-        // Fire and forget stats updates
         redis.hincrby(REDIS_KEY_USAGE, keyObj.name, 1).catch(() => {});
         redis.hset(REDIS_KEY_STATUS, { [keyObj.name]: 'ACTIVE' }).catch(() => {});
       }
@@ -213,57 +217,64 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return;
 
     } catch (error: any) {
-      console.error(`Key ${keyObj.name} failed with error:`, error.message);
+      console.error(`Key ${keyObj.name} error:`, error.message);
       lastError = error;
       
-      // Determine if it's a key/quota issue
-      // 429 = Too Many Requests / Quota Exceeded
-      const isRateLimit = error.message?.includes('429') || 
-                          error.status === 429 || 
-                          error.code === 429;
+      // SOLUSI PENYEBAB 2 & 3: Parsing Error Spesifik
+      const errorMsg = error.message?.toLowerCase() || '';
+      
+      // Cek apakah 429 atau 403 atau Quota
+      const isRateLimit = error.status === 429 || errorMsg.includes('429') || errorMsg.includes('too many requests');
+      const isQuotaExhausted = errorMsg.includes('resource has been exhausted') || errorMsg.includes('quota');
+      const isAuthError = error.status === 403 || error.status === 401 || errorMsg.includes('key not valid');
 
-      const isKeyIssue = isRateLimit ||
-                         error.message?.includes('403') || // Permission
-                         error.message?.includes('401') || // Invalid key
-                         error.message?.includes('Quota');
-
-      // 404 means model not found
-      const isModelIssue = error.message?.includes('404') || error.status === 404;
-
-      if ((isKeyIssue || isModelIssue) && redis) {
+      if (redis) {
          try {
-             // If Rate Limit (429), cooldown shorter (1 min). If Dead/Invalid, cooldown longer (5 mins).
-             const cooldown = isRateLimit ? 60 : 300; 
-             await redis.set(REDIS_COOLDOWN_PREFIX + keyObj.name, '1', { ex: cooldown }); 
-             await redis.hset(REDIS_KEY_STATUS, { [keyObj.name]: isRateLimit ? 'RATE_LIMITED' : 'DEAD' });
-             await redis.hincrby(REDIS_KEY_ERRORS, keyObj.name, 1);
+             let cooldownTime = 60; // Default 1 min
+             let statusLabel = 'RATE_LIMITED';
+
+             if (isQuotaExhausted) {
+                 // Jika Quota Habis (Resource Exhausted), jangan coba lagi dalam waktu lama (12 jam)
+                 cooldownTime = 3600 * 12; 
+                 statusLabel = 'DEAD_QUOTA';
+             } else if (isAuthError) {
+                 // Jika Key Salah/Mati permanen
+                 cooldownTime = 3600 * 24; 
+                 statusLabel = 'DEAD_INVALID';
+             }
+
+             // Set Cooldown
+             if (isRateLimit || isQuotaExhausted || isAuthError) {
+                 await redis.set(REDIS_COOLDOWN_PREFIX + keyObj.name, '1', { ex: cooldownTime });
+                 await redis.hset(REDIS_KEY_STATUS, { [keyObj.name]: statusLabel });
+                 await redis.hincrby(REDIS_KEY_ERRORS, keyObj.name, 1);
+             }
          } catch(e) {}
       } 
       
-      // Add delay before retrying next key to allow server to breathe if it's a rate limit
-      if (isRateLimit) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
+      // SOLUSI PENYEBAB 3: Percepat Failover
+      // Jika error 429/Quota, KITA TIDAK PERLU DELAY (setTimeout).
+      // Langsung coba key berikutnya agar user tidak menunggu lama.
+      // Hanya delay sedikit jika ini bukan error rate limit (misal error server 500)
+      if (!isRateLimit && !isQuotaExhausted && !isAuthError) {
+          // Generic server error, wait briefly
+          await new Promise(resolve => setTimeout(resolve, 500)); 
       }
-
-      // If it's a Bad Request (400), retrying won't help (e.g. prompt too long)
-      if (error.status === 400 && !isKeyIssue && !isModelIssue) break;
     }
   }
 
   if (!streamStarted) {
-      console.error("All AI keys failed. Last error:", lastError);
+      // SOLUSI PENYEBAB 4: Error Handling yang Jelas
+      const isQuota = lastError?.message?.includes('429') || lastError?.status === 429;
       
-      // Check if last error was 429
-      const isQuotaError = lastError?.message?.includes('429') || lastError?.status === 429 || lastError?.code === 429;
+      // Pastikan pesan error berbeda untuk frontend agar tidak cache
+      const uniqueId = Date.now(); 
       
-      const errorMessage = isQuotaError 
-        ? "Kuota API AI sedang penuh (Rate Limit). Mohon tunggu 1 menit atau tambahkan API Key cadangan di pengaturan."
-        : "Sistem AI sedang sibuk atau mengalami gangguan. Coba lagi nanti.";
-
-      return res.status(isQuotaError ? 429 : 500).json({ 
-        error: errorMessage,
-        details: lastError?.message || "No available keys",
-        troubleshoot: "Admin: Cek Log Vercel / Tambah Key."
+      return res.status(isQuota ? 429 : 500).json({ 
+        error: isQuota 
+            ? "Semua jalur AI sedang sibuk (Kuota Penuh). Mohon tunggu 1 menit lalu coba lagi." 
+            : "Gagal menghubungi layanan AI. Cek koneksi internet Anda.",
+        ref: uniqueId // Membantu debugging frontend
       });
   }
 }
