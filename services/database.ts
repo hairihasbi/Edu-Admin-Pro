@@ -350,6 +350,13 @@ export const addScopeMaterial = async (data: any) => {
     return newItem;
 };
 
+export const updateScopeMaterial = async (id: string, updates: Partial<ScopeMaterial>) => {
+    await db.scopeMaterials.update(id, { ...updates, lastModified: Date.now(), isSynced: false });
+    const updated = await db.scopeMaterials.get(id);
+    if(updated) pushToTurso('eduadmin_materials', [updated]);
+    return updated;
+};
+
 export const getScopeMaterials = async (classId: string, semester: string, userId: string) => {
     // If classId is empty, fetch all for user & semester
     if (!classId) {
