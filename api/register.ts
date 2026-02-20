@@ -1,6 +1,7 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from "@libsql/client/web";
+import bcrypt from 'bcryptjs';
 
 const cleanEnv = (val: string | undefined) => {
     if (!val) return "";
@@ -15,7 +16,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { id, username, password, fullName, email, phone, schoolNpsn, schoolName, role, status, subject, avatar, lastModified } = req.body;
 
   if (!username || !password || !schoolNpsn) {
-      return res.status(400).json({ error: "Missing required fields" });
+      return res.status(400).json({ error: "Missing required fields (username, password, npsn)" });
   }
 
   let rawUrl = cleanEnv(process.env.TURSO_DB_URL);
@@ -37,7 +38,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   });
 
   try {
-    // Cek username duplikat di server
+    // 1. Cek username duplikat di server
     const check = await client.execute({
         sql: "SELECT id FROM users WHERE username = ?",
         args: [username]
@@ -47,25 +48,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(409).json({ error: "Username sudah digunakan." });
     }
 
-    // Insert User Baru
+    // 2. Enkripsi Password (Hashing)
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // 3. Insert User Baru (Secure)
+    // Pastikan status default PENDING jika tidak dikirim
+    const finalStatus = status || 'PENDING';
+    const finalRole = role || 'GURU';
+
     await client.execute({
         sql: `INSERT INTO users (
             id, username, password, full_name, email, phone, 
             school_npsn, school_name, role, status, subject, 
-            avatar, last_modified, version
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            avatar, last_modified, version, deleted
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
         args: [
-            id, username, password, fullName, email, phone,
-            schoolNpsn, schoolName, role, status, subject,
-            avatar, lastModified, 1
+            id, username, hashedPassword, fullName, email || '', phone || '',
+            schoolNpsn, schoolName, finalRole, finalStatus, subject || '',
+            avatar, lastModified || Date.now(), 1
         ]
     });
 
-    return res.status(200).json({ success: true });
+    return res.status(200).json({ success: true, message: "Pendaftaran berhasil disimpan di server." });
 
   } catch (e: any) {
       console.error("Register Error:", e);
-      return res.status(500).json({ error: e.message });
+      return res.status(500).json({ error: e.message || "Gagal menyimpan data ke database." });
   } finally {
       client.close();
   }
