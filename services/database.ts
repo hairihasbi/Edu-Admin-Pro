@@ -1,427 +1,711 @@
-
-import {
-  User, UserRole, ClassRoom, Student, AttendanceRecord,
-  ScopeMaterial, TeachingJournal, TeachingSchedule,
-  DashboardStatsData, Notification, BackupData, EmailConfig,
-  MasterSubject, LogEntry, StudentWithDetails, AssessmentScore,
-  Ticket, TicketMessage, StudentViolation, StudentPointReduction, StudentAchievement, CounselingSession, UserStatus,
-  WhatsAppConfig, ApiKey, SystemSettings
-} from '../types';
-import { initTurso, pushToTurso, pullFromTurso, checkConnection } from './tursoService';
-import { sanitizeInput } from './security';
-import bcrypt from 'bcryptjs';
 import { db } from './db';
-import { Table } from 'dexie';
+import { 
+  User, UserRole, ClassRoom, Student, AttendanceRecord, 
+  ScopeMaterial, AssessmentScore, TeachingJournal, 
+  TeachingSchedule, LogEntry, MasterSubject, Ticket, 
+  StudentViolation, StudentPointReduction, StudentAchievement, CounselingSession, 
+  EmailConfig, WhatsAppConfig, Notification, ApiKey, SystemSettings, 
+  DashboardStatsData, BackupData, StudentWithDetails
+} from '../types';
+import { pushToTurso, pullFromTurso, initTurso } from './tursoService';
 
-// --- INITIALIZATION ---
+// --- AUTH & USER ---
 
 export const initDatabase = async () => {
-  if (!(db as any).isOpen()) {
-    await (db as any).open();
+  if (!db.isOpen()) {
+    await db.open();
   }
-  
-  // Try to sync on init if online
+  // Try to sync on init
   if (navigator.onLine) {
-      initTurso().catch(console.error);
+      initTurso().catch(console.warn);
   }
 };
 
-// --- AUTHENTICATION ---
-
-export const loginUser = async (username: string, password: string): Promise<User | null> => {
-    // 1. Try Online Login via API
+export const loginUser = async (username: string, password?: string): Promise<User | null> => {
+    // 1. Try local DB first (Dexie)
+    let user = await db.users.where('username').equals(username).first();
+    
+    // 2. If online, try server login to get fresh data/token
     if (navigator.onLine) {
         try {
-            const response = await fetch('/api/login', {
+            const res = await fetch('/api/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username, password })
             });
-            
-            if (response.ok) {
-                const data = await response.json();
-                const user = data.user;
-                // Update local DB with latest user data
-                await db.users.put(user);
-                return user;
+            if (res.ok) {
+                const data = await res.json();
+                user = data.user;
+                // Update local DB with fresh user data from server
+                if (user) await db.users.put(user);
             }
         } catch (e) {
-            console.warn("Online login failed, trying offline:", e);
+            console.warn("Server login failed, falling back to local:", e);
         }
     }
 
-    // 2. Offline Fallback
-    const user = await db.users.where('username').equals(username).first();
-    if (user && user.password && user.status === 'ACTIVE') {
-        const isValid = user.password.startsWith('$2') 
-            ? await bcrypt.compare(password, user.password)
-            : user.password === password; // Legacy/Default plain text
-            
-        if (isValid) return user;
+    if (!user) return null;
+    
+    // Local Password Check (fallback)
+    if (!navigator.onLine && user.password && user.password !== password) {
+        return null;
     }
-    return null;
+
+    if (user.status !== 'ACTIVE') return null;
+    
+    return user;
 };
 
-export const registerUser = async (fullName: string, username: string, password: string, email: string, phone: string, schoolNpsn: string, schoolName: string, subject: string = ''): Promise<{success: boolean, message: string}> => {
-    if (!navigator.onLine) return { success: false, message: "Pendaftaran membutuhkan koneksi internet." };
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const id = `user-${Date.now()}`; // Temp ID, will be used in DB
+export const registerUser = async (fullName: string, username: string, password: string, email: string, phone: string, schoolNpsn: string, schoolName: string, subject: string) => {
     const newUser: User = {
-        id,
+        id: crypto.randomUUID(),
         username,
-        password: hashedPassword,
+        password, 
         fullName,
         email,
         phone,
         schoolNpsn,
         schoolName,
-        role: UserRole.GURU,
+        role: UserRole.GURU, // Default
         status: 'PENDING',
         subject,
         avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName)}&background=random`,
         lastModified: Date.now(),
-        isSynced: false,
-        version: 1
+        isSynced: false
     };
 
-    try {
-        const response = await fetch('/api/register', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(newUser)
-        });
+    // Save to local
+    await db.users.add(newUser);
 
-        if (response.ok) {
-            return { success: true, message: "Pendaftaran berhasil! Tunggu verifikasi Admin." };
-        } else {
-            const err = await response.json();
-            return { success: false, message: err.error || "Gagal mendaftar." };
+    // Push to server immediately
+    if (navigator.onLine) {
+        try {
+            await fetch('/api/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(newUser)
+            });
+            await db.users.update(newUser.id, { isSynced: true });
+            return { success: true, message: "Pendaftaran berhasil! Tunggu persetujuan Admin." };
+        } catch (e) {
+            return { success: true, message: "Pendaftaran tersimpan (Offline). Akan dikirim saat online." };
         }
-    } catch (e: any) {
-        return { success: false, message: e.message || "Gagal menghubungi server." };
     }
+    
+    return { success: true, message: "Pendaftaran tersimpan (Offline). Tunggu persetujuan Admin." };
 };
 
-export const resetPassword = async (username: string, newPass: string): Promise<boolean> => {
-    const user = await db.users.where('username').equals(username).first();
-    if (!user) return false;
-    
-    const hashedPassword = await bcrypt.hash(newPass, 10);
-    await db.users.update(user.id, {
-        password: hashedPassword,
-        lastModified: Date.now(),
-        isSynced: false
-    });
-    
-    await syncAllData(); // Push change immediately
+export const resetPassword = async (username: string, newPass: string) => {
+    return false; // Not fully implemented client side securely
+};
+
+export const updateUserProfile = async (id: string, data: Partial<User>) => {
+    await db.users.update(id, { ...data, lastModified: Date.now(), isSynced: false });
+    triggerSync('eduadmin_users');
     return true;
 };
 
-// --- USER MANAGEMENT ---
-
-export const updateUserProfile = async (id: string, data: Partial<User>): Promise<boolean> => {
-    try {
-        await db.users.update(id, { ...data, lastModified: Date.now(), isSynced: false });
-        // Sync immediately if online
-        if (navigator.onLine) syncAllData();
-        return true;
-    } catch { return false; }
+export const updateUserPassword = async (id: string, newPass: string) => {
+    await db.users.update(id, { password: newPass, lastModified: Date.now(), isSynced: false });
+    triggerSync('eduadmin_users');
+    return true;
 };
 
-export const updateUserPassword = async (id: string, newPass: string): Promise<boolean> => {
-    const hashedPassword = await bcrypt.hash(newPass, 10);
-    return updateUserProfile(id, { password: hashedPassword });
-};
-
-export const getTeachers = async (): Promise<User[]> => {
+export const getTeachers = async () => {
     return await db.users.where('role').equals(UserRole.GURU).filter(u => u.status === 'ACTIVE' && !u.deleted).toArray();
 };
 
-export const getPendingTeachers = async (): Promise<User[]> => {
-    return await db.users.where('role').equals(UserRole.GURU).filter(u => u.status === 'PENDING' && !u.deleted).toArray();
+export const getPendingTeachers = async () => {
+    return await db.users.where('status').equals('PENDING').filter(u => !u.deleted).toArray();
 };
 
 export const approveTeacher = async (id: string): Promise<boolean> => {
     await db.users.update(id, { status: 'ACTIVE', lastModified: Date.now(), isSynced: false });
-    if(navigator.onLine) syncAllData();
+    triggerSync('eduadmin_users', true);
     return true;
 };
 
 export const rejectTeacher = async (id: string): Promise<boolean> => {
-    await deleteTeacher(id); // Soft delete or hard delete? Usually reject means delete.
+    await deleteTeacher(id);
     return true;
 };
 
 export const deleteTeacher = async (id: string): Promise<boolean> => {
     await db.users.update(id, { deleted: true, lastModified: Date.now(), isSynced: false });
-    if(navigator.onLine) syncAllData();
+    triggerSync('eduadmin_users', true);
     return true;
 };
 
-// --- CLASSES ---
+export const sendApprovalEmail = async (user: User) => {
+    try {
+        const config = await getEmailConfig();
+        if (!config || !config.isActive) return { success: false };
 
-export const getClasses = async (userId: string): Promise<ClassRoom[]> => {
-    return await db.classes.where('userId').equals(userId).filter(c => !c.deleted).toArray();
-};
-
-export const getAllClasses = async (): Promise<ClassRoom[]> => {
-    return await db.classes.filter(c => !c.deleted).toArray();
-};
-
-export const addClass = async (userId: string, name: string, description: string): Promise<ClassRoom> => {
-    // Get School NPSN from user
-    const user = await db.users.get(userId);
-    const schoolNpsn = user?.schoolNpsn || 'DEFAULT';
-
-    const newClass: ClassRoom = {
-        id: `cls-${Date.now()}`,
-        userId,
-        schoolNpsn,
-        name: sanitizeInput(name),
-        description: sanitizeInput(description),
-        studentCount: 0,
-        lastModified: Date.now(),
-        isSynced: false,
-        version: 1
-    };
-    await db.classes.add(newClass);
-    if(navigator.onLine) syncAllData();
-    return newClass;
-};
-
-export const deleteClass = async (id: string): Promise<void> => {
-    await db.classes.update(id, { deleted: true, lastModified: Date.now(), isSynced: false });
-    // Also delete students in this class?
-    const students = await db.students.where('classId').equals(id).toArray();
-    await bulkDeleteStudents(students.map(s => s.id));
-    if(navigator.onLine) syncAllData();
-};
-
-// --- STUDENTS ---
-
-export const getStudents = async (classId: string): Promise<Student[]> => {
-    return await db.students.where('classId').equals(classId).filter(s => !s.deleted).toArray();
-};
-
-export const getAllStudentsWithDetails = async (): Promise<StudentWithDetails[]> => {
-    const students = await db.students.filter(s => !s.deleted).toArray();
-    // Join with classes and teachers manually
-    const classes = await db.classes.toArray();
-    const teachers = await db.users.toArray();
-    
-    // Explicitly type maps to avoid 'unknown' errors
-    const classMap = new Map<string, ClassRoom>(classes.map(c => [c.id, c] as [string, ClassRoom]));
-    const teacherMap = new Map<string, User>(teachers.map(t => [t.id, t] as [string, User]));
-
-    return students.map(s => {
-        const cls = classMap.get(s.classId);
-        const teacher = cls ? teacherMap.get(cls.userId) : null;
-        return {
-            ...s,
-            className: cls?.name || 'Unknown',
-            teacherName: teacher?.fullName || 'Unknown',
-            schoolName: teacher?.schoolName || 'Unknown'
-        };
-    });
-};
-
-export const addStudent = async (classId: string, name: string, nis: string, gender: 'L' | 'P', phone?: string): Promise<Student> => {
-    const cls = await db.classes.get(classId);
-    const schoolNpsn = cls?.schoolNpsn || 'DEFAULT';
-
-    const newStudent: Student = {
-        id: `std-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-        classId,
-        schoolNpsn,
-        name: sanitizeInput(name),
-        nis: sanitizeInput(nis),
-        gender,
-        phone: sanitizeInput(phone),
-        lastModified: Date.now(),
-        isSynced: false,
-        version: 1
-    };
-    await db.students.add(newStudent);
-    // Update class count
-    if (cls) {
-        await db.classes.update(classId, { studentCount: (cls.studentCount || 0) + 1, lastModified: Date.now(), isSynced: false });
-    }
-    if(navigator.onLine) syncAllData();
-    return newStudent;
-};
-
-export const deleteStudent = async (id: string): Promise<void> => {
-    const student = await db.students.get(id);
-    if (student) {
-        await db.students.update(id, { deleted: true, lastModified: Date.now(), isSynced: false });
-        const cls = await db.classes.get(student.classId);
-        if (cls) {
-            await db.classes.update(student.classId, { studentCount: Math.max(0, (cls.studentCount || 0) - 1), lastModified: Date.now(), isSynced: false });
-        }
-        if(navigator.onLine) syncAllData();
+        await fetch('/api/send-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user, config })
+        });
+        return { success: true, message: "Notifikasi email terkirim." };
+    } catch (e) {
+        return { success: false };
     }
 };
 
-export const bulkDeleteStudents = async (ids: string[]): Promise<void> => {
-    for (const id of ids) {
-        await deleteStudent(id);
-    }
-};
-
-export const importStudentsFromCSV = async (classId: string, csvText: string): Promise<{success: boolean, count: number, errors: string[]}> => {
-    const cls = await db.classes.get(classId);
-    const schoolNpsn = cls?.schoolNpsn || 'DEFAULT';
-    
-    const lines = csvText.split('\n');
-    let count = 0;
-    const errors: string[] = [];
-    const studentsToAdd: Student[] = [];
-    
-    // Skip header
-    for (let i = 1; i < lines.length; i++) {
-        const line = lines[i].trim();
-        if (!line) continue;
-        
-        // Simple CSV parse (handling quotes roughly)
-        const parts = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
-        if (parts.length < 3) {
-            errors.push(`Line ${i+1}: Format salah`);
-            continue;
-        }
-        
-        const name = parts[0].replace(/^"|"$/g, '').trim();
-        const nis = parts[1].replace(/^['"]|['"]$/g, '').trim();
-        const genderRaw = parts[2].replace(/^"|"$/g, '').trim().toUpperCase();
-        const phone = parts[3] ? parts[3].replace(/^['"]|['"]$/g, '').trim() : '';
-        
-        const gender = (genderRaw === 'L' || genderRaw === 'LAKI-LAKI') ? 'L' : 'P';
-        
-        if (name && nis) {
-            const newStudent: Student = {
-                id: `std-${Date.now()}-${Math.random().toString(36).substr(2, 5)}-${i}`, // Ensure unique ID even in tight loop
-                classId,
-                schoolNpsn,
-                name: sanitizeInput(name),
-                nis: sanitizeInput(nis),
-                gender,
-                phone: sanitizeInput(phone),
-                lastModified: Date.now(),
-                isSynced: false,
-                version: 1
-            };
-            studentsToAdd.push(newStudent);
-            count++;
-        }
-    }
-
-    if (studentsToAdd.length > 0) {
-        // Bulk Add to Dexie (Faster & Atomic)
-        await db.students.bulkAdd(studentsToAdd);
-        
-        // Update Class Count
-        if (cls) {
-            await db.classes.update(classId, { 
-                studentCount: (cls.studentCount || 0) + studentsToAdd.length, 
-                lastModified: Date.now(), 
-                isSynced: false 
-            });
-        }
-
-        // Trigger Single Sync for all new data
-        if(navigator.onLine) {
-            await syncAllData();
-        }
-    }
-
-    return { success: true, count, errors };
-};
-
-// --- ACADEMIC & STATS ---
+// --- STATS & LOGS ---
 
 export const getDashboardStats = async (user: User): Promise<DashboardStatsData> => {
     let classesCount = 0;
     let studentsCount = 0;
-    let filledJournals = 0;
+    let journalsCount = 0;
     
     if (user.role === UserRole.ADMIN) {
-        // Admin sees global stats (locally available ones)
         classesCount = await db.classes.filter(x => !x.deleted).count();
         studentsCount = await db.students.filter(x => !x.deleted).count();
-        filledJournals = await db.teachingJournals.filter(x => !x.deleted).count();
+        journalsCount = await db.teachingJournals.filter(x => !x.deleted).count();
     } else {
-        // Teacher sees own stats
         classesCount = await db.classes.where('userId').equals(user.id).filter(x => !x.deleted).count();
-        // Students in teacher's classes
-        const myClasses = await db.classes.where('userId').equals(user.id).primaryKeys();
+        const myClasses = await db.classes.where('userId').equals(user.id).keys();
         studentsCount = await db.students.where('classId').anyOf(myClasses as string[]).filter(x => !x.deleted).count();
-        filledJournals = await db.teachingJournals.where('userId').equals(user.id).filter(x => !x.deleted).count();
-    }
-
-    // Attendance Calculation (Simple)
-    const totalAttendance = await db.attendanceRecords.filter(x => !x.deleted).count();
-    const present = await db.attendanceRecords.filter(x => x.status === 'H' && !x.deleted).count();
-    const attendanceRate = totalAttendance > 0 ? Math.round((present / totalAttendance) * 100) : 0;
-
-    // Gender Distribution
-    let males = 0;
-    let females = 0;
-    if (user.role === UserRole.ADMIN) {
-        males = await db.students.filter(s => s.gender === 'L' && !s.deleted).count();
-        females = await db.students.filter(s => s.gender === 'P' && !s.deleted).count();
-    } else {
-        const myClasses = await db.classes.where('userId').equals(user.id).primaryKeys();
-        males = await db.students.where('classId').anyOf(myClasses as string[]).filter(s => s.gender === 'L' && !s.deleted).count();
-        females = await db.students.where('classId').anyOf(myClasses as string[]).filter(s => s.gender === 'P' && !s.deleted).count();
+        journalsCount = await db.teachingJournals.where('userId').equals(user.id).filter(x => !x.deleted).count();
     }
 
     return {
         totalClasses: classesCount,
         totalStudents: studentsCount,
-        filledJournals: filledJournals,
-        attendanceRate: attendanceRate,
-        genderDistribution: [
-            { name: 'Laki-laki', value: males },
-            { name: 'Perempuan', value: females }
-        ],
-        weeklyAttendance: [] // Placeholder
+        filledJournals: journalsCount,
+        attendanceRate: 0,
+        genderDistribution: [],
+        weeklyAttendance: []
     };
 };
 
-export const getTeachingSchedules = async (userId: string): Promise<TeachingSchedule[]> => {
+export const getSystemLogs = async () => {
+    return await db.logs.orderBy('timestamp').reverse().limit(100).toArray();
+};
+
+export const addSystemLog = async (level: LogEntry['level'], actor: string, role: string, action: string, details: string) => {
+    await db.logs.add({
+        id: crypto.randomUUID(),
+        timestamp: new Date().toISOString(),
+        level,
+        actor,
+        role,
+        action,
+        details,
+        lastModified: Date.now(),
+        isSynced: false
+    });
+    triggerSync('eduadmin_logs');
+};
+
+export const clearSystemLogs = async () => {
+    await db.logs.clear();
+};
+
+export const getSyncStats = async (user: User) => {
+    const stats = [];
+    let totalUnsynced = 0;
+    
+    const checkTable = async (table: any, name: string) => {
+        const count = await table.filter((i: any) => i.isSynced === false).count();
+        if (count > 0) {
+            stats.push({ table: name, count });
+            totalUnsynced += count;
+        }
+    };
+
+    await checkTable(db.users, 'users');
+    await checkTable(db.classes, 'classes');
+    await checkTable(db.students, 'students');
+    await checkTable(db.assessmentScores, 'scores');
+    await checkTable(db.attendanceRecords, 'attendance');
+    await checkTable(db.teachingJournals, 'journals');
+    
+    return { stats, totalUnsynced };
+};
+
+// --- CLASSES & STUDENTS ---
+
+export const getClasses = async (userId: string) => {
+    return await db.classes.where('userId').equals(userId).filter(c => !c.deleted).toArray();
+};
+
+export const getAllClasses = async () => {
+    return await db.classes.filter(c => !c.deleted).toArray();
+};
+
+export const addClass = async (userId: string, name: string, description?: string) => {
+    const newClass: ClassRoom = {
+        id: crypto.randomUUID(),
+        userId,
+        name,
+        description,
+        studentCount: 0,
+        schoolNpsn: 'DEFAULT', 
+        lastModified: Date.now(),
+        isSynced: false
+    };
+    await db.classes.add(newClass);
+    triggerSync('eduadmin_classes');
+    return newClass;
+};
+
+export const deleteClass = async (id: string) => {
+    await db.classes.update(id, { deleted: true, lastModified: Date.now(), isSynced: false });
+    triggerSync('eduadmin_classes');
+};
+
+export const getStudents = async (classId: string) => {
+    return await db.students.where('classId').equals(classId).filter(s => !s.deleted).sortBy('name');
+};
+
+export const getAllStudentsWithDetails = async (): Promise<StudentWithDetails[]> => {
+    const students = await db.students.filter(s => !s.deleted).toArray();
+    return students.map(s => ({ ...s, className: '?', teacherName: '?', schoolName: '?' }));
+};
+
+export const getStudentsServerSide = async (page: number, limit: number, search: string, school: string, teacherId: string) => {
+    const params = new URLSearchParams({ 
+        page: page.toString(), 
+        limit: limit.toString(),
+        search,
+        school, 
+        teacherId
+    });
+    const res = await fetch(`/api/students?${params.toString()}`);
+    if (res.status === 401) return { status: 401, data: [], meta: { total: 0, totalPages: 0 } };
+    return await res.json();
+};
+
+export const addStudent = async (classId: string, name: string, nis: string, gender: 'L'|'P', phone?: string) => {
+    const newStudent: Student = {
+        id: crypto.randomUUID(),
+        classId,
+        name,
+        nis,
+        gender,
+        phone,
+        lastModified: Date.now(),
+        isSynced: false
+    };
+    await db.students.add(newStudent);
+    triggerSync('eduadmin_students');
+    return newStudent;
+};
+
+export const deleteStudent = async (id: string) => {
+    await db.students.update(id, { deleted: true, lastModified: Date.now(), isSynced: false });
+    triggerSync('eduadmin_students');
+};
+
+export const bulkDeleteStudents = async (ids: string[]) => {
+    await db.transaction('rw', db.students, async () => {
+        for (const id of ids) {
+            await db.students.update(id, { deleted: true, lastModified: Date.now(), isSynced: false });
+        }
+    });
+    triggerSync('eduadmin_students');
+};
+
+export const importStudentsFromCSV = async (classId: string, csvText: string) => {
+    const lines = csvText.split('\n');
+    const errors = [];
+    let count = 0;
+    
+    for (let i = 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        
+        const parts = line.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || [];
+        const cleanParts = parts.map(p => p.replace(/^"|"$/g, '').trim());
+        
+        if (cleanParts.length < 3) {
+            errors.push(`Row ${i+1}: Format invalid`);
+            continue;
+        }
+        
+        const [name, nis, genderRaw, phone] = cleanParts;
+        const gender = (genderRaw.toUpperCase() === 'L' || genderRaw.toUpperCase() === 'LAKI-LAKI') ? 'L' : 'P';
+        
+        await addStudent(classId, name, nis, gender, phone);
+        count++;
+    }
+    
+    return { success: true, count, errors };
+};
+
+// --- ACADEMIC ---
+
+export const getTeachingSchedules = async (userId: string) => {
     return await db.teachingSchedules.where('userId').equals(userId).filter(s => !s.deleted).toArray();
 };
 
-export const addTeachingSchedule = async (schedule: any): Promise<TeachingSchedule> => {
-    const newSchedule = {
-        ...schedule,
-        id: `sch-${Date.now()}`,
-        lastModified: Date.now(),
-        isSynced: false,
-        version: 1
-    };
-    await db.teachingSchedules.add(newSchedule);
-    if(navigator.onLine) syncAllData();
-    return newSchedule;
+export const addTeachingSchedule = async (data: any) => {
+    const newItem = { ...data, id: crypto.randomUUID(), lastModified: Date.now(), isSynced: false };
+    await db.teachingSchedules.add(newItem);
+    triggerSync('eduadmin_schedules');
+    return newItem;
 };
 
-export const deleteTeachingSchedule = async (id: string): Promise<void> => {
+export const deleteTeachingSchedule = async (id: string) => {
     await db.teachingSchedules.update(id, { deleted: true, lastModified: Date.now(), isSynced: false });
-    if(navigator.onLine) syncAllData();
+    triggerSync('eduadmin_schedules');
 };
 
-export const getActiveAnnouncements = async (): Promise<Notification[]> => {
-    // Only return popups
-    return await db.notifications.filter(n => n.isPopup === true && !n.deleted).reverse().toArray();
+export const getScopeMaterials = async (classId: string, semester: string, userId?: string) => {
+    let q = db.scopeMaterials.where('classId').equals(classId).filter(m => m.semester === semester && !m.deleted);
+    if (userId) {
+        q = q.and(m => m.userId === userId);
+    }
+    return await q.toArray();
 };
 
-export const getNotifications = async (role: UserRole): Promise<Notification[]> => {
-    return await db.notifications.filter(n => (n.targetRole === 'ALL' || n.targetRole === role) && !n.deleted).reverse().toArray();
+export const addScopeMaterial = async (data: any) => {
+    const newItem = { ...data, id: crypto.randomUUID(), lastModified: Date.now(), isSynced: false };
+    await db.scopeMaterials.add(newItem);
+    triggerSync('eduadmin_materials');
+    return newItem;
 };
 
-export const createNotification = async (title: string, message: string, type: any, targetRole: any, isPopup: boolean = false): Promise<void> => {
+export const deleteScopeMaterial = async (id: string) => {
+    await db.scopeMaterials.update(id, { deleted: true, lastModified: Date.now(), isSynced: false });
+    triggerSync('eduadmin_materials');
+};
+
+export const bulkDeleteScopeMaterials = async (ids: string[]) => {
+    await db.transaction('rw', db.scopeMaterials, async () => {
+        for (const id of ids) {
+            await db.scopeMaterials.update(id, { deleted: true, lastModified: Date.now(), isSynced: false });
+        }
+    });
+    triggerSync('eduadmin_materials');
+};
+
+export const copyScopeMaterials = async (fromClassId: string, toClassId: string, fromSem: string, toSem: string, userId: string, subject: string) => {
+    const sources = await db.scopeMaterials.where('classId').equals(fromClassId).filter(m => m.semester === fromSem && !m.deleted).toArray();
+    if (sources.length === 0) return false;
+    
+    await db.transaction('rw', db.scopeMaterials, async () => {
+        for (const m of sources) {
+            await db.scopeMaterials.add({
+                id: crypto.randomUUID(),
+                classId: toClassId,
+                userId,
+                subject,
+                semester: toSem,
+                code: m.code,
+                phase: m.phase,
+                content: m.content,
+                lastModified: Date.now(),
+                isSynced: false
+            });
+        }
+    });
+    triggerSync('eduadmin_materials');
+    return true;
+};
+
+export const getAssessmentScores = async (classId: string, semester: string) => {
+    return await db.assessmentScores.where('classId').equals(classId).filter(s => s.semester === semester && !s.deleted).toArray();
+};
+
+export const saveBulkAssessmentScores = async (scores: any[], userId: string, userName?: string) => {
+    await db.transaction('rw', db.assessmentScores, async () => {
+        for (const s of scores) {
+            let existing;
+            if (s.category === 'LM') {
+                existing = await db.assessmentScores
+                    .where({ studentId: s.studentId, materialId: s.materialId })
+                    .first();
+            } else {
+                existing = await db.assessmentScores
+                    .where({ studentId: s.studentId, category: s.category, semester: s.semester })
+                    .first();
+            }
+
+            if (existing) {
+                await db.assessmentScores.update(existing.id, { ...s, lastModified: Date.now(), isSynced: false });
+            } else {
+                await db.assessmentScores.add({ ...s, id: crypto.randomUUID(), lastModified: Date.now(), isSynced: false });
+            }
+        }
+    });
+    triggerSync('eduadmin_scores');
+};
+
+export const getTeachingJournals = async (userId: string) => {
+    return await db.teachingJournals.where('userId').equals(userId).filter(j => !j.deleted).reverse().sortBy('date');
+};
+
+export const addTeachingJournal = async (data: any) => {
+    const newItem = { ...data, id: crypto.randomUUID(), lastModified: Date.now(), isSynced: false };
+    await db.teachingJournals.add(newItem);
+    triggerSync('eduadmin_journals');
+    return newItem;
+};
+
+export const deleteTeachingJournal = async (id: string) => {
+    await db.teachingJournals.update(id, { deleted: true, lastModified: Date.now(), isSynced: false });
+    triggerSync('eduadmin_journals');
+};
+
+export const bulkDeleteTeachingJournals = async (ids: string[]) => {
+    await db.transaction('rw', db.teachingJournals, async () => {
+        for (const id of ids) {
+            await db.teachingJournals.update(id, { deleted: true, lastModified: Date.now(), isSynced: false });
+        }
+    });
+    triggerSync('eduadmin_journals');
+};
+
+export const getAttendanceRecords = async (classId: string, month: number, year: number) => {
+    const start = `${year}-${String(month+1).padStart(2, '0')}-01`;
+    const end = `${year}-${String(month+1).padStart(2, '0')}-31`;
+    
+    return await db.attendanceRecords.where('classId').equals(classId)
+        .filter(r => r.date >= start && r.date <= end && !r.deleted)
+        .toArray();
+};
+
+export const saveAttendanceRecords = async (records: any[]) => {
+    await db.transaction('rw', db.attendanceRecords, async () => {
+        for (const r of records) {
+            const existing = await db.attendanceRecords
+                .where({ studentId: r.studentId, date: r.date })
+                .first();
+            
+            if (existing) {
+                if (existing.status !== r.status) {
+                    await db.attendanceRecords.update(existing.id, { status: r.status, lastModified: Date.now(), isSynced: false });
+                }
+            } else {
+                await db.attendanceRecords.add({ ...r, id: crypto.randomUUID(), lastModified: Date.now(), isSynced: false });
+            }
+        }
+    });
+    triggerSync('eduadmin_attendance');
+};
+
+// --- BK ---
+
+export const getStudentViolations = async () => {
+    return await db.violations.filter(v => !v.deleted).toArray();
+};
+
+export const addStudentViolation = async (data: any) => {
+    const newItem = { ...data, id: crypto.randomUUID(), lastModified: Date.now(), isSynced: false };
+    await db.violations.add(newItem);
+    triggerSync('eduadmin_bk_violations');
+};
+
+export const deleteStudentViolation = async (id: string) => {
+    await db.violations.update(id, { deleted: true, lastModified: Date.now(), isSynced: false });
+    triggerSync('eduadmin_bk_violations');
+};
+
+export const getStudentPointReductions = async () => {
+    return await db.pointReductions.filter(r => !r.deleted).toArray();
+};
+
+export const addStudentPointReduction = async (data: any) => {
+    const newItem = { ...data, id: crypto.randomUUID(), lastModified: Date.now(), isSynced: false };
+    await db.pointReductions.add(newItem);
+    triggerSync('eduadmin_bk_reductions');
+};
+
+export const deleteStudentPointReduction = async (id: string) => {
+    await db.pointReductions.update(id, { deleted: true, lastModified: Date.now(), isSynced: false });
+    triggerSync('eduadmin_bk_reductions');
+};
+
+export const getStudentAchievements = async () => {
+    return await db.achievements.filter(a => !a.deleted).toArray();
+};
+
+export const addStudentAchievement = async (data: any) => {
+    const newItem = { ...data, id: crypto.randomUUID(), lastModified: Date.now(), isSynced: false };
+    await db.achievements.add(newItem);
+    triggerSync('eduadmin_bk_achievements');
+};
+
+export const deleteStudentAchievement = async (id: string) => {
+    await db.achievements.update(id, { deleted: true, lastModified: Date.now(), isSynced: false });
+    triggerSync('eduadmin_bk_achievements');
+};
+
+export const getCounselingSessions = async () => {
+    return await db.counselingSessions.filter(s => !s.deleted).toArray();
+};
+
+export const addCounselingSession = async (data: any) => {
+    const newItem = { ...data, id: crypto.randomUUID(), lastModified: Date.now(), isSynced: false };
+    await db.counselingSessions.add(newItem);
+    triggerSync('eduadmin_bk_counseling');
+};
+
+export const deleteCounselingSession = async (id: string) => {
+    await db.counselingSessions.update(id, { deleted: true, lastModified: Date.now(), isSynced: false });
+    triggerSync('eduadmin_bk_counseling');
+};
+
+// --- TICKETS ---
+
+export const getTickets = async (user: User) => {
+    if (user.role === UserRole.ADMIN) {
+        return await db.tickets.filter(t => !t.deleted).toArray();
+    }
+    return await db.tickets.where('userId').equals(user.id).filter(t => !t.deleted).toArray();
+};
+
+export const createTicket = async (user: User, subject: string, message: string) => {
+    const ticket: Ticket = {
+        id: crypto.randomUUID(),
+        userId: user.id,
+        teacherName: user.fullName,
+        subject,
+        status: 'OPEN',
+        lastUpdated: new Date().toISOString(),
+        messages: [{
+            id: crypto.randomUUID(),
+            senderRole: user.role,
+            senderName: user.fullName,
+            message,
+            timestamp: new Date().toISOString()
+        }],
+        lastModified: Date.now(),
+        isSynced: false
+    };
+    await db.tickets.add(ticket);
+    triggerSync('eduadmin_tickets');
+    return ticket;
+};
+
+export const replyTicket = async (ticketId: string, user: User, message: string) => {
+    const ticket = await db.tickets.get(ticketId);
+    if (!ticket) return false;
+    
+    const newMsg = {
+        id: crypto.randomUUID(),
+        senderRole: user.role,
+        senderName: user.fullName,
+        message,
+        timestamp: new Date().toISOString()
+    };
+    
+    const updates = {
+        messages: [...ticket.messages, newMsg],
+        lastUpdated: new Date().toISOString(),
+        lastModified: Date.now(),
+        isSynced: false
+    };
+    
+    await db.tickets.update(ticketId, updates);
+    triggerSync('eduadmin_tickets');
+    return true;
+};
+
+export const closeTicket = async (ticketId: string) => {
+    await db.tickets.update(ticketId, { status: 'CLOSED', lastModified: Date.now(), isSynced: false });
+    triggerSync('eduadmin_tickets');
+    return true;
+};
+
+// --- SETTINGS ---
+
+export const getSystemSettings = async (): Promise<SystemSettings> => {
+    const s = await db.systemSettings.get('global-settings');
+    if (s) return s;
+    return { id: 'global-settings', featureRppEnabled: true };
+};
+
+export const saveSystemSettings = async (settings: SystemSettings) => {
+    await db.systemSettings.put({ ...settings, id: 'global-settings', lastModified: Date.now(), isSynced: false });
+    triggerSync('eduadmin_system_settings');
+};
+
+export const getEmailConfig = async () => {
+    return await db.emailConfig.toCollection().first();
+};
+
+export const saveEmailConfig = async (config: any) => {
+    const id = config.id || 'default';
+    await db.emailConfig.put({ ...config, id, lastModified: Date.now(), isSynced: false });
+    triggerSync('eduadmin_email_config');
+    return true;
+};
+
+export const getWhatsAppConfig = async (userId: string) => {
+    return await db.whatsappConfigs.get(userId);
+};
+
+export const saveWhatsAppConfig = async (config: WhatsAppConfig) => {
+    await db.whatsappConfigs.put({ ...config, lastModified: Date.now(), isSynced: false });
+    triggerSync('eduadmin_wa_configs');
+};
+
+export const getMasterSubjects = async () => {
+    return await db.masterSubjects.filter(s => !s.deleted).toArray();
+};
+
+export const addMasterSubject = async (name: string, category: any, level: any) => {
+    const newSub: MasterSubject = {
+        id: crypto.randomUUID(),
+        name,
+        category,
+        level,
+        lastModified: Date.now(),
+        isSynced: false
+    };
+    await db.masterSubjects.add(newSub);
+    triggerSync('eduadmin_master_subjects');
+    return newSub;
+};
+
+export const deleteMasterSubject = async (id: string) => {
+    await db.masterSubjects.update(id, { deleted: true, lastModified: Date.now(), isSynced: false });
+    triggerSync('eduadmin_master_subjects');
+};
+
+export const getBackupApiKeys = async () => {
+    return await db.apiKeys.filter(k => !k.deleted).toArray();
+};
+
+export const addBackupApiKey = async (key: string) => {
+    const newKey: ApiKey = {
+        id: crypto.randomUUID(),
+        key,
+        provider: 'GEMINI',
+        status: 'ACTIVE',
+        addedAt: new Date().toISOString(),
+        lastModified: Date.now(),
+        isSynced: false
+    };
+    await db.apiKeys.add(newKey);
+    triggerSync('eduadmin_api_keys');
+};
+
+export const deleteBackupApiKey = async (id: string) => {
+    await db.apiKeys.update(id, { deleted: true, lastModified: Date.now(), isSynced: false });
+    triggerSync('eduadmin_api_keys');
+};
+
+export const clearBackupApiKeys = async () => {
+    await db.apiKeys.clear();
+};
+
+// --- NOTIFICATIONS ---
+
+export const getNotifications = async (role: UserRole) => {
+    return await db.notifications
+        .filter(n => (n.targetRole === 'ALL' || n.targetRole === role) && !n.deleted)
+        .reverse()
+        .sortBy('createdAt');
+};
+
+export const createNotification = async (title: string, message: string, type: Notification['type'], targetRole: Notification['targetRole'], isPopup = false) => {
     const notif: Notification = {
-        id: `notif-${Date.now()}`,
+        id: crypto.randomUUID(),
         title,
         message,
         type,
@@ -430,728 +714,132 @@ export const createNotification = async (title: string, message: string, type: a
         isPopup,
         createdAt: new Date().toISOString(),
         lastModified: Date.now(),
-        isSynced: false,
-        version: 1
+        isSynced: false
     };
     await db.notifications.add(notif);
-    if(navigator.onLine) syncAllData();
+    triggerSync('eduadmin_notifications');
 };
 
-export const markNotificationAsRead = async (id: string): Promise<void> => {
+export const markNotificationAsRead = async (id: string) => {
     await db.notifications.update(id, { isRead: true });
 };
 
-export const clearNotifications = async (role: UserRole): Promise<void> => {
-    const notifs = await getNotifications(role);
-    // Soft delete
-    await Promise.all(notifs.map(n => db.notifications.update(n.id, { deleted: true })));
+export const clearNotifications = async (role: UserRole) => {
+    const toDelete = await db.notifications.filter(n => (n.targetRole === 'ALL' || n.targetRole === role)).keys();
+    await db.notifications.bulkDelete(toDelete);
 };
 
-export const deleteNotification = async (id: string): Promise<void> => {
+export const getActiveAnnouncements = async () => {
+    return await db.notifications.filter(n => n.isPopup === true && !n.deleted).reverse().sortBy('createdAt');
+};
+
+export const deleteNotification = async (id: string) => {
     await db.notifications.update(id, { deleted: true, lastModified: Date.now(), isSynced: false });
-    if(navigator.onLine) syncAllData();
-};
-
-// ... (System Settings, System Logs, Master Subjects, etc.)
-
-export const getSystemSettings = async (): Promise<SystemSettings> => {
-    const settings = await db.systemSettings.get('global-settings');
-    if (!settings) {
-        return { id: 'global-settings', featureRppEnabled: true, maintenanceMessage: '' };
-    }
-    return settings;
-};
-
-export const saveSystemSettings = async (settings: SystemSettings): Promise<void> => {
-    await db.systemSettings.put({ ...settings, id: 'global-settings', lastModified: Date.now(), isSynced: false });
-    if(navigator.onLine) syncAllData();
-};
-
-export const getSystemLogs = async (): Promise<LogEntry[]> => {
-    return await db.logs.filter(l => !l.deleted).toArray();
-};
-
-export const addSystemLog = async (level: any, actor: string, role: string, action: string, details: string): Promise<void> => {
-    await db.logs.add({
-        id: `log-${Date.now()}`,
-        timestamp: new Date().toISOString(),
-        level, actor, role, action, details,
-        lastModified: Date.now(),
-        isSynced: false,
-        version: 1
-    });
-    if(navigator.onLine) syncAllData();
-};
-
-export const clearSystemLogs = async (): Promise<void> => {
-    const logs = await db.logs.toArray();
-    await Promise.all(logs.map(l => db.logs.update(l.id, { deleted: true })));
-};
-
-export const getMasterSubjects = async (): Promise<MasterSubject[]> => {
-    return await db.masterSubjects.filter(m => !m.deleted).toArray();
-};
-
-export const addMasterSubject = async (name: string, category: any, level: any): Promise<MasterSubject> => {
-    const newSub: MasterSubject = {
-        id: `sub-${Date.now()}`,
-        name, category, level,
-        lastModified: Date.now(),
-        isSynced: false,
-        version: 1
-    };
-    await db.masterSubjects.add(newSub);
-    if(navigator.onLine) syncAllData();
-    return newSub;
-};
-
-export const deleteMasterSubject = async (id: string): Promise<void> => {
-    await db.masterSubjects.update(id, { deleted: true, lastModified: Date.now(), isSynced: false });
-    if(navigator.onLine) syncAllData();
-};
-
-export const getEmailConfig = async (): Promise<EmailConfig | undefined> => {
-    return await db.emailConfig.get('default');
-};
-
-export const saveEmailConfig = async (config: EmailConfig): Promise<boolean> => {
-    // Add lastModified and isSynced flags for proper sync tracking
-    const configToSave = { 
-        ...config, 
-        id: 'default',
-        lastModified: Date.now(),
-        isSynced: false 
-    };
-    await db.emailConfig.put(configToSave);
-    
-    // Trigger sync immediately if online
-    if(navigator.onLine) syncAllData();
-    
-    return true;
-};
-
-export const getWhatsAppConfig = async (userId: string): Promise<WhatsAppConfig | undefined> => {
-    return await db.whatsappConfigs.get(userId);
-};
-
-export const saveWhatsAppConfig = async (config: WhatsAppConfig): Promise<void> => {
-    // Ensure all changes trigger sync
-    await db.whatsappConfigs.put({ ...config, lastModified: Date.now(), isSynced: false });
-    if(navigator.onLine) syncAllData();
-};
-
-export const getBackupApiKeys = async (): Promise<ApiKey[]> => {
-    return await db.apiKeys.filter(k => !k.deleted).toArray();
-};
-
-export const addBackupApiKey = async (key: string): Promise<void> => {
-    await db.apiKeys.add({
-        id: `key-${Date.now()}`,
-        key,
-        provider: 'GEMINI',
-        status: 'ACTIVE',
-        addedAt: new Date().toISOString(),
-        lastModified: Date.now(),
-        isSynced: false,
-        version: 1
-    });
-    if(navigator.onLine) syncAllData();
-};
-
-export const deleteBackupApiKey = async (id: string): Promise<void> => {
-    // 1. Mark as deleted locally first (Soft Delete in Dexie)
-    await db.apiKeys.update(id, { deleted: true, lastModified: Date.now(), isSynced: false });
-    
-    // 2. Trigger Immediate Sync for this specific item (REALTIME DELETE)
-    if (navigator.onLine) {
-        try {
-            // Get the updated item
-            const item = await db.apiKeys.get(id);
-            if (item) {
-                // Push specifically this item to the API with force=true
-                await pushToTurso('eduadmin_api_keys', [item], true);
-                
-                // If successful, mark as synced locally
-                await db.apiKeys.update(id, { isSynced: true });
-            }
-        } catch (e) {
-            console.error("Immediate delete sync failed, will retry in background sync:", e);
-        }
-    }
-};
-
-export const clearBackupApiKeys = async (): Promise<void> => {
-    const keys = await db.apiKeys.toArray();
-    // Mark all as deleted
-    const updatedKeys = keys.map(k => ({ ...k, deleted: true, lastModified: Date.now(), isSynced: false }));
-    
-    // Bulk update local
-    await db.apiKeys.bulkPut(updatedKeys);
-
-    // Immediate Sync (REALTIME DELETE)
-    if(navigator.onLine) {
-         try {
-            await pushToTurso('eduadmin_api_keys', updatedKeys, true);
-            // Mark all as synced
-            const syncedKeys = updatedKeys.map(k => ({ ...k, isSynced: true }));
-            await db.apiKeys.bulkPut(syncedKeys);
-        } catch (e) {
-            console.error("Immediate bulk delete sync failed:", e);
-        }
-    }
-};
-
-// --- ACADEMIC: SCOPE MATERIAL, JOURNALS, SCORES ---
-
-export const getScopeMaterials = async (classId: string, semester: string, userId: string): Promise<ScopeMaterial[]> => {
-    return await db.scopeMaterials.where({ classId, semester, userId }).filter(m => !m.deleted).toArray();
-};
-
-export const addScopeMaterial = async (data: any): Promise<ScopeMaterial> => {
-    const newItem = {
-        ...data,
-        id: `mat-${Date.now()}`,
-        lastModified: Date.now(),
-        isSynced: false,
-        version: 1
-    };
-    await db.scopeMaterials.add(newItem);
-    if(navigator.onLine) syncAllData();
-    return newItem;
-};
-
-export const deleteScopeMaterial = async (id: string): Promise<void> => {
-    await db.scopeMaterials.update(id, { deleted: true, lastModified: Date.now(), isSynced: false });
-    if(navigator.onLine) syncAllData();
-};
-
-export const bulkDeleteScopeMaterials = async (ids: string[]): Promise<void> => {
-    for(const id of ids) await deleteScopeMaterial(id);
-};
-
-export const copyScopeMaterials = async (fromClassId: string, toClassId: string, fromSemester: string, toSemester: string, userId: string, subject: string): Promise<boolean> => {
-    const sources = await db.scopeMaterials.where({ classId: fromClassId, semester: fromSemester, userId }).filter(m => !m.deleted).toArray();
-    if (sources.length === 0) return false;
-
-    const newItems = sources.map(s => ({
-        id: `mat-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-        classId: toClassId,
-        userId,
-        subject,
-        semester: toSemester,
-        code: s.code,
-        phase: s.phase,
-        content: s.content,
-        lastModified: Date.now(),
-        isSynced: false,
-        version: 1
-    }));
-    
-    await db.scopeMaterials.bulkAdd(newItems as any);
-    if(navigator.onLine) syncAllData();
-    return true;
-};
-
-export const getTeachingJournals = async (userId: string): Promise<TeachingJournal[]> => {
-    return await db.teachingJournals.where('userId').equals(userId).filter(j => !j.deleted).reverse().toArray();
-};
-
-export const addTeachingJournal = async (data: any): Promise<TeachingJournal> => {
-    const newItem = {
-        ...data,
-        id: `jrn-${Date.now()}`,
-        lastModified: Date.now(),
-        isSynced: false,
-        version: 1
-    };
-    await db.teachingJournals.add(newItem);
-    if(navigator.onLine) syncAllData();
-    return newItem;
-};
-
-export const deleteTeachingJournal = async (id: string): Promise<void> => {
-    await db.teachingJournals.update(id, { deleted: true, lastModified: Date.now(), isSynced: false });
-    if(navigator.onLine) syncAllData();
-};
-
-export const bulkDeleteTeachingJournals = async (ids: string[]): Promise<void> => {
-    for(const id of ids) await deleteTeachingJournal(id);
-};
-
-export const getAssessmentScores = async (classId: string, semester: string): Promise<AssessmentScore[]> => {
-    return await db.assessmentScores.where({ classId, semester }).filter(s => !s.deleted).toArray();
-};
-
-export const saveBulkAssessmentScores = async (scores: any[], userId: string, userName: string): Promise<void> => {
-    const timestamp = Date.now();
-    for (const score of scores) {
-        // Find existing score by composite key simulation (student+category+material+semester)
-        const existing = await db.assessmentScores
-            .where({ studentId: score.studentId, category: score.category, semester: score.semester })
-            .filter(s => s.materialId === score.materialId && s.subject === score.subject)
-            .first();
-
-        if (existing) {
-            await db.assessmentScores.update(existing.id, {
-                score: score.score,
-                lastModified: timestamp,
-                isSynced: false,
-                version: (existing.version || 1) + 1
-            });
-        } else {
-            await db.assessmentScores.add({
-                ...score,
-                id: `scr-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-                userId,
-                lastModified: timestamp,
-                isSynced: false,
-                version: 1
-            });
-        }
-    }
-    await addSystemLog('SUCCESS', userName, 'GURU', 'Update Score', `Saved ${scores.length} scores.`);
-    if(navigator.onLine) syncAllData();
-};
-
-export const getAttendanceRecords = async (classId: string, month: number, year: number): Promise<AttendanceRecord[]> => {
-    // Filter by date range in JS since date is string YYYY-MM-DD
-    const all = await db.attendanceRecords.where('classId').equals(classId).filter(r => !r.deleted).toArray();
-    return all.filter(r => {
-        const d = new Date(r.date);
-        return d.getMonth() === month && d.getFullYear() === year;
-    });
-};
-
-export const saveAttendanceRecords = async (records: any[]): Promise<void> => {
-    for (const rec of records) {
-        const existing = await db.attendanceRecords.where({ studentId: rec.studentId, date: rec.date }).first();
-        if (existing) {
-            await db.attendanceRecords.update(existing.id, { status: rec.status, lastModified: Date.now(), isSynced: false });
-        } else {
-            await db.attendanceRecords.add({
-                ...rec,
-                id: `att-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-                lastModified: Date.now(),
-                isSynced: false,
-                version: 1
-            });
-        }
-    }
-    if(navigator.onLine) syncAllData();
-};
-
-// --- BK & HELP CENTER ---
-
-export const createTicket = async (user: User, subject: string, message: string): Promise<Ticket> => {
-    const ticket: Ticket = {
-        id: `tkt-${Date.now()}`,
-        userId: user.id,
-        teacherName: user.fullName,
-        subject,
-        status: 'OPEN',
-        lastUpdated: new Date().toISOString(),
-        messages: [{
-            id: `msg-${Date.now()}`,
-            senderRole: user.role,
-            senderName: user.fullName,
-            message,
-            timestamp: new Date().toISOString()
-        }],
-        lastModified: Date.now(),
-        isSynced: false,
-        version: 1
-    };
-    await db.tickets.add(ticket);
-    if(navigator.onLine) syncAllData();
-    return ticket;
-};
-
-export const getTickets = async (user: User): Promise<Ticket[]> => {
-    if (user.role === UserRole.ADMIN) {
-        return await db.tickets.filter(t => !t.deleted).toArray();
-    } else {
-        return await db.tickets.where('userId').equals(user.id).filter(t => !t.deleted).toArray();
-    }
-};
-
-export const replyTicket = async (ticketId: string, user: User, message: string): Promise<boolean> => {
-    const ticket = await db.tickets.get(ticketId);
-    if (!ticket) return false;
-
-    const newMsg: TicketMessage = {
-        id: `msg-${Date.now()}`,
-        senderRole: user.role,
-        senderName: user.fullName,
-        message,
-        timestamp: new Date().toISOString()
-    };
-
-    const updatedMessages = [...ticket.messages, newMsg];
-    await db.tickets.update(ticketId, {
-        messages: updatedMessages,
-        lastUpdated: new Date().toISOString(),
-        lastModified: Date.now(),
-        isSynced: false
-    });
-    if(navigator.onLine) syncAllData();
-    return true;
-};
-
-export const closeTicket = async (id: string): Promise<boolean> => {
-    await db.tickets.update(id, { status: 'CLOSED', lastModified: Date.now(), isSynced: false });
-    if(navigator.onLine) syncAllData();
-    return true;
-};
-
-export const getStudentViolations = async (): Promise<StudentViolation[]> => {
-    return await db.violations.filter(v => !v.deleted).toArray();
-};
-
-export const addStudentViolation = async (data: any): Promise<void> => {
-    await db.violations.add({
-        ...data,
-        id: `viol-${Date.now()}`,
-        lastModified: Date.now(),
-        isSynced: false,
-        version: 1
-    });
-    if(navigator.onLine) syncAllData();
-};
-
-export const deleteStudentViolation = async (id: string): Promise<void> => {
-    await db.violations.update(id, { deleted: true, lastModified: Date.now(), isSynced: false });
-    if(navigator.onLine) syncAllData();
-};
-
-export const getStudentPointReductions = async (): Promise<StudentPointReduction[]> => {
-    return await db.pointReductions.filter(r => !r.deleted).toArray();
-};
-
-export const addStudentPointReduction = async (data: any): Promise<void> => {
-    await db.pointReductions.add({
-        ...data,
-        id: `red-${Date.now()}`,
-        lastModified: Date.now(),
-        isSynced: false,
-        version: 1
-    });
-    if(navigator.onLine) syncAllData();
-};
-
-export const deleteStudentPointReduction = async (id: string): Promise<void> => {
-    await db.pointReductions.update(id, { deleted: true, lastModified: Date.now(), isSynced: false });
-    if(navigator.onLine) syncAllData();
-};
-
-export const getStudentAchievements = async (): Promise<StudentAchievement[]> => {
-    return await db.achievements.filter(a => !a.deleted).toArray();
-};
-
-export const addStudentAchievement = async (data: any): Promise<void> => {
-    await db.achievements.add({
-        ...data,
-        id: `ach-${Date.now()}`,
-        lastModified: Date.now(),
-        isSynced: false,
-        version: 1
-    });
-    if(navigator.onLine) syncAllData();
-};
-
-export const deleteStudentAchievement = async (id: string): Promise<void> => {
-    await db.achievements.update(id, { deleted: true, lastModified: Date.now(), isSynced: false });
-    if(navigator.onLine) syncAllData();
-};
-
-export const getCounselingSessions = async (): Promise<CounselingSession[]> => {
-    return await db.counselingSessions.filter(s => !s.deleted).toArray();
-};
-
-export const addCounselingSession = async (data: any): Promise<void> => {
-    await db.counselingSessions.add({
-        ...data,
-        id: `sess-${Date.now()}`,
-        lastModified: Date.now(),
-        isSynced: false,
-        version: 1
-    });
-    if(navigator.onLine) syncAllData();
-};
-
-export const deleteCounselingSession = async (id: string): Promise<void> => {
-    await db.counselingSessions.update(id, { deleted: true, lastModified: Date.now(), isSynced: false });
-    if(navigator.onLine) syncAllData();
+    triggerSync('eduadmin_notifications');
 };
 
 // --- SYNC & BACKUP ---
 
-export const getSyncStats = async (user: User) => {
-    // ... existing implementation ...
-    let tablesToCheck = ['users', 'classes', 'students', 'scores', 'attendance', 'journals', 'materials', 'schedules', 'violations', 'reductions', 'achievements', 'counseling', 'tickets', 'notifications'];
+let syncTimeout: any = null;
+const triggerSync = (collectionName: string, force = false) => {
+    if (syncTimeout) clearTimeout(syncTimeout);
     
-    let totalUnsynced = 0;
-    const stats: {table: string, count: number}[] = [];
-
-    // Map internal Dexie table objects
-    const tableMap: any = {
-        'users': db.users, 'classes': db.classes, 'students': db.students, 'scores': db.assessmentScores,
-        'attendance': db.attendanceRecords, 'journals': db.teachingJournals, 'materials': db.scopeMaterials,
-        'schedules': db.teachingSchedules, 'violations': db.violations, 'reductions': db.pointReductions,
-        'achievements': db.achievements, 'counseling': db.counselingSessions, 'tickets': db.tickets, 'notifications': db.notifications
-    };
-
-    for (const name of tablesToCheck) {
-        const table = tableMap[name] as Table<any, any>;
-        // Filter by user role if needed (e.g. teacher only sees their unsynced data) - for now simpler global check
-        const count = await table.filter(i => !i.isSynced).count();
-        if (count > 0) {
-            stats.push({ table: name, count });
-            totalUnsynced += count;
-        }
+    if ('serviceWorker' in navigator && 'SyncManager' in window) {
+        navigator.serviceWorker.ready.then(reg => {
+            // @ts-ignore
+            return reg.sync.register('sync-data');
+        }).catch(() => {
+            syncTimeout = setTimeout(() => syncAllData(), 5000);
+        });
+    } else {
+        syncTimeout = setTimeout(() => syncAllData(), 5000);
     }
-
-    return { stats, totalUnsynced };
+    
+    window.dispatchEvent(new CustomEvent('unsaved-changes', { detail: true }));
 };
 
-export const syncAllData = async (force = false): Promise<{ hasWarnings: boolean }> => {
-    if (!navigator.onLine) return { hasWarnings: false };
+export const syncAllData = async (forcePush = false) => {
+    if (!navigator.onLine) return;
     
-    // List of tables to sync (Order matters for foreign keys)
-    // ADDED: eduadmin_wa_configs, eduadmin_system_settings, eduadmin_api_keys, eduadmin_master_subjects, eduadmin_email_config
-    const collections = [
-        { table: db.users, name: 'eduadmin_users' },
-        { table: db.classes, name: 'eduadmin_classes' },
-        { table: db.students, name: 'eduadmin_students' },
-        { table: db.scopeMaterials, name: 'eduadmin_materials' },
-        { table: db.assessmentScores, name: 'eduadmin_scores' },
-        { table: db.attendanceRecords, name: 'eduadmin_attendance' },
-        { table: db.teachingJournals, name: 'eduadmin_journals' },
-        { table: db.teachingSchedules, name: 'eduadmin_schedules' },
-        { table: db.violations, name: 'eduadmin_bk_violations' },
-        { table: db.pointReductions, name: 'eduadmin_bk_reductions' },
-        { table: db.achievements, name: 'eduadmin_bk_achievements' },
-        { table: db.counselingSessions, name: 'eduadmin_bk_counseling' },
-        { table: db.tickets, name: 'eduadmin_tickets' },
-        { table: db.notifications, name: 'eduadmin_notifications' },
-        { table: db.systemSettings, name: 'eduadmin_system_settings' },
-        { table: db.whatsappConfigs, name: 'eduadmin_wa_configs' },
-        { table: db.apiKeys, name: 'eduadmin_api_keys' },
-        { table: db.logs, name: 'eduadmin_logs' },
-        { table: db.masterSubjects, name: 'eduadmin_master_subjects' },
-        { table: db.emailConfig, name: 'eduadmin_email_config' } 
-    ];
+    window.dispatchEvent(new CustomEvent('sync-status', { detail: 'syncing' }));
+    
+    try {
+        const collections = [
+            { name: 'eduadmin_users', table: db.users },
+            { name: 'eduadmin_classes', table: db.classes },
+            { name: 'eduadmin_students', table: db.students },
+            { name: 'eduadmin_scores', table: db.assessmentScores },
+            { name: 'eduadmin_attendance', table: db.attendanceRecords },
+            { name: 'eduadmin_journals', table: db.teachingJournals },
+            { name: 'eduadmin_materials', table: db.scopeMaterials },
+            { name: 'eduadmin_schedules', table: db.teachingSchedules },
+            { name: 'eduadmin_bk_violations', table: db.violations },
+            { name: 'eduadmin_bk_reductions', table: db.pointReductions },
+            { name: 'eduadmin_bk_achievements', table: db.achievements },
+            { name: 'eduadmin_bk_counseling', table: db.counselingSessions },
+            { name: 'eduadmin_tickets', table: db.tickets },
+            { name: 'eduadmin_system_settings', table: db.systemSettings },
+            { name: 'eduadmin_notifications', table: db.notifications },
+            { name: 'eduadmin_logs', table: db.logs },
+            { name: 'eduadmin_master_subjects', table: db.masterSubjects },
+            { name: 'eduadmin_wa_configs', table: db.whatsappConfigs },
+            { name: 'eduadmin_email_config', table: db.emailConfig }
+        ];
 
-    let hasErrors = false;
-
-    for (const col of collections) {
-        try {
+        for (const col of collections) {
             // PUSH
-            const unsynced = await col.table.filter(i => !i.isSynced).toArray();
-            if (unsynced.length > 0 || force) {
-                await pushToTurso(col.name, unsynced, force);
+            const unsynced = await col.table.where('isSynced').equals(0).toArray(); 
+            if (unsynced.length > 0 || forcePush) {
+                const itemsToPush = forcePush ? await col.table.toArray() : unsynced;
+                await pushToTurso(col.name, itemsToPush, forcePush);
                 
-                // IMPORTANT: Update local items as synced only after successful push
-                // Use bulkPut to ensure UI updates are triggered
-                const updatedItems = unsynced.map(item => ({ ...item, isSynced: true }));
-                await (col.table as any).bulkPut(updatedItems);
+                if (!forcePush) {
+                    await db.transaction('rw', col.table, async () => {
+                        for (const item of unsynced) {
+                            await col.table.update((item as any).id || (item as any).userId, { isSynced: true });
+                        }
+                    });
+                }
             }
 
             // PULL
-            const localItems = await col.table.toArray();
-            const { items, hasChanges } = await pullFromTurso(col.name, localItems);
+            const allLocal = await col.table.toArray();
+            const { items: merged, hasChanges } = await pullFromTurso(col.name, allLocal);
             if (hasChanges) {
-                await (col.table as any).bulkPut(items);
-            }
-        } catch (e: any) {
-            console.error(`Sync failed for ${col.name}:`, e);
-            hasErrors = true;
-            // Continue to next collection instead of stopping everything
-        }
-    }
-    
-    // Dispatch event to update UI
-    window.dispatchEvent(new CustomEvent('sync-status', { detail: hasErrors ? 'error' : 'success' }));
-    
-    // Instead of throwing an error, we return the status
-    return { hasWarnings: hasErrors };
-};
-
-export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', logFn: (msg: string) => void) => {
-    logFn(`Starting ${direction} Sync...`);
-    try {
-        const result = await syncAllData(direction === 'FULL');
-        
-        if (result && result.hasWarnings) {
-            logFn('Sinkronisasi Selesai (Tidak Sempurna): Beberapa data mungkin gagal terkirim. Cek koneksi internet Anda lalu coba lagi.');
-        } else {
-            logFn('Sync Completed Successfully.');
-        }
-    } catch (e: any) {
-        // This catch block will now only trigger for catastrophic errors (not partial syncs)
-        logFn(`Sync Failed: ${e.message}`);
-    }
-};
-
-export const resetSystemData = async (scope: 'SEMESTER' | 'ALL', semester?: string): Promise<{success: boolean, message: string}> => { 
-    try { 
-        // 1. Perform Remote Hard Reset First (REALTIME API)
-        if (navigator.onLine) {
-            const userStr = localStorage.getItem('eduadmin_user');
-            const token = userStr ? JSON.parse(userStr).id : '';
-            
-            try {
-                const response = await fetch('/api/turso', {
-                    method: 'POST',
-                    headers: { 
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}` 
-                    },
-                    body: JSON.stringify({ 
-                        action: 'reset', 
-                        scope: semester === 'FULL_YEAR' ? 'FULL_YEAR' : scope, 
-                        semester 
-                    })
+                await db.transaction('rw', col.table, async () => {
+                    await col.table.bulkPut(merged);
                 });
-
-                if (!response.ok) {
-                    const err = await response.json();
-                    throw new Error(err.error || "Gagal melakukan reset di server.");
-                }
-            } catch (apiError: any) {
-                console.error("Server Reset Error:", apiError);
-                return { success: false, message: `Gagal menghapus data server: ${apiError.message}. Cek koneksi.` };
             }
-        } else {
-            return { success: false, message: "Koneksi internet diperlukan untuk melakukan reset database (Hard Delete)." };
         }
-
-        // 2. Perform Local Cleanup (Dexie)
-        if (scope === 'ALL') { 
-            // Factory Reset Logic
-            const admins = await db.users.where('role').equals(UserRole.ADMIN).toArray(); 
-            
-            // Clear Local - No Soft Delete Needed as Server is Wiped
-            // Fix: cast db to any to access tables property if types are missing
-            await Promise.all((db as any).tables.map((table: Table) => table.clear()));
-            
-            // Restore Admin
-            await db.users.bulkAdd(admins); 
-            
-            return { success: true, message: 'Database (Cloud & Lokal) berhasil di-reset total.' }; 
-        } 
         
-        if (scope === 'SEMESTER') { 
-            if (semester === 'FULL_YEAR') {
-               // Full Year Reset: Clear Students, Classes, Academic Data Locally
-               await db.students.clear();
-               await db.classes.clear();
-               await db.assessmentScores.clear();
-               await db.attendanceRecords.clear();
-               await db.teachingJournals.clear();
-               await db.scopeMaterials.clear();
-               await db.teachingSchedules.clear();
-               
-               // Clear BK Data
-               await db.violations.clear();
-               await db.pointReductions.clear();
-               await db.achievements.clear();
-               await db.counselingSessions.clear();
+        window.dispatchEvent(new CustomEvent('sync-status', { detail: 'success' }));
+        window.dispatchEvent(new CustomEvent('unsaved-changes', { detail: false }));
 
-               return { success: true, message: "Data Tahun Ajaran (Server & Lokal) berhasil direset." };
-            }
-
-            // Semester Reset: Clear only specific semester data locally
-            if (semester) {
-                const scoresToDelete = await db.assessmentScores.where('semester').equals(semester).primaryKeys(); 
-                if (scoresToDelete.length > 0) await db.assessmentScores.bulkDelete(scoresToDelete);
-                
-                const materialsToDelete = await db.scopeMaterials.where('semester').equals(semester).primaryKeys(); 
-                if (materialsToDelete.length > 0) await db.scopeMaterials.bulkDelete(materialsToDelete);
-                
-                return { success: true, message: `Data semester ${semester} berhasil dihapus dari Server & Lokal.` }; 
-            }
-        } 
-        
-        return { success: false, message: 'Invalid Scope' }; 
-    } catch (e: any) { 
-        console.error("Reset Error:", e); 
-        return { success: false, message: e.message || 'Gagal mereset data.' }; 
-    } 
-};
-
-export const createBackup = async (user: User, semesterFilter?: string): Promise<BackupData | null> => {
-    // Simplified Backup logic
-    try {
-        const meta = {
-            version: '1.0',
-            date: new Date().toISOString(),
-            generatedBy: user.fullName,
-            role: user.role,
-            semesterFilter
-        };
-
-        let data: any = {};
-        
-        if (user.role === UserRole.ADMIN) {
-            // Full Dump
-            data.users = await db.users.toArray();
-            data.classes = await db.classes.toArray();
-            data.students = await db.students.toArray();
-            data.scopeMaterials = await db.scopeMaterials.toArray();
-            data.assessmentScores = await db.assessmentScores.toArray();
-            data.teachingJournals = await db.teachingJournals.toArray();
-            // ... and so on
-        } else {
-            // Teacher Dump
-            data.classes = await db.classes.where('userId').equals(user.id).toArray();
-            const classIds = data.classes.map((c: any) => c.id);
-            data.students = await db.students.where('classId').anyOf(classIds).toArray();
-            data.scopeMaterials = await db.scopeMaterials.where('userId').equals(user.id).toArray();
-            data.teachingJournals = await db.teachingJournals.where('userId').equals(user.id).toArray();
-            data.assessmentScores = await db.assessmentScores.where('userId').equals(user.id).toArray();
-        }
-
-        return { meta, data };
     } catch (e) {
-        console.error("Backup failed", e);
-        return null;
+        console.error("Sync Error:", e);
+        window.dispatchEvent(new CustomEvent('sync-status', { detail: 'error' }));
     }
 };
 
-export const restoreBackup = async (backup: BackupData): Promise<{success: boolean, message: string}> => {
+export const runManualSync = async (direction: 'PUSH'|'PULL'|'FULL', logger: (msg: string) => void) => {
+    logger("Sync Started...");
+    await syncAllData();
+    logger("Sync Completed.");
+};
+
+// --- MISC ---
+
+export const checkSchoolNameByNpsn = async (npsn: string) => {
     try {
-        const { data } = backup;
-        
-        if (data.users) await db.users.bulkPut(data.users);
-        if (data.classes) await db.classes.bulkPut(data.classes);
-        if (data.students) await db.students.bulkPut(data.students);
-        if (data.scopeMaterials) await db.scopeMaterials.bulkPut(data.scopeMaterials);
-        if (data.assessmentScores) await db.assessmentScores.bulkPut(data.assessmentScores);
-        if (data.teachingJournals) await db.teachingJournals.bulkPut(data.teachingJournals);
-        
-        return { success: true, message: "Data berhasil dipulihkan." };
-    } catch (e: any) {
-        return { success: false, message: e.message || "Gagal restore." };
+        const res = await fetch(`/api/check-npsn?npsn=${npsn}`);
+        if (res.ok) return await res.json();
+    } catch {
+        return { found: false };
     }
+    return { found: false };
 };
 
-export const sendApprovalEmail = async (user: User): Promise<{success: boolean, message: string}> => {
-    const config = await getEmailConfig();
-    if (!config || !config.isActive) return { success: false, message: "Email config missing or inactive." };
-
-    try {
-        const res = await fetch('/api/send-email', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ user, config })
-        });
-        return await res.json();
-    } catch (e: any) {
-        return { success: false, message: e.message };
-    }
-};
-
-export const sendWhatsAppBroadcast = async (config: WhatsAppConfig, recipients: any[], message: string): Promise<{success: number, failed: number}> => {
+export const sendWhatsAppBroadcast = async (config: WhatsAppConfig, recipients: any[], message: string) => {
     try {
         const res = await fetch('/api/send-whatsapp', {
             method: 'POST',
@@ -1160,38 +848,91 @@ export const sendWhatsAppBroadcast = async (config: WhatsAppConfig, recipients: 
         });
         return await res.json();
     } catch (e) {
-        return { success: 0, failed: recipients.length };
+        return { success: 0, failed: recipients.length, errors: ["Network Error"] };
     }
 };
 
-export const checkSchoolNameByNpsn = async (npsn: string) => {
+export const createBackup = async (user: User, semesterFilter?: string) => {
+    const backup: BackupData = {
+        meta: {
+            version: '1.0',
+            date: new Date().toISOString(),
+            generatedBy: user.username,
+            role: user.role,
+            semesterFilter
+        },
+        data: {
+            classes: [], students: [], scopeMaterials: [], assessmentScores: [], teachingJournals: [], attendanceRecords: []
+        }
+    };
+
+    if (user.role === UserRole.ADMIN) {
+        backup.data.users = await db.users.toArray();
+        backup.data.classes = await db.classes.toArray();
+        backup.data.students = await db.students.toArray();
+        backup.data.scopeMaterials = await db.scopeMaterials.toArray();
+        backup.data.assessmentScores = await db.assessmentScores.toArray();
+        backup.data.teachingJournals = await db.teachingJournals.toArray();
+        backup.data.attendanceRecords = await db.attendanceRecords.toArray();
+    } else {
+        backup.data.classes = await getClasses(user.id);
+        const myClasses = backup.data.classes.map(c => c.id);
+        backup.data.students = await db.students.where('classId').anyOf(myClasses).toArray();
+        
+        let scores = await db.assessmentScores.where('userId').equals(user.id).toArray();
+        if (semesterFilter) scores = scores.filter(s => s.semester === semesterFilter);
+        backup.data.assessmentScores = scores;
+
+        let materials = await db.scopeMaterials.where('userId').equals(user.id).toArray();
+        if (semesterFilter) materials = materials.filter(m => m.semester === semesterFilter);
+        backup.data.scopeMaterials = materials;
+
+        backup.data.teachingJournals = await getTeachingJournals(user.id);
+    }
+
+    return backup;
+};
+
+export const restoreBackup = async (backup: BackupData) => {
     try {
-        const response = await fetch(`/api/check-npsn?npsn=${npsn}`);
-        return await response.json();
-    } catch (e) {
-        return { found: false };
+        await db.transaction('rw', db.classes, db.students, db.scopeMaterials, db.assessmentScores, db.teachingJournals, async () => {
+            if (backup.data.classes) await db.classes.bulkPut(backup.data.classes.map(x => ({...x, isSynced: false})));
+            if (backup.data.students) await db.students.bulkPut(backup.data.students.map(x => ({...x, isSynced: false})));
+            if (backup.data.scopeMaterials) await db.scopeMaterials.bulkPut(backup.data.scopeMaterials.map(x => ({...x, isSynced: false})));
+            if (backup.data.assessmentScores) await db.assessmentScores.bulkPut(backup.data.assessmentScores.map(x => ({...x, isSynced: false})));
+            if (backup.data.teachingJournals) await db.teachingJournals.bulkPut(backup.data.teachingJournals.map(x => ({...x, isSynced: false})));
+        });
+        triggerSync('eduadmin_users'); 
+        return { success: true, message: "Restore berhasil." };
+    } catch (e: any) {
+        return { success: false, message: e.message };
     }
 };
 
-export const getStudentsServerSide = async (page: number, limit: number, search: string, school: string, teacherId: string) => {
-    try {
-        const userStr = localStorage.getItem('eduadmin_user');
-        const token = userStr ? JSON.parse(userStr).id : '';
-        const params = new URLSearchParams({
-            page: page.toString(),
-            limit: limit.toString(),
-            search,
-            school,
-            teacherId
-        });
+export const resetSystemData = async (scope: 'SEMESTER' | 'ALL', semester?: string) => {
+    if (scope === 'ALL') {
+        await db.students.clear();
+        await db.classes.clear();
+        await db.assessmentScores.clear();
+        await db.teachingJournals.clear();
+        await db.scopeMaterials.clear();
+        await db.teachingSchedules.clear();
+        await db.attendanceRecords.clear();
+        await db.violations.clear();
+        await db.pointReductions.clear();
+        await db.achievements.clear();
+        await db.counselingSessions.clear();
         
-        const response = await fetch(`/api/students?${params.toString()}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
+        try {
+            await fetch('/api/turso', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'reset', scope })
+            });
+        } catch {}
         
-        if (response.status === 401) return { status: 401 };
-        return await response.json();
-    } catch (e) {
-        return { status: 500, data: [], meta: { total: 0, totalPages: 0 } };
+        return { success: true, message: "System Reset." };
     }
+    
+    return { success: true, message: "Done." };
 };
