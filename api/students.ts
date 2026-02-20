@@ -52,7 +52,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let args: any[] = [];
 
     // 1. FILTERING LOGIC
-    // Note: We primarily filter on the Students table now to ensure they show up.
     
     if (currentUser.role === 'GURU') {
         const userRes = await client.execute({ sql: "SELECT school_npsn FROM users WHERE id = ?", args: [currentUser.userId] });
@@ -70,12 +69,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } else {
         // ADMIN FILTER
         if (school) {
-            whereConditions.push("school_npsn = ?");
+            // Fix: Map School Name (from dropdown) to NPSN via Users table
+            // Because students table stores school_npsn, but filter passes school_name
+            whereConditions.push("school_npsn IN (SELECT school_npsn FROM users WHERE school_name = ?)");
             args.push(school);
         }
-        // Teacher Filter is complex without JOIN, we'll handle it by getting class_ids first if needed, 
-        // OR we trust the school_npsn filter mostly. 
-        // For strict Teacher filter, we use a subquery.
+        
         if (teacherId) {
             whereConditions.push("class_id IN (SELECT id FROM classes WHERE user_id = ?)");
             args.push(teacherId);
@@ -161,8 +160,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (currentUser.role !== 'GURU') {
         // Parallel Metadata Fetch for Filters
         const [sRes, tRes] = await Promise.all([
-            client.execute("SELECT DISTINCT school_name FROM users WHERE role = 'GURU' AND school_name IS NOT NULL"),
-            client.execute("SELECT id, full_name FROM users WHERE role = 'GURU' ORDER BY full_name")
+            client.execute("SELECT DISTINCT school_name FROM users WHERE role = 'GURU' AND school_name IS NOT NULL AND school_name != ''"),
+            client.execute("SELECT id, full_name FROM users WHERE role = 'GURU' AND status = 'ACTIVE' ORDER BY full_name")
         ]);
         schoolsRes = sRes;
         teachersRes = tRes;
