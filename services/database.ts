@@ -563,7 +563,8 @@ export const getSyncStats = async (user: User) => {
     const stats: {table: string, count: number}[] = [];
 
     for (const table of tables) {
-        const count = await table.where('isSynced').equals(0).count(); // 0 = false
+        // Safe check using filter to handle potential lack of index or different falsy values
+        const count = await table.filter(item => !item.isSynced).count();
         if (count > 0) {
             totalUnsynced += count;
             stats.push({ table: table.name, count });
@@ -602,7 +603,9 @@ export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', onLog: 
             onLog('Starting Push...');
             
             for (const [table, collection] of Object.entries(tableMap)) {
-                const unsynced = await db.table(table).where('isSynced').equals(0).toArray();
+                // Use filter for safety and robust boolean check
+                const unsynced = await db.table(table).filter(item => !item.isSynced).toArray();
+                
                 if (unsynced.length > 0) {
                     onLog(`Pushing ${unsynced.length} items from ${table}...`);
                     try {
