@@ -270,9 +270,13 @@ export const bulkDeleteStudents = async (ids: string[]): Promise<void> => {
 };
 
 export const importStudentsFromCSV = async (classId: string, csvText: string): Promise<{success: boolean, count: number, errors: string[]}> => {
+    const cls = await db.classes.get(classId);
+    const schoolNpsn = cls?.schoolNpsn || 'DEFAULT';
+    
     const lines = csvText.split('\n');
     let count = 0;
     const errors: string[] = [];
+    const studentsToAdd: Student[] = [];
     
     // Skip header
     for (let i = 1; i < lines.length; i++) {
@@ -294,10 +298,42 @@ export const importStudentsFromCSV = async (classId: string, csvText: string): P
         const gender = (genderRaw === 'L' || genderRaw === 'LAKI-LAKI') ? 'L' : 'P';
         
         if (name && nis) {
-            await addStudent(classId, name, nis, gender, phone);
+            const newStudent: Student = {
+                id: `std-${Date.now()}-${Math.random().toString(36).substr(2, 5)}-${i}`, // Ensure unique ID even in tight loop
+                classId,
+                schoolNpsn,
+                name: sanitizeInput(name),
+                nis: sanitizeInput(nis),
+                gender,
+                phone: sanitizeInput(phone),
+                lastModified: Date.now(),
+                isSynced: false,
+                version: 1
+            };
+            studentsToAdd.push(newStudent);
             count++;
         }
     }
+
+    if (studentsToAdd.length > 0) {
+        // Bulk Add to Dexie (Faster & Atomic)
+        await db.students.bulkAdd(studentsToAdd);
+        
+        // Update Class Count
+        if (cls) {
+            await db.classes.update(classId, { 
+                studentCount: (cls.studentCount || 0) + studentsToAdd.length, 
+                lastModified: Date.now(), 
+                isSynced: false 
+            });
+        }
+
+        // Trigger Single Sync for all new data
+        if(navigator.onLine) {
+            await syncAllData();
+        }
+    }
+
     return { success: true, count, errors };
 };
 
