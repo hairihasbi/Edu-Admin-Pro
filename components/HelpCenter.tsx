@@ -32,17 +32,26 @@ const HelpCenter: React.FC<HelpCenterProps> = ({ user }) => {
 
   const fetchTickets = async () => {
     setLoading(true);
-    const data = await getTickets(user);
-    // Sort by last updated (newest first)
-    const sorted = data.sort((a, b) => new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime());
-    setTickets(sorted);
-    
-    // Refresh selected ticket if it exists (to show new messages)
-    if (selectedTicket) {
-      const updated = sorted.find(t => t.id === selectedTicket.id);
-      if (updated) setSelectedTicket(updated);
+    try {
+      const data = await getTickets(user);
+      // Sort by last updated (newest first)
+      const sorted = data.sort((a, b) => {
+        const dateA = a.lastUpdated ? new Date(a.lastUpdated).getTime() : 0;
+        const dateB = b.lastUpdated ? new Date(b.lastUpdated).getTime() : 0;
+        return dateB - dateA;
+      });
+      setTickets(sorted);
+      
+      // Refresh selected ticket if it exists (to show new messages)
+      if (selectedTicket) {
+        const updated = sorted.find(t => t.id === selectedTicket.id);
+        if (updated) setSelectedTicket(updated);
+      }
+    } catch (e) {
+      console.error("Failed to load tickets", e);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const scrollToBottom = () => {
@@ -90,7 +99,18 @@ const HelpCenter: React.FC<HelpCenterProps> = ({ user }) => {
 
   // Helper: Format Time
   const formatTime = (isoString: string) => {
-    return new Date(isoString).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+    try {
+        return new Date(isoString).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+    } catch {
+        return '-';
+    }
+  };
+
+  const getLastMessage = (ticket: Ticket) => {
+      if (ticket.messages && Array.isArray(ticket.messages) && ticket.messages.length > 0) {
+          return ticket.messages[ticket.messages.length - 1]?.message || 'Pesan kosong';
+      }
+      return 'Belum ada pesan';
   };
 
   return (
@@ -148,11 +168,11 @@ const HelpCenter: React.FC<HelpCenterProps> = ({ user }) => {
                       {ticket.subject}
                     </h4>
                     <span className="text-[10px] text-gray-400 whitespace-nowrap ml-2">
-                      {new Date(ticket.lastUpdated).toLocaleDateString('id-ID', {day: 'numeric', month: 'short'})}
+                      {ticket.lastUpdated ? new Date(ticket.lastUpdated).toLocaleDateString('id-ID', {day: 'numeric', month: 'short'}) : '-'}
                     </span>
                   </div>
                   <p className="text-xs text-gray-500 line-clamp-2 mb-2">
-                    {ticket.messages[ticket.messages.length - 1]?.message}
+                    {getLastMessage(ticket)}
                   </p>
                   <div className="flex justify-between items-center">
                     <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
@@ -209,7 +229,7 @@ const HelpCenter: React.FC<HelpCenterProps> = ({ user }) => {
 
             {/* Chat Messages */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50/50">
-              {selectedTicket.messages.map((msg) => {
+              {(selectedTicket.messages || []).map((msg) => {
                 const isMe = msg.senderRole === user.role;
                 return (
                   <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
