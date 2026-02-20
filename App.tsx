@@ -145,7 +145,7 @@ const AppContent: React.FC = () => {
           console.warn("Initialization timed out, forcing app load.");
           setIsLoading(false);
         }
-      }, 5000);
+      }, 15000); // INCREASED TO 15 SECONDS
 
       try {
         await initDatabase();
