@@ -1,3 +1,4 @@
+
 import { db } from './db';
 import { 
   User, UserRole, ClassRoom, Student, AttendanceRecord, 
@@ -571,65 +572,80 @@ export const getSyncStats = async (user: User) => {
     return { totalUnsynced, stats };
 };
 
+// CRITICAL FIX: Implement actual PULL logic so cleared DB gets populated from server
 export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', onLog: (msg: string) => void) => {
-    const collections = [
-        'eduadmin_users', 'eduadmin_classes', 'eduadmin_students', 
-        'eduadmin_scores', 'eduadmin_attendance', 'eduadmin_journals',
-        'eduadmin_materials', 'eduadmin_schedules', 'eduadmin_bk_violations',
-        'eduadmin_bk_reductions', 'eduadmin_bk_achievements', 'eduadmin_bk_counseling',
-        'eduadmin_tickets', 'eduadmin_wa_configs', 'eduadmin_notifications',
-        'eduadmin_master_subjects', 'eduadmin_email_config', 'eduadmin_system_settings'
-    ];
+    // Mapping table name to collection name
+    const tableMap: Record<string, string> = {
+        'users': 'eduadmin_users',
+        'classes': 'eduadmin_classes',
+        'students': 'eduadmin_students',
+        'assessmentScores': 'eduadmin_scores',
+        'attendanceRecords': 'eduadmin_attendance',
+        'teachingJournals': 'eduadmin_journals',
+        'scopeMaterials': 'eduadmin_materials',
+        'teachingSchedules': 'eduadmin_schedules',
+        'violations': 'eduadmin_bk_violations',
+        'pointReductions': 'eduadmin_bk_reductions',
+        'achievements': 'eduadmin_bk_achievements',
+        'counselingSessions': 'eduadmin_bk_counseling',
+        'tickets': 'eduadmin_tickets',
+        'whatsappConfigs': 'eduadmin_wa_configs',
+        'notifications': 'eduadmin_notifications',
+        'masterSubjects': 'eduadmin_master_subjects',
+        'emailConfig': 'eduadmin_email_config',
+        'systemSettings': 'eduadmin_system_settings'
+    };
 
     try {
+        // --- PUSH PHASE ---
         if (direction === 'PUSH' || direction === 'FULL') {
             onLog('Starting Push...');
-            // Mapping table name to collection name
-            const tableMap: Record<string, string> = {
-                'users': 'eduadmin_users',
-                'classes': 'eduadmin_classes',
-                'students': 'eduadmin_students',
-                'assessmentScores': 'eduadmin_scores',
-                'attendanceRecords': 'eduadmin_attendance',
-                'teachingJournals': 'eduadmin_journals',
-                'scopeMaterials': 'eduadmin_materials',
-                'teachingSchedules': 'eduadmin_schedules',
-                'violations': 'eduadmin_bk_violations',
-                'pointReductions': 'eduadmin_bk_reductions',
-                'achievements': 'eduadmin_bk_achievements',
-                'counselingSessions': 'eduadmin_bk_counseling',
-                'tickets': 'eduadmin_tickets',
-                'whatsappConfigs': 'eduadmin_wa_configs',
-                'notifications': 'eduadmin_notifications',
-                'masterSubjects': 'eduadmin_master_subjects',
-                'emailConfig': 'eduadmin_email_config',
-                'systemSettings': 'eduadmin_system_settings'
-            };
-
+            
             for (const [table, collection] of Object.entries(tableMap)) {
                 const unsynced = await db.table(table).where('isSynced').equals(0).toArray();
                 if (unsynced.length > 0) {
                     onLog(`Pushing ${unsynced.length} items from ${table}...`);
-                    await pushToTurso(collection, unsynced);
-                    // Mark synced
-                    await db.table(table).bulkPut(unsynced.map(i => ({ ...i, isSynced: true })));
+                    try {
+                        await pushToTurso(collection, unsynced);
+                        // Mark synced
+                        await db.table(table).bulkPut(unsynced.map(i => ({ ...i, isSynced: true })));
+                    } catch (e: any) {
+                        onLog(`Failed to push ${table}: ${e.message}`);
+                    }
                 }
             }
             onLog('Push Completed.');
         }
 
+        // --- PULL PHASE ---
         if (direction === 'PULL' || direction === 'FULL') {
             onLog('Starting Pull...');
             
-            for (const collection of collections) {
+            for (const [table, collection] of Object.entries(tableMap)) {
                 onLog(`Pulling ${collection}...`);
-                // Placeholder for pull logic
-                onLog(`Skipping ${collection} pull (Auto-sync handles this in background)`);
+                
+                try {
+                    const dbTable = db.table(table);
+                    const localItems = await dbTable.toArray();
+                    
+                    const { items: mergedItems, hasChanges } = await pullFromTurso(collection, localItems);
+                    
+                    if (hasChanges) {
+                        onLog(`Updating ${table}: ${mergedItems.length} items found.`);
+                        // Bulk Put handles Insert and Update
+                        await dbTable.bulkPut(mergedItems);
+                    }
+                } catch (e: any) {
+                    onLog(`Failed to pull ${collection}: ${e.message}`);
+                }
             }
             onLog('Pull Completed.');
+            
+            // Notify UI to refresh data
+            window.dispatchEvent(new CustomEvent('sync-status', { detail: 'success' }));
         }
     } catch (e: any) {
-        onLog(`Error: ${e.message}`);
+        onLog(`Critical Sync Error: ${e.message}`);
     }
 };
 
