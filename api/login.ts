@@ -62,7 +62,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // 4. Verifikasi Password
-    const storedPassword = userRow.password as string;
+    const storedPassword = (userRow.password as string) || '';
     let isValid = false;
 
     if (storedPassword.startsWith('$2')) {
