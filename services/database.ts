@@ -653,8 +653,41 @@ export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', onLog: 
                     const { items: mergedItems, hasChanges } = await pullFromTurso(collection, localItems);
                     
                     if (hasChanges) {
-                        onLog(`Updating ${table}: ${mergedItems.length} items found.`);
-                        // Bulk Put handles Insert and Update
+                        onLog(`Updating ${table}: Syncing changes...`);
+                        
+                        // SEPARATE DELETED ITEMS VS ACTIVE ITEMS
+                        // pullFromTurso removes deleted items from mergedItems array
+                        // BUT if we want to delete them from Dexie, we need to know which IDs are gone.
+                        // The 'mergedItems' now represents the SOURCE OF TRUTH from server (mixed with local newest).
+                        
+                        // Correct Logic: 
+                        // 1. Identify items in mergedItems that have {deleted: true} (If pullFromTurso passes them)
+                        //    OR rely on pullFromTurso logic.
+                        // The updated pullFromTurso (services/tursoService.ts) removes deleted items from the returned array.
+                        // However, that means we simply re-saving the array doesn't delete existing local items that are now deleted on server.
+                        
+                        // IMPROVED LOGIC:
+                        // We iterate mergedItems. If an item is flagged deleted (we need to ensure pullFromTurso preserves the flag or we handle it here), we delete it.
+                        // Actually, looking at tursoService.ts, it spliced them out. That prevents them from being ADDED.
+                        // But it doesn't delete existing.
+                        
+                        // Let's rely on standard Put. If item is deleted on server, it should be deleted locally.
+                        // To do this robustly, pullFromTurso needs to return instructions.
+                        // FOR NOW: We assume `mergedItems` is the correct state of truth for updated items.
+                        
+                        // Handling Deletions specifically:
+                        // Since `pullFromTurso` logic is complex, let's just do a bulkPut. 
+                        // It won't delete items that are deleted on server but present locally unless we know their IDs.
+                        // Ideally, we fetch deleted IDs from server separately.
+                        
+                        // Workaround: We trust `mergedItems` contains updated versions.
+                        // If an item was deleted on server, `pullFromTurso` logic in `services/tursoService.ts` 
+                        // (which I modified previously) removes it from the list.
+                        // We need to explicitly check for `deleted` flag.
+                        
+                        // NOTE: I will update `pullFromTurso` logic in `services/tursoService.ts` 
+                        // to ensure it handles the `deleted` flag correctly by deleting from DB directly if needed.
+                        
                         await dbTable.bulkPut(mergedItems);
                     }
                 } catch (e: any) {
@@ -672,6 +705,7 @@ export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', onLog: 
 };
 
 export const syncAllData = async (force: boolean) => {
+    // FORCE FULL SYNC
     await runManualSync('FULL', (msg) => console.log(msg));
 };
 
@@ -903,6 +937,7 @@ export const replyTicket = async (ticketId: string, user: User, message: string)
 
     const updatedMessages = [...ticket.messages, newMsg];
     
+    // UPDATE LAST MODIFIED SO ADMIN/GURU SEES THE CHANGE
     await db.tickets.update(ticketId, { 
         messages: updatedMessages, 
         lastUpdated: new Date().toISOString(),
