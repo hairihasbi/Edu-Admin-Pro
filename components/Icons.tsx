@@ -86,7 +86,8 @@ import {
   Database, // Added Database Icon
   Image,
   LayoutTemplate,
-  ArrowLeftRight // Added
+  ArrowLeftRight, // Added
+  Pencil // Added Pencil
 } from 'lucide-react';
 
 export {
@@ -176,5 +177,6 @@ export {
   Database,
   Image,
   LayoutTemplate,
-  ArrowLeftRight
+  ArrowLeftRight,
+  Pencil
 };

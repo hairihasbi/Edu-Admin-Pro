@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { User, ClassRoom, ScopeMaterial } from '../types';
-import { getClasses, addScopeMaterial, getScopeMaterials, deleteScopeMaterial, bulkDeleteScopeMaterials, copyScopeMaterials } from '../services/database';
-import { Plus, Trash2, List, Copy, Save, Filter, X, FileText, ChevronLeft, ChevronRight, AlertCircle, ArrowRight } from './Icons';
+import { getClasses, addScopeMaterial, updateScopeMaterial, getScopeMaterials, deleteScopeMaterial, bulkDeleteScopeMaterials, copyScopeMaterials } from '../services/database';
+import { Plus, Trash2, List, Copy, Save, Filter, X, FileText, ChevronLeft, ChevronRight, AlertCircle, ArrowRight, Pencil } from './Icons';
 import { Link } from 'react-router-dom';
 
 interface TeacherScopeMaterialProps {
@@ -27,6 +27,7 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
     phase: '',
     content: ''
   });
+  const [editingId, setEditingId] = useState<string | null>(null);
   
   // Sub-Scopes Input State
   const [subScopeInput, setSubScopeInput] = useState('');
@@ -69,10 +70,10 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
 
   // Sync Form Class with Filter Class if user selects a specific class
   useEffect(() => {
-      if (filterClassId) {
+      if (filterClassId && !editingId) {
           setFormData(prev => ({ ...prev, classId: filterClassId }));
       }
-  }, [filterClassId]);
+  }, [filterClassId, editingId]);
 
   const fetchMaterials = async () => {
     setLoading(true);
@@ -105,30 +106,71 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
       setSubScopes(subScopes.filter((_, i) => i !== index));
   };
 
+  const handleEdit = (item: ScopeMaterial) => {
+      setEditingId(item.id);
+      setFormData({
+          classId: item.classId,
+          code: item.code,
+          phase: item.phase,
+          content: item.content
+      });
+      setSubScopes(item.subScopes || []);
+      // Scroll to top
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleCancelEdit = () => {
+      setEditingId(null);
+      setFormData(prev => ({
+          ...prev,
+          code: '',
+          phase: '',
+          content: ''
+      }));
+      setSubScopes([]);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.classId || !formData.code || !formData.content) return;
 
-    // PASS userId and subject
-    const newItem = await addScopeMaterial({
-      classId: formData.classId,
-      userId: user.id,
-      subject: user.subject || 'Umum',
-      semester: filterSemester, // Use currently viewed semester for simplicity, or add semester to form if needed
-      code: formData.code,
-      phase: formData.phase,
-      content: formData.content,
-      subScopes: subScopes 
-    });
+    if (editingId) {
+        // UPDATE MODE
+        const updatedItem = await updateScopeMaterial(editingId, {
+            classId: formData.classId,
+            code: formData.code,
+            phase: formData.phase,
+            content: formData.content,
+            subScopes: subScopes
+        });
 
-    if (newItem) {
-      // Optimistic Update: If current view includes this class, add to list
-      if (!filterClassId || filterClassId === formData.classId) {
-          setMaterials([...materials, newItem]);
-      }
-      
-      setFormData(prev => ({ ...prev, code: '', phase: '', content: '' })); // Reset form content
-      setSubScopes([]); // Reset subscopes
+        if (updatedItem) {
+            setMaterials(materials.map(m => m.id === editingId ? updatedItem : m));
+            handleCancelEdit(); // Reset form and mode
+            alert('Data berhasil diperbarui!');
+        }
+    } else {
+        // ADD MODE
+        const newItem = await addScopeMaterial({
+            classId: formData.classId,
+            userId: user.id,
+            subject: user.subject || 'Umum',
+            semester: filterSemester, // Use currently viewed semester for simplicity
+            code: formData.code,
+            phase: formData.phase,
+            content: formData.content,
+            subScopes: subScopes 
+        });
+
+        if (newItem) {
+            // Optimistic Update: If current view includes this class, add to list
+            if (!filterClassId || filterClassId === formData.classId) {
+                setMaterials([...materials, newItem]);
+            }
+            
+            setFormData(prev => ({ ...prev, code: '', phase: '', content: '' })); // Reset form content
+            setSubScopes([]); // Reset subscopes
+        }
     }
   };
 
@@ -136,6 +178,7 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
     if (window.confirm('Hapus Lingkup Materi ini?')) {
       await deleteScopeMaterial(id);
       setMaterials(materials.filter(m => m.id !== id));
+      if (editingId === id) handleCancelEdit();
     }
   };
 
@@ -161,14 +204,12 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
       await bulkDeleteScopeMaterials(Array.from(selectedIds));
       setMaterials(materials.filter(m => !selectedIds.has(m.id)));
       setSelectedIds(new Set());
+      if (selectedIds.has(editingId || '')) handleCancelEdit();
     }
   };
 
   // Copy Feature
   const handleCopy = async () => {
-    // Determine Target Class
-    // If filter is specific, use it. If not, maybe use form data or require selection.
-    // For now, let's use formData.classId as target if filter is ALL.
     const targetClassId = filterClassId || formData.classId;
 
     if (!copySourceClassId || !targetClassId) {
@@ -264,9 +305,10 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
         
         {/* Input Form */}
         <div className="lg:col-span-1">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 sticky top-20">
+          <div className={`bg-white rounded-xl shadow-sm border p-5 sticky top-20 ${editingId ? 'border-orange-200 ring-2 ring-orange-100' : 'border-gray-100'}`}>
             <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
-              <Plus size={18} className="text-green-600" /> Input Materi Baru
+              {editingId ? <Pencil size={18} className="text-orange-600" /> : <Plus size={18} className="text-green-600" />} 
+              {editingId ? 'Edit Materi' : 'Input Materi Baru'}
             </h3>
             
             {classes.length === 0 ? (
@@ -352,12 +394,23 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
                     </p>
                 </div>
 
-                <button
-                    type="submit"
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg font-medium text-sm transition flex items-center justify-center gap-2"
-                >
-                    <Save size={16} /> Simpan
-                </button>
+                <div className="flex gap-2">
+                    {editingId && (
+                        <button
+                            type="button"
+                            onClick={handleCancelEdit}
+                            className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 rounded-lg font-medium text-sm transition"
+                        >
+                            Batal
+                        </button>
+                    )}
+                    <button
+                        type="submit"
+                        className={`flex-1 text-white py-2 rounded-lg font-medium text-sm transition flex items-center justify-center gap-2 ${editingId ? 'bg-orange-600 hover:bg-orange-700' : 'bg-blue-600 hover:bg-blue-700'}`}
+                    >
+                        {editingId ? <><Pencil size={16} /> Update</> : <><Save size={16} /> Simpan</>}
+                    </button>
+                </div>
                 </form>
             )}
           </div>
@@ -400,7 +453,7 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
               ) : (
                 <div className="divide-y divide-gray-100">
                   {currentItems.map(item => (
-                    <div key={item.id} className="p-4 hover:bg-gray-50 transition group flex gap-4 items-start">
+                    <div key={item.id} className={`p-4 hover:bg-gray-50 transition group flex gap-4 items-start ${editingId === item.id ? 'bg-orange-50 border-l-4 border-orange-400' : ''}`}>
                       <div className="pt-1">
                         <input 
                           type="checkbox"
@@ -434,13 +487,22 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
                         </div>
                         <p className="text-sm text-gray-800 leading-relaxed">{item.content}</p>
                       </div>
-                      <button
-                        onClick={() => handleDelete(item.id)}
-                        className="text-gray-300 hover:text-red-500 p-2 opacity-0 group-hover:opacity-100 transition"
-                        title="Hapus"
-                      >
-                        <Trash2 size={18} />
-                      </button>
+                      <div className="flex gap-1">
+                          <button
+                            onClick={() => handleEdit(item)}
+                            className="text-gray-300 hover:text-orange-500 p-2 opacity-0 group-hover:opacity-100 transition"
+                            title="Edit"
+                          >
+                            <Pencil size={18} />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(item.id)}
+                            className="text-gray-300 hover:text-red-500 p-2 opacity-0 group-hover:opacity-100 transition"
+                            title="Hapus"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                      </div>
                     </div>
                   ))}
                 </div>
