@@ -523,14 +523,46 @@ export const addBackupApiKey = async (key: string): Promise<void> => {
 };
 
 export const deleteBackupApiKey = async (id: string): Promise<void> => {
+    // 1. Mark as deleted locally first (Soft Delete in Dexie)
     await db.apiKeys.update(id, { deleted: true, lastModified: Date.now(), isSynced: false });
-    if(navigator.onLine) syncAllData();
+    
+    // 2. Trigger Immediate Sync for this specific item (REALTIME DELETE)
+    if (navigator.onLine) {
+        try {
+            // Get the updated item
+            const item = await db.apiKeys.get(id);
+            if (item) {
+                // Push specifically this item to the API with force=true
+                await pushToTurso('eduadmin_api_keys', [item], true);
+                
+                // If successful, mark as synced locally
+                await db.apiKeys.update(id, { isSynced: true });
+            }
+        } catch (e) {
+            console.error("Immediate delete sync failed, will retry in background sync:", e);
+        }
+    }
 };
 
 export const clearBackupApiKeys = async (): Promise<void> => {
     const keys = await db.apiKeys.toArray();
-    await Promise.all(keys.map(k => db.apiKeys.update(k.id, { deleted: true })));
-    if(navigator.onLine) syncAllData();
+    // Mark all as deleted
+    const updatedKeys = keys.map(k => ({ ...k, deleted: true, lastModified: Date.now(), isSynced: false }));
+    
+    // Bulk update local
+    await db.apiKeys.bulkPut(updatedKeys);
+
+    // Immediate Sync (REALTIME DELETE)
+    if(navigator.onLine) {
+         try {
+            await pushToTurso('eduadmin_api_keys', updatedKeys, true);
+            // Mark all as synced
+            const syncedKeys = updatedKeys.map(k => ({ ...k, isSynced: true }));
+            await db.apiKeys.bulkPut(syncedKeys);
+        } catch (e) {
+            console.error("Immediate bulk delete sync failed:", e);
+        }
+    }
 };
 
 // --- ACADEMIC: SCOPE MATERIAL, JOURNALS, SCORES ---
