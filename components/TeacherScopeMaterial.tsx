@@ -17,11 +17,12 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
   const [materials, setMaterials] = useState<ScopeMaterial[]>([]);
   
   // Selection States
-  const [selectedClassId, setSelectedClassId] = useState<string>('');
-  const [selectedSemester, setSelectedSemester] = useState<string>('Ganjil');
+  const [filterClassId, setFilterClassId] = useState<string>(''); // Default Empty = All Classes
+  const [filterSemester, setFilterSemester] = useState<string>('Ganjil');
   
   // Form State
   const [formData, setFormData] = useState({
+    classId: '', // Specific Class ID for Input
     code: '',
     phase: '',
     content: ''
@@ -50,25 +51,33 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
       setLoading(true);
       const cls = await getClasses(user.id);
       setClasses(cls);
+      
+      // Default Form Class to First Available
       if (cls.length > 0) {
-        setSelectedClassId(cls[0].id);
+        setFormData(prev => ({ ...prev, classId: cls[0].id }));
       }
+      
       setLoading(false);
     };
     init();
   }, [user]);
 
-  // Fetch Materials when Class or Semester changes
+  // Fetch Materials when Filter Class or Semester changes
   useEffect(() => {
-    if (selectedClassId) {
-      fetchMaterials();
-    }
-  }, [selectedClassId, selectedSemester]);
+    fetchMaterials();
+  }, [filterClassId, filterSemester]);
+
+  // Sync Form Class with Filter Class if user selects a specific class
+  useEffect(() => {
+      if (filterClassId) {
+          setFormData(prev => ({ ...prev, classId: filterClassId }));
+      }
+  }, [filterClassId]);
 
   const fetchMaterials = async () => {
     setLoading(true);
-    // PASS user.id to filter materials by owner
-    const data = await getScopeMaterials(selectedClassId, selectedSemester, user.id);
+    // Fetch materials (supports empty classId for ALL)
+    const data = await getScopeMaterials(filterClassId, filterSemester, user.id);
     setMaterials(data);
     setSelectedIds(new Set()); // Reset selection
     setCurrentPage(1); // Reset page
@@ -77,7 +86,7 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
 
   // --- HANDLERS ---
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
@@ -98,23 +107,27 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedClassId || !formData.code || !formData.content) return;
+    if (!formData.classId || !formData.code || !formData.content) return;
 
     // PASS userId and subject
     const newItem = await addScopeMaterial({
-      classId: selectedClassId,
+      classId: formData.classId,
       userId: user.id,
       subject: user.subject || 'Umum',
-      semester: selectedSemester,
+      semester: filterSemester, // Use currently viewed semester for simplicity, or add semester to form if needed
       code: formData.code,
       phase: formData.phase,
       content: formData.content,
-      subScopes: subScopes // NEW FIELD
+      subScopes: subScopes 
     });
 
     if (newItem) {
-      setMaterials([...materials, newItem]);
-      setFormData({ code: '', phase: '', content: '' }); // Reset form
+      // Optimistic Update: If current view includes this class, add to list
+      if (!filterClassId || filterClassId === formData.classId) {
+          setMaterials([...materials, newItem]);
+      }
+      
+      setFormData(prev => ({ ...prev, code: '', phase: '', content: '' })); // Reset form content
       setSubScopes([]); // Reset subscopes
     }
   };
@@ -153,13 +166,26 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
 
   // Copy Feature
   const handleCopy = async () => {
-    if (!copySourceClassId) return;
-    // Pass user ID and subject to copy logic so new items are owned by current user
+    // Determine Target Class
+    // If filter is specific, use it. If not, maybe use form data or require selection.
+    // For now, let's use formData.classId as target if filter is ALL.
+    const targetClassId = filterClassId || formData.classId;
+
+    if (!copySourceClassId || !targetClassId) {
+        alert("Pilih kelas tujuan terlebih dahulu.");
+        return;
+    }
+
+    if (copySourceClassId === targetClassId && copySourceSemester === filterSemester) {
+        alert("Sumber dan Tujuan tidak boleh sama.");
+        return;
+    }
+
     const success = await copyScopeMaterials(
         copySourceClassId, 
-        selectedClassId, 
+        targetClassId, 
         copySourceSemester, 
-        selectedSemester, 
+        filterSemester, 
         user.id, 
         user.subject || 'Umum'
     );
@@ -179,6 +205,11 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
   const currentItems = materials.slice(indexOfFirstItem, indexOfLastItem);
   const totalPages = Math.ceil(materials.length / itemsPerPage);
 
+  // Helper to get class name
+  const getClassName = (clsId: string) => {
+      return classes.find(c => c.id === clsId)?.name || 'Unknown';
+  };
+
   return (
     <div className="space-y-6 pb-20">
       
@@ -193,26 +224,26 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
         </div>
 
         <div className="flex flex-col sm:flex-row gap-3">
-          {/* Class Selector */}
+          {/* Class Filter */}
           <div className="relative">
              <select 
-               value={selectedClassId}
-               onChange={(e) => setSelectedClassId(e.target.value)}
+               value={filterClassId}
+               onChange={(e) => setFilterClassId(e.target.value)}
                className="w-full sm:w-64 pl-3 pr-10 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none appearance-none bg-white text-sm"
              >
+               <option value="">Semua Kelas</option>
                {classes.map(c => (
                  <option key={c.id} value={c.id}>{c.name}</option>
                ))}
-               {classes.length === 0 && <option value="" disabled>Belum ada kelas</option>}
              </select>
              <Filter size={16} className="absolute right-3 top-3 text-gray-400 pointer-events-none" />
           </div>
 
-          {/* Semester Selector */}
+          {/* Semester Filter */}
           <div className="relative">
             <select
-              value={selectedSemester}
-              onChange={(e) => setSelectedSemester(e.target.value)}
+              value={filterSemester}
+              onChange={(e) => setFilterSemester(e.target.value)}
               className="w-full sm:w-36 pl-3 pr-8 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none appearance-none bg-white text-sm"
             >
               {SEMESTERS.map(s => <option key={s} value={s}>{s}</option>)}
@@ -238,7 +269,7 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
               <Plus size={18} className="text-green-600" /> Input Materi Baru
             </h3>
             
-            {!selectedClassId || classes.length === 0 ? (
+            {classes.length === 0 ? (
                 <div className="bg-yellow-50 border border-yellow-100 rounded-lg p-4 text-center space-y-2">
                     <AlertCircle className="mx-auto text-yellow-600" size={24} />
                     <p className="text-sm text-yellow-800 font-medium">Data Kelas Tidak Ditemukan</p>
@@ -249,6 +280,24 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
                 </div>
             ) : (
                 <form onSubmit={handleSubmit} className="space-y-4">
+                
+                {/* Class Selector for Input */}
+                <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1 uppercase">Pilih Kelas Tujuan</label>
+                    <select
+                        name="classId"
+                        value={formData.classId}
+                        onChange={handleInputChange}
+                        className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                        required
+                    >
+                        <option value="" disabled>-- Pilih Kelas --</option>
+                        {classes.map(c => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                    </select>
+                </div>
+
                 <div>
                     <label className="block text-xs font-medium text-gray-500 mb-1 uppercase">Kode / BAB Materi</label>
                     <input
@@ -346,7 +395,7 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
               ) : materials.length === 0 ? (
                 <div className="flex flex-col items-center justify-center p-12 text-gray-400">
                   <FileText size={48} className="mb-3 opacity-20" />
-                  <p>Belum ada data materi untuk kelas & semester ini.</p>
+                  <p>Belum ada data materi untuk filter ini.</p>
                 </div>
               ) : (
                 <div className="divide-y divide-gray-100">
@@ -361,14 +410,22 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
                         />
                       </div>
                       <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
+                        <div className="flex flex-wrap items-center gap-2 mb-1">
                           <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-bold rounded">
                             {item.code}
                           </span>
+                          
+                          {/* Class Badge if Filtering All */}
+                          {!filterClassId && (
+                              <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs font-medium rounded border border-gray-200">
+                                  {getClassName(item.classId)}
+                              </span>
+                          )}
+
                           {item.subScopes && item.subScopes.length > 0 && (
-                              <div className="flex gap-1">
+                              <div className="flex gap-1 flex-wrap">
                                   {item.subScopes.map((ss, i) => (
-                                      <span key={i} className="px-1.5 py-0.5 bg-gray-100 text-gray-600 text-[10px] rounded border border-gray-200">
+                                      <span key={i} className="px-1.5 py-0.5 bg-purple-50 text-purple-700 text-[10px] rounded border border-purple-100">
                                           {ss}
                                       </span>
                                   ))}
@@ -453,7 +510,7 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
             
             <div className="space-y-4">
               <div className="bg-yellow-50 p-3 rounded-lg text-sm text-yellow-800 border border-yellow-200">
-                Data akan disalin ke kelas <strong>{classes.find(c => c.id === selectedClassId)?.name}</strong> (Semester {selectedSemester}).
+                Data akan disalin ke: <strong>{filterClassId ? getClassName(filterClassId) : 'Pilih Kelas Tujuan'}</strong> (Semester {filterSemester}).
               </div>
 
               <div>
@@ -464,7 +521,7 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
                   onChange={(e) => setCopySourceClassId(e.target.value)}
                 >
                   <option value="">-- Pilih Kelas Sumber --</option>
-                  {classes.filter(c => c.id !== selectedClassId).map(c => (
+                  {classes.filter(c => c.id !== filterClassId).map(c => (
                     <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
                 </select>
@@ -480,6 +537,22 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
                   {SEMESTERS.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
+
+              {!filterClassId && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Ke Kelas (Tujuan)</label>
+                    <select 
+                        className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
+                        value={formData.classId}
+                        onChange={(e) => setFormData(prev => ({...prev, classId: e.target.value}))}
+                    >
+                        <option value="">-- Pilih Kelas Tujuan --</option>
+                        {classes.filter(c => c.id !== copySourceClassId).map(c => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                    </select>
+                  </div>
+              )}
 
               <div className="pt-2 flex gap-3">
                 <button 
