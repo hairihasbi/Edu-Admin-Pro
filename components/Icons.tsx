@@ -87,7 +87,8 @@ import {
   Image,
   LayoutTemplate,
   ArrowLeftRight, // Added
-  Pencil // Added Pencil
+  Pencil, // Added Pencil
+  RotateCcw // Added RotateCcw
 } from 'lucide-react';
 
 export {
@@ -178,5 +179,6 @@ export {
   Image,
   LayoutTemplate,
   ArrowLeftRight,
-  Pencil
+  Pencil,
+  RotateCcw
 };

@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { User, ClassRoom, Student, AttendanceRecord } from '../types';
-import { getClasses, getStudents, saveAttendanceRecords, getAttendanceRecords } from '../services/database';
-import { CalendarCheck, FileSpreadsheet, Printer, Save, CheckCircle, Filter, ChevronLeft, ChevronRight, User as UserIcon, X, Check, Activity, AlertCircle } from './Icons';
+import { getClasses, getStudents, saveAttendanceRecords, getAttendanceRecords, deleteAttendanceRecords } from '../services/database';
+import { CalendarCheck, FileSpreadsheet, Printer, Save, CheckCircle, Filter, ChevronLeft, ChevronRight, User as UserIcon, X, Check, Activity, AlertCircle, RotateCcw, Trash2 } from './Icons';
 import * as XLSX from 'xlsx';
 
 interface TeacherAttendanceProps {
@@ -29,6 +29,11 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
   const [attendance, setAttendance] = useState<AttendanceState>({});
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+
+  // Reset Modal State
+  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  const [resetType, setResetType] = useState<'daily' | 'monthly'>('daily');
+  const [resetDay, setResetDay] = useState(new Date().getDate());
 
   // Mobile Swipe Mode State
   const [mobileView, setMobileView] = useState<'daily' | 'monthly'>('daily');
@@ -177,6 +182,59 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
         setSwipeDirection('right');
         handleMarkDaily('H');
     }
+  };
+
+  // --- RESET HANDLERS ---
+  const handleOpenReset = () => {
+      setResetType('daily');
+      setResetDay(dailyDay); // Default to current selected daily view
+      setIsResetModalOpen(true);
+  };
+
+  const performReset = async () => {
+      if (!selectedClassId) return;
+      
+      if (confirm(`Apakah Anda yakin ingin menghapus data absensi ${resetType === 'daily' ? `tanggal ${resetDay}` : 'satu bulan penuh'}? Tindakan ini tidak dapat dibatalkan.`)) {
+          setLoading(true);
+          
+          try {
+              // 1. Call DB Service
+              await deleteAttendanceRecords(
+                  selectedClassId, 
+                  selectedMonth, 
+                  selectedYear, 
+                  resetType === 'daily' ? resetDay : undefined
+              );
+
+              // 2. Update Local State (Clear it)
+              setAttendance(prev => {
+                  const newState = { ...prev };
+                  
+                  if (resetType === 'monthly') {
+                      // Clear ALL for this class (since state is specific to loaded view)
+                      Object.keys(newState).forEach(sid => {
+                          newState[sid] = {};
+                      });
+                  } else {
+                      // Clear specific day
+                      Object.keys(newState).forEach(sid => {
+                          if (newState[sid]) {
+                              delete newState[sid][resetDay];
+                          }
+                      });
+                  }
+                  return newState;
+              });
+
+              alert('Data absensi berhasil di-reset.');
+              setIsResetModalOpen(false);
+          } catch (e) {
+              console.error(e);
+              alert('Gagal melakukan reset.');
+          } finally {
+              setLoading(false);
+          }
+      }
   };
 
   // --- OPTIMISTIC SAVE ---
@@ -482,6 +540,15 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
 
            {/* Action Buttons */}
            <div className="flex items-center gap-2 w-full xl:w-auto justify-end">
+              <button 
+                onClick={handleOpenReset}
+                disabled={students.length === 0}
+                className="px-4 py-2 bg-red-50 text-red-600 rounded-lg text-sm font-medium hover:bg-red-100 transition flex items-center gap-2 shadow-sm disabled:opacity-50 border border-red-200"
+                title="Reset / Hapus Absensi"
+              >
+                <RotateCcw size={16} /> <span className="hidden md:inline">Reset</span>
+              </button>
+
               <button
                 onClick={exportToExcel}
                 disabled={students.length === 0}
@@ -512,6 +579,71 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
            </div>
         </div>
       </div>
+
+      {/* --- RESET MODAL --- */}
+      {isResetModalOpen && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 animate-in fade-in zoom-in duration-200">
+                  <div className="flex justify-between items-center mb-4">
+                      <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                          <RotateCcw size={18} className="text-red-600" /> Reset Absensi
+                      </h3>
+                      <button onClick={() => setIsResetModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+                          <X size={20} />
+                      </button>
+                  </div>
+                  
+                  <div className="space-y-4">
+                      <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Pilih Mode Reset:</label>
+                          <div className="grid grid-cols-2 gap-3">
+                              <button 
+                                  onClick={() => setResetType('daily')}
+                                  className={`p-3 rounded-lg border text-sm font-bold flex flex-col items-center gap-1 transition ${resetType === 'daily' ? 'border-red-500 bg-red-50 text-red-700' : 'border-gray-200 hover:bg-gray-50 text-gray-600'}`}
+                              >
+                                  <CalendarCheck size={20} />
+                                  Harian
+                              </button>
+                              <button 
+                                  onClick={() => setResetType('monthly')}
+                                  className={`p-3 rounded-lg border text-sm font-bold flex flex-col items-center gap-1 transition ${resetType === 'monthly' ? 'border-red-500 bg-red-50 text-red-700' : 'border-gray-200 hover:bg-gray-50 text-gray-600'}`}
+                              >
+                                  <Trash2 size={20} />
+                                  Bulanan
+                              </button>
+                          </div>
+                      </div>
+
+                      {resetType === 'daily' && (
+                          <div className="animate-in fade-in slide-in-from-top-2">
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Pilih Tanggal:</label>
+                              <select 
+                                  value={resetDay}
+                                  onChange={(e) => setResetDay(parseInt(e.target.value))}
+                                  className="w-full border border-gray-300 rounded-lg p-2.5 text-sm"
+                              >
+                                  {days.map(d => <option key={d} value={d}>{d} {monthNames[selectedMonth]}</option>)}
+                              </select>
+                          </div>
+                      )}
+
+                      {resetType === 'monthly' && (
+                          <div className="p-3 bg-red-50 border border-red-100 rounded-lg text-xs text-red-700">
+                              <AlertCircle size={14} className="inline mr-1 mb-0.5" />
+                              <strong>Peringatan:</strong> Semua data absensi pada bulan <strong>{monthNames[selectedMonth]} {selectedYear}</strong> akan dihapus permanen.
+                          </div>
+                      )}
+
+                      <div className="flex gap-2 pt-2">
+                          <button onClick={() => setIsResetModalOpen(false)} className="flex-1 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-bold">Batal</button>
+                          <button onClick={performReset} className="flex-1 py-2 bg-red-600 text-white rounded-lg text-sm font-bold hover:bg-red-700 shadow-sm">
+                              Hapus Data
+                          </button>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      )}
 
       {/* --- MOBILE DAILY SWIPE MODE --- */}
       <div className={`md:hidden ${mobileView === 'daily' ? 'block' : 'hidden'}`}>
