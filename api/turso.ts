@@ -644,10 +644,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             for (const item of items) {
                 const isDeleted = item.deleted === true || item.deleted === 1;
                 if (isDeleted) {
+                    // HARD DELETE FROM DB IS RISKY FOR SYNC. 
+                    // Better approach: Update 'deleted' column to 1.
+                    // This allows other clients (like Admin) to PULL this change and remove it locally.
                     if (tableConfig) {
-                        statements.push({ sql: `DELETE FROM ${tableName} WHERE id = ?`, args: [item.id] });
+                        statements.push({ sql: `UPDATE ${tableName} SET deleted = 1, last_modified = ?, version = version + 1 WHERE id = ?`, args: [Date.now(), item.id] });
                     } else {
-                        statements.push({ sql: `DELETE FROM ${GENERIC_TABLE} WHERE collection = ? AND id = ?`, args: [collection, item.id] });
+                        statements.push({ sql: `UPDATE ${GENERIC_TABLE} SET deleted = 1, updated_at = ?, version = version + 1 WHERE collection = ? AND id = ?`, args: [Date.now(), collection, item.id] });
                     }
                     continue; 
                 }
@@ -682,20 +685,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             let rows: any[] = [];
 
             if (tableConfig) {
-                let query = `SELECT * FROM ${tableConfig.table} WHERE (deleted = 0 OR deleted IS NULL)`;
+                // IMPORTANT FIX: Removed "WHERE (deleted = 0 OR deleted IS NULL)" 
+                // Admin needs to receive deleted rows (deleted=1) so the client knows to remove them locally.
+                let query = `SELECT * FROM ${tableConfig.table}`;
+                let whereClauses: string[] = [];
                 let args: any[] = [];
+
                 if (isGuru) {
+                    // GURU Specific Filtering
                     const userRes = await client.execute({ sql: "SELECT school_npsn FROM users WHERE id = ?", args: [userId] });
                     const userNpsn = userRes.rows[0]?.school_npsn || null; 
-                    if (tableConfig.table === 'users') { query += " AND id = ?"; args = [userId]; }
-                    else if (tableConfig.table === 'classes') { if (userNpsn) { query += " AND school_npsn = ?"; args = [userNpsn]; } else { query += " AND user_id = ?"; args = [userId]; } }
-                    else if (tableConfig.table === 'students') { if (userNpsn) { query += " AND school_npsn = ?"; args = [userNpsn]; } else { query += " AND class_id IN (SELECT id FROM classes WHERE user_id = ?)"; args = [userId]; } }
-                    else if (tableConfig.table === 'scores' || tableConfig.table === 'journals' || tableConfig.table === 'schedules' || tableConfig.table === 'materials') { query += " AND user_id = ?"; args = [userId]; }
-                    else if (['bk_violations', 'bk_reductions', 'bk_achievements', 'bk_counseling'].includes(tableConfig.table)) { if (userNpsn) { query += " AND student_id IN (SELECT id FROM students WHERE school_npsn = ?)"; args = [userNpsn]; } }
-                    else if (tableConfig.table === 'attendance') { if (userNpsn) { query += " AND class_id IN (SELECT id FROM classes WHERE school_npsn = ?)"; args = [userNpsn]; } else { query += " AND class_id IN (SELECT id FROM classes WHERE user_id = ?)"; args = [userId]; } }
-                    else if (tableConfig.table === 'wa_configs') { query += " AND user_id = ?"; args = [userId]; }
-                    else if (tableConfig.table === 'tickets') { query += " AND user_id = ?"; args = [userId]; } // Ensure Guru only pulls own tickets
+                    if (tableConfig.table === 'users') { whereClauses.push("id = ?"); args = [userId]; }
+                    else if (tableConfig.table === 'classes') { if (userNpsn) { whereClauses.push("school_npsn = ?"); args = [userNpsn]; } else { whereClauses.push("user_id = ?"); args = [userId]; } }
+                    else if (tableConfig.table === 'students') { if (userNpsn) { whereClauses.push("school_npsn = ?"); args = [userNpsn]; } else { whereClauses.push("class_id IN (SELECT id FROM classes WHERE user_id = ?)"); args = [userId]; } }
+                    else if (tableConfig.table === 'scores' || tableConfig.table === 'journals' || tableConfig.table === 'schedules' || tableConfig.table === 'materials') { whereClauses.push("user_id = ?"); args = [userId]; }
+                    else if (['bk_violations', 'bk_reductions', 'bk_achievements', 'bk_counseling'].includes(tableConfig.table)) { if (userNpsn) { whereClauses.push("student_id IN (SELECT id FROM students WHERE school_npsn = ?)"); args = [userNpsn]; } }
+                    else if (tableConfig.table === 'attendance') { if (userNpsn) { whereClauses.push("class_id IN (SELECT id FROM classes WHERE school_npsn = ?)"); args = [userNpsn]; } else { whereClauses.push("class_id IN (SELECT id FROM classes WHERE user_id = ?)"); args = [userId]; } }
+                    else if (tableConfig.table === 'wa_configs') { whereClauses.push("user_id = ?"); args = [userId]; }
+                    else if (tableConfig.table === 'tickets') { whereClauses.push("user_id = ?"); args = [userId]; }
+                } else {
+                    // ADMIN: No filtering by User ID. Fetch ALL data.
+                    // But if it's 'tickets', ensure sorting for better UX
+                    if (tableConfig.table === 'tickets') {
+                        // Ensure tickets query doesn't filter by user, getting all tickets
+                    }
                 }
+
+                if (whereClauses.length > 0) {
+                    query += ` WHERE ${whereClauses.join(" AND ")}`;
+                }
+                
+                // Add sorting for consistent sync
+                if (tableConfig.table === 'users' || tableConfig.table === 'tickets') {
+                    query += ` ORDER BY last_modified DESC`;
+                }
+
                 const result = await client.execute({ sql: query, args });
                 rows = result.rows.map(row => ({
                     id: tableConfig.table === 'wa_configs' ? row.user_id : row.id,
@@ -704,14 +728,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     version: row.version
                 }));
             } else {
-                let query = `SELECT id, data, updated_at, version, deleted FROM ${GENERIC_TABLE} WHERE collection = ? AND (deleted = 0 OR deleted IS NULL)`;
+                // GENERIC TABLE
+                let query = `SELECT id, data, updated_at, version, deleted FROM ${GENERIC_TABLE} WHERE collection = ?`;
                 let args: any[] = [collection];
+                
                 if (isGuru) {
                     const userRes = await client.execute({ sql: "SELECT school_npsn FROM users WHERE id = ?", args: [userId] });
                     const userNpsn = userRes.rows[0]?.school_npsn || null;
                     query += " AND (user_id = ? OR (user_id IS NULL AND (school_npsn = ? OR school_npsn IS NULL)))";
                     args.push(userId, userNpsn);
                 }
+                
                 const result = await client.execute({ sql: query, args: args });
                 rows = result.rows.map(r => ({
                     id: r.id,
