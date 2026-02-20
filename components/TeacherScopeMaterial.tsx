@@ -114,6 +114,7 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
           phase: item.phase,
           content: item.content
       });
+      // Ensure we load existing subscopes properly
       setSubScopes(item.subScopes || []);
       // Scroll to top
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -134,6 +135,9 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
     e.preventDefault();
     if (!formData.classId || !formData.code || !formData.content) return;
 
+    // SANITIZE SUB SCOPES: Remove empty strings to prevent UI bugs in Summative View
+    const cleanSubScopes = subScopes.filter(s => s.trim() !== '');
+
     if (editingId) {
         // UPDATE MODE
         const updatedItem = await updateScopeMaterial(editingId, {
@@ -141,7 +145,7 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
             code: formData.code,
             phase: formData.phase,
             content: formData.content,
-            subScopes: subScopes
+            subScopes: cleanSubScopes
         });
 
         if (updatedItem) {
@@ -159,7 +163,7 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
             code: formData.code,
             phase: formData.phase,
             content: formData.content,
-            subScopes: subScopes 
+            subScopes: cleanSubScopes 
         });
 
         if (newItem) {
