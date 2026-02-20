@@ -323,7 +323,11 @@ const DB_SCHEMAS = [
         last_modified INTEGER,
         version INTEGER DEFAULT 1,
         deleted INTEGER DEFAULT 0
-    )`
+    )`,
+
+    // --- MIGRATIONS (Ensure columns exist if table already created) ---
+    `ALTER TABLE materials ADD COLUMN sub_scopes TEXT`,
+    `ALTER TABLE scores ADD COLUMN score_details TEXT`
 ];
 
 // Helper to convert undefined to null for SQL
@@ -390,45 +394,234 @@ const getTableConfig = (collection: string) => {
 };
 
 const mapRowToJSON = (collection: string, row: any) => {
-    const base = { version: row.version || 1, deleted: row.deleted === 1 };
-    switch (collection) {
-        case 'eduadmin_scores': 
-            return { 
-                ...base, 
-                id: row.id, userId: row.user_id, studentId: row.student_id, 
-                classId: row.class_id, semester: row.semester, subject: row.subject, 
-                category: row.category, materialId: row.material_id, score: row.score, 
-                scoreDetails: JSON.parse(row.score_details || '{}'),
-                lastModified: row.last_modified 
-            };
-        case 'eduadmin_materials':
-            return {
-                ...base,
-                id: row.id, classId: row.class_id, userId: row.user_id, subject: row.subject,
-                semester: row.semester, code: row.code, phase: row.phase, content: row.content,
-                subScopes: JSON.parse(row.sub_scopes || '[]'),
-                lastModified: row.last_modified
-            };
-        case 'eduadmin_users': return { ...base, id: row.id, username: row.username, password: row.password, fullName: row.full_name, role: row.role, status: row.status, schoolName: row.school_name, schoolNpsn: row.school_npsn, nip: row.nip, email: row.email, phone: row.phone, subject: row.subject, avatar: row.avatar, additionalRole: row.additional_role, homeroomClassId: row.homeroom_class_id, lastModified: row.last_modified };
-        case 'eduadmin_classes': return { ...base, id: row.id, userId: row.user_id, schoolNpsn: row.school_npsn, name: row.name, description: row.description, studentCount: row.student_count, lastModified: row.last_modified };
-        case 'eduadmin_students': return { ...base, id: row.id, classId: row.class_id, schoolNpsn: row.school_npsn, name: row.name, nis: row.nis, gender: row.gender, phone: row.phone, lastModified: row.last_modified };
-        case 'eduadmin_attendance': return { ...base, id: row.id, studentId: row.student_id, classId: row.class_id, date: row.date, status: row.status, lastModified: row.last_modified };
-        case 'eduadmin_journals': return { ...base, id: row.id, userId: row.user_id, classId: row.class_id, date: row.date, materialId: row.material_id, learningObjective: row.learning_objective, meetingNo: row.meeting_no, activities: row.activities, reflection: row.reflection, followUp: row.follow_up, lastModified: row.last_modified };
-        case 'eduadmin_schedules': return { ...base, id: row.id, userId: row.user_id, day: row.day, timeStart: row.time_start, timeEnd: row.time_end, className: row.class_name, subject: row.subject, lastModified: row.last_modified };
-        case 'eduadmin_bk_violations': return { ...base, id: row.id, studentId: row.student_id, date: row.date, violationName: row.violation_name, points: row.points, description: row.description, reportedBy: row.reported_by, lastModified: row.last_modified };
-        case 'eduadmin_bk_reductions': return { ...base, id: row.id, studentId: row.student_id, date: row.date, activityName: row.activity_name, pointsRemoved: row.points_removed, description: row.description, lastModified: row.last_modified };
-        case 'eduadmin_bk_achievements': return { ...base, id: row.id, studentId: row.student_id, date: row.date, title: row.title, level: row.level, description: row.description, lastModified: row.last_modified };
-        case 'eduadmin_bk_counseling': return { ...base, id: row.id, studentId: row.student_id, date: row.date, issue: row.issue, notes: row.notes, follow_up: row.follow_up, status: row.status, lastModified: row.last_modified };
-        case 'eduadmin_tickets': return { ...base, id: row.id, userId: row.user_id, teacherName: row.teacher_name, subject: row.subject, status: row.status, lastUpdated: row.last_updated, messages: JSON.parse(row.messages || '[]'), lastModified: row.last_modified };
-        case 'eduadmin_api_keys': return { ...base, id: row.id, key: row.key_value, provider: row.provider, status: row.status, addedAt: row.added_at, lastModified: row.last_modified };
-        case 'eduadmin_system_settings': return { ...base, id: row.id, featureRppEnabled: row.feature_rpp_enabled === 1, maintenanceMessage: row.maintenance_message, appName: row.app_name, schoolName: row.school_name, appDescription: row.app_description, appKeywords: row.app_keywords, logoUrl: row.logo_url, faviconUrl: row.favicon_url, timezone: row.timezone, footerText: row.footer_text, lastModified: row.last_modified };
-        case 'eduadmin_wa_configs': return { ...base, userId: row.user_id, provider: row.provider, baseUrl: row.base_url, apiKey: row.api_key, deviceId: row.device_id, isActive: row.is_active === 1, lastModified: row.last_modified };
-        case 'eduadmin_notifications': return { ...base, id: row.id, title: row.title, message: row.message, type: row.type, targetRole: row.target_role, is_read: row.is_read === 1, is_popup: row.is_popup === 1, createdAt: row.created_at, lastModified: row.last_modified };
-        case 'eduadmin_logs': return { ...base, id: row.id, timestamp: row.timestamp, level: row.level, actor: row.actor, role: row.role, action: row.action, details: row.details, lastModified: row.last_modified };
-        case 'eduadmin_master_subjects': return { ...base, id: row.id, name: row.name, category: row.category, level: row.level, lastModified: row.last_modified };
-        case 'eduadmin_email_config': return { ...base, id: row.id, provider: row.provider, method: row.method, apiKey: row.api_key, smtpHost: row.smtp_host, smtpPort: row.smtp_port, smtpUser: row.smtp_user, smtpPass: row.smtp_pass, fromEmail: row.from_email, fromName: row.from_name, isActive: row.is_active === 1, lastModified: row.last_modified };
-        default: return null;
-    }
+  const base = {
+    id: row.id,
+    lastModified: row.last_modified,
+    version: row.version,
+    deleted: row.deleted === 1
+  };
+
+  switch (collection) {
+    case 'eduadmin_users':
+      return {
+        ...base,
+        username: row.username,
+        password: row.password,
+        fullName: row.full_name,
+        role: row.role,
+        status: row.status,
+        schoolName: row.school_name,
+        schoolNpsn: row.school_npsn,
+        nip: row.nip,
+        email: row.email,
+        phone: row.phone,
+        subject: row.subject,
+        avatar: row.avatar,
+        additionalRole: row.additional_role,
+        homeroomClassId: row.homeroom_class_id
+      };
+    case 'eduadmin_classes':
+      return {
+        ...base,
+        userId: row.user_id,
+        schoolNpsn: row.school_npsn,
+        name: row.name,
+        description: row.description,
+        studentCount: row.student_count
+      };
+    case 'eduadmin_students':
+      return {
+        ...base,
+        classId: row.class_id,
+        schoolNpsn: row.school_npsn,
+        name: row.name,
+        nis: row.nis,
+        gender: row.gender,
+        phone: row.phone
+      };
+    case 'eduadmin_scores':
+      return {
+        ...base,
+        userId: row.user_id,
+        studentId: row.student_id,
+        classId: row.class_id,
+        semester: row.semester,
+        subject: row.subject,
+        category: row.category,
+        materialId: row.material_id,
+        score: row.score,
+        scoreDetails: row.score_details ? JSON.parse(row.score_details) : undefined
+      };
+    case 'eduadmin_attendance':
+      return {
+        ...base,
+        studentId: row.student_id,
+        classId: row.class_id,
+        date: row.date,
+        status: row.status
+      };
+    case 'eduadmin_journals':
+      return {
+        ...base,
+        userId: row.user_id,
+        classId: row.class_id,
+        date: row.date,
+        materialId: row.material_id,
+        learningObjective: row.learning_objective,
+        meetingNo: row.meeting_no,
+        activities: row.activities,
+        reflection: row.reflection,
+        followUp: row.follow_up
+      };
+    case 'eduadmin_materials':
+      return {
+        ...base,
+        classId: row.class_id,
+        userId: row.user_id,
+        subject: row.subject,
+        semester: row.semester,
+        code: row.code,
+        phase: row.phase,
+        content: row.content,
+        subScopes: row.sub_scopes ? JSON.parse(row.sub_scopes) : undefined
+      };
+    case 'eduadmin_schedules':
+      return {
+        ...base,
+        userId: row.user_id,
+        day: row.day,
+        timeStart: row.time_start,
+        timeEnd: row.time_end,
+        className: row.class_name,
+        subject: row.subject
+      };
+    case 'eduadmin_bk_violations':
+      return {
+        ...base,
+        studentId: row.student_id,
+        date: row.date,
+        violationName: row.violation_name,
+        points: row.points,
+        description: row.description,
+        reportedBy: row.reported_by
+      };
+    case 'eduadmin_bk_reductions':
+      return {
+        ...base,
+        studentId: row.student_id,
+        date: row.date,
+        activityName: row.activity_name,
+        pointsRemoved: row.points_removed,
+        description: row.description
+      };
+    case 'eduadmin_bk_achievements':
+      return {
+        ...base,
+        studentId: row.student_id,
+        date: row.date,
+        title: row.title,
+        level: row.level,
+        description: row.description
+      };
+    case 'eduadmin_bk_counseling':
+      return {
+        ...base,
+        studentId: row.student_id,
+        date: row.date,
+        issue: row.issue,
+        notes: row.notes,
+        followUp: row.follow_up,
+        status: row.status
+      };
+    case 'eduadmin_tickets':
+      return {
+        ...base,
+        userId: row.user_id,
+        teacherName: row.teacher_name,
+        subject: row.subject,
+        status: row.status,
+        lastUpdated: row.last_updated,
+        messages: row.messages ? JSON.parse(row.messages) : []
+      };
+    case 'eduadmin_api_keys':
+      return {
+        ...base,
+        key: row.key_value,
+        provider: row.provider,
+        status: row.status,
+        addedAt: row.added_at
+      };
+    case 'eduadmin_system_settings':
+      return {
+        ...base,
+        featureRppEnabled: row.feature_rpp_enabled === 1,
+        maintenanceMessage: row.maintenance_message,
+        appName: row.app_name,
+        schoolName: row.school_name,
+        appDescription: row.app_description,
+        appKeywords: row.app_keywords,
+        logoUrl: row.logo_url,
+        faviconUrl: row.favicon_url,
+        timezone: row.timezone,
+        footerText: row.footer_text
+      };
+    case 'eduadmin_wa_configs':
+      return {
+        userId: row.user_id, 
+        lastModified: row.last_modified,
+        version: row.version,
+        deleted: row.deleted === 1,
+        provider: row.provider,
+        baseUrl: row.base_url,
+        apiKey: row.api_key,
+        deviceId: row.device_id,
+        isActive: row.is_active === 1
+      };
+    case 'eduadmin_notifications':
+      return {
+        ...base,
+        title: row.title,
+        message: row.message,
+        type: row.type,
+        targetRole: row.target_role,
+        isRead: row.is_read === 1,
+        isPopup: row.is_popup === 1,
+        createdAt: row.created_at
+      };
+    case 'eduadmin_logs':
+      return {
+        ...base,
+        timestamp: row.timestamp,
+        level: row.level,
+        actor: row.actor,
+        role: row.role,
+        action: row.action,
+        details: row.details
+      };
+    case 'eduadmin_master_subjects':
+      return {
+        ...base,
+        name: row.name,
+        category: row.category,
+        level: row.level
+      };
+    case 'eduadmin_email_config':
+      return {
+        ...base,
+        provider: row.provider,
+        method: row.method,
+        apiKey: row.api_key,
+        smtpHost: row.smtp_host,
+        smtpPort: row.smtp_port,
+        smtpUser: row.smtp_user,
+        smtpPass: row.smtp_pass,
+        fromEmail: row.from_email,
+        fromName: row.from_name,
+        isActive: row.is_active === 1
+      };
+    default:
+      return base;
+  }
 };
 
 const cleanEnv = (val: string | undefined) => {
