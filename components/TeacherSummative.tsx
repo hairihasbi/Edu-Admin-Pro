@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { User, ClassRoom, Student, ScopeMaterial, AssessmentScore } from '../types';
 import { getClasses, getStudents, getScopeMaterials, getAssessmentScores, saveBulkAssessmentScores } from '../services/database';
-import { Calculator, Save, Filter, FileSpreadsheet, AlertCircle, CheckCircle } from './Icons';
+import { Calculator, Save, Filter, FileSpreadsheet, AlertCircle, CheckCircle, ArrowRight } from './Icons';
 import * as XLSX from 'xlsx';
 
 interface TeacherSummativeProps {
@@ -14,8 +14,14 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
   const [classes, setClasses] = useState<ClassRoom[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [materials, setMaterials] = useState<ScopeMaterial[]>([]);
-  const [scores, setScores] = useState<{[key: string]: number}>({}); // key: studentId-category-materialId
   
+  // Scores State
+  // Main scores (Averages for LM, or Raw STS/SAS)
+  const [scores, setScores] = useState<{[key: string]: number}>({}); 
+  // Sub scores (Raw values for sub-columns)
+  // Key format: studentId-LM-materialId-subName
+  const [subScores, setSubScores] = useState<{[key: string]: number}>({});
+
   // UI State
   const [selectedClassId, setSelectedClassId] = useState('');
   const [selectedSemester, setSelectedSemester] = useState('Ganjil');
@@ -55,19 +61,28 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
 
     // Map Scores to State Dictionary
     const scoreDict: {[key: string]: number} = {};
+    const subScoreDict: {[key: string]: number} = {};
+
     scoreData.forEach(s => {
-      // Filter logic if needed, currently assumes data is correct for this class/semester
-      const key = s.category === 'LM' 
-        ? `${s.studentId}-LM-${s.materialId}`
-        : `${s.studentId}-${s.category}`;
-      
-      // Strict: Only show scores that belong to this subject or were created by generic (legacy)
-      // With new userId logic, we might filter further, but for now subject match is good UI filter
       if (!s.subject || s.subject === user.subject) {
-         scoreDict[key] = s.score;
+          // 1. Main Score
+          const key = s.category === 'LM' 
+            ? `${s.studentId}-LM-${s.materialId}`
+            : `${s.studentId}-${s.category}`;
+          scoreDict[key] = s.score;
+
+          // 2. Sub Scores (if any)
+          if (s.scoreDetails) {
+              Object.entries(s.scoreDetails).forEach(([subName, val]) => {
+                  const subKey = `${s.studentId}-LM-${s.materialId}-${subName}`;
+                  subScoreDict[subKey] = val;
+              });
+          }
       }
     });
+
     setScores(scoreDict);
+    setSubScores(subScoreDict);
     setLoading(false);
     setHasChanges(false);
     setSaveStatus('idle');
@@ -76,14 +91,47 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
     inputRefs.current = {};
   };
 
-  const handleScoreChange = (studentId: string, category: 'LM' | 'STS' | 'SAS', val: string, materialId?: string) => {
+  const handleScoreChange = (studentId: string, category: 'LM' | 'STS' | 'SAS', val: string, materialId?: string, subName?: string) => {
     const numVal = Math.min(100, Math.max(0, parseInt(val) || 0));
-    const key = category === 'LM' ? `${studentId}-LM-${materialId}` : `${studentId}-${category}`;
     
-    setScores(prev => ({
-      ...prev,
-      [key]: numVal
-    }));
+    // CASE 1: Sub-Scope Input
+    if (category === 'LM' && materialId && subName) {
+        const subKey = `${studentId}-LM-${materialId}-${subName}`;
+        const newSubScores = { ...subScores, [subKey]: numVal };
+        setSubScores(newSubScores);
+
+        // Auto Calculate Average for Main LM Score
+        const material = materials.find(m => m.id === materialId);
+        if (material && material.subScopes) {
+            let total = 0;
+            let count = 0;
+            material.subScopes.forEach(sName => {
+                const sKey = `${studentId}-LM-${materialId}-${sName}`;
+                // Use new value if it's the one currently being edited
+                const val = (sName === subName) ? numVal : (newSubScores[sKey] || 0);
+                if (val > 0 || (sName === subName)) { // Simple logic: if entered, count it
+                    total += val;
+                    count++;
+                }
+            });
+            // If count is 0, we avoid division by zero, but realistically user entered something
+            const avg = count > 0 ? Math.round(total / count) : numVal;
+            
+            setScores(prev => ({
+                ...prev,
+                [`${studentId}-LM-${materialId}`]: avg
+            }));
+        }
+    } 
+    // CASE 2: Regular LM Input (No Sub-scopes) OR STS/SAS
+    else {
+        const key = category === 'LM' ? `${studentId}-LM-${materialId}` : `${studentId}-${category}`;
+        setScores(prev => ({
+          ...prev,
+          [key]: numVal
+        }));
+    }
+
     setHasChanges(true);
     setSaveStatus('idle'); 
   };
@@ -91,7 +139,6 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
   // --- EXCEL-LIKE NAVIGATION LOGIC ---
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, rowIndex: number, colIndex: number) => {
     if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'Enter' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-      // Prevent default behavior for arrow keys (especially Up/Down which change number values)
       e.preventDefault();
 
       let nextRow = rowIndex;
@@ -105,7 +152,6 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
       const nextInput = inputRefs.current[`cell-${nextRow}-${nextCol}`];
       if (nextInput) {
         nextInput.focus();
-        // setTimeout(() => nextInput.select(), 0); // Optional: Ensure selection persists
       }
     }
   };
@@ -133,24 +179,36 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
 
   // --- OPTIMISTIC SAVE ---
   const handleSave = () => {
-    // 1. Instant UI Feedback (Zero Latency)
     setHasChanges(false);
     setSaveStatus('saved');
     
-    // 2. Prepare Data
     const scoresToSave: Omit<AssessmentScore, 'id'>[] = [];
     students.forEach(s => {
       // LM
       materials.forEach(m => {
         const key = `${s.id}-LM-${m.id}`;
-        if (scores[key] !== undefined) {
+        
+        // Prepare scoreDetails if subscopes exist
+        let details: Record<string, number> | undefined = undefined;
+        if (m.subScopes && m.subScopes.length > 0) {
+            details = {};
+            m.subScopes.forEach(sub => {
+                const subKey = `${s.id}-LM-${m.id}-${sub}`;
+                if (subScores[subKey] !== undefined) {
+                    details![sub] = subScores[subKey];
+                }
+            });
+        }
+
+        if (scores[key] !== undefined || details) {
           scoresToSave.push({
             studentId: s.id,
             classId: selectedClassId,
             semester: selectedSemester,
             category: 'LM',
             materialId: m.id,
-            score: scores[key],
+            score: scores[key] || 0,
+            scoreDetails: details,
             subject: user.subject 
           });
         }
@@ -179,36 +237,53 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
       }
     });
 
-    // 3. Fire and Forget to Database (Background)
-    // Pass user.id explicitly as the owner of these scores
     saveBulkAssessmentScores(scoresToSave, user.id, user.fullName).catch(err => {
         console.error("Save failed in background", err);
         setSaveStatus('error');
-        setHasChanges(true); // Re-enable save button
+        setHasChanges(true); 
         alert("Gagal menyimpan ke database lokal. Data mungkin belum aman.");
     });
     
-    // Auto-hide success status after 3s
     setTimeout(() => {
         setSaveStatus(prev => prev === 'saved' ? 'idle' : prev);
     }, 3000);
   };
 
   const exportToExcel = () => {
-    const headers = ['No', 'Nama Siswa', 'NIS', ...materials.map(m => `LM: ${m.code}`), 'Rata LM', 'STS', 'SAS', 'Nilai Akhir'];
+    // Generate Headers
+    const headers = ['No', 'Nama Siswa', 'NIS'];
+    materials.forEach(m => {
+        if (m.subScopes && m.subScopes.length > 0) {
+            m.subScopes.forEach(sub => headers.push(`${m.code} - ${sub}`));
+            headers.push(`${m.code} - Rata2`);
+        } else {
+            headers.push(m.code);
+        }
+    });
+    headers.push('Rata LM', 'STS', 'SAS', 'Nilai Akhir');
+
     const rows = students.map((s, i) => {
+       const rowData = [i+1, s.name, s.nis];
+       
        let totalLM = 0;
-       const lmScores = materials.map(m => {
+       
+       materials.forEach(m => {
+          if (m.subScopes && m.subScopes.length > 0) {
+              m.subScopes.forEach(sub => {
+                  rowData.push(subScores[`${s.id}-LM-${m.id}-${sub}`] || '');
+              });
+          }
           const val = scores[`${s.id}-LM-${m.id}`] || 0;
           totalLM += val;
-          return val;
+          rowData.push(val);
        });
+
        const avgLM = materials.length > 0 ? (totalLM / materials.length).toFixed(1) : '0';
        const sts = scores[`${s.id}-STS`] || 0;
        const sas = scores[`${s.id}-SAS`] || 0;
        const final = calculateFinalScore(s.id);
 
-       return [i+1, s.name, s.nis, ...lmScores, avgLM, sts, sas, final];
+       return [...rowData, avgLM, sts, sas, final];
     });
 
     const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
@@ -216,6 +291,27 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
     XLSX.utils.book_append_sheet(wb, ws, "Nilai Sumatif");
     XLSX.writeFile(wb, `Nilai_${selectedSemester}_${classes.find(c=>c.id===selectedClassId)?.name}.xlsx`);
   };
+
+  // Helper to calculate colIndex for refs
+  // We need a stable index for keyboard navigation
+  const getColIndexMap = () => {
+      let idx = 0;
+      const map: { [key: string]: number } = {}; // materialId -> startColIndex
+      materials.forEach(m => {
+          map[m.id] = idx;
+          if (m.subScopes && m.subScopes.length > 0) {
+              idx += m.subScopes.length + 1; // Sub inputs + Avg
+          } else {
+              idx += 1;
+          }
+      });
+      // STS and SAS indices
+      map['STS'] = idx;
+      map['SAS'] = idx + 1;
+      return map;
+  };
+  
+  const colMap = getColIndexMap();
 
   return (
     <div className="space-y-6 pb-20">
@@ -228,7 +324,7 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
                  <Calculator className="text-blue-600" />
                  Asesmen Sumatif
               </h2>
-              <p className="text-sm text-gray-500">Input nilai Lingkup Materi, STS, dan SAS untuk rapor.</p>
+              <p className="text-sm text-gray-500">Input nilai Lingkup Materi, STS, dan SAS.</p>
            </div>
            
            <div className="flex flex-col sm:flex-row gap-3">
@@ -258,7 +354,7 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
               </div>
            ) : (
               <div className="text-sm text-gray-500">
-                 Mapel: <strong>{user.subject || 'Umum'}</strong> • {materials.length} Kolom Nilai • Gunakan <kbd className="bg-gray-100 border border-gray-300 rounded px-1 text-xs">Panah</kbd> & <kbd className="bg-gray-100 border border-gray-300 rounded px-1 text-xs">Enter</kbd> untuk navigasi
+                 Mapel: <strong>{user.subject || 'Umum'}</strong> • Gunakan <kbd className="bg-gray-100 border border-gray-300 rounded px-1 text-xs">Panah</kbd> navigasi
               </div>
            )}
 
@@ -299,22 +395,53 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
            <div className="overflow-x-auto">
              <table className="w-full text-sm text-left border-collapse">
                <thead>
+                 {/* HEADER ROW 1: MATERI NAMES */}
                  <tr className="bg-gray-50 text-gray-700 border-b border-gray-200">
-                   <th className="p-3 border-r border-gray-200 sticky left-0 bg-gray-50 z-10 w-10">No</th>
-                   <th className="p-3 border-r border-gray-200 sticky left-10 bg-gray-50 z-10 min-w-[200px]">Nama Siswa</th>
+                   <th className="p-3 border-r border-gray-200 sticky left-0 bg-gray-50 z-20 w-10" rowSpan={2}>No</th>
+                   <th className="p-3 border-r border-gray-200 sticky left-10 bg-gray-50 z-20 min-w-[200px]" rowSpan={2}>Nama Siswa</th>
                    
-                   {/* LM Columns */}
-                   {materials.map((m, i) => (
-                      <th key={m.id} className="p-2 border-r border-gray-200 text-center min-w-[80px]">
-                         <div className="text-[10px] text-gray-500 font-normal">LM {i+1}</div>
-                         <div className="font-bold text-blue-700" title={m.content}>{m.code}</div>
+                   {materials.map((m) => (
+                      <th 
+                        key={m.id} 
+                        className="p-2 border-r border-gray-200 text-center font-bold bg-blue-50/30 text-blue-900 border-b border-blue-100"
+                        colSpan={m.subScopes && m.subScopes.length > 0 ? m.subScopes.length + 1 : 1}
+                        title={m.content}
+                      >
+                         {m.code}
+                         <div className="text-[9px] font-normal text-gray-500 truncate max-w-[150px] mx-auto">{m.content}</div>
                       </th>
                    ))}
                    
-                   <th className="p-2 border-r border-gray-200 text-center bg-blue-50 w-20">Rata LM</th>
-                   <th className="p-2 border-r border-gray-200 text-center min-w-[80px] font-bold">STS</th>
-                   <th className="p-2 border-r border-gray-200 text-center min-w-[80px] font-bold">SAS</th>
-                   <th className="p-2 text-center bg-gray-100 font-bold w-20">Akhir</th>
+                   <th className="p-2 border-r border-gray-200 text-center bg-gray-100 w-20" rowSpan={2}>Rata LM</th>
+                   <th className="p-2 border-r border-gray-200 text-center min-w-[70px] font-bold" rowSpan={2}>STS</th>
+                   <th className="p-2 border-r border-gray-200 text-center min-w-[70px] font-bold" rowSpan={2}>SAS</th>
+                   <th className="p-2 text-center bg-gray-100 font-bold w-20" rowSpan={2}>Akhir</th>
+                 </tr>
+
+                 {/* HEADER ROW 2: SUB COLUMNS */}
+                 <tr className="bg-gray-50 text-gray-600 border-b border-gray-200 text-xs">
+                    {materials.map(m => {
+                        if (m.subScopes && m.subScopes.length > 0) {
+                            return (
+                                <React.Fragment key={m.id}>
+                                    {m.subScopes.map(sub => (
+                                        <th key={`${m.id}-${sub}`} className="p-1 border-r border-gray-200 text-center min-w-[60px] font-medium bg-white">
+                                            {sub}
+                                        </th>
+                                    ))}
+                                    <th className="p-1 border-r border-gray-200 text-center min-w-[60px] font-bold bg-blue-50 text-blue-800">
+                                        Rata
+                                    </th>
+                                </React.Fragment>
+                            );
+                        } else {
+                            return (
+                                <th key={m.id} className="p-1 border-r border-gray-200 text-center min-w-[80px] bg-white text-[10px] italic text-gray-400">
+                                    (Nilai Utuh)
+                                </th>
+                            );
+                        }
+                    })}
                  </tr>
                </thead>
                <tbody>
@@ -329,36 +456,67 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
 
                     return (
                        <tr key={student.id} className="hover:bg-gray-50 border-b border-gray-100">
-                          <td className="p-3 text-center border-r border-gray-100 sticky left-0 bg-white">{rowIdx+1}</td>
-                          <td className="p-3 border-r border-gray-100 sticky left-10 bg-white font-medium text-gray-800">{student.name}</td>
+                          <td className="p-3 text-center border-r border-gray-100 sticky left-0 bg-white z-10">{rowIdx+1}</td>
+                          <td className="p-3 border-r border-gray-100 sticky left-10 bg-white z-10 font-medium text-gray-800">{student.name}</td>
                           
-                          {/* LM Inputs */}
-                          {materials.map((m, colIdx) => (
-                             <td key={m.id} className="p-1 border-r border-gray-100 text-center">
-                                <input 
-                                  ref={(el) => { inputRefs.current[`cell-${rowIdx}-${colIdx}`] = el; }}
-                                  type="number" 
-                                  min="0" max="100"
-                                  className="w-full text-center p-1 rounded hover:bg-gray-100 focus:bg-blue-50 focus:outline-none focus:ring-1 focus:ring-blue-300 transition"
-                                  value={scores[`${student.id}-LM-${m.id}`] ?? ''}
-                                  onChange={(e) => handleScoreChange(student.id, 'LM', e.target.value, m.id)}
-                                  onKeyDown={(e) => handleKeyDown(e, rowIdx, colIdx)}
-                                  onFocus={(e) => e.target.select()}
-                                />
-                             </td>
-                          ))}
+                          {/* DYNAMIC COLUMNS */}
+                          {materials.map((m) => {
+                             const startIdx = colMap[m.id];
+                             
+                             // 1. COMPLEX MODE: Sub Scopes
+                             if (m.subScopes && m.subScopes.length > 0) {
+                                 return (
+                                     <React.Fragment key={m.id}>
+                                         {m.subScopes.map((sub, i) => (
+                                             <td key={`${m.id}-${sub}`} className="p-1 border-r border-gray-100 text-center">
+                                                 <input 
+                                                    ref={(el) => { inputRefs.current[`cell-${rowIdx}-${startIdx + i}`] = el; }}
+                                                    type="number" min="0" max="100"
+                                                    className="w-full text-center p-1 rounded hover:bg-gray-100 focus:bg-blue-50 focus:outline-none focus:ring-1 focus:ring-blue-300 transition text-xs"
+                                                    value={subScores[`${student.id}-LM-${m.id}-${sub}`] ?? ''}
+                                                    onChange={(e) => handleScoreChange(student.id, 'LM', e.target.value, m.id, sub)}
+                                                    onKeyDown={(e) => handleKeyDown(e, rowIdx, startIdx + i)}
+                                                    onFocus={(e) => e.target.select()}
+                                                 />
+                                             </td>
+                                         ))}
+                                         {/* Read Only Average for Sub Scope */}
+                                         <td className="p-1 border-r border-gray-100 text-center bg-blue-50/50 font-bold text-blue-700 text-xs">
+                                             {scores[`${student.id}-LM-${m.id}`] ?? '-'}
+                                         </td>
+                                     </React.Fragment>
+                                 );
+                             } 
+                             // 2. SIMPLE MODE: Single Input
+                             else {
+                                 return (
+                                     <td key={m.id} className="p-1 border-r border-gray-100 text-center">
+                                        <input 
+                                          ref={(el) => { inputRefs.current[`cell-${rowIdx}-${startIdx}`] = el; }}
+                                          type="number" 
+                                          min="0" max="100"
+                                          className="w-full text-center p-1 rounded hover:bg-gray-100 focus:bg-blue-50 focus:outline-none focus:ring-1 focus:ring-blue-300 transition"
+                                          value={scores[`${student.id}-LM-${m.id}`] ?? ''}
+                                          onChange={(e) => handleScoreChange(student.id, 'LM', e.target.value, m.id)}
+                                          onKeyDown={(e) => handleKeyDown(e, rowIdx, startIdx)}
+                                          onFocus={(e) => e.target.select()}
+                                        />
+                                     </td>
+                                 );
+                             }
+                          })}
 
-                          <td className="p-2 text-center border-r border-gray-100 bg-blue-50 font-bold text-blue-800">{avgLM}</td>
+                          <td className="p-2 text-center border-r border-gray-100 bg-gray-100 font-bold text-gray-700">{avgLM}</td>
                           
                           {/* STS Input */}
                           <td className="p-1 border-r border-gray-100 text-center">
                              <input 
-                                ref={(el) => { inputRefs.current[`cell-${rowIdx}-${materials.length}`] = el; }}
+                                ref={(el) => { inputRefs.current[`cell-${rowIdx}-${colMap['STS']}`] = el; }}
                                 type="number" min="0" max="100" 
                                 className="w-full text-center p-1 rounded font-medium hover:bg-gray-100 focus:bg-purple-50 focus:outline-none focus:ring-1 focus:ring-purple-300" 
                                 value={scores[`${student.id}-STS`] ?? ''} 
                                 onChange={(e) => handleScoreChange(student.id, 'STS', e.target.value)}
-                                onKeyDown={(e) => handleKeyDown(e, rowIdx, materials.length)}
+                                onKeyDown={(e) => handleKeyDown(e, rowIdx, colMap['STS'])}
                                 onFocus={(e) => e.target.select()}
                              />
                           </td>
@@ -366,12 +524,12 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
                           {/* SAS Input */}
                           <td className="p-1 border-r border-gray-100 text-center">
                              <input 
-                                ref={(el) => { inputRefs.current[`cell-${rowIdx}-${materials.length + 1}`] = el; }}
+                                ref={(el) => { inputRefs.current[`cell-${rowIdx}-${colMap['SAS']}`] = el; }}
                                 type="number" min="0" max="100" 
                                 className="w-full text-center p-1 rounded font-medium hover:bg-gray-100 focus:bg-orange-50 focus:outline-none focus:ring-1 focus:ring-orange-300" 
                                 value={scores[`${student.id}-SAS`] ?? ''} 
                                 onChange={(e) => handleScoreChange(student.id, 'SAS', e.target.value)}
-                                onKeyDown={(e) => handleKeyDown(e, rowIdx, materials.length + 1)}
+                                onKeyDown={(e) => handleKeyDown(e, rowIdx, colMap['SAS'])}
                                 onFocus={(e) => e.target.select()}
                              />
                           </td>

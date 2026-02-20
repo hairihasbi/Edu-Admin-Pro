@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, ClassRoom, ScopeMaterial } from '../types';
 import { getClasses, addScopeMaterial, getScopeMaterials, deleteScopeMaterial, bulkDeleteScopeMaterials, copyScopeMaterials } from '../services/database';
-import { Plus, Trash2, List, Copy, Save, Filter, X, Check, FileText, ChevronLeft, ChevronRight, AlertCircle, ArrowRight } from './Icons';
+import { Plus, Trash2, List, Copy, Save, Filter, X, FileText, ChevronLeft, ChevronRight, AlertCircle, ArrowRight } from './Icons';
 import { Link } from 'react-router-dom';
 
 interface TeacherScopeMaterialProps {
@@ -27,6 +27,10 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
     content: ''
   });
   
+  // Sub-Scopes Input State
+  const [subScopeInput, setSubScopeInput] = useState('');
+  const [subScopes, setSubScopes] = useState<string[]>([]);
+
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
@@ -77,6 +81,21 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  const handleSubScopeKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        const val = subScopeInput.trim();
+        if (val && !subScopes.includes(val)) {
+            setSubScopes([...subScopes, val]);
+            setSubScopeInput('');
+        }
+    }
+  };
+
+  const removeSubScope = (index: number) => {
+      setSubScopes(subScopes.filter((_, i) => i !== index));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedClassId || !formData.code || !formData.content) return;
@@ -89,12 +108,14 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
       semester: selectedSemester,
       code: formData.code,
       phase: formData.phase,
-      content: formData.content
+      content: formData.content,
+      subScopes: subScopes // NEW FIELD
     });
 
     if (newItem) {
       setMaterials([...materials, newItem]);
-      setFormData({ code: '', phase: '', content: '' }); // Reset form but keep Semester/Class
+      setFormData({ code: '', phase: '', content: '' }); // Reset form
+      setSubScopes([]); // Reset subscopes
     }
   };
 
@@ -168,7 +189,7 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
             <List className="text-blue-600" />
             Lingkup Materi
           </h2>
-          <p className="text-sm text-gray-500 mt-1">Kelola capaian pembelajaran dan lingkup materi per kelas.</p>
+          <p className="text-sm text-gray-500 mt-1">Kelola capaian pembelajaran dan sub-kolom penilaian.</p>
         </div>
 
         <div className="flex flex-col sm:flex-row gap-3">
@@ -229,7 +250,7 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
             ) : (
                 <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1 uppercase">Lingkup Materi / BAB Materi</label>
+                    <label className="block text-xs font-medium text-gray-500 mb-1 uppercase">Kode / BAB Materi</label>
                     <input
                     type="text"
                     name="code"
@@ -241,21 +262,10 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
                     />
                 </div>
                 <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1 uppercase">Kelas / Fase</label>
-                    <input
-                    type="text"
-                    name="phase"
-                    placeholder="Contoh: X / Fase E"
-                    className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                    value={formData.phase}
-                    onChange={handleInputChange}
-                    />
-                </div>
-                <div>
                     <label className="block text-xs font-medium text-gray-500 mb-1 uppercase">Isian Lingkup Materi</label>
                     <textarea
                     name="content"
-                    rows={4}
+                    rows={3}
                     placeholder="Deskripsi materi..."
                     required
                     className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
@@ -263,6 +273,36 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
                     onChange={handleInputChange}
                     />
                 </div>
+                
+                {/* SUB SCOPES INPUT (NEW) */}
+                <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                    <label className="block text-xs font-bold text-gray-600 mb-2 uppercase flex justify-between">
+                        Sub-Elemen Penilaian
+                        <span className="text-[10px] text-gray-400 font-normal">Opsional</span>
+                    </label>
+                    
+                    <div className="flex flex-wrap gap-2 mb-2">
+                        {subScopes.map((scope, idx) => (
+                            <span key={idx} className="bg-white border border-blue-200 text-blue-700 text-xs px-2 py-1 rounded flex items-center gap-1">
+                                {scope}
+                                <button type="button" onClick={() => removeSubScope(idx)} className="text-red-400 hover:text-red-600"><X size={12}/></button>
+                            </span>
+                        ))}
+                    </div>
+
+                    <input 
+                        type="text"
+                        placeholder="Ketik & Enter (Misal: Tugas 1, Praktik)"
+                        className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                        value={subScopeInput}
+                        onChange={e => setSubScopeInput(e.target.value)}
+                        onKeyDown={handleSubScopeKeyDown}
+                    />
+                    <p className="text-[10px] text-gray-500 mt-1">
+                        *Jika diisi, input nilai akan menjadi bertingkat (Nilai LM = Rata-rata Sub).
+                    </p>
+                </div>
+
                 <button
                     type="submit"
                     className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg font-medium text-sm transition flex items-center justify-center gap-2"
@@ -325,10 +365,14 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
                           <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-bold rounded">
                             {item.code}
                           </span>
-                          {item.phase && (
-                            <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded">
-                              {item.phase}
-                            </span>
+                          {item.subScopes && item.subScopes.length > 0 && (
+                              <div className="flex gap-1">
+                                  {item.subScopes.map((ss, i) => (
+                                      <span key={i} className="px-1.5 py-0.5 bg-gray-100 text-gray-600 text-[10px] rounded border border-gray-200">
+                                          {ss}
+                                      </span>
+                                  ))}
+                              </div>
                           )}
                         </div>
                         <p className="text-sm text-gray-800 leading-relaxed">{item.content}</p>
