@@ -126,42 +126,56 @@ export const testConnectionConfig = async (dbUrl: string, dbToken: string): Prom
     }
 };
 
-// Push Local Data to Turso via API
+// Push Local Data to Turso via API with Batching (Fix 504 Timeout)
 export const pushToTurso = async (collection: string, items: any[], force: boolean = false) => {
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
       throw new Error("OFFLINE: Cannot push to Turso");
   }
 
+  // 1. Filter items needing sync
   const itemsToPush = force ? items : items.filter(item => !item.isSynced || !item.lastModified);
   
   if (itemsToPush.length === 0) return;
 
-  const response = await fetch('/api/turso', {
-    method: 'POST',
-    headers: { 
-        'Content-Type': 'application/json',
-        ...getAuthHeader() // Add Auth
-    } as HeadersInit,
-    body: JSON.stringify({ 
-      action: 'push', 
-      collection, 
-      items: itemsToPush,
-      force, 
-      userId: getCurrentUserId()
-    })
-  });
+  // 2. Batching Logic (Chunk size 50 to prevent Vercel Timeout)
+  const BATCH_SIZE = 50;
+  
+  for (let i = 0; i < itemsToPush.length; i += BATCH_SIZE) {
+      const batch = itemsToPush.slice(i, i + BATCH_SIZE);
+      
+      try {
+          const response = await fetch('/api/turso', {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                ...getAuthHeader() // Add Auth
+            } as HeadersInit,
+            body: JSON.stringify({ 
+              action: 'push', 
+              collection, 
+              items: batch,
+              force, 
+              userId: getCurrentUserId()
+            })
+          });
 
-  // Special Handling for Auth/Conflict before generic JSON parse
-  if (response.status === 401 || response.status === 403) {
-      throw new Error(`Unauthorized: ${response.statusText}`);
+          // Special Handling for Auth/Conflict before generic JSON parse
+          if (response.status === 401 || response.status === 403) {
+              throw new Error(`Unauthorized: ${response.statusText}`);
+          }
+
+          if (response.status === 409) {
+              const data = await response.json();
+              throw new Error(`CONFLICT:${data.itemId}`);
+          }
+
+          await handleApiResponse(response);
+          
+      } catch (error: any) {
+          console.error(`Batch push failed for ${collection} (items ${i} to ${i + BATCH_SIZE}):`, error);
+          throw error; // Re-throw to stop sync process and alert user
+      }
   }
-
-  if (response.status === 409) {
-      const data = await response.json();
-      throw new Error(`CONFLICT:${data.itemId}`);
-  }
-
-  await handleApiResponse(response);
 };
 
 // Pull Remote Data from Turso via API
