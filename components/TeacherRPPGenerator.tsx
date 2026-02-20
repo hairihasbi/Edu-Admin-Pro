@@ -132,11 +132,15 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
   }, [rppResult, isGenerating]);
 
   const handleGenerateRPP = async () => {
-    setIsGenerating(true);
+    // FIX CAUSE 4: Ensure UI state is clean before starting
     setRppResult(''); 
     setGenProgress(0);
     setGenStatus(rppData.useSearch ? 'Menghubungkan ke Google Search...' : 'Menghubungkan ke Gemini AI...');
+    setIsGenerating(true);
     
+    // Add small delay to ensure React state flushes completely
+    await new Promise(r => setTimeout(r, 100));
+
     await generateLessonPlan(
         rppData, 
         user.id, 
