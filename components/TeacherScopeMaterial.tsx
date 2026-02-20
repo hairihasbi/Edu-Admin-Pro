@@ -29,10 +29,6 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
   });
   const [editingId, setEditingId] = useState<string | null>(null);
   
-  // Sub-Scopes Input State
-  const [subScopeInput, setSubScopeInput] = useState('');
-  const [subScopes, setSubScopes] = useState<string[]>([]);
-
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
@@ -91,21 +87,6 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSubScopeKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-        e.preventDefault();
-        const val = subScopeInput.trim();
-        if (val && !subScopes.includes(val)) {
-            setSubScopes([...subScopes, val]);
-            setSubScopeInput('');
-        }
-    }
-  };
-
-  const removeSubScope = (index: number) => {
-      setSubScopes(subScopes.filter((_, i) => i !== index));
-  };
-
   const handleEdit = (item: ScopeMaterial) => {
       setEditingId(item.id);
       setFormData({
@@ -114,8 +95,6 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
           phase: item.phase,
           content: item.content
       });
-      // Ensure we load existing subscopes properly
-      setSubScopes(item.subScopes || []);
       // Scroll to top
       window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -128,15 +107,11 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
           phase: '',
           content: ''
       }));
-      setSubScopes([]);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.classId || !formData.code || !formData.content) return;
-
-    // SANITIZE SUB SCOPES: Remove empty strings to prevent UI bugs in Summative View
-    const cleanSubScopes = subScopes.filter(s => s.trim() !== '');
 
     if (editingId) {
         // UPDATE MODE
@@ -144,8 +119,7 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
             classId: formData.classId,
             code: formData.code,
             phase: formData.phase,
-            content: formData.content,
-            subScopes: cleanSubScopes
+            content: formData.content
         });
 
         if (updatedItem) {
@@ -162,8 +136,7 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
             semester: filterSemester, // Use currently viewed semester for simplicity
             code: formData.code,
             phase: formData.phase,
-            content: formData.content,
-            subScopes: cleanSubScopes 
+            content: formData.content
         });
 
         if (newItem) {
@@ -173,7 +146,6 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
             }
             
             setFormData(prev => ({ ...prev, code: '', phase: '', content: '' })); // Reset form content
-            setSubScopes([]); // Reset subscopes
         }
     }
   };
@@ -265,7 +237,7 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
             <List className="text-blue-600" />
             Lingkup Materi
           </h2>
-          <p className="text-sm text-gray-500 mt-1">Kelola capaian pembelajaran dan sub-kolom penilaian.</p>
+          <p className="text-sm text-gray-500 mt-1">Kelola data materi pembelajaran.</p>
         </div>
 
         <div className="flex flex-col sm:flex-row gap-3">
@@ -369,35 +341,6 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
                     />
                 </div>
                 
-                {/* SUB SCOPES INPUT (NEW) */}
-                <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                    <label className="block text-xs font-bold text-gray-600 mb-2 uppercase flex justify-between">
-                        Sub-Elemen Penilaian
-                        <span className="text-[10px] text-gray-400 font-normal">Opsional</span>
-                    </label>
-                    
-                    <div className="flex flex-wrap gap-2 mb-2">
-                        {subScopes.map((scope, idx) => (
-                            <span key={idx} className="bg-white border border-blue-200 text-blue-700 text-xs px-2 py-1 rounded flex items-center gap-1">
-                                {scope}
-                                <button type="button" onClick={() => removeSubScope(idx)} className="text-red-400 hover:text-red-600"><X size={12}/></button>
-                            </span>
-                        ))}
-                    </div>
-
-                    <input 
-                        type="text"
-                        placeholder="Ketik & Enter (Misal: Tugas 1, Praktik)"
-                        className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
-                        value={subScopeInput}
-                        onChange={e => setSubScopeInput(e.target.value)}
-                        onKeyDown={handleSubScopeKeyDown}
-                    />
-                    <p className="text-[10px] text-gray-500 mt-1">
-                        *Jika diisi, input nilai akan menjadi bertingkat (Nilai LM = Rata-rata Sub).
-                    </p>
-                </div>
-
                 <div className="flex gap-2">
                     {editingId && (
                         <button
