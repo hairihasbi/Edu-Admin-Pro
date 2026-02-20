@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { User, UserStatus } from '../types';
-import { getTeachers, getPendingTeachers, approveTeacher, rejectTeacher, sendApprovalEmail, deleteTeacher } from '../services/database';
-import { User as UserIcon, CheckCircle, X, Shield, Search, School, Mail, ChevronLeft, ChevronRight, FileSpreadsheet, Smartphone, Trash2, MoreVertical, BookOpen } from './Icons';
+import { getTeachers, getPendingTeachers, approveTeacher, rejectTeacher, sendApprovalEmail, deleteTeacher, runManualSync } from '../services/database';
+import { User as UserIcon, CheckCircle, X, Shield, Search, School, Mail, ChevronLeft, ChevronRight, FileSpreadsheet, Smartphone, Trash2, MoreVertical, BookOpen, RefreshCcw } from './Icons';
 import * as XLSX from 'xlsx';
 
 const AdminTeachers: React.FC = () => {
@@ -10,6 +10,7 @@ const AdminTeachers: React.FC = () => {
   const [activeTeachers, setActiveTeachers] = useState<User[]>([]);
   const [pendingTeachers, setPendingTeachers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   
   // Search & Pagination State
   const [searchTerm, setSearchTerm] = useState('');
@@ -36,6 +37,14 @@ const AdminTeachers: React.FC = () => {
       setPendingTeachers(data);
     }
     setIsLoading(false);
+  };
+
+  const handleSyncData = async () => {
+      setIsSyncing(true);
+      // PULL only to get latest registrations from server
+      await runManualSync('PULL', (msg) => console.log(msg));
+      await fetchData(); // Refresh list after pull
+      setIsSyncing(false);
   };
 
   const handleApprove = async (teacher: User) => {
@@ -139,26 +148,38 @@ const AdminTeachers: React.FC = () => {
           <p className="text-sm text-gray-500">Kelola daftar guru dan persetujuan akun baru.</p>
         </div>
         
-        <div className="flex bg-gray-100 p-1 rounded-lg">
+        <div className="flex flex-col sm:flex-row gap-2">
+           {/* SYNC BUTTON */}
            <button 
-             onClick={() => setActiveTab('active')}
-             className={`px-4 py-2 rounded-md text-sm font-medium transition ${
-                activeTab === 'active' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-             }`}
+             onClick={handleSyncData}
+             disabled={isSyncing}
+             className="px-4 py-2 bg-blue-50 text-blue-700 rounded-md text-sm font-bold hover:bg-blue-100 transition flex items-center justify-center gap-2"
            >
-             Guru Aktif
+             <RefreshCcw size={16} className={isSyncing ? "animate-spin" : ""} />
+             {isSyncing ? 'Sinkronisasi...' : 'Tarik Data Baru'}
            </button>
-           <button 
-             onClick={() => setActiveTab('pending')}
-             className={`px-4 py-2 rounded-md text-sm font-medium transition flex items-center gap-2 ${
-                activeTab === 'pending' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-             }`}
-           >
-             Menunggu
-             {pendingTeachers.length > 0 && (
-                <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full animate-pulse">{pendingTeachers.length}</span>
-             )}
-           </button>
+
+           <div className="flex bg-gray-100 p-1 rounded-lg">
+                <button 
+                    onClick={() => setActiveTab('active')}
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition ${
+                        activeTab === 'active' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                >
+                    Guru Aktif
+                </button>
+                <button 
+                    onClick={() => setActiveTab('pending')}
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition flex items-center gap-2 ${
+                        activeTab === 'pending' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                >
+                    Menunggu
+                    {pendingTeachers.length > 0 && (
+                        <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full animate-pulse">{pendingTeachers.length}</span>
+                    )}
+                </button>
+           </div>
         </div>
       </div>
 
@@ -210,7 +231,9 @@ const AdminTeachers: React.FC = () => {
               <div className="text-center py-20">
                   <UserIcon size={48} className="mx-auto text-gray-300 mb-3" />
                   <p className="text-gray-500 font-medium">Tidak ada data guru ditemukan.</p>
-                  <p className="text-sm text-gray-400">Coba ubah kata kunci pencarian atau tab status.</p>
+                  <p className="text-sm text-gray-400">
+                      {activeTab === 'pending' ? 'Belum ada pendaftaran baru. Coba klik "Tarik Data Baru".' : 'Coba ubah kata kunci pencarian.'}
+                  </p>
               </div>
           ) : (
               <div className="divide-y divide-gray-100">
