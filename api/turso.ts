@@ -141,7 +141,6 @@ const DB_SCHEMAS = [
         deleted INTEGER DEFAULT 0
     )`,
 
-    // ... (Other tables remain unchanged) ...
     // 9. ACADEMIC: SCHEDULES
     `CREATE TABLE IF NOT EXISTS schedules (
         id TEXT PRIMARY KEY,
@@ -325,9 +324,10 @@ const DB_SCHEMAS = [
         deleted INTEGER DEFAULT 0
     )`,
 
-    // --- MIGRATIONS (Ensure columns exist if table already created) ---
-    `ALTER TABLE materials ADD COLUMN sub_scopes TEXT`,
-    `ALTER TABLE scores ADD COLUMN score_details TEXT`
+    // --- MIGRATIONS ---
+    // Note: Older migrations removed if they cause 'duplicate column' errors 
+    // because the CREATE TABLE definitions above are up to date.
+    // Only keep new ALTERs here if you add columns in future versions.
 ];
 
 // Helper to convert undefined to null for SQL
@@ -630,8 +630,6 @@ const cleanEnv = (val: string | undefined) => {
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // ... (Existing handler implementation with no changes logic, just ensuring table configs are used)
-  // Re-using the same handler logic as provided in previous file content
   
   let client;
   try {
@@ -662,7 +660,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         try {
             currentUser = await authorize(req, ['ADMIN', 'GURU']);
         } catch (err: any) {
-            // ... (Auth error handling logic) ...
              const isUserPush = action === 'push' && collection === 'eduadmin_users';
              const isAuthError = err.status === 401 || (err.message && err.message.includes('User not found'));
              if (isUserPush && isAuthError) {
@@ -702,12 +699,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         if (action === 'init') {
             const results = [];
+            // Batch execution handles creating tables
             const statements = DB_SCHEMAS.map(sql => ({ sql, args: [] }));
             try {
                 await client.batch(statements);
                 results.push({ success: true, message: "Schemas created via batch." });
             } catch (e: any) {
                 console.error("Batch init failed, retrying sequentially:", e);
+                // Retry sequentially if batch fails (e.g. some tables exist)
                 for (const schema of DB_SCHEMAS) {
                     try {
                         await client.execute(schema);
@@ -717,6 +716,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     }
                 }
             }
+            // Create default admin if not exists
             try {
                 const checkAdmin = await client.execute("SELECT id FROM users WHERE role='ADMIN' LIMIT 1");
                 if (checkAdmin.rows.length === 0) {
@@ -730,7 +730,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
 
         if (action === 'reset') {
-             // ... existing reset logic ...
              return res.status(200).json({ success: true, message: "Reset logic placeholder (not changed)" });
         }
 
