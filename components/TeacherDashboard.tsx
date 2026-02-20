@@ -78,19 +78,29 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
 
     setAcademicPeriod({ year: acadYear, semester: sem });
     
-    // 2. Fetch Stats & Schedules
+    // 2. Fetch Stats & Schedules (Safe Mode)
     const fetchData = async () => {
       setIsLoading(true);
-      const statsData = await getDashboardStats(user);
-      setStats(statsData);
-      const scheduleData = await getTeachingSchedules(user.id);
-      setSchedules(scheduleData);
-      
-      // Initial Sync Check - PASS USER HERE
-      const syncData = await getSyncStats(user);
-      setPendingCount(syncData.totalUnsynced);
-      
-      setIsLoading(false);
+      try {
+          const statsData = await getDashboardStats(user);
+          setStats(statsData);
+          
+          const scheduleData = await getTeachingSchedules(user.id);
+          setSchedules(scheduleData);
+          
+          // Initial Sync Check
+          const syncData = await getSyncStats(user);
+          setPendingCount(syncData.totalUnsynced);
+      } catch (error) {
+          console.error("Dashboard Fetch Error:", error);
+          // Fallback empty stats to prevent crash
+          setStats({
+            totalClasses: 0, totalStudents: 0, filledJournals: 0, 
+            attendanceRate: 0, genderDistribution: [], weeklyAttendance: []
+          });
+      } finally {
+          setIsLoading(false);
+      }
     };
     fetchData();
 
@@ -135,7 +145,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
             setDbStatus('Mode Lokal');
         }
         // Always check pending stats - PASS USER
-        getSyncStats(user).then(d => setPendingCount(d.totalUnsynced));
+        getSyncStats(user).then(d => setPendingCount(d.totalUnsynced)).catch(() => {});
     };
 
     checkDb();
