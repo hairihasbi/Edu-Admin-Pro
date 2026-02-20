@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { User, ClassRoom, Student, ScopeMaterial, AssessmentScore } from '../types';
-import { getClasses, getStudents, getScopeMaterials, getAssessmentScores, saveBulkAssessmentScores } from '../services/database';
-import { Calculator, Save, Filter, FileSpreadsheet, AlertCircle, CheckCircle, ArrowRight, RefreshCcw } from './Icons';
+import { getClasses, getStudents, getScopeMaterials, getAssessmentScores, saveBulkAssessmentScores, updateScopeMaterial } from '../services/database';
+import { Calculator, Save, Filter, FileSpreadsheet, AlertCircle, CheckCircle, ArrowRight, RefreshCcw, Settings, Plus, Trash2, X } from './Icons';
 import * as XLSX from 'xlsx';
 
 interface TeacherSummativeProps {
@@ -26,6 +26,12 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [hasChanges, setHasChanges] = useState(false);
 
+  // Manage Column Modal State
+  const [isManageModalOpen, setIsManageModalOpen] = useState(false);
+  const [manageMaterial, setManageMaterial] = useState<ScopeMaterial | null>(null);
+  const [tempSubScopes, setTempSubScopes] = useState<string[]>([]);
+  const [newSubInput, setNewSubInput] = useState('');
+
   // Refs for Excel-like navigation
   const inputRefs = useRef<{[key: string]: HTMLInputElement | null}>({});
 
@@ -44,30 +50,16 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
     if (selectedClassId) fetchData();
   }, [selectedClassId, selectedSemester]);
 
-  // ROBUST PARSER: Handles Array, JSON String, and Double-Encoded JSON String
+  // ROBUST PARSER
   const parseSubScopes = (val: any): string[] => {
       if (!val) return [];
-      
-      // Case 1: Already an Array (Normal Dexie behavior)
-      if (Array.isArray(val)) {
-          // Map to string to be safe against non-string items
-          return val.map(String).filter(s => s.trim() !== '');
-      }
-      
-      // Case 2: JSON String (From Turso Raw)
+      if (Array.isArray(val)) return val.map(String).filter(s => s.trim() !== '');
       if (typeof val === 'string') {
           try {
               let parsed = JSON.parse(val);
-              
-              // Case 3: Double Encoded JSON String (e.g. "[\"Tugas 1\"]")
-              if (typeof parsed === 'string') {
-                  try { parsed = JSON.parse(parsed); } catch { return []; }
-              }
-              
+              if (typeof parsed === 'string') { try { parsed = JSON.parse(parsed); } catch { return []; } }
               return Array.isArray(parsed) ? parsed.map(String).filter((s: string) => s.trim() !== '') : [];
-          } catch {
-              return [];
-          }
+          } catch { return []; }
       }
       return [];
   };
@@ -82,37 +74,26 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
 
     setStudents(stData);
     
-    // Normalize materials data immediately with Robust Parser
-    // We create a new array to force React to re-render
     const cleanMaterials = matData.map(m => ({
         ...m,
         subScopes: parseSubScopes(m.subScopes)
     }));
     setMaterials(cleanMaterials);
 
-    // Map Scores
     const scoreDict: {[key: string]: number} = {};
     const subScoreDict: {[key: string]: number} = {};
 
     scoreData.forEach(s => {
       if (!s.subject || s.subject === user.subject) {
-          // Main Score
           const key = s.category === 'LM' 
             ? `${s.studentId}-LM-${s.materialId}`
             : `${s.studentId}-${s.category}`;
           scoreDict[key] = s.score;
 
-          // Sub Scores
           if (s.scoreDetails) {
               let details = s.scoreDetails;
-              // Handle potential stringified scoreDetails
-              if (typeof details === 'string') {
-                  try { details = JSON.parse(details); } catch { details = {}; }
-              }
-              // Handle double encoded
-              if (typeof details === 'string') {
-                   try { details = JSON.parse(details); } catch { details = {}; }
-              }
+              if (typeof details === 'string') { try { details = JSON.parse(details); } catch { details = {}; } }
+              if (typeof details === 'string') { try { details = JSON.parse(details); } catch { details = {}; } }
 
               if (details && typeof details === 'object') {
                   Object.entries(details).forEach(([subName, val]) => {
@@ -130,6 +111,36 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
     setHasChanges(false);
     setSaveStatus('idle');
     inputRefs.current = {};
+  };
+
+  // --- COLUMN MANAGEMENT LOGIC ---
+  const handleOpenManage = (m: ScopeMaterial) => {
+      setManageMaterial(m);
+      setTempSubScopes(m.subScopes || []);
+      setNewSubInput('');
+      setIsManageModalOpen(true);
+  };
+
+  const handleAddSubScope = () => {
+      if(newSubInput.trim() && !tempSubScopes.includes(newSubInput.trim())) {
+          setTempSubScopes([...tempSubScopes, newSubInput.trim()]);
+          setNewSubInput('');
+      }
+  };
+
+  const handleRemoveSubScope = (index: number) => {
+      setTempSubScopes(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSaveStructure = async () => {
+      if (!manageMaterial) return;
+      
+      // Update Database
+      await updateScopeMaterial(manageMaterial.id, { subScopes: tempSubScopes });
+      
+      // Close and Refresh
+      setIsManageModalOpen(false);
+      fetchData(); // This will redraw table with new columns
   };
 
   const handleScoreChange = (studentId: string, category: 'LM' | 'STS' | 'SAS', val: string, materialId?: string, subName?: string) => {
@@ -157,7 +168,6 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
                 }
             });
             
-            // Calculate Average based on filled columns count (or total columns? usually total filled for ease)
             const avg = count > 0 ? Math.round(total / count) : 0;
             
             setScores(prev => ({
@@ -315,7 +325,6 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
     XLSX.writeFile(wb, `Nilai_${selectedSemester}_${classes.find(c=>c.id===selectedClassId)?.name}.xlsx`);
   };
 
-  // Helper for keyboard navigation indexing
   const getColIndexMap = () => {
       let idx = 0;
       const map: { [key: string]: number } = {}; 
@@ -335,7 +344,7 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
   const colMap = getColIndexMap();
 
   return (
-    <div className="space-y-6 pb-20">
+    <div className="space-y-6 pb-20 relative">
       
       {/* Header & Controls */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col gap-6">
@@ -376,7 +385,7 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
                   </div>
                ) : (
                   <div className="text-sm text-gray-500">
-                     Mapel: <strong>{user.subject || 'Umum'}</strong> • Gunakan <kbd className="bg-gray-100 border border-gray-300 rounded px-1 text-xs">Panah</kbd> navigasi
+                     Mapel: <strong>{user.subject || 'Umum'}</strong> • Klik <Settings size={12} className="inline"/> untuk atur sub-kolom
                   </div>
                )}
                <button onClick={fetchData} className="text-gray-400 hover:text-blue-600 p-1.5 rounded-full hover:bg-blue-50 transition" title="Refresh Data">
@@ -431,15 +440,23 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
                    
                    {materials.map((m) => {
                       const subCols = m.subScopes || [];
-                      // Ensure unique key for re-render if subScopes changed
                       return (
                         <th 
                             key={`${m.id}-head-${subCols.length}`}
-                            className="p-2 border-r border-gray-200 text-center font-bold bg-blue-50/30 text-blue-900 border-b border-blue-100"
+                            className="p-2 border-r border-gray-200 text-center font-bold bg-blue-50/30 text-blue-900 border-b border-blue-100 group relative"
                             colSpan={subCols.length > 0 ? subCols.length + 1 : 1}
                             title={m.content}
                         >
-                            {m.code}
+                            <div className="flex items-center justify-center gap-1">
+                                {m.code}
+                                <button 
+                                    onClick={() => handleOpenManage(m)}
+                                    className="p-1 hover:bg-blue-100 rounded text-blue-400 hover:text-blue-700 transition"
+                                    title="Edit Sub Elemen"
+                                >
+                                    <Settings size={12} />
+                                </button>
+                            </div>
                             <div className="text-[9px] font-normal text-gray-500 truncate max-w-[150px] mx-auto">{m.content}</div>
                         </th>
                       );
@@ -573,6 +590,81 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
            </div>
         )}
       </div>
+
+      {/* MANAGE STRUCTURE MODAL */}
+      {isManageModalOpen && manageMaterial && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+              <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+                  <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                      <div>
+                          <h3 className="font-bold text-gray-800">Edit Struktur Penilaian</h3>
+                          <p className="text-xs text-gray-500">{manageMaterial.code} - {manageMaterial.content.substring(0, 30)}...</p>
+                      </div>
+                      <button onClick={() => setIsManageModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+                          <X size={20} />
+                      </button>
+                  </div>
+                  
+                  <div className="p-6">
+                      <div className="mb-4">
+                          <label className="block text-xs font-bold text-gray-600 mb-2 uppercase">Daftar Sub-Elemen</label>
+                          <div className="flex flex-wrap gap-2 mb-3">
+                              {tempSubScopes.length === 0 && <span className="text-sm text-gray-400 italic">Belum ada sub-elemen (Nilai Tunggal)</span>}
+                              {tempSubScopes.map((scope, idx) => (
+                                  <span key={idx} className="bg-blue-50 border border-blue-200 text-blue-700 text-sm px-3 py-1 rounded-full flex items-center gap-2">
+                                      {scope}
+                                      <button onClick={() => handleRemoveSubScope(idx)} className="text-red-400 hover:text-red-600 rounded-full hover:bg-red-50 p-0.5">
+                                          <X size={14} />
+                                      </button>
+                                  </span>
+                              ))}
+                          </div>
+                      </div>
+
+                      <div className="flex gap-2">
+                          <input 
+                              type="text" 
+                              className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                              placeholder="Tambah Sub (Misal: Tugas 1)"
+                              value={newSubInput}
+                              onChange={(e) => setNewSubInput(e.target.value)}
+                              onKeyDown={(e) => e.key === 'Enter' && handleAddSubScope()}
+                          />
+                          <button 
+                              onClick={handleAddSubScope}
+                              className="bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 transition"
+                          >
+                              <Plus size={18} />
+                          </button>
+                      </div>
+                      
+                      <div className="mt-4 p-3 bg-yellow-50 border border-yellow-100 rounded-lg text-xs text-yellow-800">
+                          <p><strong>Catatan:</strong></p>
+                          <ul className="list-disc pl-4 mt-1 space-y-1">
+                              <li>Jika sub-elemen kosong, input nilai hanya satu kolom (Nilai Utuh).</li>
+                              <li>Jika ada sub-elemen, nilai Lingkup Materi akan dihitung dari <strong>Rata-rata Sub-elemen</strong>.</li>
+                          </ul>
+                      </div>
+                  </div>
+
+                  <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end gap-3">
+                      <button 
+                          onClick={() => setIsManageModalOpen(false)}
+                          className="px-4 py-2 text-gray-600 hover:bg-gray-200 rounded-lg text-sm font-medium transition"
+                      >
+                          Batal
+                      </button>
+                      <button 
+                          onClick={handleSaveStructure}
+                          className="px-6 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg text-sm font-bold transition shadow-sm"
+                      >
+                          Simpan Perubahan
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
+
     </div>
   );
 };
