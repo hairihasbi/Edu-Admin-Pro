@@ -873,27 +873,40 @@ export const syncAllData = async (force = false) => {
         { table: db.emailConfig, name: 'eduadmin_email_config' } 
     ];
 
-    for (const col of collections) {
-        // PUSH
-        const unsynced = await col.table.filter(i => !i.isSynced).toArray();
-        if (unsynced.length > 0 || force) {
-            await pushToTurso(col.name, unsynced, force);
-            
-            // Fix: Use bulkPut instead of bulkUpdate
-            const updatedItems = unsynced.map(item => ({ ...item, isSynced: true }));
-            await (col.table as any).bulkPut(updatedItems);
-        }
+    let hasErrors = false;
 
-        // PULL
-        const localItems = await col.table.toArray();
-        const { items, hasChanges } = await pullFromTurso(col.name, localItems);
-        if (hasChanges) {
-            await (col.table as any).bulkPut(items);
+    for (const col of collections) {
+        try {
+            // PUSH
+            const unsynced = await col.table.filter(i => !i.isSynced).toArray();
+            if (unsynced.length > 0 || force) {
+                await pushToTurso(col.name, unsynced, force);
+                
+                // IMPORTANT: Update local items as synced only after successful push
+                // Use bulkPut to ensure UI updates are triggered
+                const updatedItems = unsynced.map(item => ({ ...item, isSynced: true }));
+                await (col.table as any).bulkPut(updatedItems);
+            }
+
+            // PULL
+            const localItems = await col.table.toArray();
+            const { items, hasChanges } = await pullFromTurso(col.name, localItems);
+            if (hasChanges) {
+                await (col.table as any).bulkPut(items);
+            }
+        } catch (e: any) {
+            console.error(`Sync failed for ${col.name}:`, e);
+            hasErrors = true;
+            // Continue to next collection instead of stopping everything
         }
     }
     
-    // Dispatch event
-    window.dispatchEvent(new CustomEvent('sync-status', { detail: 'success' }));
+    // Dispatch event to update UI
+    window.dispatchEvent(new CustomEvent('sync-status', { detail: hasErrors ? 'error' : 'success' }));
+    
+    if (hasErrors) {
+        throw new Error("Sinkronisasi selesai dengan beberapa peringatan. Cek koneksi Anda.");
+    }
 };
 
 export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', logFn: (msg: string) => void) => {
