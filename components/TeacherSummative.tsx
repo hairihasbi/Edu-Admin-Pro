@@ -48,12 +48,13 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
   const parseSubScopes = (val: any): string[] => {
       if (!val) return [];
       
-      // Case 1: Already an Array
+      // Case 1: Already an Array (Normal Dexie behavior)
       if (Array.isArray(val)) {
-          return val.filter(s => typeof s === 'string' && s.trim() !== '');
+          // Map to string to be safe against non-string items
+          return val.map(String).filter(s => s.trim() !== '');
       }
       
-      // Case 2: JSON String
+      // Case 2: JSON String (From Turso Raw)
       if (typeof val === 'string') {
           try {
               let parsed = JSON.parse(val);
@@ -63,7 +64,7 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
                   try { parsed = JSON.parse(parsed); } catch { return []; }
               }
               
-              return Array.isArray(parsed) ? parsed.filter((s: any) => typeof s === 'string' && s.trim() !== '') : [];
+              return Array.isArray(parsed) ? parsed.map(String).filter((s: string) => s.trim() !== '') : [];
           } catch {
               return [];
           }
@@ -82,6 +83,7 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
     setStudents(stData);
     
     // Normalize materials data immediately with Robust Parser
+    // We create a new array to force React to re-render
     const cleanMaterials = matData.map(m => ({
         ...m,
         subScopes: parseSubScopes(m.subScopes)
