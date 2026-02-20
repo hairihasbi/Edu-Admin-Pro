@@ -334,6 +334,17 @@ const DB_SCHEMAS = [
 // Helper to convert undefined to null for SQL
 const s = (val: any) => (val === undefined ? null : val);
 
+// Helper for Safe JSON Parsing
+const parseJSONSafe = (val: any) => {
+    if (!val) return [];
+    try {
+        if (typeof val === 'string') return JSON.parse(val);
+        return val;
+    } catch {
+        return [];
+    }
+};
+
 // --- MAPPING CONFIGURATION ---
 const getTableConfig = (collection: string) => {
   switch (collection) {
@@ -426,13 +437,13 @@ const mapRowToJSON = (collection: string, row: any) => {
     case 'eduadmin_students':
       return { ...base, classId: row.class_id, schoolNpsn: row.school_npsn, name: row.name, nis: row.nis, gender: row.gender, phone: row.phone };
     case 'eduadmin_scores':
-      return { ...base, userId: row.user_id, studentId: row.student_id, classId: row.class_id, semester: row.semester, subject: row.subject, category: row.category, materialId: row.material_id, score: row.score, scoreDetails: typeof row.score_details === 'string' ? JSON.parse(row.score_details) : row.score_details };
+      return { ...base, userId: row.user_id, studentId: row.student_id, classId: row.class_id, semester: row.semester, subject: row.subject, category: row.category, materialId: row.material_id, score: row.score, scoreDetails: parseJSONSafe(row.score_details) };
     case 'eduadmin_attendance':
       return { ...base, studentId: row.student_id, classId: row.class_id, date: row.date, status: row.status };
     case 'eduadmin_journals':
       return { ...base, userId: row.user_id, classId: row.class_id, date: row.date, materialId: row.material_id, learningObjective: row.learning_objective, meetingNo: row.meeting_no, activities: row.activities, reflection: row.reflection, followUp: row.follow_up };
     case 'eduadmin_materials':
-      return { ...base, classId: row.class_id, userId: row.user_id, subject: row.subject, semester: row.semester, code: row.code, phase: row.phase, content: row.content, subScopes: typeof row.sub_scopes === 'string' ? JSON.parse(row.sub_scopes) : row.sub_scopes };
+      return { ...base, classId: row.class_id, userId: row.user_id, subject: row.subject, semester: row.semester, code: row.code, phase: row.phase, content: row.content, subScopes: parseJSONSafe(row.sub_scopes) };
     case 'eduadmin_schedules':
       return { ...base, userId: row.user_id, day: row.day, timeStart: row.time_start, timeEnd: row.time_end, className: row.class_name, subject: row.subject };
     case 'eduadmin_bk_violations':
@@ -444,7 +455,7 @@ const mapRowToJSON = (collection: string, row: any) => {
     case 'eduadmin_bk_counseling':
       return { ...base, studentId: row.student_id, date: row.date, issue: row.issue, notes: row.notes, followUp: row.follow_up, status: row.status };
     case 'eduadmin_tickets':
-      return { ...base, userId: row.user_id, teacherName: row.teacher_name, subject: row.subject, status: row.status, lastUpdated: row.last_updated, messages: typeof row.messages === 'string' ? JSON.parse(row.messages) : row.messages };
+      return { ...base, userId: row.user_id, teacherName: row.teacher_name, subject: row.subject, status: row.status, lastUpdated: row.last_updated, messages: parseJSONSafe(row.messages) };
     case 'eduadmin_api_keys':
       return { ...base, key: row.key_value, provider: row.provider, status: row.status, addedAt: row.added_at };
     case 'eduadmin_system_settings':
@@ -683,6 +694,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     else if (['bk_violations', 'bk_reductions', 'bk_achievements', 'bk_counseling'].includes(tableConfig.table)) { if (userNpsn) { query += " AND student_id IN (SELECT id FROM students WHERE school_npsn = ?)"; args = [userNpsn]; } }
                     else if (tableConfig.table === 'attendance') { if (userNpsn) { query += " AND class_id IN (SELECT id FROM classes WHERE school_npsn = ?)"; args = [userNpsn]; } else { query += " AND class_id IN (SELECT id FROM classes WHERE user_id = ?)"; args = [userId]; } }
                     else if (tableConfig.table === 'wa_configs') { query += " AND user_id = ?"; args = [userId]; }
+                    else if (tableConfig.table === 'tickets') { query += " AND user_id = ?"; args = [userId]; } // Ensure Guru only pulls own tickets
                 }
                 const result = await client.execute({ sql: query, args });
                 rows = result.rows.map(row => ({
