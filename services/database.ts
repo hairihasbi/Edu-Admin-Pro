@@ -487,35 +487,48 @@ export const clearSystemLogs = async () => {
 };
 
 export const getDashboardStats = async (user: User) => {
-    // Local calculation for immediate display
-    const classes = user.role === 'ADMIN' 
-        ? await db.classes.count() 
-        : await db.classes.where('userId').equals(user.id).count();
+    try {
+        // Local calculation for immediate display
+        const classes = user.role === 'ADMIN' 
+            ? await db.classes.count() 
+            : await db.classes.where('userId').equals(user.id).count();
+            
+        const students = user.role === 'ADMIN'
+            ? await db.students.count()
+            : await (async () => {
+                const clsIds = await db.classes.where('userId').equals(user.id).primaryKeys();
+                return await db.students.where('classId').anyOf(clsIds as string[]).count();
+            })();
+
+        const journals = await db.teachingJournals.count(); // Approximation
         
-    const students = user.role === 'ADMIN'
-        ? await db.students.count()
-        : await (async () => {
-            const clsIds = await db.classes.where('userId').equals(user.id).primaryKeys();
-            return await db.students.where('classId').anyOf(clsIds as string[]).count();
-        })();
+        // Basic gender distribution (sample)
+        const males = await db.students.where('gender').equals('L').count();
+        const females = await db.students.where('gender').equals('P').count();
 
-    const journals = await db.teachingJournals.count(); // Approximation
-    
-    // Basic gender distribution (sample)
-    const males = await db.students.where('gender').equals('L').count();
-    const females = await db.students.where('gender').equals('P').count();
-
-    return {
-        totalClasses: classes,
-        totalStudents: students,
-        filledJournals: journals,
-        attendanceRate: 0, // Need complex calc
-        genderDistribution: [
-            { name: 'Laki-laki', value: males },
-            { name: 'Perempuan', value: females }
-        ],
-        weeklyAttendance: []
-    } as DashboardStatsData;
+        return {
+            totalClasses: classes,
+            totalStudents: students,
+            filledJournals: journals,
+            attendanceRate: 0, // Need complex calc
+            genderDistribution: [
+                { name: 'Laki-laki', value: males },
+                { name: 'Perempuan', value: females }
+            ],
+            weeklyAttendance: []
+        } as DashboardStatsData;
+    } catch (e) {
+        console.error("Error calculating stats:", e);
+        // Return safe empty object
+        return {
+            totalClasses: 0,
+            totalStudents: 0,
+            filledJournals: 0,
+            attendanceRate: 0,
+            genderDistribution: [],
+            weeklyAttendance: []
+        } as DashboardStatsData;
+    }
 };
 
 export const getSystemSettings = async () => {
