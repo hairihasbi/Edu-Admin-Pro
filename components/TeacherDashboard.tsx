@@ -54,6 +54,31 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
   const [announcement, setAnnouncement] = useState<Notification | null>(null);
   const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
 
+  // FETCH DATA FUNCTION
+  const fetchData = async () => {
+    // Only show loading on initial load or if explicitly needed
+    if (isLoading) setIsLoading(true);
+    try {
+        const statsData = await getDashboardStats(user);
+        setStats(statsData);
+        
+        const scheduleData = await getTeachingSchedules(user.id);
+        setSchedules(scheduleData);
+        
+        // Initial Sync Check
+        const syncData = await getSyncStats(user);
+        setPendingCount(syncData.totalUnsynced);
+    } catch (error) {
+        console.error("Dashboard Fetch Error:", error);
+        setStats({
+          totalClasses: 0, totalStudents: 0, filledJournals: 0, 
+          attendanceRate: 0, genderDistribution: [], weeklyAttendance: []
+        });
+    } finally {
+        setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
     // 1. Calculate Academic Period & Date
     const now = new Date();
@@ -79,29 +104,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
     setAcademicPeriod({ year: acadYear, semester: sem });
     
     // 2. Fetch Stats & Schedules (Safe Mode)
-    const fetchData = async () => {
-      setIsLoading(true);
-      try {
-          const statsData = await getDashboardStats(user);
-          setStats(statsData);
-          
-          const scheduleData = await getTeachingSchedules(user.id);
-          setSchedules(scheduleData);
-          
-          // Initial Sync Check
-          const syncData = await getSyncStats(user);
-          setPendingCount(syncData.totalUnsynced);
-      } catch (error) {
-          console.error("Dashboard Fetch Error:", error);
-          // Fallback empty stats to prevent crash
-          setStats({
-            totalClasses: 0, totalStudents: 0, filledJournals: 0, 
-            attendanceRate: 0, genderDistribution: [], weeklyAttendance: []
-          });
-      } finally {
-          setIsLoading(false);
-      }
-    };
     fetchData();
 
     // 3. Check Donation Popup Preference
@@ -118,13 +120,12 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
         if (e.detail === 'error') setDbStatus('Sync Error');
         else if (e.detail === 'success') {
             setDbStatus('Turso Cloud');
-            // Refresh pending count on success - PASS USER
-            getSyncStats(user).then(d => setPendingCount(d.totalUnsynced));
+            // CRITICAL FIX: Reload dashboard stats when data arrives from server
+            fetchData();
         }
     };
 
     const handleUnsavedChanges = (e: any) => {
-        // Refresh pending count when unsaved changes detected - PASS USER
         getSyncStats(user).then(d => setPendingCount(d.totalUnsynced));
     };
     
