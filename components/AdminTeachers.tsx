@@ -19,6 +19,18 @@ const AdminTeachers: React.FC = () => {
 
   useEffect(() => {
     fetchData();
+
+    // Listen to sync events to refresh data automatically
+    const handleSyncStatus = (e: any) => {
+        if (e.detail === 'success') {
+            fetchData();
+        }
+    };
+    window.addEventListener('sync-status', handleSyncStatus);
+    
+    return () => {
+        window.removeEventListener('sync-status', handleSyncStatus);
+    };
   }, [activeTab]);
 
   // Reset pagination when tab or search changes
