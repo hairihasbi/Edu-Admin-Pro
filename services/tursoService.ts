@@ -137,8 +137,10 @@ export const pushToTurso = async (collection: string, items: any[], force: boole
   
   if (itemsToPush.length === 0) return;
 
-  // 2. Batching Logic (Chunk size 50 to prevent Vercel Timeout)
-  const BATCH_SIZE = 50;
+  // 2. Batching Logic (Chunk size 10 to prevent Vercel Timeout)
+  // Vercel serverless functions have a default timeout (e.g., 10s or 60s).
+  // Large batches with sequential DB writes in the backend can exceed this.
+  const BATCH_SIZE = 10;
   
   for (let i = 0; i < itemsToPush.length; i += BATCH_SIZE) {
       const batch = itemsToPush.slice(i, i + BATCH_SIZE);
