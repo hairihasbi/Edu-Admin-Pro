@@ -193,6 +193,9 @@ const TeacherClasses: React.FC<TeacherClassesProps> = ({ user }) => {
            // FIX: fetchStudents calls database getStudents which now has rigorous sorting
            fetchStudents(selectedClass.id);
            fetchClasses();
+           
+           // CRITICAL FIX: Update Sync Status Immediately for Dashboard
+           window.dispatchEvent(new CustomEvent('sync-status', { detail: 'success' }));
         } else {
            alert(`Gagal Import!\n\n${result.errors.join('\n')}`);
         }
