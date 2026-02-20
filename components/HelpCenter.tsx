@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { User, Ticket, UserRole } from '../types';
 import { createTicket, getTickets, replyTicket, closeTicket } from '../services/database';
-import { LifeBuoy, Send, Plus, Search, CheckCircle, X, MessageCircle, User as UserIcon } from './Icons';
+import { LifeBuoy, Send, Plus, Search, CheckCircle, X, MessageCircle, User as UserIcon, RefreshCcw } from './Icons';
 
 interface HelpCenterProps {
   user: User;
@@ -24,6 +24,18 @@ const HelpCenter: React.FC<HelpCenterProps> = ({ user }) => {
 
   useEffect(() => {
     fetchTickets();
+
+    // LISTEN TO SYNC EVENTS: Auto-refresh data when Admin pulls from cloud
+    const handleSyncStatus = (e: any) => {
+        if (e.detail === 'success') {
+            fetchTickets();
+        }
+    };
+    window.addEventListener('sync-status', handleSyncStatus);
+    
+    return () => {
+        window.removeEventListener('sync-status', handleSyncStatus);
+    };
   }, [user]);
 
   useEffect(() => {
@@ -125,15 +137,20 @@ const HelpCenter: React.FC<HelpCenterProps> = ({ user }) => {
             <h2 className="font-bold text-gray-800 flex items-center gap-2">
               <LifeBuoy className="text-blue-600" /> Pusat Bantuan
             </h2>
-            {user.role === UserRole.GURU && (
-              <button 
-                onClick={() => setIsModalOpen(true)}
-                className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-lg shadow-sm transition"
-                title="Buat Tiket Baru"
-              >
-                <Plus size={20} />
-              </button>
-            )}
+            <div className="flex gap-2">
+                <button onClick={fetchTickets} className="p-2 text-gray-500 hover:text-blue-600 hover:bg-white rounded-lg transition" title="Refresh">
+                    <RefreshCcw size={18} />
+                </button>
+                {user.role === UserRole.GURU && (
+                <button 
+                    onClick={() => setIsModalOpen(true)}
+                    className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-lg shadow-sm transition"
+                    title="Buat Tiket Baru"
+                >
+                    <Plus size={20} />
+                </button>
+                )}
+            </div>
           </div>
           <div className="relative">
             <Search className="absolute left-3 top-2.5 text-gray-400" size={16} />
