@@ -56,8 +56,7 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
       const cls = await getClasses(user.id);
       setClasses(cls);
       if (cls.length > 0) {
-        setFilterClassId(cls[0].id);
-        // Default form class to first available
+        // Default form class to first available, BUT FILTER defaults to All ('')
         setFormData(prev => ({ ...prev, classId: cls[0].id }));
       }
       
@@ -79,6 +78,18 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
       setLoading(false);
     };
     init();
+
+    // Listen to sync events to refresh data
+    const handleSyncStatus = (e: any) => {
+        if (e.detail === 'success') {
+            fetchJournals();
+        }
+    };
+    window.addEventListener('sync-status', handleSyncStatus);
+    
+    return () => {
+        window.removeEventListener('sync-status', handleSyncStatus);
+    };
   }, [user]);
 
   // Reset pagination when filters change
