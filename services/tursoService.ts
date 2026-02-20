@@ -226,19 +226,37 @@ export const pullFromTurso = async (collection: string, localItems: any[]): Prom
     remoteMap.forEach((remote, id) => {
       const localIndex = mergedItems.findIndex(i => i.id === id);
       
-      // CRITICAL FIX: Ensure ID is present in the object spread
-      // Dexie requires the Primary Key field (id) to be present in the object being saved.
+      // FIX 1: Handle Deletion
+      // If remote has deleted flag, remove it locally
+      if (remote.data.deleted) {
+          if (localIndex !== -1) {
+              // Item exists locally, remove it
+              mergedItems.splice(localIndex, 1);
+              hasChanges = true;
+          }
+          return; // Skip adding
+      }
+
+      // CRITICAL FIX 2: Ensure ID is present in the object spread
       const safeRemoteData = { ...remote.data, id: id, isSynced: true };
 
       if (localIndex === -1) {
+        // Item new (remote only)
         mergedItems.push(safeRemoteData);
         hasChanges = true;
       } else {
+        // Item exists locally, check version OR timestamp
         const local = mergedItems[localIndex];
         const remoteVer = remote.version || 1;
         const localVer = local.version || 1;
+        
+        // FIX 3: Timestamp based conflict resolution
+        // If versions are equal, but remote timestamp is NEWER, trust remote.
+        // This solves "stuck version" issues where edits happen but version didn't increment.
+        const remoteTime = remote.updated_at || 0;
+        const localTime = local.lastModified || 0;
 
-        if (remoteVer > localVer) {
+        if (remoteVer > localVer || (remoteVer === localVer && remoteTime > localTime)) {
           mergedItems[localIndex] = safeRemoteData;
           hasChanges = true;
         } 
