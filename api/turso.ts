@@ -2,6 +2,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from "@libsql/client/web";
 import { authorize } from './_utils/auth.js';
+import bcrypt from 'bcryptjs';
 
 // --- CONFIGURATION ---
 const GENERIC_TABLE = "sync_store";
@@ -552,27 +553,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             }
 
             // CRITICAL FIX: PRESERVE EXISTING PASSWORDS IF NOT PROVIDED
+            // 1. Preserve existing password if client sends null/empty.
+            // 2. Encrypt (Hash) password if client sends plain text.
             if (collection === 'eduadmin_users') {
-                const idsWithMissingPass = items.filter((i: any) => !i.password && !i.deleted).map((i: any) => i.id);
-                if (idsWithMissingPass.length > 0) {
+                const idsToUpdate = items.map((i: any) => i.id);
+                
+                if (idsToUpdate.length > 0) {
                     try {
-                        const pPlaceholders = idsWithMissingPass.map(() => '?').join(',');
+                        const pPlaceholders = idsToUpdate.map(() => '?').join(',');
                         const passRes = await client.execute({
                             sql: `SELECT id, password FROM users WHERE id IN (${pPlaceholders})`,
-                            args: idsWithMissingPass
+                            args: idsToUpdate
                         });
                         
-                        const passMap = new Map();
-                        passRes.rows.forEach((r: any) => passMap.set(r.id, r.password));
+                        const dbPassMap = new Map();
+                        passRes.rows.forEach((r: any) => dbPassMap.set(r.id, r.password));
                         
-                        // Inject back existing passwords into items
-                        items.forEach((item: any) => {
-                            if (!item.password && !item.deleted && passMap.has(item.id)) {
-                                item.password = passMap.get(item.id);
+                        for (const item of items) {
+                            if (item.deleted) continue;
+
+                            // CASE A: Password Missing -> Use DB Version
+                            if (!item.password) {
+                                if (dbPassMap.has(item.id)) {
+                                    item.password = dbPassMap.get(item.id);
+                                }
+                            } 
+                            // CASE B: Password Provided -> Hash if Plain Text
+                            else {
+                                // If it doesn't look like a bcrypt hash ($2...)
+                                if (!item.password.startsWith('$2')) {
+                                    item.password = await bcrypt.hash(item.password, 10);
+                                }
                             }
-                        });
+                        }
                     } catch (e) {
-                        console.error("Failed to fetch existing passwords for preservation:", e);
+                        console.error("Failed to process passwords:", e);
                     }
                 }
             }
