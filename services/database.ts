@@ -877,8 +877,8 @@ export const getSyncStats = async (user: User) => {
     return { stats, totalUnsynced };
 };
 
-export const syncAllData = async (force = false) => {
-    if (!navigator.onLine) return;
+export const syncAllData = async (force = false): Promise<{ hasWarnings: boolean }> => {
+    if (!navigator.onLine) return { hasWarnings: false };
     
     // List of tables to sync (Order matters for foreign keys)
     // ADDED: eduadmin_wa_configs, eduadmin_system_settings, eduadmin_api_keys, eduadmin_master_subjects, eduadmin_email_config
@@ -936,17 +936,22 @@ export const syncAllData = async (force = false) => {
     // Dispatch event to update UI
     window.dispatchEvent(new CustomEvent('sync-status', { detail: hasErrors ? 'error' : 'success' }));
     
-    if (hasErrors) {
-        throw new Error("Sinkronisasi selesai dengan beberapa peringatan. Cek koneksi Anda.");
-    }
+    // Instead of throwing an error, we return the status
+    return { hasWarnings: hasErrors };
 };
 
 export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', logFn: (msg: string) => void) => {
     logFn(`Starting ${direction} Sync...`);
     try {
-        await syncAllData(direction === 'FULL');
-        logFn('Sync Completed Successfully.');
+        const result = await syncAllData(direction === 'FULL');
+        
+        if (result && result.hasWarnings) {
+            logFn('Sinkronisasi Selesai (Tidak Sempurna): Beberapa data mungkin gagal terkirim. Cek koneksi internet Anda lalu coba lagi.');
+        } else {
+            logFn('Sync Completed Successfully.');
+        }
     } catch (e: any) {
+        // This catch block will now only trigger for catastrophic errors (not partial syncs)
         logFn(`Sync Failed: ${e.message}`);
     }
 };
