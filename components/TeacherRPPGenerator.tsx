@@ -7,7 +7,7 @@ import {
   BrainCircuit, ChevronLeft, ChevronRight, CheckCircle, BookOpen, Save, Printer, 
   FileText, ShieldCheck, RefreshCcw, Trash2, Cloud, AlertTriangle, Download, 
   Globe, Pencil, Bold, Italic, Heading, List, ListOrdered, Type, LayoutTemplate, X,
-  Underline, AlignLeft, AlignCenter, AlignRight, Undo, Redo
+  Underline, AlignLeft, AlignCenter, AlignRight, Undo, Redo, Maximize2, Minimize2
 } from './Icons';
 // @ts-ignore
 import html2pdf from 'html2pdf.js';
@@ -385,7 +385,7 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
   }
 
   return (
-    <div className="space-y-6 pb-20">
+    <div className="space-y-6 pb-20 relative">
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex justify-between items-start">
             <div>
                 <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
@@ -556,48 +556,41 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
              </div>
           </div>
 
-          {/* Result Area (WORKBENCH ENABLED) */}
+          {/* Result Area (Preview / Editor Trigger) */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 h-[600px] flex flex-col overflow-hidden">
-            {/* Workbench Header */}
+            {/* Header */}
             <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                 <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                    {isEditing ? <Pencil size={20} className="text-orange-500"/> : <CheckCircle size={20} className="text-green-500"/>}
-                    {isEditing ? 'Workbench Editor' : 'Preview RPP'}
+                    <CheckCircle size={20} className="text-green-500"/>
+                    Preview RPP
                 </h3>
                 
                 {rppResult && !isGenerating && (
                     <div className="flex items-center gap-2">
-                        {/* MODE TOGGLE */}
+                        {/* TRIGGER FULLSCREEN WORKBENCH */}
                         <button 
-                            onClick={() => setIsEditing(!isEditing)} 
-                            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition text-xs font-bold shadow-sm ${
-                                isEditing 
-                                ? 'bg-green-600 text-white hover:bg-green-700' 
-                                : 'bg-orange-500 text-white hover:bg-orange-600'
-                            }`}
+                            onClick={() => setIsEditing(true)} 
+                            className="flex items-center gap-2 px-3 py-1.5 rounded-lg transition text-xs font-bold shadow-sm bg-orange-500 text-white hover:bg-orange-600"
                         >
-                            {isEditing ? <CheckCircle size={14} /> : <Pencil size={14} />} 
-                            {isEditing ? "Simpan (Selesai)" : "Workbench (Editor)"}
+                            <Maximize2 size={14} /> Workbench (Full Edit)
                         </button>
 
-                        {!isEditing && (
-                            <div className="flex gap-1">
-                                <button onClick={handlePrint} className="p-2 bg-white text-gray-700 hover:bg-gray-50 border border-gray-200 rounded-lg shadow-sm" title="Cetak">
-                                    <Printer size={16} />
-                                </button>
-                                <button onClick={handleExportDocx} className="p-2 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 rounded-lg shadow-sm" title="Word">
-                                    <FileText size={16} />
-                                </button>
-                                <button onClick={handleExportPDF} className="p-2 bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 rounded-lg shadow-sm" title="PDF">
-                                    <Download size={16} />
-                                </button>
-                            </div>
-                        )}
+                        <div className="flex gap-1">
+                            <button onClick={handlePrint} className="p-2 bg-white text-gray-700 hover:bg-gray-50 border border-gray-200 rounded-lg shadow-sm" title="Cetak">
+                                <Printer size={16} />
+                            </button>
+                            <button onClick={handleExportDocx} className="p-2 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 rounded-lg shadow-sm" title="Word">
+                                <FileText size={16} />
+                            </button>
+                            <button onClick={handleExportPDF} className="p-2 bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 rounded-lg shadow-sm" title="PDF">
+                                <Download size={16} />
+                            </button>
+                        </div>
                     </div>
                 )}
             </div>
             
-            {/* Content Area */}
+            {/* Content Area (Read-Only Preview) */}
             <div className="flex-1 relative flex flex-col min-h-0 bg-gray-50">
               {isGenerating ? (
                  <div className="flex flex-col items-center justify-center h-full text-gray-400 space-y-4">
@@ -609,49 +602,7 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
                     <BookOpen size={48} className="mb-2 opacity-20" />
                     <p>Hasil RPP akan muncul di sini.</p>
                  </div>
-              ) : isEditing ? (
-                 // --- WORKBENCH MODE (WYSIWYG EDITOR) ---
-                 <div className="flex flex-col h-full bg-gray-100">
-                    {/* Fixed Toolbar */}
-                    <div className="bg-white p-2 border-b border-gray-200 flex flex-wrap gap-1 shadow-sm shrink-0 z-10 items-center justify-center">
-                        <div className="flex gap-1 bg-gray-50 rounded-lg p-1 border border-gray-200">
-                            <button onMouseDown={(e) => {e.preventDefault(); execCmd('undo');}} className="p-1.5 hover:bg-gray-200 rounded text-gray-600" title="Undo"><Undo size={16}/></button>
-                            <button onMouseDown={(e) => {e.preventDefault(); execCmd('redo');}} className="p-1.5 hover:bg-gray-200 rounded text-gray-600" title="Redo"><Redo size={16}/></button>
-                        </div>
-                        <div className="w-px h-6 bg-gray-300 mx-1"></div>
-                        <div className="flex gap-1 bg-gray-50 rounded-lg p-1 border border-gray-200">
-                            <button onMouseDown={(e) => {e.preventDefault(); execCmd('bold');}} className="p-1.5 hover:bg-gray-200 rounded text-gray-700 font-bold" title="Bold"><Bold size={16}/></button>
-                            <button onMouseDown={(e) => {e.preventDefault(); execCmd('italic');}} className="p-1.5 hover:bg-gray-200 rounded text-gray-700 italic" title="Italic"><Italic size={16}/></button>
-                            <button onMouseDown={(e) => {e.preventDefault(); execCmd('underline');}} className="p-1.5 hover:bg-gray-200 rounded text-gray-700 underline" title="Underline"><Underline size={16}/></button>
-                        </div>
-                        <div className="w-px h-6 bg-gray-300 mx-1"></div>
-                        <div className="flex gap-1 bg-gray-50 rounded-lg p-1 border border-gray-200">
-                            <button onMouseDown={(e) => {e.preventDefault(); execCmd('justifyLeft');}} className="p-1.5 hover:bg-gray-200 rounded text-gray-700" title="Left"><AlignLeft size={16}/></button>
-                            <button onMouseDown={(e) => {e.preventDefault(); execCmd('justifyCenter');}} className="p-1.5 hover:bg-gray-200 rounded text-gray-700" title="Center"><AlignCenter size={16}/></button>
-                            <button onMouseDown={(e) => {e.preventDefault(); execCmd('justifyRight');}} className="p-1.5 hover:bg-gray-200 rounded text-gray-700" title="Right"><AlignRight size={16}/></button>
-                        </div>
-                        <div className="w-px h-6 bg-gray-300 mx-1"></div>
-                        <div className="flex gap-1 bg-gray-50 rounded-lg p-1 border border-gray-200">
-                            <button onMouseDown={(e) => {e.preventDefault(); execCmd('formatBlock', 'H3');}} className="p-1.5 hover:bg-gray-200 rounded text-gray-700 font-bold text-xs" title="Heading">H1</button>
-                            <button onMouseDown={(e) => {e.preventDefault(); execCmd('insertUnorderedList');}} className="p-1.5 hover:bg-gray-200 rounded text-gray-700" title="Bullet List"><List size={16}/></button>
-                            <button onMouseDown={(e) => {e.preventDefault(); execCmd('insertOrderedList');}} className="p-1.5 hover:bg-gray-200 rounded text-gray-700" title="Numbered List"><ListOrdered size={16}/></button>
-                        </div>
-                    </div>
-                    
-                    {/* Visual Editor Page */}
-                    <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-gray-100 flex justify-center">
-                        <div
-                            ref={editorRef}
-                            contentEditable
-                            className="bg-white w-full max-w-[210mm] min-h-[297mm] p-[20mm] shadow-lg outline-none text-gray-800 text-justify leading-relaxed prose prose-sm max-w-none focus:ring-2 focus:ring-blue-500/20"
-                            style={{ fontFamily: "'Times New Roman', serif", fontSize: '12pt' }}
-                            dangerouslySetInnerHTML={{ __html: formatMarkdownToWordHTML(rppResult) }}
-                            onInput={(e) => setRppResult(e.currentTarget.innerHTML)}
-                        />
-                    </div>
-                 </div>
               ) : (
-                 // VIEW MODE
                  <div className="overflow-y-auto p-8 h-full bg-white scrollbar-thin scrollbar-thumb-gray-300 flex justify-center">
                     <div 
                         className="prose prose-sm max-w-[210mm] w-full whitespace-pre-wrap font-serif text-gray-800 leading-relaxed text-justify"
@@ -664,6 +615,72 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
             </div>
           </div>
         </div>
+
+        {/* --- FULLSCREEN WORKBENCH OVERLAY --- */}
+        {isEditing && (
+            <div className="fixed inset-0 z-[100] bg-gray-900/90 backdrop-blur-sm flex flex-col animate-in fade-in zoom-in-95 duration-200">
+                {/* Workbench Toolbar */}
+                <div className="bg-white p-2 border-b border-gray-200 flex flex-wrap gap-2 shadow-md shrink-0 z-50 items-center justify-between">
+                    <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2 px-4 border-r border-gray-200">
+                            <BrainCircuit className="text-purple-600" size={24} />
+                            <div>
+                                <h3 className="font-bold text-gray-800 text-sm leading-none">Workbench Mode</h3>
+                                <span className="text-[10px] text-gray-500">Edit Naskah RPP</span>
+                            </div>
+                        </div>
+
+                        {/* Formatting Tools */}
+                        <div className="flex flex-wrap gap-1 items-center">
+                            <div className="flex gap-1 bg-gray-50 rounded-lg p-1 border border-gray-200">
+                                <button onMouseDown={(e) => {e.preventDefault(); execCmd('undo');}} className="p-1.5 hover:bg-gray-200 rounded text-gray-600" title="Undo"><Undo size={16}/></button>
+                                <button onMouseDown={(e) => {e.preventDefault(); execCmd('redo');}} className="p-1.5 hover:bg-gray-200 rounded text-gray-600" title="Redo"><Redo size={16}/></button>
+                            </div>
+                            <div className="w-px h-6 bg-gray-300 mx-1"></div>
+                            <div className="flex gap-1 bg-gray-50 rounded-lg p-1 border border-gray-200">
+                                <button onMouseDown={(e) => {e.preventDefault(); execCmd('bold');}} className="p-1.5 hover:bg-gray-200 rounded text-gray-700 font-bold" title="Bold"><Bold size={16}/></button>
+                                <button onMouseDown={(e) => {e.preventDefault(); execCmd('italic');}} className="p-1.5 hover:bg-gray-200 rounded text-gray-700 italic" title="Italic"><Italic size={16}/></button>
+                                <button onMouseDown={(e) => {e.preventDefault(); execCmd('underline');}} className="p-1.5 hover:bg-gray-200 rounded text-gray-700 underline" title="Underline"><Underline size={16}/></button>
+                            </div>
+                            <div className="w-px h-6 bg-gray-300 mx-1"></div>
+                            <div className="flex gap-1 bg-gray-50 rounded-lg p-1 border border-gray-200">
+                                <button onMouseDown={(e) => {e.preventDefault(); execCmd('justifyLeft');}} className="p-1.5 hover:bg-gray-200 rounded text-gray-700" title="Left"><AlignLeft size={16}/></button>
+                                <button onMouseDown={(e) => {e.preventDefault(); execCmd('justifyCenter');}} className="p-1.5 hover:bg-gray-200 rounded text-gray-700" title="Center"><AlignCenter size={16}/></button>
+                                <button onMouseDown={(e) => {e.preventDefault(); execCmd('justifyRight');}} className="p-1.5 hover:bg-gray-200 rounded text-gray-700" title="Right"><AlignRight size={16}/></button>
+                            </div>
+                            <div className="w-px h-6 bg-gray-300 mx-1"></div>
+                            <div className="flex gap-1 bg-gray-50 rounded-lg p-1 border border-gray-200">
+                                <button onMouseDown={(e) => {e.preventDefault(); execCmd('formatBlock', 'H3');}} className="p-1.5 hover:bg-gray-200 rounded text-gray-700 font-bold text-xs" title="Heading">H1</button>
+                                <button onMouseDown={(e) => {e.preventDefault(); execCmd('insertUnorderedList');}} className="p-1.5 hover:bg-gray-200 rounded text-gray-700" title="Bullet List"><List size={16}/></button>
+                                <button onMouseDown={(e) => {e.preventDefault(); execCmd('insertOrderedList');}} className="p-1.5 hover:bg-gray-200 rounded text-gray-700" title="Numbered List"><ListOrdered size={16}/></button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                        <span className="text-xs text-gray-500 italic hidden md:inline">Perubahan tersimpan otomatis di draft.</span>
+                        <button 
+                            onClick={() => setIsEditing(false)}
+                            className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-bold text-sm shadow-sm flex items-center gap-2 transition"
+                        >
+                            <CheckCircle size={16} /> Selesai & Tutup
+                        </button>
+                    </div>
+                </div>
+
+                {/* Main Visual Editor Page */}
+                <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-gray-800/50 flex justify-center cursor-text" onClick={() => editorRef.current?.focus()}>
+                    <div
+                        ref={editorRef}
+                        contentEditable
+                        className="bg-white w-full max-w-[210mm] min-h-[297mm] p-[20mm] shadow-2xl outline-none text-gray-800 text-justify leading-relaxed prose prose-sm max-w-none focus:ring-4 focus:ring-blue-500/20 mb-20"
+                        style={{ fontFamily: "'Times New Roman', serif", fontSize: '12pt' }}
+                        dangerouslySetInnerHTML={{ __html: formatMarkdownToWordHTML(rppResult) }}
+                        onInput={(e) => setRppResult(e.currentTarget.innerHTML)}
+                    />
+                </div>
+            </div>
+        )}
     </div>
   );
 };

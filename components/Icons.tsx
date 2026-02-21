@@ -99,7 +99,9 @@ import {
   AlignCenter, // Added
   AlignRight, // Added
   Undo, // Added
-  Redo // Added
+  Redo, // Added
+  Maximize2, // Added
+  Minimize2 // Added
 } from 'lucide-react';
 
 export {
@@ -202,5 +204,7 @@ export {
   AlignCenter,
   AlignRight,
   Undo,
-  Redo
+  Redo,
+  Maximize2,
+  Minimize2
 };
