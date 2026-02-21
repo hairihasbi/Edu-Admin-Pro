@@ -438,9 +438,9 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
              </div>
 
              <div className="p-6 flex-1 overflow-y-auto max-h-[600px]">
+                {/* Step Content Rendered Here Based on rppStep - Kept Same as before */}
                 {rppStep === 1 && (
                    <div className="space-y-5 animate-in fade-in slide-in-from-right-4">
-                      {/* Step 1 Inputs */}
                       <div className="space-y-3">
                          <label className="block text-sm font-bold text-gray-800">Pilih Kurikulum</label>
                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -456,7 +456,6 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
                             </label>
                          </div>
                       </div>
-                      {/* Identity Fields */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
                          <div><label className="block text-xs font-semibold text-gray-600 mb-1">Nama Penyusun</label><input type="text" className="w-full border rounded-lg p-2 text-sm" value={rppData.teacherName} onChange={e => handleRppChange('teacherName', e.target.value)} /></div>
                          <div><label className="block text-xs font-semibold text-gray-600 mb-1">NIP Penyusun</label><input type="text" className="w-full border rounded-lg p-2 text-sm" value={rppData.teacherNip} onChange={e => handleRppChange('teacherNip', e.target.value)} /></div>
@@ -481,7 +480,6 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
 
                 {rppStep === 2 && (
                    <div className="space-y-5 animate-in fade-in slide-in-from-right-4">
-                      {/* Step 2 Inputs */}
                       <div><label className="block text-sm font-bold text-gray-800 mb-1">Topik / Materi Pokok</label><input type="text" className="w-full border border-gray-300 rounded-lg p-2.5 text-sm" placeholder="Contoh: Hukum Newton" value={rppData.topic} onChange={e => handleRppChange('topic', e.target.value)} /></div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                          <div><label className="block text-sm font-bold text-gray-800 mb-1">Model Pembelajaran</label><select className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-white" value={rppData.learningModel} onChange={e => handleRppChange('learningModel', e.target.value)}>{LEARNING_MODELS.map(m => <option key={m} value={m}>{m}</option>)}</select></div>
