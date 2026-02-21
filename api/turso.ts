@@ -1,4 +1,3 @@
-
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from "@libsql/client/web";
 import { authorize } from './_utils/auth.js';
@@ -330,9 +329,12 @@ const DB_SCHEMAS = [
     )`,
 
     // --- MIGRATIONS ---
-    // Note: Older migrations removed if they cause 'duplicate column' errors 
-    // because the CREATE TABLE definitions above are up to date.
-    // Only keep new ALTERs here if you add columns in future versions.
+    // Safely add new columns if they don't exist (SQLite doesn't support IF NOT EXISTS for ADD COLUMN in older versions, 
+    // but client.batch() will continue if one fails, or we can handle it in the loop)
+    `ALTER TABLE system_settings ADD COLUMN ai_provider TEXT`,
+    `ALTER TABLE system_settings ADD COLUMN ai_base_url TEXT`,
+    `ALTER TABLE system_settings ADD COLUMN ai_api_key TEXT`,
+    `ALTER TABLE system_settings ADD COLUMN ai_model TEXT`,
 ];
 
 // Helper to convert undefined to null for SQL
@@ -392,7 +394,6 @@ const getTableConfig = (collection: string) => {
         columns: ['id', 'user_id', 'day', 'time_start', 'time_end', 'class_name', 'subject', 'last_modified', 'version', 'deleted'], 
         mapFn: (item: any) => [s(item.id), s(item.userId), s(item.day), s(item.timeStart), s(item.timeEnd), s(item.className), s(item.subject), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] 
     };
-    // ... rest of the cases ...
     case 'eduadmin_bk_violations': return { table: 'bk_violations', columns: ['id', 'student_id', 'date', 'violation_name', 'points', 'description', 'reported_by', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.studentId), s(item.date), s(item.violationName), s(item.points), s(item.description), s(item.reportedBy), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_bk_reductions': return { table: 'bk_reductions', columns: ['id', 'student_id', 'date', 'activity_name', 'points_removed', 'description', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.studentId), s(item.date), s(item.activityName), s(item.pointsRemoved), s(item.description), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_bk_achievements': return { table: 'bk_achievements', columns: ['id', 'student_id', 'date', 'title', 'level', 'description', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.studentId), s(item.date), s(item.title), s(item.level), s(item.description), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
@@ -405,78 +406,273 @@ const getTableConfig = (collection: string) => {
     case 'eduadmin_logs': return { table: 'logs', columns: ['id', 'timestamp', 'level', 'actor', 'role', 'action', 'details', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.timestamp), s(item.level), s(item.actor), s(item.role), s(item.action), s(item.details), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_master_subjects': return { table: 'master_subjects', columns: ['id', 'name', 'category', 'level', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.name), s(item.category), s(item.level), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_email_config': return { table: 'email_config', columns: ['id', 'provider', 'method', 'api_key', 'smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass', 'from_email', 'from_name', 'is_active', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.provider), s(item.method), s(item.apiKey), s(item.smtpHost), s(item.smtpPort), s(item.smtpUser), s(item.smtpPass), s(item.fromEmail), s(item.fromName), item.isActive ? 1 : 0, s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
-    default: return null;
+    default:
+      return null;
   }
 };
 
 const mapRowToJSON = (collection: string, row: any) => {
-  const base = {
-    id: row.id,
-    lastModified: row.last_modified,
-    version: row.version,
-    deleted: row.deleted === 1
-  };
-
-  switch (collection) {
-    case 'eduadmin_users':
-      return {
-        ...base,
-        username: row.username,
-        password: row.password,
-        fullName: row.full_name,
-        role: row.role,
-        status: row.status,
-        schoolName: row.school_name,
-        schoolNpsn: row.school_npsn,
-        nip: row.nip,
-        email: row.email,
-        phone: row.phone,
-        subject: row.subject,
-        avatar: row.avatar,
-        additionalRole: row.additional_role,
-        homeroomClassId: row.homeroom_class_id
-      };
-    case 'eduadmin_classes':
-      return { ...base, userId: row.user_id, schoolNpsn: row.school_npsn, name: row.name, description: row.description, studentCount: row.student_count };
-    case 'eduadmin_students':
-      return { ...base, classId: row.class_id, schoolNpsn: row.school_npsn, name: row.name, nis: row.nis, gender: row.gender, phone: row.phone };
-    case 'eduadmin_scores':
-      return { ...base, userId: row.user_id, studentId: row.student_id, classId: row.class_id, semester: row.semester, subject: row.subject, category: row.category, materialId: row.material_id, score: row.score, scoreDetails: parseJSONSafe(row.score_details) };
-    case 'eduadmin_attendance':
-      return { ...base, studentId: row.student_id, classId: row.class_id, date: row.date, status: row.status };
-    case 'eduadmin_journals':
-      return { ...base, userId: row.user_id, classId: row.class_id, date: row.date, materialId: row.material_id, learningObjective: row.learning_objective, meetingNo: row.meeting_no, activities: row.activities, reflection: row.reflection, followUp: row.follow_up };
-    case 'eduadmin_materials':
-      return { ...base, classId: row.class_id, userId: row.user_id, subject: row.subject, semester: row.semester, code: row.code, phase: row.phase, content: row.content, subScopes: parseJSONSafe(row.sub_scopes) };
-    case 'eduadmin_schedules':
-      return { ...base, userId: row.user_id, day: row.day, timeStart: row.time_start, timeEnd: row.time_end, className: row.class_name, subject: row.subject };
-    case 'eduadmin_bk_violations':
-      return { ...base, studentId: row.student_id, date: row.date, violationName: row.violation_name, points: row.points, description: row.description, reportedBy: row.reported_by };
-    case 'eduadmin_bk_reductions':
-      return { ...base, studentId: row.student_id, date: row.date, activityName: row.activity_name, pointsRemoved: row.points_removed, description: row.description };
-    case 'eduadmin_bk_achievements':
-      return { ...base, studentId: row.student_id, date: row.date, title: row.title, level: row.level, description: row.description };
-    case 'eduadmin_bk_counseling':
-      return { ...base, studentId: row.student_id, date: row.date, issue: row.issue, notes: row.notes, follow_up: row.follow_up, status: row.status };
-    case 'eduadmin_tickets':
-      return { ...base, userId: row.user_id, teacherName: row.teacher_name, subject: row.subject, status: row.status, lastUpdated: row.last_updated, messages: parseJSONSafe(row.messages) };
-    case 'eduadmin_api_keys':
-      return { ...base, key: row.key_value, provider: row.provider, status: row.status, addedAt: row.added_at };
-    case 'eduadmin_system_settings':
-      return { ...base, featureRppEnabled: row.feature_rpp_enabled === 1, maintenanceMessage: row.maintenance_message, appName: row.app_name, schoolName: row.school_name, appDescription: row.app_description, appKeywords: row.app_keywords, logoUrl: row.logo_url, faviconUrl: row.favicon_url, timezone: row.timezone, footerText: row.footer_text, aiProvider: row.ai_provider, aiBaseUrl: row.ai_base_url, aiApiKey: row.ai_api_key, aiModel: row.ai_model };
-    case 'eduadmin_wa_configs':
-      return { ...base, userId: row.user_id, provider: row.provider, baseUrl: row.base_url, apiKey: row.api_key, deviceId: row.device_id, isActive: row.is_active === 1 };
-    case 'eduadmin_notifications':
-      return { ...base, title: row.title, message: row.message, type: row.type, targetRole: row.target_role, isRead: row.is_read === 1, isPopup: row.is_popup === 1, createdAt: row.created_at };
-    case 'eduadmin_logs':
-      return { ...base, timestamp: row.timestamp, level: row.level, actor: row.actor, role: row.role, action: row.action, details: row.details };
-    case 'eduadmin_master_subjects':
-      return { ...base, name: row.name, category: row.category, level: row.level };
-    case 'eduadmin_email_config':
-      return { ...base, provider: row.provider, method: row.method, apiKey: row.api_key, smtpHost: row.smtp_host, smtpPort: row.smtp_port, smtpUser: row.smtp_user, smtpPass: row.smtp_pass, fromEmail: row.from_email, fromName: row.from_name, isActive: row.is_active === 1 };
-    default:
-      return base;
-  }
+    switch (collection) {
+        case 'eduadmin_users': return {
+            id: row.id,
+            username: row.username,
+            password: row.password,
+            fullName: row.full_name,
+            role: row.role,
+            status: row.status,
+            schoolName: row.school_name,
+            schoolNpsn: row.school_npsn,
+            nip: row.nip,
+            email: row.email,
+            phone: row.phone,
+            subject: row.subject,
+            avatar: row.avatar,
+            additionalRole: row.additional_role,
+            homeroomClassId: row.homeroom_class_id,
+            lastModified: row.last_modified,
+            version: row.version,
+            deleted: Boolean(row.deleted)
+        };
+        case 'eduadmin_classes': return {
+            id: row.id,
+            userId: row.user_id,
+            schoolNpsn: row.school_npsn,
+            name: row.name,
+            description: row.description,
+            studentCount: row.student_count,
+            lastModified: row.last_modified,
+            version: row.version,
+            deleted: Boolean(row.deleted)
+        };
+        case 'eduadmin_students': return {
+            id: row.id,
+            classId: row.class_id,
+            schoolNpsn: row.school_npsn,
+            name: row.name,
+            nis: row.nis,
+            gender: row.gender,
+            phone: row.phone,
+            lastModified: row.last_modified,
+            version: row.version,
+            deleted: Boolean(row.deleted)
+        };
+        case 'eduadmin_scores': return {
+            id: row.id,
+            userId: row.user_id,
+            studentId: row.student_id,
+            classId: row.class_id,
+            semester: row.semester,
+            subject: row.subject,
+            category: row.category,
+            materialId: row.material_id,
+            score: row.score,
+            scoreDetails: parseJSONSafe(row.score_details),
+            lastModified: row.last_modified,
+            version: row.version,
+            deleted: Boolean(row.deleted)
+        };
+        case 'eduadmin_attendance': return {
+            id: row.id,
+            studentId: row.student_id,
+            classId: row.class_id,
+            date: row.date,
+            status: row.status,
+            lastModified: row.last_modified,
+            version: row.version,
+            deleted: Boolean(row.deleted)
+        };
+        case 'eduadmin_journals': return {
+            id: row.id,
+            userId: row.user_id,
+            classId: row.class_id,
+            date: row.date,
+            materialId: row.material_id,
+            learningObjective: row.learning_objective,
+            meetingNo: row.meeting_no,
+            activities: row.activities,
+            reflection: row.reflection,
+            followUp: row.follow_up,
+            lastModified: row.last_modified,
+            version: row.version,
+            deleted: Boolean(row.deleted)
+        };
+        case 'eduadmin_materials': return {
+            id: row.id,
+            classId: row.class_id,
+            userId: row.user_id,
+            subject: row.subject,
+            semester: row.semester,
+            code: row.code,
+            phase: row.phase,
+            content: row.content,
+            subScopes: parseJSONSafe(row.sub_scopes),
+            lastModified: row.last_modified,
+            version: row.version,
+            deleted: Boolean(row.deleted)
+        };
+        case 'eduadmin_schedules': return {
+            id: row.id,
+            userId: row.user_id,
+            day: row.day,
+            timeStart: row.time_start,
+            timeEnd: row.time_end,
+            className: row.class_name,
+            subject: row.subject,
+            lastModified: row.last_modified,
+            version: row.version,
+            deleted: Boolean(row.deleted)
+        };
+        case 'eduadmin_bk_violations': return {
+            id: row.id,
+            studentId: row.student_id,
+            date: row.date,
+            violationName: row.violation_name,
+            points: row.points,
+            description: row.description,
+            reportedBy: row.reported_by,
+            lastModified: row.last_modified,
+            version: row.version,
+            deleted: Boolean(row.deleted)
+        };
+        case 'eduadmin_bk_reductions': return {
+            id: row.id,
+            studentId: row.student_id,
+            date: row.date,
+            activityName: row.activity_name,
+            pointsRemoved: row.points_removed,
+            description: row.description,
+            lastModified: row.last_modified,
+            version: row.version,
+            deleted: Boolean(row.deleted)
+        };
+        case 'eduadmin_bk_achievements': return {
+            id: row.id,
+            studentId: row.student_id,
+            date: row.date,
+            title: row.title,
+            level: row.level,
+            description: row.description,
+            lastModified: row.last_modified,
+            version: row.version,
+            deleted: Boolean(row.deleted)
+        };
+        case 'eduadmin_bk_counseling': return {
+            id: row.id,
+            studentId: row.student_id,
+            date: row.date,
+            issue: row.issue,
+            notes: row.notes,
+            followUp: row.follow_up,
+            status: row.status,
+            lastModified: row.last_modified,
+            version: row.version,
+            deleted: Boolean(row.deleted)
+        };
+        case 'eduadmin_tickets': return {
+            id: row.id,
+            userId: row.user_id,
+            teacherName: row.teacher_name,
+            subject: row.subject,
+            status: row.status,
+            lastUpdated: row.last_updated,
+            messages: parseJSONSafe(row.messages),
+            lastModified: row.last_modified,
+            version: row.version,
+            deleted: Boolean(row.deleted)
+        };
+        case 'eduadmin_api_keys': return {
+            id: row.id,
+            key: row.key_value,
+            provider: row.provider,
+            status: row.status,
+            addedAt: row.added_at,
+            lastModified: row.last_modified,
+            version: row.version,
+            deleted: Boolean(row.deleted)
+        };
+        case 'eduadmin_system_settings': return {
+            id: row.id,
+            featureRppEnabled: Boolean(row.feature_rpp_enabled),
+            maintenanceMessage: row.maintenance_message,
+            appName: row.app_name,
+            schoolName: row.school_name,
+            appDescription: row.app_description,
+            appKeywords: row.app_keywords,
+            logoUrl: row.logo_url,
+            faviconUrl: row.favicon_url,
+            timezone: row.timezone,
+            footerText: row.footer_text,
+            aiProvider: row.ai_provider,
+            aiBaseUrl: row.ai_base_url,
+            aiApiKey: row.ai_api_key,
+            aiModel: row.ai_model,
+            lastModified: row.last_modified,
+            version: row.version,
+            deleted: Boolean(row.deleted)
+        };
+        case 'eduadmin_wa_configs': return {
+            userId: row.user_id,
+            provider: row.provider,
+            baseUrl: row.base_url,
+            apiKey: row.api_key,
+            deviceId: row.device_id,
+            isActive: Boolean(row.is_active),
+            lastModified: row.last_modified,
+            version: row.version,
+            deleted: Boolean(row.deleted)
+        };
+        case 'eduadmin_notifications': return {
+            id: row.id,
+            title: row.title,
+            message: row.message,
+            type: row.type,
+            targetRole: row.target_role,
+            isRead: Boolean(row.is_read),
+            isPopup: Boolean(row.is_popup),
+            createdAt: row.created_at,
+            lastModified: row.last_modified,
+            version: row.version,
+            deleted: Boolean(row.deleted)
+        };
+        case 'eduadmin_logs': return {
+            id: row.id,
+            timestamp: row.timestamp,
+            level: row.level,
+            actor: row.actor,
+            role: row.role,
+            action: row.action,
+            details: row.details,
+            lastModified: row.last_modified,
+            version: row.version,
+            deleted: Boolean(row.deleted)
+        };
+        case 'eduadmin_master_subjects': return {
+            id: row.id,
+            name: row.name,
+            category: row.category,
+            level: row.level,
+            lastModified: row.last_modified,
+            version: row.version,
+            deleted: Boolean(row.deleted)
+        };
+        case 'eduadmin_email_config': return {
+            id: row.id,
+            provider: row.provider,
+            method: row.method,
+            apiKey: row.api_key,
+            smtpHost: row.smtp_host,
+            smtpPort: row.smtp_port,
+            smtpUser: row.smtp_user,
+            smtpPass: row.smtp_pass,
+            fromEmail: row.from_email,
+            fromName: row.from_name,
+            isActive: Boolean(row.is_active),
+            lastModified: row.last_modified,
+            version: row.version,
+            deleted: Boolean(row.deleted)
+        };
+        default: return {};
+    }
 };
 
 const cleanEnv = (val: string | undefined) => {
@@ -485,7 +681,6 @@ const cleanEnv = (val: string | undefined) => {
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // ... rest of the file ... (unchanged)
   let client;
   try {
     if (req.method !== 'POST') {
@@ -605,11 +800,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             }
 
             // CRITICAL FIX: PRESERVE EXISTING PASSWORDS IF NOT PROVIDED
-            // 1. Preserve existing password if client sends null/empty.
-            // 2. Encrypt (Hash) password if client sends plain text.
             if (collection === 'eduadmin_users') {
                 const idsToUpdate = items.map((i: any) => i.id);
-                
                 if (idsToUpdate.length > 0) {
                     try {
                         const pPlaceholders = idsToUpdate.map(() => '?').join(',');
@@ -617,30 +809,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                             sql: `SELECT id, password FROM users WHERE id IN (${pPlaceholders})`,
                             args: idsToUpdate
                         });
-                        
                         const dbPassMap = new Map();
                         passRes.rows.forEach((r: any) => dbPassMap.set(r.id, r.password));
-                        
                         for (const item of items) {
                             if (item.deleted) continue;
-
-                            // CASE A: Password Missing -> Use DB Version
                             if (!item.password) {
                                 if (dbPassMap.has(item.id)) {
                                     item.password = dbPassMap.get(item.id);
                                 }
-                            } 
-                            // CASE B: Password Provided -> Hash if Plain Text
-                            else {
-                                // If it doesn't look like a bcrypt hash ($2...)
+                            } else {
                                 if (!item.password.startsWith('$2')) {
                                     item.password = await bcrypt.hash(item.password, 10);
                                 }
                             }
                         }
-                    } catch (e) {
-                        console.error("Failed to process passwords:", e);
-                    }
+                    } catch (e) { console.error("Failed to process passwords:", e); }
                 }
             }
 
@@ -648,9 +831,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             for (const item of items) {
                 const isDeleted = item.deleted === true || item.deleted === 1;
                 if (isDeleted) {
-                    // HARD DELETE FROM DB IS RISKY FOR SYNC. 
-                    // Better approach: Update 'deleted' column to 1.
-                    // This allows other clients (like Admin) to PULL this change and remove it locally.
                     if (tableConfig) {
                         statements.push({ sql: `UPDATE ${tableName} SET deleted = 1, last_modified = ?, version = version + 1 WHERE id = ?`, args: [Date.now(), item.id] });
                     } else {
@@ -676,7 +856,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     });
                 }
             }
-            if (statements.length > 0) await client.batch(statements);
+            
+            if (statements.length > 0) {
+                try {
+                    await client.batch(statements);
+                } catch (batchError: any) {
+                    // Lazy Migration Hook for System Settings
+                    if (batchError.message && batchError.message.includes('no such column') && collection === 'eduadmin_system_settings') {
+                        console.log("Lazy migration: Adding missing AI columns to system_settings...");
+                        try {
+                            // Try adding columns one by one (ignore errors if they exist)
+                            await client.execute(`ALTER TABLE system_settings ADD COLUMN ai_provider TEXT`).catch(() => {});
+                            await client.execute(`ALTER TABLE system_settings ADD COLUMN ai_base_url TEXT`).catch(() => {});
+                            await client.execute(`ALTER TABLE system_settings ADD COLUMN ai_api_key TEXT`).catch(() => {});
+                            await client.execute(`ALTER TABLE system_settings ADD COLUMN ai_model TEXT`).catch(() => {});
+                            
+                            // Retry batch after migration
+                            await client.batch(statements);
+                        } catch (migErr) {
+                            console.error("Lazy migration failed:", migErr);
+                            throw batchError; 
+                        }
+                    } else {
+                        throw batchError;
+                    }
+                }
+            }
             return res.status(200).json({ success: true, processed: statements.length });
         }
 

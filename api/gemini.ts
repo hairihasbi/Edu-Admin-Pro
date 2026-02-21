@@ -36,6 +36,7 @@ async function getSystemSettings(redis: Redis | null) {
 
     try {
         const client = createClient({ url, authToken, fetch: fetch as any });
+        // Handle "no such column" error if migration hasn't run yet
         const result = await client.execute("SELECT ai_provider, ai_base_url, ai_api_key, ai_model FROM system_settings WHERE id = 'global-settings'");
         client.close();
         
@@ -49,7 +50,11 @@ async function getSystemSettings(redis: Redis | null) {
             if (redis) await redis.set(REDIS_KEY_SYS_SETTINGS, settings, { ex: 300 }); // Cache 5 min
             return settings;
         }
-    } catch (e) {
+    } catch (e: any) {
+        if (e.message && e.message.includes('no such column')) {
+            console.warn("Schema outdated (missing AI columns), defaulting to GOOGLE provider.");
+            return { provider: 'GOOGLE' };
+        }
         console.error("DB Settings Fetch Error:", e);
     }
     return { provider: 'GOOGLE' };
@@ -89,7 +94,7 @@ async function getDatabaseKeys(redis: Redis | null) {
 function shuffleArray<T>(array: T[]): T[] {
     for (let i = array.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
-        [array[i], array[j]] = [array[j], array[i]];
+        [array[i], array[j]] = [array[i], array[i]];
     }
     return array;
 }
