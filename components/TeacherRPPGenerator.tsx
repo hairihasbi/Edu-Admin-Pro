@@ -6,7 +6,8 @@ import { getSystemSettings } from '../services/database';
 import { 
   BrainCircuit, ChevronLeft, ChevronRight, CheckCircle, BookOpen, Save, Printer, 
   FileText, ShieldCheck, RefreshCcw, Trash2, Cloud, AlertTriangle, Download, 
-  Globe, Pencil, Bold, Italic, Heading, List, ListOrdered, Type, LayoutTemplate 
+  Globe, Pencil, Bold, Italic, Heading, List, ListOrdered, Type, LayoutTemplate, X,
+  Underline, AlignLeft, AlignCenter, AlignRight, Undo, Redo
 } from './Icons';
 // @ts-ignore
 import html2pdf from 'html2pdf.js';
@@ -86,7 +87,7 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
   const [isEditing, setIsEditing] = useState(false); 
   
   const resultEndRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const editorRef = useRef<HTMLDivElement>(null); // For ContentEditable
 
   // --- FEATURE TOGGLE CHECK ---
   useEffect(() => {
@@ -138,26 +139,11 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
     }
   }, [rppResult, isGenerating]);
 
-  // --- MARKDOWN WORKBENCH LOGIC ---
-  const insertMarkdown = (prefix: string, suffix: string = '') => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const text = textarea.value;
-    const before = text.substring(0, start);
-    const selection = text.substring(start, end);
-    const after = text.substring(end);
-
-    const newText = before + prefix + selection + suffix + after;
-    setRppResult(newText);
-
-    // Restore focus and cursor position (after insertion)
-    setTimeout(() => {
-        textarea.focus();
-        textarea.setSelectionRange(start + prefix.length, end + prefix.length);
-    }, 0);
+  // --- WYSIWYG EDITOR LOGIC ---
+  const execCmd = (command: string, value: string | undefined = undefined) => {
+    document.execCommand(command, false, value);
+    // Focus back to editor after click button
+    if (editorRef.current) editorRef.current.focus();
   };
 
   const handleGenerateRPP = async () => {
@@ -215,10 +201,16 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
       }
   };
 
-  const formatMarkdownToWordHTML = (md: string) => {
-      if (!md) return '';
+  const formatMarkdownToWordHTML = (content: string) => {
+      if (!content) return '';
       
-      let html = md
+      // CRITICAL: If content looks like HTML (starts with tag), return it as is.
+      // This allows the editor to save HTML back to rppResult and display it correctly.
+      if (content.trim().startsWith('<') && !content.trim().startsWith('<http')) {
+          return content;
+      }
+
+      let html = content
         .replace(/\$\$(.*?)\$\$/gs, (match, tex) => `<div style="text-align:center; margin: 10px 0;">${renderMath(tex, true)}</div>`)
         .replace(/\$([^$]+?)\$/g, (match, tex) => {
             if (!tex || /^\d/.test(tex)) return match;
@@ -257,13 +249,6 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
                         if (index === 0) style += ' width: 10%; text-align: center;';
                         else if (index === 1) style += ' width: 20%; text-align: left; font-weight: bold;';
                         else if (index === 2) style += ' width: 55%; text-align: justify;';
-                        else style += ' width: 15%; text-align: center; font-style: italic;';
-                    }
-                    else if (colCount === 5) {
-                        if (index === 0) style += ' width: 15%; text-align: left; font-weight: bold;';
-                        else if (index === 1) style += ' width: 10%; text-align: center;';
-                        else if (index === 2) style += ' width: 30%; text-align: justify;';
-                        else if (index === 3) style += ' width: 30%; text-align: justify;';
                         else style += ' width: 15%; text-align: center; font-style: italic;';
                     }
                     else {
@@ -572,98 +557,109 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
           </div>
 
           {/* Result Area (WORKBENCH ENABLED) */}
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 min-h-[500px] flex flex-col">
-            <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-4">
-                <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
-                    Hasil RPP <span className="text-xs bg-green-50 text-green-600 px-2 py-1 rounded border border-green-100">Deep Learning</span>
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 h-[600px] flex flex-col overflow-hidden">
+            {/* Workbench Header */}
+            <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                    {isEditing ? <Pencil size={20} className="text-orange-500"/> : <CheckCircle size={20} className="text-green-500"/>}
+                    {isEditing ? 'Workbench Editor' : 'Preview RPP'}
                 </h3>
                 
                 {rppResult && !isGenerating && (
-                    <div className="flex flex-wrap items-center gap-2">
-                        {/* MODE TOGGLE: EDIT vs VIEW */}
+                    <div className="flex items-center gap-2">
+                        {/* MODE TOGGLE */}
                         <button 
                             onClick={() => setIsEditing(!isEditing)} 
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition text-sm font-bold shadow-sm ${
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition text-xs font-bold shadow-sm ${
                                 isEditing 
-                                ? 'bg-green-600 text-white hover:bg-green-700 ring-2 ring-green-600 ring-offset-1' 
-                                : 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100 border border-yellow-200'
+                                ? 'bg-green-600 text-white hover:bg-green-700' 
+                                : 'bg-orange-500 text-white hover:bg-orange-600'
                             }`}
-                            title={isEditing ? "Simpan Perubahan & Selesai" : "Buka Mode Workbench (Editor Canggih)"}
                         >
-                            {isEditing ? <CheckCircle size={16} /> : <LayoutTemplate size={16} />} 
-                            {isEditing ? "Simpan (Selesai)" : "Workbench"}
+                            {isEditing ? <CheckCircle size={14} /> : <Pencil size={14} />} 
+                            {isEditing ? "Simpan (Selesai)" : "Workbench (Editor)"}
                         </button>
 
                         {!isEditing && (
-                            <>
-                                <div className="h-6 w-px bg-gray-300 mx-1 hidden md:block"></div>
-                                <button onClick={handlePrint} className="flex items-center gap-2 px-3 py-2 bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200 rounded-lg transition text-sm font-medium" title="Cetak ke Printer">
-                                    <Printer size={16} /> <span className="hidden sm:inline">Cetak</span>
+                            <div className="flex gap-1">
+                                <button onClick={handlePrint} className="p-2 bg-white text-gray-700 hover:bg-gray-50 border border-gray-200 rounded-lg shadow-sm" title="Cetak">
+                                    <Printer size={16} />
                                 </button>
-                                <button onClick={handleExportDocx} className="flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 rounded-lg transition text-sm font-medium" title="Unduh format Word (.doc)">
-                                    <FileText size={16} /> <span className="hidden sm:inline">Word</span>
+                                <button onClick={handleExportDocx} className="p-2 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 rounded-lg shadow-sm" title="Word">
+                                    <FileText size={16} />
                                 </button>
-                                <button onClick={handleExportPDF} className="flex items-center gap-2 px-3 py-2 bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 rounded-lg transition text-sm font-medium" title="Unduh format PDF (.pdf)">
-                                    <Download size={16} /> <span className="hidden sm:inline">PDF</span>
+                                <button onClick={handleExportPDF} className="p-2 bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 rounded-lg shadow-sm" title="PDF">
+                                    <Download size={16} />
                                 </button>
-                            </>
+                            </div>
                         )}
                     </div>
                 )}
             </div>
             
-            <div className="flex-1 bg-gray-50 rounded-lg p-4 border border-gray-200 overflow-y-auto max-h-[600px] scrollbar-thin scrollbar-thumb-gray-300">
+            {/* Content Area */}
+            <div className="flex-1 relative flex flex-col min-h-0 bg-gray-50">
               {isGenerating ? (
-                 <div className="flex flex-col items-center justify-center h-full text-gray-400 space-y-4 min-h-[300px]">
+                 <div className="flex flex-col items-center justify-center h-full text-gray-400 space-y-4">
                     <div className="animate-spin rounded-full h-10 w-10 border-4 border-purple-200 border-t-purple-600"></div>
-                    <p className="animate-pulse">{genStatus} ({genProgress}%)</p>
+                    <p className="animate-pulse font-medium">{genStatus} ({genProgress}%)</p>
                  </div>
               ) : !rppResult ? (
-                 <div className="flex flex-col items-center justify-center h-full text-gray-400 min-h-[300px]">
+                 <div className="flex flex-col items-center justify-center h-full text-gray-400">
                     <BookOpen size={48} className="mb-2 opacity-20" />
-                    <p className="text-center">Hasil RPP akan muncul di sini.</p>
+                    <p>Hasil RPP akan muncul di sini.</p>
                  </div>
               ) : isEditing ? (
-                 // --- WORKBENCH MODE (MARKDOWN EDITOR) ---
-                 <div className="h-full flex flex-col">
-                    <div className="bg-white p-2 mb-2 rounded-lg border border-gray-200 flex flex-wrap gap-1 shadow-sm sticky top-0 z-10">
-                        <div className="flex items-center px-2 text-xs font-bold text-gray-500 uppercase tracking-wider mr-2">
-                            Workbench Tools:
+                 // --- WORKBENCH MODE (WYSIWYG EDITOR) ---
+                 <div className="flex flex-col h-full bg-gray-100">
+                    {/* Fixed Toolbar */}
+                    <div className="bg-white p-2 border-b border-gray-200 flex flex-wrap gap-1 shadow-sm shrink-0 z-10 items-center justify-center">
+                        <div className="flex gap-1 bg-gray-50 rounded-lg p-1 border border-gray-200">
+                            <button onMouseDown={(e) => {e.preventDefault(); execCmd('undo');}} className="p-1.5 hover:bg-gray-200 rounded text-gray-600" title="Undo"><Undo size={16}/></button>
+                            <button onMouseDown={(e) => {e.preventDefault(); execCmd('redo');}} className="p-1.5 hover:bg-gray-200 rounded text-gray-600" title="Redo"><Redo size={16}/></button>
                         </div>
-                        <button onClick={() => insertMarkdown('**', '**')} className="p-2 hover:bg-gray-100 rounded text-gray-700 border border-transparent hover:border-gray-300 transition" title="Bold"><Bold size={16}/></button>
-                        <button onClick={() => insertMarkdown('*', '*')} className="p-2 hover:bg-gray-100 rounded text-gray-700 border border-transparent hover:border-gray-300 transition" title="Italic"><Italic size={16}/></button>
-                        <div className="w-px bg-gray-300 h-6 mx-1 self-center"></div>
-                        <button onClick={() => insertMarkdown('# ', '')} className="p-2 hover:bg-gray-100 rounded text-gray-700 font-bold border border-transparent hover:border-gray-300 transition" title="H1"><Type size={16}/></button>
-                        <button onClick={() => insertMarkdown('## ', '')} className="p-2 hover:bg-gray-100 rounded text-gray-700 font-bold text-sm border border-transparent hover:border-gray-300 transition" title="H2"><Heading size={16}/></button>
-                        <button onClick={() => insertMarkdown('### ', '')} className="p-2 hover:bg-gray-100 rounded text-gray-700 font-bold text-xs border border-transparent hover:border-gray-300 transition" title="H3"><Heading size={14}/></button>
-                        <div className="w-px bg-gray-300 h-6 mx-1 self-center"></div>
-                        <button onClick={() => insertMarkdown('- ', '')} className="p-2 hover:bg-gray-100 rounded text-gray-700 border border-transparent hover:border-gray-300 transition" title="Bullet List"><List size={16}/></button>
-                        <button onClick={() => insertMarkdown('1. ', '')} className="p-2 hover:bg-gray-100 rounded text-gray-700 border border-transparent hover:border-gray-300 transition" title="Numbered List"><ListOrdered size={16}/></button>
-                        <div className="w-px bg-gray-300 h-6 mx-1 self-center"></div>
-                        <button onClick={() => insertMarkdown('\n| Header 1 | Header 2 |\n| --- | --- |\n| Cell 1 | Cell 2 |\n', '')} className="p-2 hover:bg-gray-100 rounded text-gray-700 flex items-center gap-1 text-xs border border-transparent hover:border-gray-300 transition" title="Insert Table">
-                            <FileText size={16}/> Tabel
-                        </button>
+                        <div className="w-px h-6 bg-gray-300 mx-1"></div>
+                        <div className="flex gap-1 bg-gray-50 rounded-lg p-1 border border-gray-200">
+                            <button onMouseDown={(e) => {e.preventDefault(); execCmd('bold');}} className="p-1.5 hover:bg-gray-200 rounded text-gray-700 font-bold" title="Bold"><Bold size={16}/></button>
+                            <button onMouseDown={(e) => {e.preventDefault(); execCmd('italic');}} className="p-1.5 hover:bg-gray-200 rounded text-gray-700 italic" title="Italic"><Italic size={16}/></button>
+                            <button onMouseDown={(e) => {e.preventDefault(); execCmd('underline');}} className="p-1.5 hover:bg-gray-200 rounded text-gray-700 underline" title="Underline"><Underline size={16}/></button>
+                        </div>
+                        <div className="w-px h-6 bg-gray-300 mx-1"></div>
+                        <div className="flex gap-1 bg-gray-50 rounded-lg p-1 border border-gray-200">
+                            <button onMouseDown={(e) => {e.preventDefault(); execCmd('justifyLeft');}} className="p-1.5 hover:bg-gray-200 rounded text-gray-700" title="Left"><AlignLeft size={16}/></button>
+                            <button onMouseDown={(e) => {e.preventDefault(); execCmd('justifyCenter');}} className="p-1.5 hover:bg-gray-200 rounded text-gray-700" title="Center"><AlignCenter size={16}/></button>
+                            <button onMouseDown={(e) => {e.preventDefault(); execCmd('justifyRight');}} className="p-1.5 hover:bg-gray-200 rounded text-gray-700" title="Right"><AlignRight size={16}/></button>
+                        </div>
+                        <div className="w-px h-6 bg-gray-300 mx-1"></div>
+                        <div className="flex gap-1 bg-gray-50 rounded-lg p-1 border border-gray-200">
+                            <button onMouseDown={(e) => {e.preventDefault(); execCmd('formatBlock', 'H3');}} className="p-1.5 hover:bg-gray-200 rounded text-gray-700 font-bold text-xs" title="Heading">H1</button>
+                            <button onMouseDown={(e) => {e.preventDefault(); execCmd('insertUnorderedList');}} className="p-1.5 hover:bg-gray-200 rounded text-gray-700" title="Bullet List"><List size={16}/></button>
+                            <button onMouseDown={(e) => {e.preventDefault(); execCmd('insertOrderedList');}} className="p-1.5 hover:bg-gray-200 rounded text-gray-700" title="Numbered List"><ListOrdered size={16}/></button>
+                        </div>
                     </div>
                     
-                    <textarea
-                        ref={textareaRef}
-                        className="w-full flex-1 p-4 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none font-mono text-sm leading-relaxed resize-none shadow-inner"
-                        value={rppResult}
-                        onChange={(e) => setRppResult(e.target.value)}
-                        placeholder="Mulai ketik atau edit konten RPP di sini..."
-                        spellCheck={false}
-                    />
-                    <div className="text-xs text-gray-400 mt-2 text-right">Markdown Supported</div>
+                    {/* Visual Editor Page */}
+                    <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-gray-100 flex justify-center">
+                        <div
+                            ref={editorRef}
+                            contentEditable
+                            className="bg-white w-full max-w-[210mm] min-h-[297mm] p-[20mm] shadow-lg outline-none text-gray-800 text-justify leading-relaxed prose prose-sm max-w-none focus:ring-2 focus:ring-blue-500/20"
+                            style={{ fontFamily: "'Times New Roman', serif", fontSize: '12pt' }}
+                            dangerouslySetInnerHTML={{ __html: formatMarkdownToWordHTML(rppResult) }}
+                            onInput={(e) => setRppResult(e.currentTarget.innerHTML)}
+                        />
+                    </div>
                  </div>
               ) : (
                  // VIEW MODE
-                 <>
+                 <div className="overflow-y-auto p-8 h-full bg-white scrollbar-thin scrollbar-thumb-gray-300 flex justify-center">
                     <div 
-                        className="prose prose-sm max-w-none whitespace-pre-wrap font-sans text-gray-700 leading-relaxed text-justify"
+                        className="prose prose-sm max-w-[210mm] w-full whitespace-pre-wrap font-serif text-gray-800 leading-relaxed text-justify"
+                        style={{ fontFamily: "'Times New Roman', serif", fontSize: '12pt' }}
                         dangerouslySetInnerHTML={{ __html: formatMarkdownToWordHTML(rppResult) }}
                     ></div>
                     <div ref={resultEndRef}></div>
-                 </>
+                 </div>
               )}
             </div>
           </div>

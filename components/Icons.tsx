@@ -93,7 +93,13 @@ import {
   Italic, // Added
   Heading, // Added
   ListOrdered, // Added
-  Type // Added
+  Type, // Added
+  Underline, // Added
+  AlignLeft, // Added
+  AlignCenter, // Added
+  AlignRight, // Added
+  Undo, // Added
+  Redo // Added
 } from 'lucide-react';
 
 export {
@@ -190,5 +196,11 @@ export {
   Italic,
   Heading,
   ListOrdered,
-  Type
+  Type,
+  Underline,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  Undo,
+  Redo
 };
