@@ -40,8 +40,8 @@ export class EduAdminDatabase extends Dexie {
     // * = Multi-entry index (not used here)
     // [field] = Indexed field for searching
     // Added schoolNpsn indexes for multi-tenancy filtering
-    // Bumped to version 13 to ensure schema integrity
-    (this as any).version(13).stores({
+    // Bumped to version 14 to include new fields
+    (this as any).version(14).stores({
       users: '&id, username, role, status, schoolNpsn, isSynced',
       classes: '&id, userId, schoolNpsn, name, isSynced', 
       students: '&id, classId, schoolNpsn, name, nis, gender, isSynced', 
