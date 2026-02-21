@@ -45,6 +45,11 @@ export interface SystemSettings extends Syncable {
   faviconUrl?: string; // URL Favicon
   timezone?: string; // e.g. 'Asia/Jakarta'
   footerText?: string;
+  // AI Configuration (LiteLLM / Custom Gateway)
+  aiProvider?: 'GOOGLE' | 'CUSTOM';
+  aiBaseUrl?: string; // e.g. https://my-litellm.com/v1
+  aiApiKey?: string; // Custom Key
+  aiModel?: string; // e.g. gemini-pro, gpt-3.5-turbo (mapped in gateway)
 }
 
 export interface MasterSubject extends Syncable {
