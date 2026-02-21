@@ -88,7 +88,12 @@ import {
   LayoutTemplate,
   ArrowLeftRight, // Added
   Pencil, // Added Pencil
-  RotateCcw // Added RotateCcw
+  RotateCcw, // Added RotateCcw
+  Bold, // Added
+  Italic, // Added
+  Heading, // Added
+  ListOrdered, // Added
+  Type // Added
 } from 'lucide-react';
 
 export {
@@ -180,5 +185,10 @@ export {
   LayoutTemplate,
   ArrowLeftRight,
   Pencil,
-  RotateCcw
+  RotateCcw,
+  Bold,
+  Italic,
+  Heading,
+  ListOrdered,
+  Type
 };

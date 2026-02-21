@@ -3,7 +3,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { User, LessonPlanRequest, SystemSettings } from '../types';
 import { generateLessonPlan } from '../services/geminiService';
 import { getSystemSettings } from '../services/database';
-import { BrainCircuit, ChevronLeft, ChevronRight, CheckCircle, BookOpen, Save, Printer, FileText, ShieldCheck, RefreshCcw, Trash2, Cloud, AlertTriangle, Download, Globe, Pencil } from './Icons';
+import { 
+  BrainCircuit, ChevronLeft, ChevronRight, CheckCircle, BookOpen, Save, Printer, 
+  FileText, ShieldCheck, RefreshCcw, Trash2, Cloud, AlertTriangle, Download, 
+  Globe, Pencil, Bold, Italic, Heading, List, ListOrdered, Type 
+} from './Icons';
 // @ts-ignore
 import html2pdf from 'html2pdf.js';
 // @ts-ignore
@@ -13,7 +17,7 @@ interface TeacherRPPGeneratorProps {
   user: User;
 }
 
-// --- DATA LISTS (Tetap Sama) ---
+// --- DATA LISTS ---
 const LEARNING_MODELS = [
   "Flipped Classroom - Standard", "Flipped Classroom - Debate Oriented", "Flipped Classroom - Mastery", "Flipped Classroom - Group Based",
   "Cooperative Learning - STAD", "Cooperative Learning - Jigsaw", "Cooperative Learning - Group Investigation", "Cooperative Learning - TGT",
@@ -71,7 +75,7 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
     graduateProfileDimensions: [],
     assessmentType: ASSESSMENT_TYPES[0],
     assessmentInstrument: ASSESSMENT_INSTRUMENTS[0],
-    useSearch: false // Default to false
+    useSearch: false
   };
 
   const [rppData, setRppData] = useState<LessonPlanRequest>(initialRppData);
@@ -79,8 +83,10 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [genProgress, setGenProgress] = useState(0);
   const [genStatus, setGenStatus] = useState('Menginisialisasi AI...');
-  const [isEditing, setIsEditing] = useState(false); // NEW STATE FOR EDITING
+  const [isEditing, setIsEditing] = useState(false); 
+  
   const resultEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // --- FEATURE TOGGLE CHECK ---
   useEffect(() => {
@@ -132,15 +138,35 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
     }
   }, [rppResult, isGenerating]);
 
+  // --- MARKDOWN WORKBENCH LOGIC ---
+  const insertMarkdown = (prefix: string, suffix: string = '') => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const text = textarea.value;
+    const before = text.substring(0, start);
+    const selection = text.substring(start, end);
+    const after = text.substring(end);
+
+    const newText = before + prefix + selection + suffix + after;
+    setRppResult(newText);
+
+    // Restore focus and cursor position (after insertion)
+    setTimeout(() => {
+        textarea.focus();
+        textarea.setSelectionRange(start + prefix.length, end + prefix.length);
+    }, 0);
+  };
+
   const handleGenerateRPP = async () => {
-    // Ensure UI state is clean before starting
     setRppResult(''); 
-    setIsEditing(false); // Reset editing mode
+    setIsEditing(false);
     setGenProgress(0);
     setGenStatus(rppData.useSearch ? 'Menghubungkan ke Google Search...' : 'Menghubungkan ke Gemini AI...');
     setIsGenerating(true);
     
-    // Add small delay to ensure React state flushes completely
     await new Promise(r => setTimeout(r, 100));
 
     await generateLessonPlan(
@@ -177,80 +203,52 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
     });
   };
 
-  // --- HELPER: RENDER LATEX ---
   const renderMath = (latex: string, displayMode: boolean) => {
       try {
           return katex.renderToString(latex, {
               throwOnError: false,
               displayMode: displayMode,
-              output: 'html' // Use HTML+CSS for PDF/Print fidelity
+              output: 'html'
           });
       } catch (e) {
           return latex;
       }
   };
 
-  // --- HELPER: CONVERT MARKDOWN TO HTML FOR WORD/PDF (FIXED TABLE ALIGNMENT & WIDTHS + LATEX) ---
   const formatMarkdownToWordHTML = (md: string) => {
       if (!md) return '';
       
       let html = md
-        // --- LATEX PARSING ---
-        // Block math: $$ ... $$
-        .replace(/\$\$(.*?)\$\$/gs, (match, tex) => {
-            return `<div style="text-align:center; margin: 10px 0;">${renderMath(tex, true)}</div>`;
-        })
-        // Inline math: $ ... $ (excluding typical currency usage like $100)
+        .replace(/\$\$(.*?)\$\$/gs, (match, tex) => `<div style="text-align:center; margin: 10px 0;">${renderMath(tex, true)}</div>`)
         .replace(/\$([^$]+?)\$/g, (match, tex) => {
-            // Check if it looks like currency (digit follows $) or just empty
             if (!tex || /^\d/.test(tex)) return match;
             return renderMath(tex, false);
         })
-
-        // --- MARKDOWN PARSING ---
-        // Headers (Reduced Margins for Compactness)
         .replace(/###\s+(.*?)\n/g, '<h3 style="margin-top:10pt; margin-bottom:2pt; font-size:12pt; font-weight:bold; text-transform:uppercase;">$1</h3>')
         .replace(/##\s+(.*?)\n/g, '<h2 style="margin-top:15pt; margin-bottom:5pt; font-size:14pt; font-weight:bold; text-align:center; text-transform:uppercase;">$1</h2>')
         .replace(/#\s+(.*?)\n/g, '<h1 style="margin-top:15pt; margin-bottom:5pt; font-size:16pt; font-weight:bold; text-align:center; text-transform:uppercase; text-decoration: underline;">$1</h1>')
-        // Bold: **text** -> <b>text</b>
         .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
-        // Italic: *text* -> <i>text</i>
         .replace(/\*(.*?)\*/g, '<i>$1</i>')
-        // Bullet points
         .replace(/^\s*-\s+(.*)$/gm, '<li style="text-align: justify;">$1</li>')
         .replace(/((<li.*>.*<\/li>\n?)+)/g, '<ul>$1</ul>')
-        // Ordered lists
         .replace(/^\s*\d+\.\s+(.*)$/gm, '<li style="text-align: justify;">$1</li>')
         .replace(/((<li.*>.*<\/li>\n?)+)/g, '<ol>$1</ol>')
-        // Tables (Standard Markdown with FIXED COLUMN WIDTH & SIGNATURE LOGIC)
         .replace(/\|(.+)\|/g, (match) => {
-            const cells = match.split('|').filter((s, i, arr) => {
-                // Filter out empty strings that come from splitting | at start/end
-                return !(s.trim() === '' && (i === 0 || i === arr.length - 1));
-            });
-            // Check if it's a separator row (---)
+            const cells = match.split('|').filter((s, i, arr) => !(s.trim() === '' && (i === 0 || i === arr.length - 1)));
             if (cells.some(c => c.includes('---'))) return ''; 
-
             const colCount = cells.length;
-            
-            // Check content to determine style
             const rowContent = cells.join(' ');
             const isSignature = rowContent.includes('Mengetahui') || rowContent.includes('Guru Mata Pelajaran') || rowContent.includes('NIP.');
-            
             return '<tr>' + cells.map((cell, index) => {
-                // Default styles (Bordered)
                 let style = 'padding: 5px; vertical-align: top; border: 1px solid black;';
-                
                 if (isSignature) {
                     style = 'padding: 5px; vertical-align: top; border: none; width: 50%; text-align: center;'; 
                 } else {
-                    // Normal Table Widths (Activities etc)
                     if (colCount === 2) {
                         if (index === 0) style += ' width: 25%; text-align: left; font-weight: bold;'; 
                         else style += ' width: 75%; text-align: justify;'; 
                     } 
                     else if (colCount === 3) {
-                         // e.g. Waktu | Aktivitas | DL
                          if (index === 0) style += ' width: 15%; text-align: center;';
                          else if (index === 1) style += ' width: 65%; text-align: justify;';
                          else style += ' width: 20%; text-align: center; font-style: italic;';
@@ -272,45 +270,28 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
                         style += ' text-align: justify;';
                     }
                 }
-
                 return `<td style="${style}">${cell.trim() || '&nbsp;'}</td>`;
             }).join('') + '</tr>';
         })
-        // Newlines: Check for double newlines first (Paragraphs), then single (Line break)
-        // Adjust spacing for compactness
         .replace(/\n\n/g, '</p><p style="text-align: justify; margin-bottom: 6pt;">')
         .replace(/\n/g, '<br/>');
 
-      // Wrap tables if any rows detected and remove empty header marker rows
       if (html.includes('<tr>')) {
-          html = html.replace(/<tr>\s*<\/tr>/g, ''); // Remove empty rows from markdown separator lines
-          
-          // Custom wrapper logic
+          html = html.replace(/<tr>\s*<\/tr>/g, ''); 
           html = html.replace(/((<tr>.*?<\/tr>)+)/g, (match) => {
-              // 1. Signature Table (Mengetahui)
               if (match.includes('Mengetahui') || match.includes('Guru Mata Pelajaran')) {
                   return `<table border="0" style="width:100%; border-collapse:collapse; margin-top:30px; border: none;">${match}</table>`;
               }
-              
-              // 3. Normal Tables (Bordered) - Fallback for other tables
               return `<table border="1" cellspacing="0" cellpadding="5" style="width:100%; border-collapse:collapse; margin-bottom:15px; border: 1px solid black;">${match}</table>`;
           });
       }
-      
-      // Wrap content in p if not already started
-      if (!html.startsWith('<')) {
-          html = '<p style="text-align: justify; margin-bottom: 6pt;">' + html + '</p>';
-      }
-
+      if (!html.startsWith('<')) html = '<p style="text-align: justify; margin-bottom: 6pt;">' + html + '</p>';
       return html;
   };
 
-  // --- EXPORT FUNCTIONS ---
   const handleExportDocx = () => {
     if (!rppResult) return;
-
     const formattedBody = formatMarkdownToWordHTML(rppResult);
-
     const htmlContent = `
       <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
       <head>
@@ -324,16 +305,12 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
           ul, ol { margin-top: 0; margin-bottom: 5pt; padding-left: 20pt; }
           li { margin-bottom: 2pt; }
           p { margin-top: 0; margin-bottom: 6pt; text-align: justify; }
-          /* Minimal KaTeX styles for Word compat */
           .katex { font-size: 1.1em; font-family: 'Times New Roman', serif; }
         </style>
       </head>
-      <body>
-        ${formattedBody}
-      </body>
+      <body>${formattedBody}</body>
       </html>
     `;
-
     const blob = new Blob(['\ufeff', htmlContent], { type: 'application/msword' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -346,18 +323,13 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
 
   const handleExportPDF = async () => {
     if (!rppResult) return;
-    
-    // We need to format the HTML first, forcing Math rendering
     const formattedBody = formatMarkdownToWordHTML(rppResult);
-    
-    // Create a temporary container with improved styles for PDF
     const element = document.createElement('div');
     element.innerHTML = `
       <div style="font-family: 'Arial', sans-serif; padding: 25px; color: #000; font-size: 11pt; text-align: justify; line-height: 1.3;">
         <style>
            h1, h2 { text-align: center; font-weight: bold; text-transform: uppercase; margin-bottom: 10px; font-size: 14pt; }
            h3 { font-weight: bold; margin-top: 10px; margin-bottom: 5px; font-size: 12pt; text-transform: uppercase; }
-           /* Default Table Styles */
            table { width: 100%; border-collapse: collapse; margin-bottom: 10px; margin-top: 5px; page-break-inside: avoid !important; }
            tr { page-break-inside: avoid !important; page-break-after: auto; }
            td, th { padding: 5px; vertical-align: top; text-align: justify; }
@@ -365,28 +337,20 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
            li { margin-bottom: 3px; }
            p { margin-bottom: 6px; margin-top: 0; text-align: justify; }
            .page-break { page-break-before: always; }
-           .katex { font-size: 1em !important; } /* Fix math size in PDF */
+           .katex { font-size: 1em !important; } 
         </style>
         ${formattedBody}
       </div>
     `;
-    
-    // PDF Options
     const opt = {
-      margin:       15, // mm
-      filename:     `RPP_${rppData.subject.replace(/\s+/g, '_')}_${rppData.grade}.pdf`,
-      image:        { type: 'jpeg' as const, quality: 0.98 },
-      html2canvas:  { scale: 2, useCORS: true },
-      jsPDF:        { unit: 'mm' as const, format: 'a4' as const, orientation: 'portrait' as const },
-      pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
+      margin: 15, filename: `RPP_${rppData.subject.replace(/\s+/g, '_')}_${rppData.grade}.pdf`,
+      image: { type: 'jpeg' as const, quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true },
+      jsPDF: { unit: 'mm' as const, format: 'a4' as const, orientation: 'portrait' as const },
+      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
     };
-
-    try {
-      await html2pdf().set(opt).from(element).save();
-    } catch (e) {
-      console.error("PDF generation failed:", e);
-      alert("Gagal membuat PDF. Silakan coba 'Cetak' lalu 'Simpan sebagai PDF'.");
-    }
+    try { await html2pdf().set(opt).from(element).save(); } 
+    catch (e) { alert("Gagal membuat PDF. Silakan coba 'Cetak' lalu 'Simpan sebagai PDF'."); }
   };
 
   const handlePrint = () => {
@@ -394,10 +358,7 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
     const printWindow = window.open('', '', 'height=800,width=800');
     if (!printWindow) return;
     const formattedBody = formatMarkdownToWordHTML(rppResult);
-    
-    // Grab KaTeX CSS link from main document to ensure styles carry over to print window
     const katexLink = (document.querySelector('link[href*="katex"]') as HTMLLinkElement)?.href || 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css';
-
     printWindow.document.write(`
       <html>
         <head>
@@ -411,13 +372,7 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
             td, th { padding: 6px; vertical-align: top; text-align: justify; }
             ul, ol { padding-left: 25px; margin-top: 0; }
             p { text-align: justify; margin-bottom: 6px; }
-            @media print {
-               button { display: none; }
-               body { margin: 0; padding: 0; }
-               @page { margin: 2cm; }
-               table { page-break-inside: avoid; }
-               tr { page-break-inside: avoid; }
-            }
+            @media print { button { display: none; } body { margin: 0; padding: 0; } @page { margin: 2cm; } table { page-break-inside: avoid; } tr { page-break-inside: avoid; } }
           </style>
         </head>
         <body>${formattedBody}</body>
@@ -430,7 +385,6 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
       return <div className="p-8 text-center text-gray-500">Memuat status fitur...</div>;
   }
 
-  // --- MAINTENANCE VIEW ---
   if (settings && !settings.featureRppEnabled && user.role !== 'ADMIN') {
       return (
           <div className="max-w-2xl mx-auto mt-10 p-8 bg-white rounded-xl shadow-lg border border-yellow-200 text-center animate-in fade-in zoom-in duration-300">
@@ -464,8 +418,7 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-2">
           {/* Main Wizard Area */}
           <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
-             
-             {/* Wizard Header */}
+             {/* Wizard Header & Content Omitted for Brevity (Standard Steps) */}
              <div className="bg-gray-50 p-6 border-b border-gray-100">
                 <div className="flex justify-between items-center mb-4">
                     <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Langkah Pembuatan</span>
@@ -473,7 +426,6 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
                         <Trash2 size={12} /> Reset Draft
                     </button>
                 </div>
-                {/* Steps Indicator */}
                 <div className="flex items-center justify-between relative">
                    <div className="absolute left-0 top-1/2 w-full h-1 bg-gray-200 -z-0"></div>
                    {[1, 2, 3, 4].map(step => (
@@ -485,11 +437,10 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
                 </div>
              </div>
 
-             {/* Wizard Content */}
              <div className="p-6 flex-1 overflow-y-auto max-h-[600px]">
-                {/* STEP 1: IDENTITAS */}
                 {rppStep === 1 && (
                    <div className="space-y-5 animate-in fade-in slide-in-from-right-4">
+                      {/* Step 1 Inputs */}
                       <div className="space-y-3">
                          <label className="block text-sm font-bold text-gray-800">Pilih Kurikulum</label>
                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -505,6 +456,7 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
                             </label>
                          </div>
                       </div>
+                      {/* Identity Fields */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
                          <div><label className="block text-xs font-semibold text-gray-600 mb-1">Nama Penyusun</label><input type="text" className="w-full border rounded-lg p-2 text-sm" value={rppData.teacherName} onChange={e => handleRppChange('teacherName', e.target.value)} /></div>
                          <div><label className="block text-xs font-semibold text-gray-600 mb-1">NIP Penyusun</label><input type="text" className="w-full border rounded-lg p-2 text-sm" value={rppData.teacherNip} onChange={e => handleRppChange('teacherNip', e.target.value)} /></div>
@@ -527,9 +479,9 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
                    </div>
                 )}
 
-                {/* STEP 2: DETAIL */}
                 {rppStep === 2 && (
                    <div className="space-y-5 animate-in fade-in slide-in-from-right-4">
+                      {/* Step 2 Inputs */}
                       <div><label className="block text-sm font-bold text-gray-800 mb-1">Topik / Materi Pokok</label><input type="text" className="w-full border border-gray-300 rounded-lg p-2.5 text-sm" placeholder="Contoh: Hukum Newton" value={rppData.topic} onChange={e => handleRppChange('topic', e.target.value)} /></div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                          <div><label className="block text-sm font-bold text-gray-800 mb-1">Model Pembelajaran</label><select className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-white" value={rppData.learningModel} onChange={e => handleRppChange('learningModel', e.target.value)}>{LEARNING_MODELS.map(m => <option key={m} value={m}>{m}</option>)}</select></div>
@@ -556,7 +508,6 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
                    </div>
                 )}
 
-                {/* STEP 3: ASESMEN */}
                 {rppStep === 3 && (
                    <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
                       <div><label className="block text-sm font-bold text-gray-800 mb-2">Jenis Asesmen</label><div className="grid grid-cols-1 md:grid-cols-2 gap-3">{ASSESSMENT_TYPES.map(type => (<label key={type} className={`border rounded-lg p-3 cursor-pointer flex items-center justify-between transition ${rppData.assessmentType === type ? 'border-purple-600 bg-purple-50' : 'hover:bg-gray-50'}`}><span className="text-sm font-medium">{type}</span><input type="radio" name="assessType" checked={rppData.assessmentType === type} onChange={() => handleRppChange('assessmentType', type)} className="text-purple-600 focus:ring-purple-500" /></label>))}</div></div>
@@ -564,7 +515,6 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
                    </div>
                 )}
 
-                {/* STEP 4: REVIEW & GENERATE */}
                 {rppStep === 4 && (
                    <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
                       <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
@@ -576,7 +526,6 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
                          </div>
                       </div>
 
-                      {/* AI Fact Check Toggle */}
                       <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-center justify-between">
                           <div>
                               <h4 className="text-blue-800 font-bold flex items-center gap-2">
@@ -618,21 +567,19 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
                 )}
              </div>
 
-             {/* Footer Nav */}
              <div className="p-4 border-t border-gray-100 flex justify-between bg-white">
                 <button onClick={() => setRppStep(p => Math.max(1, p - 1))} disabled={rppStep === 1 || isGenerating} className="px-4 py-2 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-50 flex items-center gap-1 transition"><ChevronLeft size={18} /> Kembali</button>
                 {rppStep < 4 && <button onClick={() => setRppStep(p => Math.min(4, p + 1))} className="px-6 py-2 rounded-lg bg-purple-600 text-white hover:bg-purple-700 flex items-center gap-1 transition shadow-sm">Lanjut <ChevronRight size={18} /></button>}
              </div>
           </div>
 
-          {/* Result Area */}
+          {/* Result Area (WORKBENCH ENABLED) */}
           <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 min-h-[500px] flex flex-col">
             <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-4">
                 <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
                     Hasil RPP <span className="text-xs bg-green-50 text-green-600 px-2 py-1 rounded border border-green-100">Deep Learning</span>
                 </h3>
                 
-                {/* Action Buttons Toolbar */}
                 {rppResult && !isGenerating && (
                     <div className="flex flex-wrap items-center gap-2">
                         {/* MODE TOGGLE: EDIT vs VIEW */}
@@ -643,13 +590,12 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
                                 ? 'bg-green-600 text-white hover:bg-green-700 ring-2 ring-green-600 ring-offset-1' 
                                 : 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100 border border-yellow-200'
                             }`}
-                            title={isEditing ? "Simpan Perubahan & Selesai" : "Edit Teks RPP Secara Manual"}
+                            title={isEditing ? "Simpan Perubahan & Selesai" : "Buka Mode Editor (Workbench)"}
                         >
                             {isEditing ? <CheckCircle size={16} /> : <Pencil size={16} />} 
-                            {isEditing ? "Selesai" : "Edit Teks"}
+                            {isEditing ? "Selesai" : "Editor"}
                         </button>
 
-                        {/* EXPORT BUTTONS (Hidden while editing) */}
                         {!isEditing && (
                             <>
                                 <div className="h-6 w-px bg-gray-300 mx-1 hidden md:block"></div>
@@ -670,33 +616,46 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
             
             <div className="flex-1 bg-gray-50 rounded-lg p-4 border border-gray-200 overflow-y-auto max-h-[600px] scrollbar-thin scrollbar-thumb-gray-300">
               {isGenerating ? (
-                 // Generating State...
                  <div className="flex flex-col items-center justify-center h-full text-gray-400 space-y-4 min-h-[300px]">
                     <div className="animate-spin rounded-full h-10 w-10 border-4 border-purple-200 border-t-purple-600"></div>
                     <p className="animate-pulse">{genStatus} ({genProgress}%)</p>
                  </div>
               ) : !rppResult ? (
-                 // Empty State...
                  <div className="flex flex-col items-center justify-center h-full text-gray-400 min-h-[300px]">
                     <BookOpen size={48} className="mb-2 opacity-20" />
                     <p className="text-center">Hasil RPP akan muncul di sini.</p>
                  </div>
               ) : isEditing ? (
-                 // EDIT MODE: Textarea
+                 // --- WORKBENCH MODE (MARKDOWN EDITOR) ---
                  <div className="h-full flex flex-col">
-                    <div className="bg-yellow-50 text-yellow-800 text-xs p-2 mb-2 rounded border border-yellow-200 flex items-center gap-2">
-                        <Pencil size={12}/> Mode Edit: Anda dapat mengubah teks RPP secara langsung. Klik "Selesai" untuk menyimpan tampilan.
+                    <div className="bg-white p-2 mb-2 rounded-lg border border-gray-200 flex flex-wrap gap-1 shadow-sm sticky top-0 z-10">
+                        <button onClick={() => insertMarkdown('**', '**')} className="p-2 hover:bg-gray-100 rounded text-gray-700" title="Bold"><Bold size={16}/></button>
+                        <button onClick={() => insertMarkdown('*', '*')} className="p-2 hover:bg-gray-100 rounded text-gray-700" title="Italic"><Italic size={16}/></button>
+                        <div className="w-px bg-gray-300 h-6 mx-1 self-center"></div>
+                        <button onClick={() => insertMarkdown('# ', '')} className="p-2 hover:bg-gray-100 rounded text-gray-700 font-bold" title="H1"><Type size={16}/></button>
+                        <button onClick={() => insertMarkdown('## ', '')} className="p-2 hover:bg-gray-100 rounded text-gray-700 font-bold text-sm" title="H2"><Heading size={16}/></button>
+                        <button onClick={() => insertMarkdown('### ', '')} className="p-2 hover:bg-gray-100 rounded text-gray-700 font-bold text-xs" title="H3"><Heading size={14}/></button>
+                        <div className="w-px bg-gray-300 h-6 mx-1 self-center"></div>
+                        <button onClick={() => insertMarkdown('- ', '')} className="p-2 hover:bg-gray-100 rounded text-gray-700" title="Bullet List"><List size={16}/></button>
+                        <button onClick={() => insertMarkdown('1. ', '')} className="p-2 hover:bg-gray-100 rounded text-gray-700" title="Numbered List"><ListOrdered size={16}/></button>
+                        <div className="w-px bg-gray-300 h-6 mx-1 self-center"></div>
+                        <button onClick={() => insertMarkdown('\n| Header 1 | Header 2 |\n| --- | --- |\n| Cell 1 | Cell 2 |\n', '')} className="p-2 hover:bg-gray-100 rounded text-gray-700 flex items-center gap-1 text-xs" title="Insert Table">
+                            <FileText size={16}/> Tabel
+                        </button>
                     </div>
+                    
                     <textarea
-                        className="w-full flex-1 p-4 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none font-mono text-sm leading-relaxed resize-none"
+                        ref={textareaRef}
+                        className="w-full flex-1 p-4 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none font-mono text-sm leading-relaxed resize-none shadow-inner"
                         value={rppResult}
                         onChange={(e) => setRppResult(e.target.value)}
-                        placeholder="Edit konten RPP di sini..."
+                        placeholder="Mulai ketik atau edit konten RPP di sini..."
                         spellCheck={false}
                     />
+                    <div className="text-xs text-gray-400 mt-2 text-right">Markdown Supported</div>
                  </div>
               ) : (
-                 // VIEW MODE: Rendered HTML
+                 // VIEW MODE
                  <>
                     <div 
                         className="prose prose-sm max-w-none whitespace-pre-wrap font-sans text-gray-700 leading-relaxed text-justify"
