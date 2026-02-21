@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { User, LessonPlanRequest, SystemSettings } from '../types';
 import { generateLessonPlan } from '../services/geminiService';
 import { getSystemSettings } from '../services/database';
-import { BrainCircuit, ChevronLeft, ChevronRight, CheckCircle, BookOpen, Save, Printer, FileText, ShieldCheck, RefreshCcw, Trash2, Cloud, AlertTriangle, Download, Globe } from './Icons';
+import { BrainCircuit, ChevronLeft, ChevronRight, CheckCircle, BookOpen, Save, Printer, FileText, ShieldCheck, RefreshCcw, Trash2, Cloud, AlertTriangle, Download, Globe, Pencil } from './Icons';
 // @ts-ignore
 import html2pdf from 'html2pdf.js';
 // @ts-ignore
@@ -79,6 +79,7 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [genProgress, setGenProgress] = useState(0);
   const [genStatus, setGenStatus] = useState('Menginisialisasi AI...');
+  const [isEditing, setIsEditing] = useState(false); // NEW STATE FOR EDITING
   const resultEndRef = useRef<HTMLDivElement>(null);
 
   // --- FEATURE TOGGLE CHECK ---
@@ -132,8 +133,9 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
   }, [rppResult, isGenerating]);
 
   const handleGenerateRPP = async () => {
-    // FIX CAUSE 4: Ensure UI state is clean before starting
+    // Ensure UI state is clean before starting
     setRppResult(''); 
+    setIsEditing(false); // Reset editing mode
     setGenProgress(0);
     setGenStatus(rppData.useSearch ? 'Menghubungkan ke Google Search...' : 'Menghubungkan ke Gemini AI...');
     setIsGenerating(true);
@@ -159,6 +161,7 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
           setRppData(initialRppData);
           setRppStep(1);
           setRppResult('');
+          setIsEditing(false);
           setRppData(prev => ({ ...prev, teacherName: user.fullName, teacherNip: user.nip || '', schoolName: user.schoolName || '', subject: user.subject || '' }));
       }
   };
@@ -628,15 +631,29 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
                 <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">Hasil RPP <span className="text-xs bg-green-50 text-green-600 px-2 py-1 rounded">Deep Learning</span></h3>
                 {rppResult && !isGenerating && (
                     <div className="flex flex-wrap gap-2">
-                        <button onClick={handlePrint} className="flex items-center gap-2 px-3 py-2 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-lg transition text-sm font-medium" title="Cetak">
-                            <Printer size={16} /> Cetak
+                        {/* EDIT BUTTON */}
+                        <button 
+                            onClick={() => setIsEditing(!isEditing)} 
+                            className={`flex items-center gap-2 px-3 py-2 rounded-lg transition text-sm font-medium ${isEditing ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'}`}
+                            title={isEditing ? "Simpan Perubahan" : "Edit Teks Manual"}
+                        >
+                            {isEditing ? <CheckCircle size={16} /> : <Pencil size={16} />} 
+                            {isEditing ? "Selesai" : "Edit"}
                         </button>
-                        <button onClick={handleExportDocx} className="flex items-center gap-2 px-3 py-2 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded-lg transition text-sm font-medium" title="Unduh Word">
-                            <FileText size={16} /> Word
-                        </button>
-                        <button onClick={handleExportPDF} className="flex items-center gap-2 px-3 py-2 bg-red-100 text-red-700 hover:bg-red-200 rounded-lg transition text-sm font-medium" title="Unduh PDF">
-                            <Download size={16} /> PDF
-                        </button>
+
+                        {!isEditing && (
+                            <>
+                                <button onClick={handlePrint} className="flex items-center gap-2 px-3 py-2 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-lg transition text-sm font-medium" title="Cetak">
+                                    <Printer size={16} /> Cetak
+                                </button>
+                                <button onClick={handleExportDocx} className="flex items-center gap-2 px-3 py-2 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded-lg transition text-sm font-medium" title="Unduh Word">
+                                    <FileText size={16} /> Word
+                                </button>
+                                <button onClick={handleExportPDF} className="flex items-center gap-2 px-3 py-2 bg-red-100 text-red-700 hover:bg-red-200 rounded-lg transition text-sm font-medium" title="Unduh PDF">
+                                    <Download size={16} /> PDF
+                                </button>
+                            </>
+                        )}
                     </div>
                 )}
             </div>
@@ -648,14 +665,24 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
                   <p className="animate-pulse">Sedang menyusun struktur A-L...</p>
                 </div>
               ) : rppResult ? (
-                <>
-                    {/* Rendered HTML Container */}
-                    <div 
-                        className="prose prose-sm max-w-none whitespace-pre-wrap font-sans text-gray-700 leading-relaxed text-justify"
-                        dangerouslySetInnerHTML={{ __html: formatMarkdownToWordHTML(rppResult) }}
-                    ></div>
-                    <div ref={resultEndRef}></div>
-                </>
+                isEditing ? (
+                    // EDIT MODE
+                    <textarea
+                        className="w-full h-full min-h-[500px] p-4 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none font-mono text-sm leading-relaxed resize-none"
+                        value={rppResult}
+                        onChange={(e) => setRppResult(e.target.value)}
+                        placeholder="Edit konten RPP di sini..."
+                    />
+                ) : (
+                    // PREVIEW MODE
+                    <>
+                        <div 
+                            className="prose prose-sm max-w-none whitespace-pre-wrap font-sans text-gray-700 leading-relaxed text-justify"
+                            dangerouslySetInnerHTML={{ __html: formatMarkdownToWordHTML(rppResult) }}
+                        ></div>
+                        <div ref={resultEndRef}></div>
+                    </>
+                )
               ) : (
                 <div className="flex flex-col items-center justify-center h-full text-gray-400">
                   <BookOpen size={48} className="mb-2 opacity-20" />
