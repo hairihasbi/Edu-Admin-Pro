@@ -618,7 +618,7 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
 
         {/* --- FULLSCREEN WORKBENCH OVERLAY --- */}
         {isEditing && (
-            <div className="fixed inset-0 z-[100] bg-gray-900/90 backdrop-blur-sm flex flex-col animate-in fade-in zoom-in-95 duration-200">
+            <div className="fixed inset-0 z-[100] bg-gray-900/90 backdrop-blur-sm flex flex-col h-screen w-screen animate-in fade-in zoom-in-95 duration-200">
                 {/* Workbench Toolbar */}
                 <div className="bg-white p-2 border-b border-gray-200 flex flex-wrap gap-2 shadow-md shrink-0 z-50 items-center justify-between">
                     <div className="flex items-center gap-4">
@@ -669,15 +669,17 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
                 </div>
 
                 {/* Main Visual Editor Page */}
-                <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-gray-800/50 flex justify-center cursor-text" onClick={() => editorRef.current?.focus()}>
-                    <div
-                        ref={editorRef}
-                        contentEditable
-                        className="bg-white w-full max-w-[210mm] min-h-[297mm] p-[20mm] shadow-2xl outline-none text-gray-800 text-justify leading-relaxed prose prose-sm max-w-none focus:ring-4 focus:ring-blue-500/20 mb-20"
-                        style={{ fontFamily: "'Times New Roman', serif", fontSize: '12pt' }}
-                        dangerouslySetInnerHTML={{ __html: formatMarkdownToWordHTML(rppResult) }}
-                        onInput={(e) => setRppResult(e.currentTarget.innerHTML)}
-                    />
+                <div className="flex-1 overflow-y-auto bg-gray-800/50 cursor-text" onClick={() => editorRef.current?.focus()}>
+                    <div className="min-h-full p-4 md:p-8 flex justify-center pb-40">
+                        <div
+                            ref={editorRef}
+                            contentEditable
+                            className="bg-white w-full max-w-[210mm] min-h-[297mm] p-[20mm] shadow-2xl outline-none text-gray-800 text-justify leading-relaxed prose prose-sm max-w-none focus:ring-4 focus:ring-blue-500/20 mx-auto"
+                            style={{ fontFamily: "'Times New Roman', serif", fontSize: '12pt' }}
+                            dangerouslySetInnerHTML={{ __html: formatMarkdownToWordHTML(rppResult) }}
+                            onInput={(e) => setRppResult(e.currentTarget.innerHTML)}
+                        />
+                    </div>
                 </div>
             </div>
         )}
