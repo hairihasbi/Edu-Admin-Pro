@@ -6,7 +6,7 @@ import { getSystemSettings } from '../services/database';
 import { 
   BrainCircuit, ChevronLeft, ChevronRight, CheckCircle, BookOpen, Save, Printer, 
   FileText, ShieldCheck, RefreshCcw, Trash2, Cloud, AlertTriangle, Download, 
-  Globe, Pencil, Bold, Italic, Heading, List, ListOrdered, Type 
+  Globe, Pencil, Bold, Italic, Heading, List, ListOrdered, Type, LayoutTemplate 
 } from './Icons';
 // @ts-ignore
 import html2pdf from 'html2pdf.js';
@@ -588,10 +588,10 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
                                 ? 'bg-green-600 text-white hover:bg-green-700 ring-2 ring-green-600 ring-offset-1' 
                                 : 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100 border border-yellow-200'
                             }`}
-                            title={isEditing ? "Simpan Perubahan & Selesai" : "Buka Mode Editor (Workbench)"}
+                            title={isEditing ? "Simpan Perubahan & Selesai" : "Buka Mode Workbench (Editor Canggih)"}
                         >
-                            {isEditing ? <CheckCircle size={16} /> : <Pencil size={16} />} 
-                            {isEditing ? "Selesai" : "Editor"}
+                            {isEditing ? <CheckCircle size={16} /> : <LayoutTemplate size={16} />} 
+                            {isEditing ? "Simpan (Selesai)" : "Workbench"}
                         </button>
 
                         {!isEditing && (
@@ -627,17 +627,20 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
                  // --- WORKBENCH MODE (MARKDOWN EDITOR) ---
                  <div className="h-full flex flex-col">
                     <div className="bg-white p-2 mb-2 rounded-lg border border-gray-200 flex flex-wrap gap-1 shadow-sm sticky top-0 z-10">
-                        <button onClick={() => insertMarkdown('**', '**')} className="p-2 hover:bg-gray-100 rounded text-gray-700" title="Bold"><Bold size={16}/></button>
-                        <button onClick={() => insertMarkdown('*', '*')} className="p-2 hover:bg-gray-100 rounded text-gray-700" title="Italic"><Italic size={16}/></button>
+                        <div className="flex items-center px-2 text-xs font-bold text-gray-500 uppercase tracking-wider mr-2">
+                            Workbench Tools:
+                        </div>
+                        <button onClick={() => insertMarkdown('**', '**')} className="p-2 hover:bg-gray-100 rounded text-gray-700 border border-transparent hover:border-gray-300 transition" title="Bold"><Bold size={16}/></button>
+                        <button onClick={() => insertMarkdown('*', '*')} className="p-2 hover:bg-gray-100 rounded text-gray-700 border border-transparent hover:border-gray-300 transition" title="Italic"><Italic size={16}/></button>
                         <div className="w-px bg-gray-300 h-6 mx-1 self-center"></div>
-                        <button onClick={() => insertMarkdown('# ', '')} className="p-2 hover:bg-gray-100 rounded text-gray-700 font-bold" title="H1"><Type size={16}/></button>
-                        <button onClick={() => insertMarkdown('## ', '')} className="p-2 hover:bg-gray-100 rounded text-gray-700 font-bold text-sm" title="H2"><Heading size={16}/></button>
-                        <button onClick={() => insertMarkdown('### ', '')} className="p-2 hover:bg-gray-100 rounded text-gray-700 font-bold text-xs" title="H3"><Heading size={14}/></button>
+                        <button onClick={() => insertMarkdown('# ', '')} className="p-2 hover:bg-gray-100 rounded text-gray-700 font-bold border border-transparent hover:border-gray-300 transition" title="H1"><Type size={16}/></button>
+                        <button onClick={() => insertMarkdown('## ', '')} className="p-2 hover:bg-gray-100 rounded text-gray-700 font-bold text-sm border border-transparent hover:border-gray-300 transition" title="H2"><Heading size={16}/></button>
+                        <button onClick={() => insertMarkdown('### ', '')} className="p-2 hover:bg-gray-100 rounded text-gray-700 font-bold text-xs border border-transparent hover:border-gray-300 transition" title="H3"><Heading size={14}/></button>
                         <div className="w-px bg-gray-300 h-6 mx-1 self-center"></div>
-                        <button onClick={() => insertMarkdown('- ', '')} className="p-2 hover:bg-gray-100 rounded text-gray-700" title="Bullet List"><List size={16}/></button>
-                        <button onClick={() => insertMarkdown('1. ', '')} className="p-2 hover:bg-gray-100 rounded text-gray-700" title="Numbered List"><ListOrdered size={16}/></button>
+                        <button onClick={() => insertMarkdown('- ', '')} className="p-2 hover:bg-gray-100 rounded text-gray-700 border border-transparent hover:border-gray-300 transition" title="Bullet List"><List size={16}/></button>
+                        <button onClick={() => insertMarkdown('1. ', '')} className="p-2 hover:bg-gray-100 rounded text-gray-700 border border-transparent hover:border-gray-300 transition" title="Numbered List"><ListOrdered size={16}/></button>
                         <div className="w-px bg-gray-300 h-6 mx-1 self-center"></div>
-                        <button onClick={() => insertMarkdown('\n| Header 1 | Header 2 |\n| --- | --- |\n| Cell 1 | Cell 2 |\n', '')} className="p-2 hover:bg-gray-100 rounded text-gray-700 flex items-center gap-1 text-xs" title="Insert Table">
+                        <button onClick={() => insertMarkdown('\n| Header 1 | Header 2 |\n| --- | --- |\n| Cell 1 | Cell 2 |\n', '')} className="p-2 hover:bg-gray-100 rounded text-gray-700 flex items-center gap-1 text-xs border border-transparent hover:border-gray-300 transition" title="Insert Table">
                             <FileText size={16}/> Tabel
                         </button>
                     </div>
