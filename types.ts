@@ -29,7 +29,10 @@ export interface User extends Syncable {
   schoolNpsn?: string; // NEW: Multi-tenancy Key
   subject?: string;
   additionalRole?: 'WALI_KELAS'; 
-  homeroomClassId?: string; 
+  homeroomClassId?: string;
+  // RPP Quota Tracking
+  rppUsageCount?: number; // Jumlah RPP dibuat bulan ini
+  rppLastReset?: string; // Format "YYYY-MM" untuk menandai bulan terakhir reset
 }
 
 export interface SystemSettings extends Syncable {
@@ -50,6 +53,8 @@ export interface SystemSettings extends Syncable {
   aiBaseUrl?: string; // e.g. https://my-litellm.com/v1
   aiApiKey?: string; // Custom Key
   aiModel?: string; // e.g. gemini-pro, gpt-3.5-turbo (mapped in gateway)
+  // Quota Management
+  rppMonthlyLimit?: number; // 0 = Unlimited
 }
 
 export interface MasterSubject extends Syncable {
