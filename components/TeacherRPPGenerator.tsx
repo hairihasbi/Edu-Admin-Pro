@@ -7,7 +7,8 @@ import {
   BrainCircuit, ChevronLeft, ChevronRight, CheckCircle, BookOpen, Save, Printer, 
   FileText, ShieldCheck, RefreshCcw, Trash2, Cloud, AlertTriangle, Download, 
   Globe, Pencil, Bold, Italic, Heading, List, ListOrdered, Type, LayoutTemplate, X,
-  Underline, AlignLeft, AlignCenter, AlignRight, Undo, Redo, Maximize2, Minimize2
+  Underline, AlignLeft, AlignCenter, AlignRight, Undo, Redo, Maximize2, Minimize2,
+  PieChart
 } from './Icons';
 // @ts-ignore
 import html2pdf from 'html2pdf.js';
@@ -52,6 +53,11 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
   const [settings, setSettings] = useState<SystemSettings | null>(null);
   const [loadingSettings, setLoadingSettings] = useState(true);
   
+  // Quota States
+  const [quotaUsage, setQuotaUsage] = useState(user.rppUsageCount || 0);
+  const [quotaLimit, setQuotaLimit] = useState(0);
+  const [isQuotaExceeded, setIsQuotaExceeded] = useState(false);
+
   // Initial State Definition
   const initialRppData: LessonPlanRequest = {
     curriculumType: 'MERDEKA',
@@ -89,16 +95,29 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
   const resultEndRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<HTMLDivElement>(null); // For ContentEditable
 
-  // --- FEATURE TOGGLE CHECK ---
+  // --- FEATURE TOGGLE & QUOTA CHECK ---
   useEffect(() => {
       const checkFeature = async () => {
           setLoadingSettings(true);
           const sysSettings = await getSystemSettings();
           setSettings(sysSettings);
+          
+          if (sysSettings) {
+              setQuotaLimit(sysSettings.rppMonthlyLimit || 0);
+              const currentUsage = user.rppUsageCount || 0;
+              setQuotaUsage(currentUsage);
+              // Check quota (0 means unlimited)
+              if (sysSettings.rppMonthlyLimit && sysSettings.rppMonthlyLimit > 0 && currentUsage >= sysSettings.rppMonthlyLimit) {
+                  setIsQuotaExceeded(true);
+              } else {
+                  setIsQuotaExceeded(false);
+              }
+          }
+          
           setLoadingSettings(false);
       };
       checkFeature();
-  }, []);
+  }, [user.rppUsageCount]); // Re-run if user object updates (e.g. after sync)
 
   // --- AUTO SAVE & LOAD LOGIC ---
   useEffect(() => {
@@ -147,6 +166,11 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
   };
 
   const handleGenerateRPP = async () => {
+    if (isQuotaExceeded) {
+        alert("Maaf, kuota pembuatan RPP Anda bulan ini telah habis. Silakan hubungi Admin atau tunggu bulan depan.");
+        return;
+    }
+
     setRppResult(''); 
     setIsEditing(false);
     setGenProgress(0);
@@ -158,13 +182,32 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
     await generateLessonPlan(
         rppData, 
         user.id, 
-        (chunk) => { setRppResult(prev => prev + chunk); },
+        (chunk) => { 
+            // If chunk contains block message, handle it
+            if (chunk.includes("[ERROR SYSTEM]")) {
+                setIsGenerating(false);
+                setGenStatus('Gagal');
+                if (chunk.includes("Kuota")) {
+                    setIsQuotaExceeded(true);
+                    alert(chunk.replace("[ERROR SYSTEM]: ", ""));
+                }
+            }
+            setRppResult(prev => prev + chunk); 
+        },
         (percent, status) => { setGenProgress(percent); setGenStatus(status); }
     );
     
     setIsGenerating(false);
     setGenProgress(100);
     setGenStatus('Selesai');
+    
+    // Optimistic update of quota usage
+    if (!isQuotaExceeded) {
+        setQuotaUsage(prev => prev + 1);
+        if (quotaLimit > 0 && quotaUsage + 1 >= quotaLimit) {
+            setIsQuotaExceeded(true);
+        }
+    }
   };
 
   const handleResetDraft = () => {
@@ -386,14 +429,26 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
 
   return (
     <div className="space-y-6 pb-20 relative">
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex justify-between items-start">
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
                 <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                    <BrainCircuit className="text-purple-600" /> AI RPP Generator (Deep Learning)
+                    <BrainCircuit className="text-purple-600" /> AI RPP Generator
                 </h2>
-                <p className="text-sm text-gray-500 mt-1">Buat Modul Ajar lengkap struktur A-L sesuai standar terbaru. Mendukung Rumus Matematika (LaTeX).</p>
+                <p className="text-sm text-gray-500 mt-1">Buat Modul Ajar lengkap struktur A-L sesuai standar terbaru.</p>
             </div>
-            <div className="flex flex-col items-end gap-2">
+            <div className="flex items-center gap-3">
+               {/* Quota Badge */}
+               <div className={`px-4 py-2 rounded-lg text-xs font-bold border flex items-center gap-2 ${
+                   isQuotaExceeded 
+                   ? 'bg-red-50 text-red-700 border-red-200' 
+                   : 'bg-blue-50 text-blue-700 border-blue-200'
+               }`}>
+                   <PieChart size={16} />
+                   <span>
+                       Kuota Bulan Ini: {quotaUsage} / {quotaLimit > 0 ? quotaLimit : '∞'}
+                   </span>
+               </div>
+               
                <div className="hidden md:flex items-center gap-2 bg-green-50 text-green-700 px-3 py-1.5 rounded-lg text-xs font-medium border border-green-100">
                   <ShieldCheck size={16} /> License: Sekolah
                </div>
@@ -500,6 +555,19 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
 
                 {rppStep === 4 && (
                    <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
+                      {isQuotaExceeded && (
+                          <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex gap-3 items-start">
+                              <AlertTriangle className="text-red-600 shrink-0 mt-1" />
+                              <div>
+                                  <h4 className="font-bold text-red-800">Kuota Habis</h4>
+                                  <p className="text-sm text-red-600">
+                                      Anda telah mencapai batas pembuatan RPP bulan ini ({quotaUsage}/{quotaLimit}). 
+                                      Silakan tunggu bulan depan atau hubungi Admin.
+                                  </p>
+                              </div>
+                          </div>
+                      )}
+
                       <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
                          <h4 className="text-yellow-800 font-bold mb-2 flex items-center gap-2"><CheckCircle size={18} /> Review Data</h4>
                          <div className="space-y-2 text-sm text-gray-700">
@@ -542,8 +610,16 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
                               <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden"><div className="bg-gradient-to-r from-purple-500 to-indigo-600 h-3 rounded-full transition-all duration-300 ease-out" style={{ width: `${genProgress}%` }}></div></div>
                           </div>
                       ) : (
-                          <button onClick={handleGenerateRPP} className="w-full py-4 rounded-xl text-white font-bold text-lg shadow-lg bg-gradient-to-r from-purple-600 to-indigo-600 hover:scale-[1.02] transition flex justify-center items-center gap-2">
-                            <BrainCircuit size={24} /> Generate RPP Sekarang
+                          <button 
+                            onClick={handleGenerateRPP} 
+                            disabled={isQuotaExceeded}
+                            className={`w-full py-4 rounded-xl text-white font-bold text-lg shadow-lg flex justify-center items-center gap-2 transition ${
+                                isQuotaExceeded 
+                                ? 'bg-gray-400 cursor-not-allowed' 
+                                : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:scale-[1.02]'
+                            }`}
+                          >
+                            <BrainCircuit size={24} /> {isQuotaExceeded ? 'Kuota Habis' : 'Generate RPP Sekarang'}
                           </button>
                       )}
                    </div>

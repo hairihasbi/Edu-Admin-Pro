@@ -27,7 +27,8 @@ const AdminSettings: React.FC = () => {
   const [systemSettings, setSystemSettings] = useState<SystemSettings>({
       id: 'global-settings',
       featureRppEnabled: true,
-      maintenanceMessage: 'Fitur sedang dalam pemeliharaan.'
+      maintenanceMessage: 'Fitur sedang dalam pemeliharaan.',
+      rppMonthlyLimit: 0 // Default unlimited
   });
 
   // DB Config State
@@ -350,11 +351,31 @@ const AdminSettings: React.FC = () => {
                   )}
 
                   <form onSubmit={handleSaveSystemSettings} className="space-y-6">
+                      {/* RPP Quota Limit (NEW) */}
+                      <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                          <h4 className="font-bold text-blue-800 mb-2">Batas Kuota AI RPP Generator</h4>
+                          <p className="text-sm text-gray-600 mb-3">
+                              Atur berapa kali seorang Guru dapat menggunakan fitur generate RPP dalam satu bulan.
+                              Ini berguna untuk menjaga penggunaan API agar tidak melampaui batas biaya/kuota.
+                          </p>
+                          <div className="flex items-center gap-3">
+                              <label className="text-sm font-semibold text-gray-700">Limit per Bulan:</label>
+                              <input 
+                                  type="number" 
+                                  min="0"
+                                  className="w-24 border border-blue-300 rounded-lg p-2 text-center font-bold focus:ring-2 focus:ring-blue-500 outline-none"
+                                  value={systemSettings.rppMonthlyLimit}
+                                  onChange={(e) => setSystemSettings({...systemSettings, rppMonthlyLimit: parseInt(e.target.value) || 0})}
+                              />
+                              <span className="text-sm text-gray-500">(0 = Tidak Terbatas)</span>
+                          </div>
+                      </div>
+
                       <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                           <div className="flex justify-between items-start">
                               <div className="flex-1">
                                   <h4 className="font-bold text-gray-800 text-lg flex items-center gap-2">
-                                      <Zap className="text-purple-500" size={20} /> AI RPP Generator
+                                      <Zap className="text-purple-500" size={20} /> AI RPP Generator (Master Switch)
                                   </h4>
                                   <p className="text-sm text-gray-600 mt-1">
                                       Matikan fitur ini jika sedang dalam proses <i>maintenance</i>, perbaikan bug, atau jika kuota API habis. 
@@ -512,10 +533,9 @@ const AdminSettings: React.FC = () => {
           </div>
       )}
 
-      {/* EMAIL CONFIG TAB */}
+      {/* ... (Existing Tabs: Email, Keys, WA, Master) ... */}
       {activeTab === 'email' && (
         <form onSubmit={handleSaveEmail} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden animate-in fade-in zoom-in duration-200">
-          {/* ... (Email Tab Content Remains Unchanged) ... */}
           <div className="bg-gray-50 px-6 py-4 border-b border-gray-100 flex items-center justify-between">
             <h3 className="font-bold text-gray-800 flex items-center gap-2">
               <Mail size={18} className="text-blue-600" /> Konfigurasi Email Notifikasi
@@ -895,33 +915,32 @@ const AdminSettings: React.FC = () => {
               </h3>
               <form onSubmit={handleAddSubject} className="flex flex-col md:flex-row gap-4 items-end">
                  <div className="flex-1 w-full">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Nama Mata Pelajaran</label>
+                    <label className="block text-xs font-semibold text-gray-500 mb-1">Nama Mata Pelajaran</label>
                     <input 
                       type="text" 
-                      placeholder="Contoh: Bahasa Mandarin (Muatan Lokal)"
-                      className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
+                      className="w-full border border-gray-300 rounded-lg p-2.5 text-sm"
+                      placeholder="Contoh: Matematika Lanjut"
                       value={newSubjectName}
                       onChange={(e) => setNewSubjectName(e.target.value)}
-                      required
                     />
                  </div>
-                 <div className="w-full md:w-48">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Kategori</label>
+                 <div className="w-full md:w-40">
+                    <label className="block text-xs font-semibold text-gray-500 mb-1">Kategori</label>
                     <select 
-                      className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                      className="w-full border border-gray-300 rounded-lg p-2.5 text-sm"
                       value={newSubjectCategory}
                       onChange={(e) => setNewSubjectCategory(e.target.value as any)}
                     >
-                       <option value="UMUM">Umum (Wajib)</option>
-                       <option value="PILIHAN">Pilihan (Fase F)</option>
-                       <option value="KEJURUAN">Kejuruan / Vokasi</option>
-                       <option value="MULOK">Muatan Lokal</option>
+                       <option value="UMUM">Umum</option>
+                       <option value="KEJURUAN">Kejuruan</option>
+                       <option value="MULOK">Mulok</option>
+                       <option value="PILIHAN">Pilihan</option>
                     </select>
                  </div>
                  <div className="w-full md:w-32">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Jenjang</label>
+                    <label className="block text-xs font-semibold text-gray-500 mb-1">Jenjang</label>
                     <select 
-                      className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                      className="w-full border border-gray-300 rounded-lg p-2.5 text-sm"
                       value={newSubjectLevel}
                       onChange={(e) => setNewSubjectLevel(e.target.value as any)}
                     >
@@ -933,64 +952,37 @@ const AdminSettings: React.FC = () => {
                     </select>
                  </div>
                  <button 
-                   type="submit"
-                   className="w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white font-medium px-6 py-2.5 rounded-lg transition"
+                   type="submit" 
+                   className="bg-blue-600 text-white px-4 py-2.5 rounded-lg font-bold text-sm hover:bg-blue-700 w-full md:w-auto"
                  >
                     Tambah
                  </button>
               </form>
            </div>
 
-           {/* List Table */}
+           {/* List */}
            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-              <div className="bg-gray-50 px-6 py-4 border-b border-gray-100">
-                 <h3 className="font-bold text-gray-800">Daftar Mata Pelajaran Resmi</h3>
-                 <p className="text-xs text-gray-500">Mapel ini akan muncul di dropdown profil guru.</p>
+              <div className="bg-gray-50 px-6 py-3 border-b border-gray-100 flex justify-between items-center">
+                 <h4 className="font-bold text-gray-700">Daftar Mata Pelajaran ({subjects.length})</h4>
               </div>
-              <div className="overflow-x-auto">
-                 <table className="w-full text-sm text-left">
-                    <thead className="bg-gray-50 text-gray-600 font-medium border-b border-gray-200">
-                       <tr>
-                          <th className="p-4 w-16 text-center">No</th>
-                          <th className="p-4">Nama Mata Pelajaran</th>
-                          <th className="p-4 w-40">Kategori</th>
-                          <th className="p-4 w-32 text-center">Jenjang</th>
-                          <th className="p-4 w-20 text-center">Aksi</th>
-                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                       {subjects.map((sub, index) => (
-                          <tr key={sub.id} className="hover:bg-gray-50">
-                             <td className="p-4 text-center text-gray-500">{index + 1}</td>
-                             <td className="p-4 font-medium text-gray-800">{sub.name}</td>
-                             <td className="p-4">
-                                <span className={`px-2 py-1 rounded text-xs font-bold ${
-                                   sub.category === 'UMUM' ? 'bg-blue-100 text-blue-700' :
-                                   sub.category === 'PILIHAN' ? 'bg-teal-100 text-teal-700' :
-                                   sub.category === 'KEJURUAN' ? 'bg-purple-100 text-purple-700' :
-                                   'bg-orange-100 text-orange-700'
-                                }`}>
-                                   {sub.category}
-                                </span>
-                             </td>
-                             <td className="p-4 text-center">
-                                <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs font-bold border border-gray-200">
-                                   {sub.level || 'SEMUA'}
-                                </span>
-                             </td>
-                             <td className="p-4 text-center">
-                                <button 
-                                  onClick={() => handleDeleteSubject(sub.id)}
-                                  className="text-gray-400 hover:text-red-600 p-2 rounded hover:bg-red-50 transition"
-                                  title="Hapus"
-                                >
-                                   <Trash2 size={16} />
-                                </button>
-                             </td>
-                          </tr>
-                       ))}
-                    </tbody>
-                 </table>
+              <div className="max-h-[400px] overflow-y-auto divide-y divide-gray-100">
+                 {subjects.map(sub => (
+                    <div key={sub.id} className="px-6 py-3 flex justify-between items-center hover:bg-gray-50 transition group">
+                       <div>
+                          <div className="font-semibold text-gray-800">{sub.name}</div>
+                          <div className="text-xs text-gray-500 flex gap-2">
+                             <span className="bg-gray-100 px-1.5 rounded">{sub.category}</span>
+                             <span className="bg-blue-50 text-blue-600 px-1.5 rounded">{sub.level}</span>
+                          </div>
+                       </div>
+                       <button 
+                          onClick={() => handleDeleteSubject(sub.id)}
+                          className="text-gray-300 hover:text-red-500 p-1.5 rounded-full hover:bg-red-50 transition"
+                       >
+                          <Trash2 size={16} />
+                       </button>
+                    </div>
+                 ))}
               </div>
            </div>
         </div>

@@ -101,7 +101,8 @@ import {
   Undo, // Added
   Redo, // Added
   Maximize2, // Added
-  Minimize2 // Added
+  Minimize2, // Added
+  PieChart // Added PieChart
 } from 'lucide-react';
 
 export {
@@ -206,5 +207,6 @@ export {
   Undo,
   Redo,
   Maximize2,
-  Minimize2
+  Minimize2,
+  PieChart
 };
