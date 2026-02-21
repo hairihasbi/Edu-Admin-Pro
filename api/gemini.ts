@@ -37,7 +37,7 @@ async function getSystemSettings(redis: Redis | null) {
     try {
         const client = createClient({ url, authToken, fetch: fetch as any });
         // Handle "no such column" error if migration hasn't run yet
-        const result = await client.execute("SELECT ai_provider, ai_base_url, ai_api_key, ai_model FROM system_settings WHERE id = 'global-settings'");
+        const result = await client.execute("SELECT ai_provider, ai_base_url, ai_api_key, ai_model, rpp_monthly_limit FROM system_settings WHERE id = 'global-settings'");
         client.close();
         
         if (result.rows.length > 0) {
@@ -45,7 +45,8 @@ async function getSystemSettings(redis: Redis | null) {
                 provider: result.rows[0].ai_provider as string || 'GOOGLE',
                 baseUrl: result.rows[0].ai_base_url as string || '',
                 apiKey: result.rows[0].ai_api_key as string || '',
-                model: result.rows[0].ai_model as string || ''
+                model: result.rows[0].ai_model as string || '',
+                rppMonthlyLimit: result.rows[0].rpp_monthly_limit as number || 0
             };
             if (redis) await redis.set(REDIS_KEY_SYS_SETTINGS, settings, { ex: 300 }); // Cache 5 min
             return settings;
@@ -53,11 +54,11 @@ async function getSystemSettings(redis: Redis | null) {
     } catch (e: any) {
         if (e.message && e.message.includes('no such column')) {
             console.warn("Schema outdated (missing AI columns), defaulting to GOOGLE provider.");
-            return { provider: 'GOOGLE' };
+            return { provider: 'GOOGLE', rppMonthlyLimit: 0 };
         }
         console.error("DB Settings Fetch Error:", e);
     }
-    return { provider: 'GOOGLE' };
+    return { provider: 'GOOGLE', rppMonthlyLimit: 0 };
 }
 
 // --- HELPER: DATABASE KEYS ---
@@ -142,8 +143,62 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } catch (e) { console.error("Redis Error:", e); }
   }
 
-  // 2. CHECK PROVIDER SETTINGS
+  // 2. CHECK PROVIDER SETTINGS & QUOTA
   const settings = await getSystemSettings(redis);
+  
+  // --- QUOTA GATEKEEPER ---
+  // Only applies to Teachers (GURU), Admins are exempt
+  if (currentUser.role === 'GURU') {
+      let rawUrl = cleanEnv(process.env.TURSO_DB_URL);
+      if (rawUrl && rawUrl.startsWith('libsql://')) rawUrl = rawUrl.replace('libsql://', 'https://');
+      const url = rawUrl;
+      const authToken = cleanEnv(process.env.TURSO_AUTH_TOKEN);
+      
+      if (url && authToken) {
+          try {
+              const client = createClient({ url, authToken, fetch: fetch as any });
+              
+              // Get current user usage stats
+              const userRes = await client.execute({
+                  sql: "SELECT rpp_usage_count, rpp_last_reset FROM users WHERE id = ?",
+                  args: [currentUser.userId]
+              });
+              
+              if (userRes.rows.length > 0) {
+                  const userRow = userRes.rows[0];
+                  const currentMonth = new Date().toISOString().slice(0, 7); // "YYYY-MM"
+                  let usageCount = userRow.rpp_usage_count as number || 0;
+                  const lastReset = userRow.rpp_last_reset as string || '';
+
+                  // Logic: Reset if new month
+                  if (lastReset !== currentMonth) {
+                      usageCount = 0;
+                      // Update DB to reset count immediately (lazy reset)
+                      await client.execute({
+                          sql: "UPDATE users SET rpp_usage_count = 0, rpp_last_reset = ? WHERE id = ?",
+                          args: [currentMonth, currentUser.userId]
+                      });
+                  }
+
+                  const monthlyLimit = settings?.rppMonthlyLimit || 0;
+                  
+                  // Check Limit (0 = Unlimited)
+                  if (monthlyLimit > 0 && usageCount >= monthlyLimit) {
+                      client.close();
+                      return res.status(429).json({ 
+                          error: `Kuota pembuatan RPP bulan ini telah habis (${usageCount}/${monthlyLimit}). Silakan tunggu bulan depan atau hubungi Admin.` 
+                      });
+                  }
+                  
+                  // If quota OK, proceed... count will be incremented AFTER generation starts
+              }
+              client.close();
+          } catch (e) {
+              console.error("Quota Check Error:", e);
+              // Fail open or closed? Here we fail open (allow access if DB check fails) but log error
+          }
+      }
+  }
 
   // --- BRANCH A: CUSTOM GATEWAY (LiteLLM / OpenAI Compatible) ---
   if (settings && settings.provider === 'CUSTOM' && settings.baseUrl && settings.apiKey) {
@@ -177,6 +232,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           }
 
           if (!response.body) throw new Error("No response body from gateway");
+
+          // INCREMENT USAGE AFTER SUCCESSFUL START
+          if (currentUser.role === 'GURU') {
+              incrementUsage(currentUser.userId).catch(console.error);
+          }
 
           res.setHeader('Content-Type', 'text/plain; charset=utf-8');
           res.setHeader('Transfer-Encoding', 'chunked');
@@ -298,6 +358,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       streamStarted = true;
       
+      // INCREMENT USAGE FOR USER
+      if (currentUser.role === 'GURU') {
+          incrementUsage(currentUser.userId).catch(console.error);
+      }
+
       res.setHeader('Content-Type', 'text/plain; charset=utf-8');
       res.setHeader('Transfer-Encoding', 'chunked');
       
@@ -358,4 +423,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ref: Date.now()
       });
   }
+}
+
+// Helper to Increment Usage
+async function incrementUsage(userId: string) {
+    let rawUrl = cleanEnv(process.env.TURSO_DB_URL);
+    if (rawUrl && rawUrl.startsWith('libsql://')) rawUrl = rawUrl.replace('libsql://', 'https://');
+    const url = rawUrl;
+    const authToken = cleanEnv(process.env.TURSO_AUTH_TOKEN);
+    
+    if (url && authToken) {
+        try {
+            const client = createClient({ url, authToken, fetch: fetch as any });
+            const currentMonth = new Date().toISOString().slice(0, 7);
+            await client.execute({
+                sql: "UPDATE users SET rpp_usage_count = rpp_usage_count + 1, rpp_last_reset = ?, last_modified = ? WHERE id = ?",
+                args: [currentMonth, Date.now(), userId]
+            });
+            client.close();
+        } catch (e) {
+            console.error("Failed to increment usage stats:", e);
+        }
+    }
 }
