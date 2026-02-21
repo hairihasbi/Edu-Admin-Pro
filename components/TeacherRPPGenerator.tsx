@@ -627,30 +627,40 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
 
           {/* Result Area */}
           <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 min-h-[500px] flex flex-col">
-            <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">Hasil RPP <span className="text-xs bg-green-50 text-green-600 px-2 py-1 rounded">Deep Learning</span></h3>
+            <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-4">
+                <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                    Hasil RPP <span className="text-xs bg-green-50 text-green-600 px-2 py-1 rounded border border-green-100">Deep Learning</span>
+                </h3>
+                
+                {/* Action Buttons Toolbar */}
                 {rppResult && !isGenerating && (
-                    <div className="flex flex-wrap gap-2">
-                        {/* EDIT BUTTON */}
+                    <div className="flex flex-wrap items-center gap-2">
+                        {/* MODE TOGGLE: EDIT vs VIEW */}
                         <button 
                             onClick={() => setIsEditing(!isEditing)} 
-                            className={`flex items-center gap-2 px-3 py-2 rounded-lg transition text-sm font-medium ${isEditing ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'}`}
-                            title={isEditing ? "Simpan Perubahan" : "Edit Teks Manual"}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition text-sm font-bold shadow-sm ${
+                                isEditing 
+                                ? 'bg-green-600 text-white hover:bg-green-700 ring-2 ring-green-600 ring-offset-1' 
+                                : 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100 border border-yellow-200'
+                            }`}
+                            title={isEditing ? "Simpan Perubahan & Selesai" : "Edit Teks RPP Secara Manual"}
                         >
                             {isEditing ? <CheckCircle size={16} /> : <Pencil size={16} />} 
-                            {isEditing ? "Selesai" : "Edit"}
+                            {isEditing ? "Selesai" : "Edit Teks"}
                         </button>
 
+                        {/* EXPORT BUTTONS (Hidden while editing) */}
                         {!isEditing && (
                             <>
-                                <button onClick={handlePrint} className="flex items-center gap-2 px-3 py-2 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-lg transition text-sm font-medium" title="Cetak">
-                                    <Printer size={16} /> Cetak
+                                <div className="h-6 w-px bg-gray-300 mx-1 hidden md:block"></div>
+                                <button onClick={handlePrint} className="flex items-center gap-2 px-3 py-2 bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200 rounded-lg transition text-sm font-medium" title="Cetak ke Printer">
+                                    <Printer size={16} /> <span className="hidden sm:inline">Cetak</span>
                                 </button>
-                                <button onClick={handleExportDocx} className="flex items-center gap-2 px-3 py-2 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded-lg transition text-sm font-medium" title="Unduh Word">
-                                    <FileText size={16} /> Word
+                                <button onClick={handleExportDocx} className="flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 rounded-lg transition text-sm font-medium" title="Unduh format Word (.doc)">
+                                    <FileText size={16} /> <span className="hidden sm:inline">Word</span>
                                 </button>
-                                <button onClick={handleExportPDF} className="flex items-center gap-2 px-3 py-2 bg-red-100 text-red-700 hover:bg-red-200 rounded-lg transition text-sm font-medium" title="Unduh PDF">
-                                    <Download size={16} /> PDF
+                                <button onClick={handleExportPDF} className="flex items-center gap-2 px-3 py-2 bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 rounded-lg transition text-sm font-medium" title="Unduh format PDF (.pdf)">
+                                    <Download size={16} /> <span className="hidden sm:inline">PDF</span>
                                 </button>
                             </>
                         )}
@@ -659,35 +669,41 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
             </div>
             
             <div className="flex-1 bg-gray-50 rounded-lg p-4 border border-gray-200 overflow-y-auto max-h-[600px] scrollbar-thin scrollbar-thumb-gray-300">
-              {isGenerating && !rppResult ? (
-                <div className="flex flex-col items-center justify-center h-full text-gray-400 space-y-4">
-                  <div className="animate-spin rounded-full h-10 w-10 border-4 border-purple-200 border-t-purple-600"></div>
-                  <p className="animate-pulse">Sedang menyusun struktur A-L...</p>
-                </div>
-              ) : rppResult ? (
-                isEditing ? (
-                    // EDIT MODE
+              {isGenerating ? (
+                 // Generating State...
+                 <div className="flex flex-col items-center justify-center h-full text-gray-400 space-y-4 min-h-[300px]">
+                    <div className="animate-spin rounded-full h-10 w-10 border-4 border-purple-200 border-t-purple-600"></div>
+                    <p className="animate-pulse">{genStatus} ({genProgress}%)</p>
+                 </div>
+              ) : !rppResult ? (
+                 // Empty State...
+                 <div className="flex flex-col items-center justify-center h-full text-gray-400 min-h-[300px]">
+                    <BookOpen size={48} className="mb-2 opacity-20" />
+                    <p className="text-center">Hasil RPP akan muncul di sini.</p>
+                 </div>
+              ) : isEditing ? (
+                 // EDIT MODE: Textarea
+                 <div className="h-full flex flex-col">
+                    <div className="bg-yellow-50 text-yellow-800 text-xs p-2 mb-2 rounded border border-yellow-200 flex items-center gap-2">
+                        <Pencil size={12}/> Mode Edit: Anda dapat mengubah teks RPP secara langsung. Klik "Selesai" untuk menyimpan tampilan.
+                    </div>
                     <textarea
-                        className="w-full h-full min-h-[500px] p-4 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none font-mono text-sm leading-relaxed resize-none"
+                        className="w-full flex-1 p-4 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none font-mono text-sm leading-relaxed resize-none"
                         value={rppResult}
                         onChange={(e) => setRppResult(e.target.value)}
                         placeholder="Edit konten RPP di sini..."
+                        spellCheck={false}
                     />
-                ) : (
-                    // PREVIEW MODE
-                    <>
-                        <div 
-                            className="prose prose-sm max-w-none whitespace-pre-wrap font-sans text-gray-700 leading-relaxed text-justify"
-                            dangerouslySetInnerHTML={{ __html: formatMarkdownToWordHTML(rppResult) }}
-                        ></div>
-                        <div ref={resultEndRef}></div>
-                    </>
-                )
+                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center h-full text-gray-400">
-                  <BookOpen size={48} className="mb-2 opacity-20" />
-                  <p className="text-center">Hasil RPP akan muncul di sini.</p>
-                </div>
+                 // VIEW MODE: Rendered HTML
+                 <>
+                    <div 
+                        className="prose prose-sm max-w-none whitespace-pre-wrap font-sans text-gray-700 leading-relaxed text-justify"
+                        dangerouslySetInnerHTML={{ __html: formatMarkdownToWordHTML(rppResult) }}
+                    ></div>
+                    <div ref={resultEndRef}></div>
+                 </>
               )}
             </div>
           </div>
