@@ -2,10 +2,10 @@
 import React, { useState, useEffect } from 'react';
 import { SystemSettings } from '../types';
 import { getSystemSettings, saveSystemSettings } from '../services/database';
-import { Save, Globe, Image, Clock, CheckCircle, AlertCircle, LayoutTemplate } from './Icons';
+import { Save, Globe, Image, Clock, CheckCircle, AlertCircle, LayoutTemplate, BrainCircuit } from './Icons';
 
 const AdminSiteSettings: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'general' | 'seo' | 'appearance'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'seo' | 'appearance' | 'ai'>('general');
   const [settings, setSettings] = useState<SystemSettings>({
     id: 'global-settings',
     featureRppEnabled: true,
@@ -17,7 +17,11 @@ const AdminSiteSettings: React.FC = () => {
     logoUrl: '',
     faviconUrl: '',
     timezone: 'Asia/Jakarta',
-    footerText: `© ${new Date().getFullYear()} EduAdmin Pro. All rights reserved.`
+    footerText: `© ${new Date().getFullYear()} EduAdmin Pro. All rights reserved.`,
+    aiProvider: 'GOOGLE',
+    aiBaseUrl: '',
+    aiApiKey: '',
+    aiModel: ''
   });
   
   const [isLoading, setIsLoading] = useState(false);
@@ -108,6 +112,14 @@ const AdminSiteSettings: React.FC = () => {
           }`}
         >
           <Image size={16} /> Icon & Tampilan
+        </button>
+        <button
+          onClick={() => setActiveTab('ai')}
+          className={`px-6 py-2.5 rounded-md text-sm font-medium transition flex items-center gap-2 ${
+            activeTab === 'ai' ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-600 hover:text-gray-800'
+          }`}
+        >
+          <BrainCircuit size={16} /> AI Config
         </button>
       </div>
 
@@ -256,6 +268,93 @@ const AdminSiteSettings: React.FC = () => {
                    Catatan: Gunakan URL gambar yang dapat diakses publik (Direct Link). 
                    Perubahan icon mungkin memerlukan refresh browser (F5) untuk terlihat.
                 </p>
+             </div>
+          </div>
+        )}
+
+        {/* TAB: AI CONFIG */}
+        {activeTab === 'ai' && (
+          <div className="space-y-6">
+             <div className="bg-purple-50 border border-purple-200 p-4 rounded-lg mb-6">
+                <div className="flex items-start gap-3">
+                   <div className="bg-purple-100 p-2 rounded-full text-purple-700 mt-1">
+                      <BrainCircuit size={20} />
+                   </div>
+                   <div>
+                      <h4 className="text-purple-900 font-bold text-lg mb-1">AI Provider Configuration</h4>
+                      <p className="text-sm text-purple-700">
+                         Pilih penyedia layanan AI. Gunakan <strong>Google Direct</strong> untuk setup mudah (gratis) atau <strong>Custom Gateway</strong> (LiteLLM, Proxy) untuk performa tinggi dan manajemen kuota terpusat.
+                      </p>
+                   </div>
+                </div>
+             </div>
+
+             <div className="space-y-4">
+                <div>
+                   <label className="block text-sm font-bold text-gray-700 mb-2">Provider Type</label>
+                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <label className={`border rounded-lg p-4 cursor-pointer transition flex items-center gap-3 ${settings.aiProvider !== 'CUSTOM' ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500' : 'hover:bg-gray-50'}`}>
+                         <input type="radio" className="hidden" checked={settings.aiProvider !== 'CUSTOM'} onChange={() => handleChange('aiProvider', 'GOOGLE')} />
+                         <div className="w-4 h-4 rounded-full border border-gray-400 flex items-center justify-center">
+                            {settings.aiProvider !== 'CUSTOM' && <div className="w-2 h-2 rounded-full bg-blue-600" />}
+                         </div>
+                         <div>
+                            <div className="font-bold text-gray-800">Direct Google Gemini</div>
+                            <div className="text-xs text-gray-500">Menggunakan API Key di Environment Variables (Vercel).</div>
+                         </div>
+                      </label>
+
+                      <label className={`border rounded-lg p-4 cursor-pointer transition flex items-center gap-3 ${settings.aiProvider === 'CUSTOM' ? 'border-purple-500 bg-purple-50 ring-1 ring-purple-500' : 'hover:bg-gray-50'}`}>
+                         <input type="radio" className="hidden" checked={settings.aiProvider === 'CUSTOM'} onChange={() => handleChange('aiProvider', 'CUSTOM')} />
+                         <div className="w-4 h-4 rounded-full border border-gray-400 flex items-center justify-center">
+                            {settings.aiProvider === 'CUSTOM' && <div className="w-2 h-2 rounded-full bg-purple-600" />}
+                         </div>
+                         <div>
+                            <div className="font-bold text-gray-800">Custom Gateway / LiteLLM</div>
+                            <div className="text-xs text-gray-500">Gunakan Base URL & Key sendiri (OpenAI Compatible).</div>
+                         </div>
+                      </label>
+                   </div>
+                </div>
+
+                {settings.aiProvider === 'CUSTOM' && (
+                   <div className="bg-gray-50 p-6 rounded-lg border border-gray-200 space-y-4 animate-in fade-in slide-in-from-top-2">
+                      <div>
+                         <label className="block text-sm font-semibold text-gray-700 mb-1">Base URL</label>
+                         <input 
+                            type="text" 
+                            className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-purple-500 outline-none"
+                            placeholder="https://your-litellm-proxy.com/v1"
+                            value={settings.aiBaseUrl || ''}
+                            onChange={(e) => handleChange('aiBaseUrl', e.target.value)}
+                         />
+                         <p className="text-xs text-gray-500 mt-1">Endpoint API (OpenAI Compatible). Contoh: <code>http://localhost:4000/v1</code></p>
+                      </div>
+
+                      <div>
+                         <label className="block text-sm font-semibold text-gray-700 mb-1">API Key (Custom)</label>
+                         <input 
+                            type="password" 
+                            className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-purple-500 outline-none"
+                            placeholder="sk-..."
+                            value={settings.aiApiKey || ''}
+                            onChange={(e) => handleChange('aiApiKey', e.target.value)}
+                         />
+                      </div>
+
+                      <div>
+                         <label className="block text-sm font-semibold text-gray-700 mb-1">Model Name (Optional)</label>
+                         <input 
+                            type="text" 
+                            className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-purple-500 outline-none"
+                            placeholder="gemini-pro"
+                            value={settings.aiModel || ''}
+                            onChange={(e) => handleChange('aiModel', e.target.value)}
+                         />
+                         <p className="text-xs text-gray-500 mt-1">Nama model yang akan dipanggil di Gateway (Default: <code>gemini-pro</code> atau sesuai mapping LiteLLM Anda).</p>
+                      </div>
+                   </div>
+                )}
              </div>
           </div>
         )}
