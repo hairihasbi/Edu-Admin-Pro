@@ -249,6 +249,10 @@ const DB_SCHEMAS = [
         favicon_url TEXT,
         timezone TEXT,
         footer_text TEXT,
+        ai_provider TEXT,
+        ai_base_url TEXT,
+        ai_api_key TEXT,
+        ai_model TEXT,
         last_modified INTEGER,
         version INTEGER DEFAULT 1,
         deleted INTEGER DEFAULT 0
@@ -395,7 +399,7 @@ const getTableConfig = (collection: string) => {
     case 'eduadmin_bk_counseling': return { table: 'bk_counseling', columns: ['id', 'student_id', 'date', 'issue', 'notes', 'follow_up', 'status', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.studentId), s(item.date), s(item.issue), s(item.notes), s(item.follow_up), s(item.status), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_tickets': return { table: 'tickets', columns: ['id', 'user_id', 'teacher_name', 'subject', 'status', 'last_updated', 'messages', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.userId), s(item.teacherName), s(item.subject), s(item.status), s(item.lastUpdated), JSON.stringify(item.messages || []), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_api_keys': return { table: 'api_keys', columns: ['id', 'key_value', 'provider', 'status', 'added_at', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.key), s(item.provider), s(item.status), s(item.addedAt), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
-    case 'eduadmin_system_settings': return { table: 'system_settings', columns: ['id', 'feature_rpp_enabled', 'maintenance_message', 'app_name', 'school_name', 'app_description', 'app_keywords', 'logo_url', 'favicon_url', 'timezone', 'footer_text', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), item.featureRppEnabled ? 1 : 0, s(item.maintenanceMessage), s(item.appName), s(item.schoolName), s(item.appDescription), s(item.appKeywords), s(item.logoUrl), s(item.faviconUrl), s(item.timezone), s(item.footerText), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
+    case 'eduadmin_system_settings': return { table: 'system_settings', columns: ['id', 'feature_rpp_enabled', 'maintenance_message', 'app_name', 'school_name', 'app_description', 'app_keywords', 'logo_url', 'favicon_url', 'timezone', 'footer_text', 'ai_provider', 'ai_base_url', 'ai_api_key', 'ai_model', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), item.featureRppEnabled ? 1 : 0, s(item.maintenanceMessage), s(item.appName), s(item.schoolName), s(item.appDescription), s(item.appKeywords), s(item.logoUrl), s(item.faviconUrl), s(item.timezone), s(item.footerText), s(item.aiProvider), s(item.aiBaseUrl), s(item.aiApiKey), s(item.aiModel), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_wa_configs': return { table: 'wa_configs', columns: ['user_id', 'provider', 'base_url', 'api_key', 'device_id', 'is_active', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.userId), s(item.provider), s(item.baseUrl), s(item.apiKey), s(item.deviceId), item.isActive ? 1 : 0, s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_notifications': return { table: 'notifications', columns: ['id', 'title', 'message', 'type', 'target_role', 'is_read', 'is_popup', 'created_at', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.title), s(item.message), s(item.type), s(item.targetRole), item.isRead ? 1 : 0, item.isPopup ? 1 : 0, s(item.createdAt), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_logs': return { table: 'logs', columns: ['id', 'timestamp', 'level', 'actor', 'role', 'action', 'details', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.timestamp), s(item.level), s(item.actor), s(item.role), s(item.action), s(item.details), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
@@ -453,13 +457,13 @@ const mapRowToJSON = (collection: string, row: any) => {
     case 'eduadmin_bk_achievements':
       return { ...base, studentId: row.student_id, date: row.date, title: row.title, level: row.level, description: row.description };
     case 'eduadmin_bk_counseling':
-      return { ...base, studentId: row.student_id, date: row.date, issue: row.issue, notes: row.notes, followUp: row.follow_up, status: row.status };
+      return { ...base, studentId: row.student_id, date: row.date, issue: row.issue, notes: row.notes, follow_up: row.follow_up, status: row.status };
     case 'eduadmin_tickets':
       return { ...base, userId: row.user_id, teacherName: row.teacher_name, subject: row.subject, status: row.status, lastUpdated: row.last_updated, messages: parseJSONSafe(row.messages) };
     case 'eduadmin_api_keys':
       return { ...base, key: row.key_value, provider: row.provider, status: row.status, addedAt: row.added_at };
     case 'eduadmin_system_settings':
-      return { ...base, featureRppEnabled: row.feature_rpp_enabled === 1, maintenanceMessage: row.maintenance_message, appName: row.app_name, schoolName: row.school_name, appDescription: row.app_description, appKeywords: row.app_keywords, logoUrl: row.logo_url, faviconUrl: row.favicon_url, timezone: row.timezone, footerText: row.footer_text };
+      return { ...base, featureRppEnabled: row.feature_rpp_enabled === 1, maintenanceMessage: row.maintenance_message, appName: row.app_name, schoolName: row.school_name, appDescription: row.app_description, appKeywords: row.app_keywords, logoUrl: row.logo_url, faviconUrl: row.favicon_url, timezone: row.timezone, footerText: row.footer_text, aiProvider: row.ai_provider, aiBaseUrl: row.ai_base_url, aiApiKey: row.ai_api_key, aiModel: row.ai_model };
     case 'eduadmin_wa_configs':
       return { ...base, userId: row.user_id, provider: row.provider, baseUrl: row.base_url, apiKey: row.api_key, deviceId: row.device_id, isActive: row.is_active === 1 };
     case 'eduadmin_notifications':
@@ -481,7 +485,7 @@ const cleanEnv = (val: string | undefined) => {
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  
+  // ... rest of the file ... (unchanged)
   let client;
   try {
     if (req.method !== 'POST') {
