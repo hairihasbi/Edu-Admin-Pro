@@ -308,11 +308,6 @@ export const importStudentsFromCSV = async (classId: string, csvText: string) =>
 
 // --- ACADEMIC ---
 export const saveAttendanceRecords = async (records: Omit<AttendanceRecord, 'id'>[]) => {
-    // Basic deduplication logic: find existing record for student+date and update, or add new
-    // For bulk speed in local, we can just put. Dexie 'put' replaces if key exists, but our key is random UUID.
-    // So we must query first or handle logic.
-    // Better approach for sync:
-    
     const recordsToSync: AttendanceRecord[] = [];
 
     await db.transaction('rw', db.attendanceRecords, async () => {
@@ -381,6 +376,14 @@ export const getAttendanceRecords = async (classId: string, month: number, year:
         const d = new Date(r.date);
         return d.getMonth() === month && d.getFullYear() === year;
     });
+};
+
+// NEW: Get records by range for Recap
+export const getAttendanceRecordsByRange = async (classId: string, startDate: string, endDate: string) => {
+    // We fetch all for class then filter because IndexedDB string range queries can be tricky with complex keys
+    // But simplified ISO string comparison works well.
+    const all = await db.attendanceRecords.where('classId').equals(classId).toArray();
+    return all.filter(r => r.date >= startDate && r.date <= endDate);
 };
 
 export const addScopeMaterial = async (data: any) => {
