@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Zap, CheckCircle, ArrowRight, BrainCircuit, FileQuestion, Star } from './Icons';
+import { Zap, CheckCircle, ArrowRight, BrainCircuit, FileQuestion, Star, ExternalLink } from './Icons';
 
 const TeacherGenQuiz: React.FC = () => {
   return (
@@ -15,26 +15,43 @@ const TeacherGenQuiz: React.FC = () => {
         <div className="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
            <div>
               <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider mb-6 border border-white/20">
-                  <Zap size={14} fill="currentColor" className="text-yellow-300" /> Powered by Advanced AI
+                  <Zap size={14} fill="currentColor" className="text-yellow-300" /> Premium AI Feature
               </div>
               <h1 className="text-3xl md:text-5xl font-extrabold mb-6 leading-tight">
                   Buat Soal Ulangan <br/> Dalam Hitungan Detik
               </h1>
-              <p className="text-indigo-100 text-lg mb-8 leading-relaxed">
-                  Tidak perlu lagi menghabiskan waktu berjam-jam mencari referensi soal. 
-                  Gunakan <strong>GenQuiz AI</strong> untuk menghasilkan bank soal berkualitas lengkap dengan kunci jawaban dan pembahasan.
-              </p>
+              <div className="text-indigo-100 text-lg mb-8 leading-relaxed space-y-2">
+                  <p>
+                    Gunakan teknologi AI untuk menghasilkan bank soal berkualitas lengkap dengan kunci jawaban dan pembahasan.
+                  </p>
+                  <p className="bg-white/10 p-3 rounded-lg border border-white/20 text-sm font-medium">
+                    ⚠️ <strong>Informasi Penting:</strong> Fitur ini menggunakan sistem <strong>Kredit (Berbayar)</strong>. Anda perlu melakukan top-up atau membeli paket kuota untuk men-generate soal.
+                  </p>
+              </div>
               
-              <a
-                  href="https://www.genquiz.my.id/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-3 bg-white text-indigo-700 px-8 py-4 rounded-xl font-bold text-lg hover:bg-gray-50 transition shadow-lg transform hover:-translate-y-1 group"
-              >
-                  Buka GenQuiz Sekarang 
-                  <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
-              </a>
-              <p className="mt-4 text-xs text-indigo-200 opacity-80">*Membuka tab baru ke layanan GenQuiz</p>
+              <div className="flex flex-col sm:flex-row gap-4">
+                  <a
+                      href="https://www.genzquiz.my.id/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center justify-center gap-2 bg-yellow-400 text-yellow-900 px-6 py-3.5 rounded-xl font-bold text-base hover:bg-yellow-300 transition shadow-lg transform hover:-translate-y-1 group"
+                  >
+                      Buka GenZ Quiz (Baru)
+                      <Zap size={18} fill="currentColor" />
+                  </a>
+
+                  <a
+                      href="https://www.genquiz.my.id/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center justify-center gap-2 bg-white text-indigo-700 px-6 py-3.5 rounded-xl font-bold text-base hover:bg-gray-50 transition shadow-lg transform hover:-translate-y-1 group"
+                  >
+                      Buka GenQuiz (V1)
+                      <ExternalLink size={18} />
+                  </a>
+              </div>
+              
+              <p className="mt-4 text-xs text-indigo-200 opacity-80">*Link akan membuka tab baru ke layanan eksternal</p>
            </div>
 
            <div className="hidden lg:flex justify-center">
@@ -93,9 +110,9 @@ const TeacherGenQuiz: React.FC = () => {
                 <div className="w-14 h-14 bg-pink-50 text-pink-600 rounded-2xl flex items-center justify-center mb-5 group-hover:bg-pink-600 group-hover:text-white transition-colors">
                     <Zap size={28} />
                 </div>
-                <h3 className="text-lg font-bold text-gray-800 mb-2">3. Generate & Unduh</h3>
+                <h3 className="text-lg font-bold text-gray-800 mb-2">3. Beli Credit & Generate</h3>
                 <p className="text-gray-600 text-sm leading-relaxed">
-                    AI akan memproses permintaan Anda dalam detik. Hasilnya dapat langsung disalin atau diunduh dalam format Dokumen.
+                    Top-up credit sesuai kebutuhan. AI akan memproses permintaan Anda dalam detik. Hasilnya dapat langsung diunduh.
                 </p>
             </div>
         </div>
@@ -128,14 +145,24 @@ const TeacherGenQuiz: React.FC = () => {
               <div className="flex-1 bg-gray-50 p-6 rounded-xl border border-gray-100 w-full">
                   <div className="text-center">
                       <p className="text-gray-500 text-sm mb-4">Sudah siap membuat soal?</p>
-                      <a 
-                          href="https://www.genquiz.my.id/"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="block w-full bg-gray-900 text-white font-bold py-3 rounded-lg hover:bg-gray-800 transition"
-                      >
-                          Mulai Sekarang (Gratis)
-                      </a>
+                      <div className="grid grid-cols-1 gap-3">
+                          <a 
+                              href="https://www.genzquiz.my.id/"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="block w-full bg-yellow-400 text-yellow-900 font-bold py-3 rounded-lg hover:bg-yellow-300 transition"
+                          >
+                              Coba GenZ Quiz (V2)
+                          </a>
+                          <a 
+                              href="https://www.genquiz.my.id/"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="block w-full bg-gray-900 text-white font-bold py-3 rounded-lg hover:bg-gray-800 transition"
+                          >
+                              Buka GenQuiz (V1)
+                          </a>
+                      </div>
                   </div>
               </div>
           </div>
