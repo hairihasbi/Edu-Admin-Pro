@@ -762,9 +762,10 @@ export const syncAllData = async (force: boolean = false) => {
             if (unsynced.length > 0) {
                 await pushToTurso(collection, unsynced);
                 // Mark as synced locally
-                const ids = unsynced.map((i: any) => i.id);
+                // FIX: Use bulkPut instead of bulkUpdate because Dexie does not have bulkUpdate
+                const syncedItems = unsynced.map((item: any) => ({ ...item, isSynced: true }));
                 // @ts-ignore
-                await db[localTable].bulkUpdate(ids.map((id:any) => ({ key: id, changes: { isSynced: true } })));
+                await db[localTable].bulkPut(syncedItems);
             }
 
             // PULL
