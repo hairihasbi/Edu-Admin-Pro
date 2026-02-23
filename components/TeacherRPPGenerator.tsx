@@ -8,7 +8,7 @@ import {
   FileText, ShieldCheck, RefreshCcw, Trash2, Cloud, AlertTriangle, Download, 
   Globe, Pencil, Bold, Italic, Heading, List, ListOrdered, Type, LayoutTemplate, X,
   Underline, AlignLeft, AlignCenter, AlignRight, Undo, Redo, Maximize2, Minimize2,
-  PieChart
+  PieChart, Zap
 } from './Icons';
 // @ts-ignore
 import html2pdf from 'html2pdf.js';
@@ -452,6 +452,30 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
                <div className="hidden md:flex items-center gap-2 bg-green-50 text-green-700 px-3 py-1.5 rounded-lg text-xs font-medium border border-green-100">
                   <ShieldCheck size={16} /> License: Sekolah
                </div>
+            </div>
+        </div>
+
+        {/* Free Access Banner */}
+        <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 flex gap-4 items-start shadow-sm animate-in fade-in slide-in-from-top-2">
+            <div className="bg-white p-2 rounded-full text-indigo-600 mt-0.5 shrink-0 border border-indigo-100 shadow-sm">
+                <Zap size={20} fill="currentColor" />
+            </div>
+            <div>
+                <h4 className="font-bold text-indigo-900 text-sm flex items-center gap-2">
+                    Fitur Gratis (Free Access)
+                    <span className="text-[10px] bg-indigo-200 text-indigo-800 px-2 py-0.5 rounded-full">Bulanan</span>
+                </h4>
+                <p className="text-xs text-indigo-800 mt-1 leading-relaxed">
+                    Layanan AI Generator ini dapat digunakan secara <strong>Gratis</strong> untuk membantu administrasi guru. 
+                    Demi menjaga performa server, terdapat <strong>Batas Kuota Penggunaan</strong>.
+                    {quotaLimit > 0 ? (
+                        <span className="block mt-1 pt-1 border-t border-indigo-200/50 font-medium">
+                            Kuota Anda: {quotaUsage} / {quotaLimit} RPP bulan ini. (Reset otomatis awal bulan)
+                        </span>
+                    ) : (
+                        <span className="block mt-1"> Saat ini penggunaan tidak dibatasi (Unlimited).</span>
+                    )}
+                </p>
             </div>
         </div>
 
