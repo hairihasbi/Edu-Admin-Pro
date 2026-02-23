@@ -40,8 +40,8 @@ export class EduAdminDatabase extends Dexie {
     // * = Multi-entry index (not used here)
     // [field] = Indexed field for searching
     // Added schoolNpsn indexes for multi-tenancy filtering
-    // Bumped to version 15 to include new quota fields
-    (this as any).version(15).stores({
+    // Bumped to version 16 to include isPopup index
+    (this as any).version(16).stores({
       users: '&id, username, role, status, schoolNpsn, isSynced',
       classes: '&id, userId, schoolNpsn, name, isSynced', 
       students: '&id, classId, schoolNpsn, name, nis, gender, isSynced', 
@@ -59,7 +59,7 @@ export class EduAdminDatabase extends Dexie {
       achievements: '&id, studentId, date, isSynced',
       counselingSessions: '&id, studentId, date, status, isSynced',
       whatsappConfigs: '&userId, isSynced',
-      notifications: '&id, targetRole, isRead, createdAt, isSynced',
+      notifications: '&id, targetRole, isRead, isPopup, createdAt, isSynced',
       apiKeys: '&id, key, status, isSynced',
       systemSettings: '&id, isSynced'
     });
