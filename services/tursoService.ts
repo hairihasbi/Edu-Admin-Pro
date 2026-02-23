@@ -24,6 +24,15 @@ const getAuthHeader = () => {
 
 // --- NEW: Helper to safely parse API responses ---
 const handleApiResponse = async (response: Response) => {
+    // 1. Intercept 401 (Unauthorized) - Session Expired / User Deleted
+    if (response.status === 401) {
+        if (typeof window !== 'undefined') {
+            // Dispatch event for App.tsx to handle logout
+            window.dispatchEvent(new CustomEvent('auth-error'));
+        }
+        throw new Error("Sesi kadaluarsa atau tidak valid. Silakan login ulang.");
+    }
+
     const contentType = response.headers.get("content-type");
     if (contentType && contentType.includes("application/json")) {
         const data = await response.json();
@@ -162,10 +171,7 @@ export const pushToTurso = async (collection: string, items: any[], force: boole
           });
 
           // Special Handling for Auth/Conflict before generic JSON parse
-          if (response.status === 401 || response.status === 403) {
-              throw new Error(`Unauthorized: ${response.statusText}`);
-          }
-
+          // Note: 401 is now handled inside handleApiResponse, but specific conflict 409 logic remains here if needed before parse
           if (response.status === 409) {
               const data = await response.json();
               throw new Error(`CONFLICT:${data.itemId}`);
@@ -201,7 +207,8 @@ export const pullFromTurso = async (collection: string, localItems: any[]): Prom
               userId: getCurrentUserId()
           })
         });
-        if (!response.ok) throw new Error(response.statusText);
+        // 401 handled inside handleApiResponse
+        if (!response.ok && response.status !== 401) throw new Error(response.statusText);
         return await handleApiResponse(response);
     }, 1, 500);
 
@@ -266,6 +273,7 @@ export const pullFromTurso = async (collection: string, localItems: any[]): Prom
     return { items: mergedItems, hasChanges };
   } catch (e) {
     console.error(`Pull Error (${collection}):`, e);
+    // Don't swallow auth errors if possible, but keep app stable
     return { items: localItems, hasChanges: false };
   }
 };
