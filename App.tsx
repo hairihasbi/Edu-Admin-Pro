@@ -130,6 +130,19 @@ const AppContent: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // --- LOGOUT HANDLER ---
+  const handleLogout = useCallback(() => {
+    localStorage.removeItem('eduadmin_user');
+    setCurrentUser(null);
+    setIsSidebarOpen(false);
+    setIsNotifPanelOpen(false);
+    if (sessionTimerRef.current) {
+        clearTimeout(sessionTimerRef.current);
+        sessionTimerRef.current = null;
+    }
+    navigate('/login');
+  }, [navigate]);
+
   // --- INITIALIZATION & SYSTEM SETTINGS ---
   useEffect(() => {
     let isMounted = true;
@@ -218,12 +231,20 @@ const AppContent: React.FC = () => {
     const handleUnsavedStatus = (e: any) => {
         setHasUnsaved(e.detail);
     };
+
+    // NEW Listener for Auth Errors (401 from API)
+    const handleAuthError = () => {
+        console.warn("Session expired or invalid (401). Triggering auto-logout.");
+        alert("Sesi Anda telah berakhir atau akun tidak ditemukan di server. Silakan login kembali.");
+        handleLogout();
+    };
     
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
     
     window.addEventListener('sync-status', handleSyncStatus);
     window.addEventListener('unsaved-changes', handleUnsavedStatus);
+    window.addEventListener('auth-error', handleAuthError); // Register Auth Listener
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
@@ -238,11 +259,12 @@ const AppContent: React.FC = () => {
       isMounted = false;
       window.removeEventListener('sync-status', handleSyncStatus);
       window.removeEventListener('unsaved-changes', handleUnsavedStatus);
+      window.removeEventListener('auth-error', handleAuthError);
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     };
-  }, []);
+  }, [handleLogout]); // Add handleLogout to dependencies
 
   // --- AUTOMATIC SYNC HEARTBEAT ---
   // Runs every 15 seconds to ensure data flows between Guru <-> Admin
@@ -259,18 +281,6 @@ const AppContent: React.FC = () => {
 
       return () => clearInterval(syncInterval);
   }, [currentUser]);
-
-  const handleLogout = useCallback(() => {
-    localStorage.removeItem('eduadmin_user');
-    setCurrentUser(null);
-    setIsSidebarOpen(false);
-    setIsNotifPanelOpen(false);
-    if (sessionTimerRef.current) {
-        clearTimeout(sessionTimerRef.current);
-        sessionTimerRef.current = null;
-    }
-    navigate('/login');
-  }, [navigate]);
 
   useEffect(() => {
     if (!currentUser) return;
