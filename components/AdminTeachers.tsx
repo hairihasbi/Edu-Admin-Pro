@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { User, UserStatus } from '../types';
-import { getTeachers, getPendingTeachers, approveTeacher, rejectTeacher, sendApprovalEmail, deleteTeacher, runManualSync } from '../services/database';
+import { getTeachers, getPendingTeachers, approveTeacher, rejectTeacher, sendApprovalEmail, sendApprovalWhatsApp, deleteTeacher, runManualSync } from '../services/database';
 import { User as UserIcon, CheckCircle, X, Shield, Search, School, Mail, ChevronLeft, ChevronRight, FileSpreadsheet, Smartphone, Trash2, MoreVertical, BookOpen, RefreshCcw } from './Icons';
 import * as XLSX from 'xlsx';
 
@@ -66,15 +66,33 @@ const AdminTeachers: React.FC = () => {
         if (success) {
             setPendingTeachers(prev => prev.filter(u => u.id !== teacher.id));
             
-            // Send Email Notification
+            // 1. Send Email Notification
             const emailResult = await sendApprovalEmail(teacher);
             
-            let message = "Guru berhasil disetujui dan aktif.";
-            if (emailResult.success) {
-                message += " " + emailResult.message;
+            // 2. Send WhatsApp Notification
+            let waMessage = "";
+            const currentUserStr = localStorage.getItem('eduadmin_user');
+            if (currentUserStr) {
+                const currentUser = JSON.parse(currentUserStr);
+                const waResult = await sendApprovalWhatsApp(teacher, currentUser.id);
+                waMessage = waResult.success ? "✅ WA Terkirim" : `❌ WA Gagal (${waResult.message})`;
             } else {
-                message += " (Email notifikasi gagal dikirim: cek konfigurasi).";
+                waMessage = "⚠️ WA Gagal (Admin ID tidak ditemukan)";
             }
+            
+            // Construct Final Message
+            let message = "Guru berhasil disetujui dan aktif.";
+            
+            // Append Email Status
+            if (emailResult.success) {
+                message += "\n📧 Email Terkirim.";
+            } else {
+                message += "\n⚠️ Email Gagal.";
+            }
+
+            // Append WA Status
+            message += `\n📱 ${waMessage}`;
+
             alert(message);
         } else {
             alert("Gagal menyetujui guru.");
@@ -109,316 +127,217 @@ const AdminTeachers: React.FC = () => {
   };
 
   const handleExportExcel = () => {
-    const dataToExport = activeTab === 'active' ? activeTeachers : pendingTeachers;
-    
-    if (dataToExport.length === 0) {
-        alert("Tidak ada data untuk diekspor.");
-        return;
-    }
-
-    const rows = dataToExport.map((t, index) => ({
-        'No': index + 1,
-        'Nama Lengkap': t.fullName,
-        'NIP/NUPTK': t.nip || '-',
-        'Email': t.email || '-',
-        'No. WhatsApp': t.phone || '-',
-        'Username': t.username,
-        'Sekolah': t.schoolName || '-',
-        'Mata Pelajaran': t.subject || '-',
-        'Status': t.status,
-        'Role Tambahan': t.additionalRole || '-'
+    const data = activeTeachers.map((t, i) => ({
+        No: i + 1,
+        Nama: t.fullName,
+        NIP: t.nip || '-',
+        Mapel: t.subject || '-',
+        Sekolah: t.schoolName || '-',
+        Email: t.email,
+        HP: t.phone,
+        Status: t.status
     }));
 
-    const ws = XLSX.utils.json_to_sheet(rows);
+    const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Data Guru");
-    XLSX.writeFile(wb, `Data_Guru_${activeTab}_${new Date().toISOString().split('T')[0]}.xlsx`);
+    XLSX.writeFile(wb, "Data_Guru_EduAdmin.xlsx");
   };
 
   // Filter Logic
-  const allData = activeTab === 'active' ? activeTeachers : pendingTeachers;
-  const filteredTeachers = allData.filter(t => 
-    (t.fullName || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
-    (t.username || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (t.schoolName || '').toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredList = (activeTab === 'active' ? activeTeachers : pendingTeachers).filter(t => 
+      t.fullName.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      (t.schoolName && t.schoolName.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-  // Pagination Logic
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentItems = filteredTeachers.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(filteredTeachers.length / itemsPerPage);
+  const currentItems = filteredList.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(filteredList.length / itemsPerPage);
 
   return (
     <div className="space-y-6 pb-20">
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
             <UserIcon className="text-blue-600" /> Manajemen Guru
           </h2>
-          <p className="text-sm text-gray-500">Kelola daftar guru dan persetujuan akun baru.</p>
+          <p className="text-sm text-gray-500">Kelola akun guru, persetujuan pendaftaran, dan data sekolah.</p>
         </div>
-        
-        <div className="flex flex-col sm:flex-row gap-2">
-           {/* SYNC BUTTON */}
-           <button 
-             onClick={handleSyncData}
-             disabled={isSyncing}
-             className="px-4 py-2 bg-blue-50 text-blue-700 rounded-md text-sm font-bold hover:bg-blue-100 transition flex items-center justify-center gap-2"
-           >
-             <RefreshCcw size={16} className={isSyncing ? "animate-spin" : ""} />
-             {isSyncing ? 'Sinkronisasi...' : 'Tarik Data Baru'}
-           </button>
-
-           <div className="flex bg-gray-100 p-1 rounded-lg">
-                <button 
-                    onClick={() => setActiveTab('active')}
-                    className={`px-4 py-2 rounded-md text-sm font-medium transition ${
-                        activeTab === 'active' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                    }`}
-                >
-                    Guru Aktif
-                </button>
-                <button 
-                    onClick={() => setActiveTab('pending')}
-                    className={`px-4 py-2 rounded-md text-sm font-medium transition flex items-center gap-2 ${
-                        activeTab === 'pending' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                    }`}
-                >
-                    Menunggu
-                    {pendingTeachers.length > 0 && (
-                        <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full animate-pulse">{pendingTeachers.length}</span>
-                    )}
-                </button>
-           </div>
+        <div className="flex gap-2">
+            <button 
+                onClick={handleSyncData}
+                disabled={isSyncing}
+                className="flex items-center gap-2 bg-purple-50 text-purple-700 px-4 py-2 rounded-lg font-medium hover:bg-purple-100 transition disabled:opacity-50"
+            >
+                <RefreshCcw size={16} className={isSyncing ? "animate-spin" : ""} />
+                {isSyncing ? "Syncing..." : "Sync Data"}
+            </button>
+            <button 
+                onClick={handleExportExcel}
+                className="flex items-center gap-2 bg-green-50 text-green-700 px-4 py-2 rounded-lg font-medium hover:bg-green-100 transition"
+            >
+                <FileSpreadsheet size={16} /> Export Excel
+            </button>
         </div>
       </div>
 
-      {/* Search Bar & Export */}
-      <div className="flex flex-col sm:flex-row gap-2">
-         <div className="relative flex-1">
-            <Search size={18} className="absolute left-3 top-3 text-gray-400" />
-            <input 
-              type="text" 
-              placeholder="Cari Nama, Username, atau Sekolah..." 
-              className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-         </div>
-         <button 
-            onClick={handleExportExcel}
-            className="flex items-center justify-center gap-2 bg-green-600 text-white px-6 py-2.5 rounded-xl font-medium shadow-sm hover:bg-green-700 transition whitespace-nowrap"
-            title="Download Data Excel"
-         >
-            <FileSpreadsheet size={20} /> Excel
-         </button>
+      {/* Tabs & Search */}
+      <div className="flex flex-col md:flex-row justify-between gap-4">
+          <div className="flex space-x-1 bg-gray-200 p-1 rounded-lg w-fit">
+            <button
+                onClick={() => setActiveTab('active')}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition flex items-center gap-2 ${
+                activeTab === 'active' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-800'
+                }`}
+            >
+                Guru Aktif <span className="bg-blue-100 text-blue-700 px-2 rounded-full text-xs">{activeTeachers.length}</span>
+            </button>
+            <button
+                onClick={() => setActiveTab('pending')}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition flex items-center gap-2 ${
+                activeTab === 'pending' ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-600 hover:text-gray-800'
+                }`}
+            >
+                Menunggu <span className="bg-orange-100 text-orange-700 px-2 rounded-full text-xs">{pendingTeachers.length}</span>
+            </button>
+          </div>
+
+          <div className="relative w-full md:w-64">
+             <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
+             <input 
+                type="text" 
+                placeholder="Cari Nama / Sekolah..." 
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+             />
+          </div>
       </div>
 
-      {/* Content - LIST VIEW */}
+      {/* List Content */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-          {/* Table Header (Desktop) */}
-          <div className="hidden md:flex bg-gray-50 border-b border-gray-200 px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">
-              <div className="w-12 text-center">#</div>
-              <div className="flex-1">Identitas Guru</div>
-              <div className="flex-1">Sekolah & Mapel</div>
-              <div className="w-40">Kontak</div>
-              <div className="w-24 text-center">Status</div>
-              <div className="w-32 text-right">Aksi</div>
-          </div>
-
-          {isLoading ? (
-             <div className="p-6 space-y-4">
-                {Array.from({length: 5}).map((_, i) => (
-                   <div key={i} className="flex items-center gap-4 animate-pulse">
-                      <div className="w-10 h-10 bg-gray-200 rounded-full"></div>
-                      <div className="flex-1 h-4 bg-gray-200 rounded w-1/4"></div>
-                      <div className="hidden md:block flex-1 h-4 bg-gray-200 rounded w-1/4"></div>
-                      <div className="w-20 h-8 bg-gray-200 rounded"></div>
-                   </div>
-                ))}
+         {isLoading ? (
+             <div className="p-10 text-center text-gray-400">Memuat data guru...</div>
+         ) : filteredList.length === 0 ? (
+             <div className="p-10 text-center text-gray-400">Tidak ada data guru ditemukan.</div>
+         ) : (
+             <div className="overflow-x-auto">
+                 <table className="w-full text-sm text-left">
+                     <thead className="bg-gray-50 text-gray-600 font-medium border-b border-gray-200">
+                         <tr>
+                             <th className="p-4 w-10">No</th>
+                             <th className="p-4">Nama Lengkap</th>
+                             <th className="p-4">Sekolah / Instansi</th>
+                             <th className="p-4">Mapel</th>
+                             <th className="p-4">Kontak (WA/Email)</th>
+                             <th className="p-4 text-center">Status</th>
+                             <th className="p-4 text-center">Aksi</th>
+                         </tr>
+                     </thead>
+                     <tbody className="divide-y divide-gray-100">
+                         {currentItems.map((teacher, idx) => (
+                             <tr key={teacher.id} className="hover:bg-gray-50 transition">
+                                 <td className="p-4 text-center text-gray-500">{indexOfFirstItem + idx + 1}</td>
+                                 <td className="p-4">
+                                     <div className="font-bold text-gray-800">{teacher.fullName}</div>
+                                     <div className="text-xs text-gray-500">@{teacher.username}</div>
+                                 </td>
+                                 <td className="p-4">
+                                     <div className="flex items-center gap-1 text-gray-700 font-medium">
+                                         <School size={14} className="text-gray-400" /> {teacher.schoolName || '-'}
+                                     </div>
+                                     <div className="text-xs text-gray-400">NPSN: {teacher.schoolNpsn || '-'}</div>
+                                 </td>
+                                 <td className="p-4">
+                                     <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded text-xs font-medium border border-blue-100">
+                                         {teacher.subject || 'Umum'}
+                                     </span>
+                                 </td>
+                                 <td className="p-4">
+                                     <div className="flex flex-col gap-1">
+                                         {teacher.phone && (
+                                             <div className="flex items-center gap-1 text-xs text-green-700">
+                                                 <Smartphone size={12} /> {teacher.phone}
+                                             </div>
+                                         )}
+                                         <div className="flex items-center gap-1 text-xs text-gray-500">
+                                             <Mail size={12} /> {teacher.email}
+                                         </div>
+                                     </div>
+                                 </td>
+                                 <td className="p-4 text-center">
+                                     <span className={`px-2 py-1 rounded-full text-xs font-bold uppercase ${
+                                         teacher.status === 'ACTIVE' ? 'bg-green-100 text-green-700' : 
+                                         teacher.status === 'PENDING' ? 'bg-orange-100 text-orange-700' : 
+                                         'bg-red-100 text-red-700'
+                                     }`}>
+                                         {teacher.status}
+                                     </span>
+                                 </td>
+                                 <td className="p-4 text-center">
+                                     <div className="flex justify-center gap-2">
+                                         {activeTab === 'pending' ? (
+                                             <>
+                                                 <button 
+                                                     onClick={() => handleApprove(teacher)}
+                                                     className="bg-green-100 hover:bg-green-200 text-green-700 p-2 rounded-lg transition"
+                                                     title="Setujui"
+                                                 >
+                                                     <CheckCircle size={18} />
+                                                 </button>
+                                                 <button 
+                                                     onClick={() => handleReject(teacher.id)}
+                                                     className="bg-red-100 hover:bg-red-200 text-red-700 p-2 rounded-lg transition"
+                                                     title="Tolak"
+                                                 >
+                                                     <X size={18} />
+                                                 </button>
+                                             </>
+                                         ) : (
+                                             <button 
+                                                 onClick={() => handleDeleteAccount(teacher)}
+                                                 className="bg-gray-100 hover:bg-red-100 text-gray-500 hover:text-red-600 p-2 rounded-lg transition"
+                                                 title="Hapus Akun"
+                                             >
+                                                 <Trash2 size={18} />
+                                             </button>
+                                         )}
+                                     </div>
+                                 </td>
+                             </tr>
+                         ))}
+                     </tbody>
+                 </table>
              </div>
-          ) : filteredTeachers.length === 0 ? (
-              <div className="text-center py-20">
-                  <UserIcon size={48} className="mx-auto text-gray-300 mb-3" />
-                  <p className="text-gray-500 font-medium">Tidak ada data guru ditemukan.</p>
-                  <p className="text-sm text-gray-400">
-                      {activeTab === 'pending' ? 'Belum ada pendaftaran baru. Coba klik "Tarik Data Baru".' : 'Coba ubah kata kunci pencarian.'}
-                  </p>
-              </div>
-          ) : (
-              <div className="divide-y divide-gray-100">
-                {currentItems.map((teacher, index) => (
-                    <div key={teacher.id} className="group hover:bg-blue-50/50 transition-colors duration-200">
-                        {/* Desktop Row Layout */}
-                        <div className="hidden md:flex items-center px-6 py-4">
-                            <div className="w-12 text-center text-gray-400 font-medium text-sm">
-                                {indexOfFirstItem + index + 1}
-                            </div>
-                            
-                            <div className="flex-1 flex items-center gap-3 pr-4">
-                                <img src={teacher.avatar} alt="Avatar" className="w-10 h-10 rounded-full border border-gray-200 object-cover" />
-                                <div className="min-w-0">
-                                    <h4 className="font-bold text-gray-800 text-sm truncate" title={teacher.fullName}>{teacher.fullName}</h4>
-                                    <p className="text-xs text-gray-500 flex items-center gap-1">
-                                        @{teacher.username} 
-                                        {teacher.nip && <span className="bg-gray-100 px-1 rounded text-[10px]">{teacher.nip}</span>}
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div className="flex-1 pr-4 min-w-0">
-                                <div className="text-sm text-gray-700 font-medium flex items-center gap-1.5 truncate" title={teacher.schoolName}>
-                                    <School size={14} className="text-blue-500 flex-shrink-0" /> 
-                                    <span className="truncate">{teacher.schoolName || <i className="text-gray-400">Sekolah belum diatur</i>}</span>
-                                </div>
-                                <div className="text-xs text-gray-500 flex items-center gap-1.5 mt-0.5 truncate">
-                                    <BookOpen size={14} className="text-purple-500 flex-shrink-0" />
-                                    <span>{teacher.subject || '-'}</span>
-                                </div>
-                            </div>
-
-                            <div className="w-40 flex items-center gap-2">
-                                {teacher.phone ? (
-                                    <a href={`https://wa.me/${teacher.phone}`} target="_blank" rel="noreferrer" className="p-1.5 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition" title={teacher.phone}>
-                                        <Smartphone size={16} />
-                                    </a>
-                                ) : <span className="p-1.5 text-gray-300"><Smartphone size={16} /></span>}
-                                
-                                {teacher.email ? (
-                                    <a href={`mailto:${teacher.email}`} className="p-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition" title={teacher.email}>
-                                        <Mail size={16} />
-                                    </a>
-                                ) : <span className="p-1.5 text-gray-300"><Mail size={16} /></span>}
-                            </div>
-
-                            <div className="w-24 text-center">
-                                <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide border ${
-                                    teacher.status === 'ACTIVE' 
-                                    ? 'bg-green-50 text-green-600 border-green-200' 
-                                    : 'bg-yellow-50 text-yellow-600 border-yellow-200'
-                                }`}>
-                                    {teacher.status === 'ACTIVE' ? 'Aktif' : 'Pending'}
-                                </span>
-                            </div>
-
-                            <div className="w-32 flex justify-end gap-2">
-                                {activeTab === 'pending' ? (
-                                    <>
-                                        <button onClick={() => handleApprove(teacher)} className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-700 shadow-sm transition" title="Setujui">
-                                            <CheckCircle size={16} />
-                                        </button>
-                                        <button onClick={() => handleReject(teacher.id)} className="p-2 bg-white text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition" title="Tolak">
-                                            <X size={16} />
-                                        </button>
-                                    </>
-                                ) : (
-                                    <button onClick={() => handleDeleteAccount(teacher)} className="flex items-center gap-1 px-3 py-1.5 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg text-xs font-bold transition border border-transparent hover:border-red-200">
-                                        <Trash2 size={14} /> Hapus
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Mobile Row Layout */}
-                        <div className="md:hidden p-4 flex gap-3">
-                            <img src={teacher.avatar} alt="Avatar" className="w-12 h-12 rounded-full border border-gray-200 object-cover flex-shrink-0" />
-                            <div className="flex-1 min-w-0">
-                                <div className="flex justify-between items-start mb-1">
-                                    <div>
-                                        <h4 className="font-bold text-gray-800 text-sm">{teacher.fullName}</h4>
-                                        <p className="text-xs text-gray-500">@{teacher.username}</p>
-                                    </div>
-                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                                        teacher.status === 'ACTIVE' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
-                                    }`}>
-                                        {teacher.status === 'ACTIVE' ? 'Aktif' : 'Wait'}
-                                    </span>
-                                </div>
-                                
-                                <div className="text-xs text-gray-600 space-y-1 mb-3">
-                                    <div className="flex items-center gap-1.5 truncate">
-                                        <School size={12} className="text-blue-500" /> 
-                                        {teacher.schoolName || '-'}
-                                    </div>
-                                    <div className="flex items-center gap-1.5 truncate">
-                                        <BookOpen size={12} className="text-purple-500" />
-                                        {teacher.subject || '-'}
-                                    </div>
-                                </div>
-
-                                <div className="flex justify-between items-center border-t border-gray-100 pt-2">
-                                    <div className="flex gap-2">
-                                        {teacher.phone && <a href={`https://wa.me/${teacher.phone}`} className="text-green-600 bg-green-50 p-1.5 rounded"><Smartphone size={14}/></a>}
-                                        {teacher.email && <a href={`mailto:${teacher.email}`} className="text-blue-600 bg-blue-50 p-1.5 rounded"><Mail size={14}/></a>}
-                                    </div>
-                                    <div className="flex gap-2">
-                                        {activeTab === 'pending' ? (
-                                            <>
-                                                <button onClick={() => handleApprove(teacher)} className="bg-green-600 text-white px-3 py-1.5 rounded text-xs font-bold">Setujui</button>
-                                                <button onClick={() => handleReject(teacher.id)} className="bg-red-50 text-red-600 px-3 py-1.5 rounded text-xs font-bold">Tolak</button>
-                                            </>
-                                        ) : (
-                                            <button onClick={() => handleDeleteAccount(teacher)} className="text-red-500 hover:text-red-700 text-xs font-bold flex items-center gap-1">
-                                                <Trash2 size={12} /> Hapus Akun
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                ))}
-              </div>
-          )}
+         )}
+         
+         {/* Pagination */}
+         {totalPages > 1 && (
+            <div className="p-4 border-t border-gray-100 flex items-center justify-between bg-gray-50">
+                <span className="text-xs text-gray-500">
+                    Halaman {currentPage} dari {totalPages}
+                </span>
+                <div className="flex gap-2">
+                    <button 
+                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                        disabled={currentPage === 1}
+                        className="p-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 transition"
+                    >
+                        <ChevronLeft size={16} />
+                    </button>
+                    <button 
+                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                        disabled={currentPage === totalPages}
+                        className="p-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 transition"
+                    >
+                        <ChevronRight size={16} />
+                    </button>
+                </div>
+            </div>
+         )}
       </div>
-
-      {/* Pagination Controls */}
-      {totalPages > 1 && (
-          <div className="flex items-center justify-between border-t border-gray-200 pt-4">
-            <div className="text-sm text-gray-500">
-                Halaman {currentPage} dari {totalPages} ({filteredTeachers.length} data)
-            </div>
-            <div className="flex gap-2">
-                <button 
-                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                  className="p-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
-                >
-                  <ChevronLeft size={18} />
-                </button>
-                
-                {Array.from({length: Math.min(5, totalPages)}, (_, i) => {
-                  let p = i + 1;
-                  if (totalPages > 5 && currentPage > 3) p = currentPage - 2 + i;
-                  if (p > totalPages) return null;
-                  
-                  return (
-                      <button 
-                          key={p}
-                          onClick={() => setCurrentPage(p)}
-                          className={`w-9 h-9 flex items-center justify-center rounded-lg text-sm font-medium transition ${
-                            currentPage === p 
-                            ? 'bg-blue-600 text-white shadow-md' 
-                            : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-50'
-                          }`}
-                      >
-                          {p}
-                      </button>
-                  )
-                })}
-
-                <button 
-                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                  disabled={currentPage === totalPages}
-                  className="p-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
-                >
-                  <ChevronRight size={18} />
-                </button>
-            </div>
-          </div>
-      )}
     </div>
   );
 };
