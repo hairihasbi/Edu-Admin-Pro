@@ -234,6 +234,9 @@ const AppContent: React.FC = () => {
 
     // NEW Listener for Auth Errors (401 from API)
     const handleAuthError = () => {
+        // Prevent alert if user already logged out (manual logout race condition)
+        if (!localStorage.getItem('eduadmin_user')) return;
+
         console.warn("Session expired or invalid (401). Triggering auto-logout.");
         alert("Sesi Anda telah berakhir atau akun tidak ditemukan di server. Silakan login kembali.");
         handleLogout();
