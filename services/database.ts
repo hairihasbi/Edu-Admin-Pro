@@ -881,6 +881,41 @@ export const sendWhatsAppBroadcast = async (config: WhatsAppConfig, recipients: 
     }
 };
 
+// NEW: Email Broadcast Function
+export const sendEmailBroadcast = async (config: EmailConfig, recipients: any[], subject: string, message: string) => {
+    try {
+        // Prepare Recipients (filter invalid emails if handled by frontend, but good to double check)
+        const safeRecipients = recipients.map(r => ({
+            name: r.name,
+            email: r.email || ""
+        })).filter(r => r.email.includes('@'));
+
+        const res = await fetch('/api/broadcast-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                config, 
+                recipients: safeRecipients, 
+                subject,
+                content: message 
+            })
+        });
+
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            return {
+                success: 0,
+                failed: safeRecipients.length,
+                errors: [errData.error || errData.message || `HTTP Error ${res.status}`]
+            };
+        }
+
+        return await res.json();
+    } catch (e: any) {
+        return { success: 0, failed: recipients.length, errors: [e.message] };
+    }
+};
+
 // --- KEYS ---
 export const getBackupApiKeys = async () => {
     return await db.apiKeys.toArray();
