@@ -424,8 +424,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
                                   <div className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${
                                       log.level === 'ERROR' ? 'bg-red-500' : 
                                       log.level === 'WARNING' ? 'bg-yellow-500' : 
-                                      log.action.includes('Delete') ? 'bg-red-400' :
-                                      log.action.includes('Update') ? 'bg-blue-500' : 'bg-green-500'
+                                      (log.action || '').includes('Delete') ? 'bg-red-400' :
+                                      (log.action || '').includes('Update') ? 'bg-blue-500' : 'bg-green-500'
                                   }`}></div>
                                   <div className="flex-1 min-w-0">
                                       <div className="flex justify-between items-start">
