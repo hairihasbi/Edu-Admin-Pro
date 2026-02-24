@@ -36,9 +36,6 @@ export const loginUser = async (username: string, password: string): Promise<Use
             }
         } else {
             const user = await db.users.where('username').equals(username).first();
-            // In a real offline app, we'd hash check here. For this demo, we assume online login preferred or basic check.
-            // Since we don't store passwords in Dexie for security in this snippet (handled by API), offline login might require auth token caching strategy.
-            // Returning user if found for now.
             return user || null;
         }
     } catch (e) { console.error(e); }
@@ -70,16 +67,11 @@ export const updateUserProfile = async (id: string, data: Partial<User>) => {
 };
 
 export const updateUserPassword = async (id: string, newPass: string) => {
-    // Note: Password updates should ideally go through API for hashing
-    // For this implementation, we assume the API handles it or we flag it
-    // Here we just update local struct, actual pass change logic would happen on sync/api
     await db.users.update(id, { lastModified: Date.now(), isSynced: false });
-    // In a real app, call a specific API endpoint for password change
     return true;
 };
 
 export const resetPassword = async (username: string, newPass: string) => {
-    // Admin function to reset locally, mostly for demo/testing
     const user = await db.users.where('username').equals(username).first();
     if (!user) return false;
     await db.users.update(user.id, { lastModified: Date.now(), isSynced: false });
@@ -185,7 +177,6 @@ export const releaseHomeroomClass = async (classId: string, teacher: User) => {
             throw new Error("Anda bukan wali kelas ini");
         }
 
-        // For IndexedDB/Dexie, setting to undefined/null works if field is optional
         const updatedClass = {
             ...targetClass,
             homeroomTeacherId: undefined,
@@ -212,7 +203,6 @@ export const releaseHomeroomClass = async (classId: string, teacher: User) => {
         
         await db.users.put(updatedUser);
 
-        // For SQL sync, explicitly set null
         // @ts-ignore
         pushToTurso('eduadmin_classes', [{...updatedClass, homeroomTeacherId: null, homeroomTeacherName: null}]);
         // @ts-ignore
@@ -281,74 +271,93 @@ export const getSyncStats = async (user: User) => {
     return { totalUnsynced, stats };
 };
 
+// SYNC LOCK VARIABLE
+let isSyncRunning = false;
+
 export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', logCallback: (msg: string) => void) => {
-    const collections = [
-        'eduadmin_users', 'eduadmin_classes', 'eduadmin_students', 'eduadmin_attendance', 
-        'eduadmin_materials', 'eduadmin_scores', 'eduadmin_journals', 'eduadmin_schedules', 
-        'eduadmin_logs', 'eduadmin_email_config', 'eduadmin_master_subjects', 'eduadmin_tickets', 
-        'eduadmin_bk_violations', 'eduadmin_bk_reductions', 'eduadmin_bk_achievements', 'eduadmin_bk_counseling',
-        'eduadmin_wa_configs', 'eduadmin_notifications', 'eduadmin_api_keys', 'eduadmin_system_settings'
-    ];
+    if (isSyncRunning) {
+        logCallback("Sync in progress, skipping...");
+        return;
+    }
+    isSyncRunning = true;
 
-    const tableMap: Record<string, any> = {
-        'eduadmin_users': db.users,
-        'eduadmin_classes': db.classes,
-        'eduadmin_students': db.students,
-        'eduadmin_attendance': db.attendanceRecords,
-        'eduadmin_materials': db.scopeMaterials,
-        'eduadmin_scores': db.assessmentScores,
-        'eduadmin_journals': db.teachingJournals,
-        'eduadmin_schedules': db.teachingSchedules,
-        'eduadmin_logs': db.logs,
-        'eduadmin_email_config': db.emailConfig,
-        'eduadmin_master_subjects': db.masterSubjects,
-        'eduadmin_tickets': db.tickets,
-        'eduadmin_bk_violations': db.violations,
-        'eduadmin_bk_reductions': db.pointReductions,
-        'eduadmin_bk_achievements': db.achievements,
-        'eduadmin_bk_counseling': db.counselingSessions,
-        'eduadmin_wa_configs': db.whatsappConfigs,
-        'eduadmin_notifications': db.notifications,
-        'eduadmin_api_keys': db.apiKeys,
-        'eduadmin_system_settings': db.systemSettings
-    };
+    try {
+        const collections = [
+            'eduadmin_users', 'eduadmin_classes', 'eduadmin_students', 'eduadmin_attendance', 
+            'eduadmin_materials', 'eduadmin_scores', 'eduadmin_journals', 'eduadmin_schedules', 
+            'eduadmin_logs', 'eduadmin_email_config', 'eduadmin_master_subjects', 'eduadmin_tickets', 
+            'eduadmin_bk_violations', 'eduadmin_bk_reductions', 'eduadmin_bk_achievements', 'eduadmin_bk_counseling',
+            'eduadmin_wa_configs', 'eduadmin_notifications', 'eduadmin_api_keys', 'eduadmin_system_settings'
+        ];
 
-    if (direction === 'PUSH' || direction === 'FULL') {
-        logCallback("Starting PUSH...");
-        for (const col of collections) {
-            const table = tableMap[col];
-            // @ts-ignore
-            const items = await table.filter(i => !i.isSynced).toArray();
-            if (items.length > 0) {
-                logCallback(`Pushing ${items.length} items from ${col}...`);
-                await pushToTurso(col, items);
-                for(const item of items) {
-                    await table.update(item.id || item.userId, { isSynced: true });
+        const tableMap: Record<string, any> = {
+            'eduadmin_users': db.users,
+            'eduadmin_classes': db.classes,
+            'eduadmin_students': db.students,
+            'eduadmin_attendance': db.attendanceRecords,
+            'eduadmin_materials': db.scopeMaterials,
+            'eduadmin_scores': db.assessmentScores,
+            'eduadmin_journals': db.teachingJournals,
+            'eduadmin_schedules': db.teachingSchedules,
+            'eduadmin_logs': db.logs,
+            'eduadmin_email_config': db.emailConfig,
+            'eduadmin_master_subjects': db.masterSubjects,
+            'eduadmin_tickets': db.tickets,
+            'eduadmin_bk_violations': db.violations,
+            'eduadmin_bk_reductions': db.pointReductions,
+            'eduadmin_bk_achievements': db.achievements,
+            'eduadmin_bk_counseling': db.counselingSessions,
+            'eduadmin_wa_configs': db.whatsappConfigs,
+            'eduadmin_notifications': db.notifications,
+            'eduadmin_api_keys': db.apiKeys,
+            'eduadmin_system_settings': db.systemSettings
+        };
+
+        if (direction === 'PUSH' || direction === 'FULL') {
+            logCallback("Starting PUSH...");
+            for (const col of collections) {
+                const table = tableMap[col];
+                // @ts-ignore
+                const items = await table.filter(i => !i.isSynced).toArray();
+                if (items.length > 0) {
+                    logCallback(`Pushing ${items.length} items from ${col}...`);
+                    await pushToTurso(col, items);
+                    for(const item of items) {
+                        await table.update(item.id || item.userId, { isSynced: true });
+                    }
                 }
             }
+            logCallback("PUSH Completed.");
         }
-        logCallback("PUSH Completed.");
-    }
 
-    if (direction === 'PULL' || direction === 'FULL') {
-        logCallback("Starting PULL...");
-        for (const col of collections) {
-            const table = tableMap[col];
-            const localItems = await table.toArray();
-            logCallback(`Checking ${col}...`);
-            const result = await pullFromTurso(col, localItems);
-            if (result.hasChanges) {
-                logCallback(`Updating local ${col}...`);
-                await table.clear();
-                await table.bulkAdd(result.items);
+        if (direction === 'PULL' || direction === 'FULL') {
+            logCallback("Starting PULL...");
+            for (const col of collections) {
+                const table = tableMap[col];
+                const localItems = await table.toArray();
+                logCallback(`Checking ${col}...`);
+                const result = await pullFromTurso(col, localItems);
+                if (result.hasChanges) {
+                    logCallback(`Updating local ${col}...`);
+                    // USE TRANSACTION FOR ATOMIC UPDATE
+                    await db.transaction('rw', table, async () => {
+                        await table.clear();
+                        await table.bulkAdd(result.items);
+                    });
+                }
             }
+            logCallback("PULL Completed.");
         }
-        logCallback("PULL Completed.");
+    } catch (e: any) {
+        logCallback(`Sync Error: ${e.message}`);
+    } finally {
+        isSyncRunning = false;
     }
 };
 
 export const syncAllData = async (force = false) => {
-    await runManualSync('FULL', (msg) => console.log('[AutoSync]', msg));
+    // Silent Sync Wrapper
+    await runManualSync('FULL', (msg) => { /* console.log('[AutoSync]', msg) */ });
 };
 
 export const createBackup = async (user: User, semesterFilter?: string) => {
