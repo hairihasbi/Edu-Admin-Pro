@@ -121,7 +121,11 @@ const AdminSystemLogs: React.FC = () => {
         matchLevel = log.level === filterLevel;
     }
 
-    const matchActor = filterActor === '' || log.actor.toLowerCase().includes(filterActor.toLowerCase()) || log.action.toLowerCase().includes(filterActor.toLowerCase());
+    // Safe access to potentially undefined properties
+    const actor = log.actor || '';
+    const action = log.action || '';
+    const matchActor = filterActor === '' || actor.toLowerCase().includes(filterActor.toLowerCase()) || action.toLowerCase().includes(filterActor.toLowerCase());
+    
     return matchLevel && matchActor;
   });
 

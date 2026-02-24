@@ -31,7 +31,6 @@ const AdminSettings: React.FC = () => {
       rppMonthlyLimit: 0 // Default unlimited
   });
 
-  // ... (Keep existing states for DB Config, Master Data, Keys) ...
   // DB Config State
   const [dbTestUrl, setDbTestUrl] = useState('');
   const [dbTestToken, setDbTestToken] = useState('');
@@ -75,7 +74,6 @@ const AdminSettings: React.FC = () => {
         fetchBackupKeys();
     } else if (activeTab === 'system') {
         const settings = await getSystemSettings();
-        // Fix: spread fallback if undefined
         if (settings) {
             setSystemSettings(prev => ({ ...prev, ...settings }));
         }
@@ -85,7 +83,6 @@ const AdminSettings: React.FC = () => {
     }
   };
 
-  // ... (Keep existing handlers: handleTestConnection, handleInitializeDb, handleSaveSystemSettings, etc.) ...
   // DB Handlers
   const handleTestConnection = async () => {
       setIsLoading(true);

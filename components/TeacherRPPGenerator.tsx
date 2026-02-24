@@ -120,7 +120,6 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
       checkFeature();
   }, [user.rppUsageCount]);
 
-  // ... (Keep the rest of the component implementation exactly as is, just with the fix above) ...
   // --- AUTO SAVE & LOAD LOGIC ---
   useEffect(() => {
     const savedDraft = localStorage.getItem(DRAFT_KEY);
