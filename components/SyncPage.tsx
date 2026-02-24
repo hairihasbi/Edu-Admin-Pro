@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { User, UserRole } from '../types';
-import { getSyncStats, runManualSync } from '../services/database';
+import { getSyncStats, runManualSync, resetSyncLock } from '../services/database';
 import { checkConnection } from '../services/tursoService';
-import { Cloud, Upload, Download, RefreshCcw, CheckCircle, AlertTriangle, ArrowLeftRight, Database, Wifi } from './Icons';
+import { Cloud, Upload, Download, RefreshCcw, CheckCircle, AlertTriangle, ArrowLeftRight, Database, Wifi, RotateCcw } from './Icons';
 
 interface SyncPageProps {
   user: User;
@@ -70,22 +70,37 @@ const SyncPage: React.FC<SyncPageProps> = ({ user }) => {
     setLoading(false);
   };
 
+  const handleResetLock = () => {
+      resetSyncLock();
+      alert("Kunci sinkronisasi berhasil di-reset. Silakan coba sync ulang.");
+      setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] Sync Lock Reset Manual.`]);
+  };
+
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-20">
       
       {/* Header */}
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-start gap-4">
-        <div className="p-3 bg-blue-50 text-blue-600 rounded-full">
-          <ArrowLeftRight size={24} />
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col sm:flex-row justify-between items-start gap-4">
+        <div className="flex items-start gap-4">
+            <div className="p-3 bg-blue-50 text-blue-600 rounded-full">
+            <ArrowLeftRight size={24} />
+            </div>
+            <div>
+            <h2 className="text-xl font-bold text-gray-800">Sinkronisasi Data Cloud</h2>
+            <p className="text-gray-500">
+                {user.role === UserRole.ADMIN 
+                ? 'Kelola sinkronisasi seluruh data sekolah (Admin Mode).'
+                : 'Sinkronkan data kelas dan siswa Anda dengan server.'}
+            </p>
+            </div>
         </div>
-        <div>
-          <h2 className="text-xl font-bold text-gray-800">Sinkronisasi Data Cloud</h2>
-          <p className="text-gray-500">
-            {user.role === UserRole.ADMIN 
-              ? 'Kelola sinkronisasi seluruh data sekolah (Admin Mode).'
-              : 'Sinkronkan data kelas dan siswa Anda dengan server.'}
-          </p>
-        </div>
+        <button 
+            onClick={handleResetLock}
+            className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-lg text-xs font-bold hover:bg-red-100 transition border border-red-200"
+            title="Gunakan jika proses sync macet"
+        >
+            <RotateCcw size={14} /> Reset Status Macet
+        </button>
       </div>
 
       {/* Status Cards */}
