@@ -529,6 +529,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
     }
 
+    // --- HANDLE CHECK CONNECTION ---
+    if (action === 'check') {
+        try {
+            await client.execute("SELECT 1");
+            return res.status(200).json({ success: true, message: "Connection OK" });
+        } catch (e: any) {
+            return res.status(500).json({ error: "Connection Failed", details: e.message });
+        }
+    }
+
     // ... (Init Logic is same) ...
     if (action === 'init') {
         const results = [];
