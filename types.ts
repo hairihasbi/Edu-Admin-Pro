@@ -30,6 +30,7 @@ export interface User extends Syncable {
   subject?: string;
   additionalRole?: 'WALI_KELAS'; 
   homeroomClassId?: string;
+  homeroomClassName?: string; // Helper for UI
   // RPP Quota Tracking
   rppUsageCount?: number; // Jumlah RPP dibuat bulan ini
   rppLastReset?: string; // Format "YYYY-MM" untuk menandai bulan terakhir reset
@@ -98,6 +99,9 @@ export interface ClassRoom extends Syncable {
   name: string; 
   description?: string;
   studentCount: number;
+  // Homeroom Logic
+  homeroomTeacherId?: string; // ID Wali Kelas
+  homeroomTeacherName?: string; // Nama Wali Kelas (untuk display)
 }
 
 export interface Student extends Syncable {
