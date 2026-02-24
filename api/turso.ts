@@ -372,41 +372,14 @@ const getTableConfig = (collection: string) => {
         columns: ['id', 'username', 'password', 'full_name', 'role', 'status', 'school_name', 'school_npsn', 'nip', 'email', 'phone', 'subject', 'avatar', 'additional_role', 'homeroom_class_id', 'homeroom_class_name', 'rpp_usage_count', 'rpp_last_reset', 'last_modified', 'version', 'deleted'], 
         mapFn: (item: any) => [s(item.id), s(item.username), s(item.password), s(item.fullName), s(item.role), s(item.status), s(item.schoolName), s(item.schoolNpsn), s(item.nip), s(item.email), s(item.phone), s(item.subject), s(item.avatar), s(item.additionalRole), s(item.homeroomClassId), s(item.homeroomClassName), item.rppUsageCount || 0, s(item.rppLastReset), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] 
     };
-    case 'eduadmin_classes': return { 
-        table: 'classes', 
-        columns: ['id', 'user_id', 'school_npsn', 'name', 'description', 'student_count', 'homeroom_teacher_id', 'homeroom_teacher_name', 'last_modified', 'version', 'deleted'], 
-        mapFn: (item: any) => [s(item.id), s(item.userId), s(item.schoolNpsn || 'DEFAULT'), s(item.name), s(item.description), s(item.studentCount), s(item.homeroomTeacherId), s(item.homeroomTeacherName), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] 
-    };
-    case 'eduadmin_students': return { 
-        table: 'students', 
-        columns: ['id', 'class_id', 'school_npsn', 'name', 'nis', 'gender', 'phone', 'last_modified', 'version', 'deleted'], 
-        mapFn: (item: any) => [s(item.id), s(item.classId), s(item.schoolNpsn || 'DEFAULT'), s(item.name), s(item.nis), s(item.gender), s(item.phone || ''), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] 
-    };
-    case 'eduadmin_scores': return { 
-        table: 'scores', 
-        columns: ['id', 'user_id', 'student_id', 'class_id', 'semester', 'subject', 'category', 'material_id', 'score', 'score_details', 'last_modified', 'version', 'deleted'], 
-        mapFn: (item: any) => [s(item.id), s(item.userId || 'UNKNOWN'), s(item.studentId), s(item.classId), s(item.semester), s(item.subject), s(item.category), s(item.materialId), s(item.score), JSON.stringify(item.scoreDetails || {}), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] 
-    };
-    case 'eduadmin_attendance': return { 
-        table: 'attendance', 
-        columns: ['id', 'student_id', 'class_id', 'date', 'status', 'last_modified', 'version', 'deleted'], 
-        mapFn: (item: any) => [s(item.id), s(item.studentId), s(item.classId), s(item.date), s(item.status), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] 
-    };
-    case 'eduadmin_journals': return { 
-        table: 'journals', 
-        columns: ['id', 'user_id', 'class_id', 'date', 'material_id', 'learning_objective', 'meeting_no', 'activities', 'reflection', 'follow_up', 'last_modified', 'version', 'deleted'], 
-        mapFn: (item: any) => [s(item.id), s(item.userId), s(item.classId), s(item.date), s(item.materialId), s(item.learningObjective), s(item.meetingNo), s(item.activities), s(item.reflection), s(item.followUp), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] 
-    };
-    case 'eduadmin_materials': return { 
-        table: 'materials', 
-        columns: ['id', 'class_id', 'user_id', 'subject', 'semester', 'code', 'phase', 'content', 'sub_scopes', 'last_modified', 'version', 'deleted'], 
-        mapFn: (item: any) => [s(item.id), s(item.classId), s(item.userId), s(item.subject), s(item.semester), s(item.code), s(item.phase), s(item.content), JSON.stringify(item.subScopes || []), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] 
-    };
-    case 'eduadmin_schedules': return { 
-        table: 'schedules', 
-        columns: ['id', 'user_id', 'day', 'time_start', 'time_end', 'class_name', 'subject', 'last_modified', 'version', 'deleted'], 
-        mapFn: (item: any) => [s(item.id), s(item.userId), s(item.day), s(item.timeStart), s(item.timeEnd), s(item.className), s(item.subject), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] 
-    };
+    // ... (All other table configs remain exactly the same) ...
+    case 'eduadmin_classes': return { table: 'classes', columns: ['id', 'user_id', 'school_npsn', 'name', 'description', 'student_count', 'homeroom_teacher_id', 'homeroom_teacher_name', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.userId), s(item.schoolNpsn || 'DEFAULT'), s(item.name), s(item.description), s(item.studentCount), s(item.homeroomTeacherId), s(item.homeroomTeacherName), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
+    case 'eduadmin_students': return { table: 'students', columns: ['id', 'class_id', 'school_npsn', 'name', 'nis', 'gender', 'phone', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.classId), s(item.schoolNpsn || 'DEFAULT'), s(item.name), s(item.nis), s(item.gender), s(item.phone || ''), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
+    case 'eduadmin_scores': return { table: 'scores', columns: ['id', 'user_id', 'student_id', 'class_id', 'semester', 'subject', 'category', 'material_id', 'score', 'score_details', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.userId || 'UNKNOWN'), s(item.studentId), s(item.classId), s(item.semester), s(item.subject), s(item.category), s(item.materialId), s(item.score), JSON.stringify(item.scoreDetails || {}), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
+    case 'eduadmin_attendance': return { table: 'attendance', columns: ['id', 'student_id', 'class_id', 'date', 'status', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.studentId), s(item.classId), s(item.date), s(item.status), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
+    case 'eduadmin_journals': return { table: 'journals', columns: ['id', 'user_id', 'class_id', 'date', 'material_id', 'learning_objective', 'meeting_no', 'activities', 'reflection', 'follow_up', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.userId), s(item.classId), s(item.date), s(item.materialId), s(item.learningObjective), s(item.meetingNo), s(item.activities), s(item.reflection), s(item.followUp), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
+    case 'eduadmin_materials': return { table: 'materials', columns: ['id', 'class_id', 'user_id', 'subject', 'semester', 'code', 'phase', 'content', 'sub_scopes', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.classId), s(item.userId), s(item.subject), s(item.semester), s(item.code), s(item.phase), s(item.content), JSON.stringify(item.subScopes || []), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
+    case 'eduadmin_schedules': return { table: 'schedules', columns: ['id', 'user_id', 'day', 'time_start', 'time_end', 'class_name', 'subject', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.userId), s(item.day), s(item.timeStart), s(item.timeEnd), s(item.className), s(item.subject), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_bk_violations': return { table: 'bk_violations', columns: ['id', 'student_id', 'date', 'violation_name', 'points', 'description', 'reported_by', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.studentId), s(item.date), s(item.violationName), s(item.points), s(item.description), s(item.reportedBy), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_bk_reductions': return { table: 'bk_reductions', columns: ['id', 'student_id', 'date', 'activity_name', 'points_removed', 'description', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.studentId), s(item.date), s(item.activityName), s(item.pointsRemoved), s(item.description), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_bk_achievements': return { table: 'bk_achievements', columns: ['id', 'student_id', 'date', 'title', 'level', 'description', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.studentId), s(item.date), s(item.title), s(item.level), s(item.description), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
@@ -619,27 +592,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const statements = [];
         for (const item of items) {
             if (tableConfig) {
-                // --- PASSWORD PRESERVATION LOGIC ---
-                // If pushing a user update and password is empty/missing, keep the existing one from DB.
-                if (collection === 'eduadmin_users' && (!item.password || item.password === '')) {
-                    try {
-                        const existing = await client.execute({
-                            sql: "SELECT password FROM users WHERE id = ?",
-                            args: [item.id]
-                        });
-                        
-                        if (existing.rows.length > 0 && existing.rows[0].password) {
-                            // Use existing password
-                            item.password = existing.rows[0].password;
-                        } else if (item.role === 'ADMIN') {
-                            // SELF-HEALING: If Admin password is NULL in DB (broken), set default
-                            console.log(`[Auto-Heal] Resetting password for Admin ${item.username}`);
+                // --- SELF HEALING: ADMIN ROLE SAFEGUARD ---
+                if (collection === 'eduadmin_users' && item.role === 'ADMIN') {
+                    // FORCE ACTIVE STATUS: Prevent admin from locking themselves out
+                    item.status = 'ACTIVE';
+                    
+                    // FORCE PASSWORD FIX: Check if password is missing/empty
+                    if (!item.password || item.password === '') {
+                        try {
+                            const existing = await client.execute({
+                                sql: "SELECT password FROM users WHERE id = ?",
+                                args: [item.id]
+                            });
+                            
+                            // If row exists and has a password, use it
+                            if (existing.rows.length > 0 && existing.rows[0].password) {
+                                item.password = existing.rows[0].password;
+                            } else {
+                                // Fallback: Either row missing OR password is null in DB
+                                console.log(`[Auto-Heal] Resetting password for Admin ${item.username} (was missing/null)`);
+                                item.password = await bcrypt.hash("admin", 10);
+                            }
+                        } catch (e) {
+                            console.warn("Password preservation failed:", e);
+                            // Emergency fallback
                             item.password = await bcrypt.hash("admin", 10);
                         }
-                    } catch (e) {
-                        console.warn("Password preservation failed:", e);
                     }
                 }
+                // --- END SELF HEALING ---
 
                 const placeholders = tableConfig.columns.map(() => '?').join(', ');
                 const sql = `INSERT OR REPLACE INTO ${tableName} (${tableConfig.columns.join(', ')}) VALUES (${placeholders})`;
