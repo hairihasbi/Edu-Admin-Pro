@@ -610,6 +610,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const statements = [];
         for (const item of items) {
             if (tableConfig) {
+                // FIX: Preserve password for users to prevent overwriting with NULL during sync
+                if (collection === 'eduadmin_users' && (!item.password || item.password === '')) {
+                    try {
+                        const existing = await client.execute({
+                            sql: "SELECT password FROM users WHERE id = ?",
+                            args: [item.id]
+                        });
+                        if (existing.rows.length > 0 && existing.rows[0].password) {
+                            item.password = existing.rows[0].password;
+                        } else if (item.role === 'ADMIN') {
+                            // Critical Fallback: If Admin is being restored to an empty DB without a password in payload,
+                            // set a default password to prevent account lockout.
+                            item.password = await bcrypt.hash("admin", 10);
+                        }
+                    } catch (e) {
+                        console.warn("Password preservation failed:", e);
+                    }
+                }
+
                 const placeholders = tableConfig.columns.map(() => '?').join(', ');
                 const sql = `INSERT OR REPLACE INTO ${tableName} (${tableConfig.columns.join(', ')}) VALUES (${placeholders})`;
                 statements.push({ sql, args: tableConfig.mapFn(item) });
