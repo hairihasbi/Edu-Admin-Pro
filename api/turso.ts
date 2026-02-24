@@ -494,7 +494,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(503).json({ error: "Database configuration missing." });
     }
 
-    if (rawUrl.startsWith('libsql://')) {
+    // Auto-fix URL scheme
+    if (rawUrl && !rawUrl.includes('://')) {
+        rawUrl = 'https://' + rawUrl;
+    } else if (rawUrl.startsWith('libsql://')) {
         rawUrl = rawUrl.replace('libsql://', 'https://');
     }
 
@@ -525,7 +528,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } catch (err: any) {
         return res.status(500).json({ 
             error: "Failed to initialize database client.", 
-            details: err.message
+            details: err.message || String(err)
         });
     }
 
