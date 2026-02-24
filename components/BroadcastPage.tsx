@@ -1,13 +1,14 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, UserRole, Student, ClassRoom } from '../types';
+import { User, UserRole, ClassRoom } from '../types';
 import { 
   getWhatsAppConfig, sendWhatsAppBroadcast, 
-  getClasses, getStudents, getAllStudentsWithDetails, getTeachers 
+  getClasses, getStudents, getAllStudentsWithDetails, getTeachers, 
+  getEmailConfig, sendEmailBroadcast 
 } from '../services/database';
 import { 
-  Smartphone, Send, Users, Search, Filter, 
-  CheckCircle, AlertCircle, X, Check, RefreshCcw, UserPlus, Trash2 
+  Smartphone, Send, Users, Search, 
+  CheckCircle, Check, UserPlus, Trash2, Mail, FileText, WifiOff 
 } from './Icons';
 
 interface BroadcastPageProps {
@@ -15,19 +16,22 @@ interface BroadcastPageProps {
 }
 
 type TargetType = 'TEACHERS' | 'STUDENTS_CLASS' | 'ALL_STUDENTS' | 'MANUAL';
+type ChannelType = 'WHATSAPP' | 'EMAIL';
 
 interface Recipient {
   id: string;
   name: string;
   phone: string;
-  label: string; // Class name or Role
+  email: string; // NEW
+  label: string; 
   selected: boolean;
 }
 
 const BroadcastPage: React.FC<BroadcastPageProps> = ({ user }) => {
   // --- STATE ---
-  const [configReady, setConfigReady] = useState(false);
-  const [loadingConfig, setLoadingConfig] = useState(true);
+  const [channel, setChannel] = useState<ChannelType>('WHATSAPP');
+  const [waConfigReady, setWaConfigReady] = useState(false);
+  const [emailConfigReady, setEmailConfigReady] = useState(false);
   
   // Data State
   const [classes, setClasses] = useState<ClassRoom[]>([]);
@@ -41,41 +45,38 @@ const BroadcastPage: React.FC<BroadcastPageProps> = ({ user }) => {
 
   // Manual Input State
   const [manualName, setManualName] = useState('');
-  const [manualPhone, setManualPhone] = useState('');
+  const [manualContact, setManualContact] = useState(''); // Shared for phone/email
   
   // Composer State
+  const [emailSubject, setEmailSubject] = useState(''); // NEW
   const [message, setMessage] = useState('Halo {{name}},\n\nBerikut informasi dari sekolah:\n...');
-  const [sendingStatus, setSendingStatus] = useState<'idle' | 'sending' | 'completed'>('idle');
+  const [sendingStatus, setSendingStatus] = useState<'idle' | 'sending' | 'completed' | 'error'>('idle');
   const [progress, setProgress] = useState({ current: 0, total: 0, success: 0, failed: 0 });
+  const [resultErrors, setResultErrors] = useState<string[]>([]);
 
   // --- INIT ---
   useEffect(() => {
-    checkConfig();
+    checkConfigs();
     fetchClasses();
   }, [user]);
 
   // Load recipients when filters change
   useEffect(() => {
-    if (configReady) {
-      if (targetType === 'MANUAL') {
-        // Do not clear recipients automatically if adding manually, 
-        // unless switching TO manual from another tab (handled in tab click)
+    if (targetType === 'MANUAL') {
         if (recipients.length > 0 && recipients[0].label !== 'Manual') {
             setRecipients([]);
         }
-      } else {
+    } else {
         fetchRecipients();
-      }
     }
-  }, [targetType, selectedClassId, configReady]);
+  }, [targetType, selectedClassId]);
 
-  const checkConfig = async () => {
-    setLoadingConfig(true);
-    const config = await getWhatsAppConfig(user.id);
-    if (config && config.isActive && config.apiKey) {
-      setConfigReady(true);
-    }
-    setLoadingConfig(false);
+  const checkConfigs = async () => {
+    const wa = await getWhatsAppConfig(user.id);
+    if (wa && wa.isActive && wa.apiKey) setWaConfigReady(true);
+
+    const em = await getEmailConfig();
+    if (em && em.isActive) setEmailConfigReady(true);
   };
 
   const fetchClasses = async () => {
@@ -102,6 +103,7 @@ const BroadcastPage: React.FC<BroadcastPageProps> = ({ user }) => {
           id: t.id,
           name: t.fullName,
           phone: t.phone || '',
+          email: t.email || '',
           label: 'Guru',
           selected: true
         }));
@@ -111,6 +113,10 @@ const BroadcastPage: React.FC<BroadcastPageProps> = ({ user }) => {
           id: s.id,
           name: s.name,
           phone: s.phone || '',
+          email: '', // Students table usually doesn't have email in this version, check schema? User schema has it.
+          // Note: Current schema only has phone for students. If email needed, schema update required. 
+          // Assuming students might not have email for now or it's not in fetched details.
+          // If User table (teachers) -> has email.
           label: s.className,
           selected: true
         }));
@@ -122,6 +128,7 @@ const BroadcastPage: React.FC<BroadcastPageProps> = ({ user }) => {
             id: s.id,
             name: s.name,
             phone: s.phone || '',
+            email: '', // See note above
             label: clsName,
             selected: true
           }));
@@ -148,19 +155,20 @@ const BroadcastPage: React.FC<BroadcastPageProps> = ({ user }) => {
 
   const handleAddManualRecipient = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!manualName || !manualPhone) return;
+    if (!manualName || !manualContact) return;
 
     const newRecipient: Recipient = {
       id: `manual-${Date.now()}`,
       name: manualName,
-      phone: manualPhone,
+      phone: channel === 'WHATSAPP' ? manualContact : '',
+      email: channel === 'EMAIL' ? manualContact : '',
       label: 'Manual',
       selected: true
     };
 
     setRecipients(prev => [newRecipient, ...prev]);
     setManualName('');
-    setManualPhone('');
+    setManualContact('');
   };
 
   const handleDeleteManual = (id: string) => {
@@ -168,34 +176,60 @@ const BroadcastPage: React.FC<BroadcastPageProps> = ({ user }) => {
   };
 
   const handleSendBroadcast = async () => {
-    const selectedTargets = recipients.filter(r => r.selected && r.phone.length > 5);
+    const selectedTargets = recipients.filter(r => {
+        if (!r.selected) return false;
+        if (channel === 'WHATSAPP') return r.phone && r.phone.length > 5;
+        if (channel === 'EMAIL') return r.email && r.email.includes('@');
+        return false;
+    });
     
     if (selectedTargets.length === 0) {
-      alert("Pilih minimal satu penerima dengan nomor valid.");
+      alert(`Pilih minimal satu penerima dengan ${channel === 'WHATSAPP' ? 'nomor WA' : 'email'} valid.`);
       return;
     }
 
-    if (!window.confirm(`Kirim pesan ke ${selectedTargets.length} orang?`)) return;
+    if (channel === 'EMAIL' && !emailSubject) {
+        alert("Subjek email wajib diisi.");
+        return;
+    }
+
+    if (!window.confirm(`Kirim pesan ke ${selectedTargets.length} orang via ${channel}?`)) return;
 
     setSendingStatus('sending');
     setProgress({ current: 0, total: selectedTargets.length, success: 0, failed: 0 });
-
-    const config = await getWhatsAppConfig(user.id);
-    if (!config) return;
+    setResultErrors([]);
 
     let successCount = 0;
     let failCount = 0;
-    const BATCH_SIZE = 5;
+    const errors: string[] = [];
+    
+    // Batch configuration
+    // Email: 50 per batch (API timeout limit ~60s, processing takes ~25s for 50 items)
+    // WhatsApp: 10 per batch (Typical generic rate limit safety)
+    const BATCH_SIZE = channel === 'EMAIL' ? 50 : 10;
 
     for (let i = 0; i < selectedTargets.length; i += BATCH_SIZE) {
         const batch = selectedTargets.slice(i, i + BATCH_SIZE);
         
         try {
-            const res = await sendWhatsAppBroadcast(config, batch, message);
+            let res;
+            if (channel === 'WHATSAPP') {
+                const config = await getWhatsAppConfig(user.id);
+                if (!config) throw new Error("Config WA hilang");
+                res = await sendWhatsAppBroadcast(config, batch, message);
+            } else {
+                const config = await getEmailConfig();
+                if (!config) throw new Error("Config Email hilang");
+                res = await sendEmailBroadcast(config, batch, emailSubject, message);
+            }
+
             successCount += res.success;
             failCount += res.failed;
-        } catch (e) {
+            if (res.errors) errors.push(...res.errors);
+
+        } catch (e: any) {
             failCount += batch.length;
+            errors.push(`Batch Error: ${e.message}`);
         }
 
         setProgress(prev => ({
@@ -204,9 +238,15 @@ const BroadcastPage: React.FC<BroadcastPageProps> = ({ user }) => {
             success: successCount,
             failed: failCount
         }));
+
+        // Delay between batches to prevent rate limiting
+        if (i + BATCH_SIZE < selectedTargets.length) {
+            await new Promise(r => setTimeout(r, 2000));
+        }
     }
 
-    setSendingStatus('completed');
+    setResultErrors(errors);
+    setSendingStatus(failCount > 0 && successCount === 0 ? 'error' : 'completed');
   };
 
   const filteredRecipients = recipients.filter(r => 
@@ -214,29 +254,11 @@ const BroadcastPage: React.FC<BroadcastPageProps> = ({ user }) => {
   );
 
   const selectedCount = filteredRecipients.filter(r => r.selected).length;
-
-  if (loadingConfig) return <div className="p-10 text-center">Memuat konfigurasi...</div>;
-
-  if (!configReady) {
-    return (
-      <div className="max-w-2xl mx-auto mt-10 p-8 bg-white rounded-xl shadow-sm border border-gray-100 text-center">
-        <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
-          <Smartphone size={32} className="text-yellow-600" />
-        </div>
-        <h2 className="text-2xl font-bold text-gray-800 mb-2">WhatsApp Belum Terhubung</h2>
-        <p className="text-gray-500 mb-6">
-          Fitur Broadcast memerlukan konfigurasi API Gateway (FlowKirim/Fonnte). 
-          Silakan atur API Token dan Device ID terlebih dahulu.
-        </p>
-        <button 
-          onClick={() => window.location.hash = user.role === UserRole.ADMIN ? '#/settings' : '#/profile'}
-          className="bg-blue-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-blue-700 transition"
-        >
-          Buka Pengaturan
-        </button>
-      </div>
-    );
-  }
+  
+  // Dynamic validation count based on channel
+  const validCount = filteredRecipients.filter(r => 
+      r.selected && (channel === 'WHATSAPP' ? (r.phone && r.phone.length > 5) : (r.email && r.email.includes('@')))
+  ).length;
 
   return (
     <div className="h-[calc(100vh-100px)] flex flex-col md:flex-row gap-6 pb-4">
@@ -244,10 +266,39 @@ const BroadcastPage: React.FC<BroadcastPageProps> = ({ user }) => {
       {/* LEFT COL: AUDIENCE SELECTOR */}
       <div className="flex-1 bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col overflow-hidden">
         <div className="p-4 border-b border-gray-100 bg-gray-50">
-          <h2 className="font-bold text-gray-800 flex items-center gap-2 mb-4">
-            <Users className="text-blue-600" /> Target Penerima
-          </h2>
           
+          {/* Channel Tabs */}
+          <div className="flex bg-white p-1 rounded-lg mb-4 border border-gray-200">
+             <button 
+                onClick={() => setChannel('WHATSAPP')}
+                className={`flex-1 py-2 text-sm font-bold rounded-md transition flex items-center justify-center gap-2 ${
+                    channel === 'WHATSAPP' ? 'bg-green-100 text-green-700' : 'text-gray-500 hover:bg-gray-50'
+                }`}
+             >
+                <Smartphone size={16} /> WhatsApp
+             </button>
+             <button 
+                onClick={() => setChannel('EMAIL')}
+                className={`flex-1 py-2 text-sm font-bold rounded-md transition flex items-center justify-center gap-2 ${
+                    channel === 'EMAIL' ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-50'
+                }`}
+             >
+                <Mail size={16} /> Email
+             </button>
+          </div>
+
+          {/* Config Alert */}
+          {channel === 'WHATSAPP' && !waConfigReady && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 flex items-center gap-2">
+                  <WifiOff size={16} /> WA Gateway belum dikonfigurasi.
+              </div>
+          )}
+          {channel === 'EMAIL' && !emailConfigReady && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 flex items-center gap-2">
+                  <WifiOff size={16} /> Email Config belum aktif.
+              </div>
+          )}
+
           {/* Target Tabs */}
           <div className="flex bg-gray-200 p-1 rounded-lg mb-4 overflow-x-auto">
             {user.role === UserRole.ADMIN && (
@@ -297,11 +348,11 @@ const BroadcastPage: React.FC<BroadcastPageProps> = ({ user }) => {
                   />
                   <div className="flex gap-2">
                      <input 
-                        type="tel" 
-                        placeholder="No. WhatsApp (08...)" 
+                        type={channel === 'EMAIL' ? 'email' : 'tel'} 
+                        placeholder={channel === 'EMAIL' ? 'Email Address' : 'No. WhatsApp'} 
                         className="flex-1 border border-blue-200 rounded p-2 text-sm focus:ring-1 focus:ring-blue-500 outline-none"
-                        value={manualPhone}
-                        onChange={(e) => setManualPhone(e.target.value)}
+                        value={manualContact}
+                        onChange={(e) => setManualContact(e.target.value)}
                         required
                      />
                      <button type="submit" className="bg-blue-600 text-white px-3 py-1 rounded text-sm font-bold hover:bg-blue-700">
@@ -373,9 +424,15 @@ const BroadcastPage: React.FC<BroadcastPageProps> = ({ user }) => {
                       <p className={`text-sm font-medium truncate ${r.selected ? 'text-blue-900' : 'text-gray-700'}`}>{r.name}</p>
                       <div className="flex items-center gap-2 text-xs">
                         <span className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-500">{r.label}</span>
-                        <span className={r.phone ? 'text-green-600' : 'text-red-400'}>
-                          {r.phone || 'No HP'}
-                        </span>
+                        {channel === 'WHATSAPP' ? (
+                            <span className={r.phone ? 'text-green-600' : 'text-red-400'}>
+                                {r.phone || 'No WA'}
+                            </span>
+                        ) : (
+                            <span className={r.email && r.email.includes('@') ? 'text-blue-600' : 'text-red-400'}>
+                                {r.email || 'No Email'}
+                            </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -395,7 +452,7 @@ const BroadcastPage: React.FC<BroadcastPageProps> = ({ user }) => {
         
         <div className="p-3 bg-gray-50 border-t border-gray-100 text-xs text-gray-500 flex justify-between">
            <span>Total: {filteredRecipients.length}</span>
-           <span className="font-bold text-blue-600">Terpilih: {selectedCount}</span>
+           <span className="font-bold text-blue-600">Valid & Terpilih: {validCount}</span>
         </div>
       </div>
 
@@ -403,41 +460,72 @@ const BroadcastPage: React.FC<BroadcastPageProps> = ({ user }) => {
       <div className="flex-1 bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col">
         <div className="p-4 border-b border-gray-100 bg-gray-50 rounded-t-xl">
           <h2 className="font-bold text-gray-800 flex items-center gap-2">
-            <Smartphone className="text-green-600" /> Tulis Pesan
+            {channel === 'WHATSAPP' ? <Smartphone className="text-green-600" /> : <Mail className="text-blue-600" />} 
+            Tulis Pesan {channel === 'WHATSAPP' ? 'WhatsApp' : 'Email'}
           </h2>
         </div>
 
         <div className="p-4 flex-1 flex flex-col gap-4">
-           {/* Variable Helpers */}
-           <div className="flex gap-2 overflow-x-auto">
-              <button onClick={() => setMessage(prev => prev + ' {{name}}')} className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-medium hover:bg-gray-200 transition border border-gray-200">
-                 + {'{{name}}'}
-              </button>
-              <button onClick={() => setMessage(prev => prev + ' *tebal*')} className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-medium hover:bg-gray-200 transition border border-gray-200">
-                 B (Bold)
-              </button>
-              <button onClick={() => setMessage(prev => prev + ' _miring_')} className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-medium hover:bg-gray-200 transition border border-gray-200">
-                 I (Italic)
-              </button>
+           {channel === 'EMAIL' && (
+               <div>
+                   <label className="block text-xs font-bold text-gray-600 mb-1 uppercase">Subjek Email</label>
+                   <input 
+                      type="text"
+                      className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                      placeholder="Judul Email..."
+                      value={emailSubject}
+                      onChange={(e) => setEmailSubject(e.target.value)}
+                   />
+               </div>
+           )}
+
+           <div className="flex-1 flex flex-col">
+               <div className="flex justify-between items-center mb-1">
+                   <label className="block text-xs font-bold text-gray-600 uppercase">Isi Pesan</label>
+                   {/* Variable Helpers */}
+                   <div className="flex gap-2">
+                      <button onClick={() => setMessage(prev => prev + ' {{name}}')} className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs hover:bg-gray-200">
+                         + {'{{name}}'}
+                      </button>
+                      {channel === 'WHATSAPP' && (
+                          <>
+                            <button onClick={() => setMessage(prev => prev + ' *tebal*')} className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs hover:bg-gray-200">B</button>
+                            <button onClick={() => setMessage(prev => prev + ' _miring_')} className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs hover:bg-gray-200">I</button>
+                          </>
+                      )}
+                   </div>
+               </div>
+               <textarea 
+                 className="flex-1 w-full border border-gray-300 rounded-xl p-4 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none font-sans leading-relaxed"
+                 placeholder={channel === 'WHATSAPP' ? "Ketik pesan WA..." : "Ketik isi email (support HTML basic)..."}
+                 value={message}
+                 onChange={(e) => setMessage(e.target.value)}
+               />
            </div>
 
-           <textarea 
-             className="flex-1 w-full border border-gray-300 rounded-xl p-4 text-sm focus:ring-2 focus:ring-green-500 outline-none resize-none font-sans leading-relaxed"
-             placeholder="Tulis pesan broadcast di sini..."
-             value={message}
-             onChange={(e) => setMessage(e.target.value)}
-           />
-
            {/* Status & Action */}
-           {sendingStatus === 'idle' ? (
-             <button 
-               onClick={handleSendBroadcast}
-               disabled={selectedCount === 0 || !message}
-               className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-xl font-bold transition shadow-md flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-             >
-               <Send size={18} />
-               Kirim ke {selectedCount} Penerima
-             </button>
+           {sendingStatus === 'idle' || sendingStatus === 'error' ? (
+             <div className="space-y-3">
+                 {sendingStatus === 'error' && (
+                     <div className="text-xs text-red-600 bg-red-50 p-2 rounded border border-red-200 max-h-24 overflow-y-auto">
+                         <strong>Pengiriman Gagal Sebagian:</strong>
+                         <ul className="list-disc pl-4 mt-1">
+                             {resultErrors.map((err, i) => <li key={i}>{err}</li>)}
+                         </ul>
+                     </div>
+                 )}
+                 
+                 <button 
+                   onClick={handleSendBroadcast}
+                   disabled={validCount === 0 || !message || (channel === 'EMAIL' && !emailSubject)}
+                   className={`w-full py-3 rounded-xl font-bold transition shadow-md flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+                       channel === 'WHATSAPP' ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white'
+                   }`}
+                 >
+                   <Send size={18} />
+                   Kirim ke {validCount} Penerima
+                 </button>
+             </div>
            ) : sendingStatus === 'sending' ? (
              <div className="space-y-2">
                 <div className="flex justify-between text-sm font-medium text-gray-600">
@@ -445,9 +533,9 @@ const BroadcastPage: React.FC<BroadcastPageProps> = ({ user }) => {
                    <span>{Math.round((progress.current / progress.total) * 100)}%</span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-2.5">
-                   <div className="bg-green-600 h-2.5 rounded-full transition-all duration-300" style={{ width: `${(progress.current / progress.total) * 100}%` }}></div>
+                   <div className="bg-blue-600 h-2.5 rounded-full transition-all duration-300" style={{ width: `${(progress.current / progress.total) * 100}%` }}></div>
                 </div>
-                <p className="text-center text-xs text-gray-400">Jangan tutup halaman ini.</p>
+                <p className="text-center text-xs text-gray-400">Mohon tunggu, jangan tutup halaman ini.</p>
              </div>
            ) : (
              <div className="text-center p-4 bg-green-50 rounded-xl border border-green-100 animate-in fade-in zoom-in">
@@ -457,7 +545,7 @@ const BroadcastPage: React.FC<BroadcastPageProps> = ({ user }) => {
                    <span className="text-green-700">Sukses: {progress.success}</span>
                    <span className="text-red-600">Gagal: {progress.failed}</span>
                 </div>
-                <button onClick={() => setSendingStatus('idle')} className="mt-4 text-sm text-gray-500 underline hover:text-gray-800">
+                <button onClick={() => { setSendingStatus('idle'); setProgress({current:0,total:0,success:0,failed:0}); }} className="mt-4 text-sm text-gray-500 underline hover:text-gray-800">
                    Kirim Lagi
                 </button>
              </div>
