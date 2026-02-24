@@ -134,9 +134,9 @@ export const sendApprovalEmail = async (user: User) => {
 export const sendApprovalWhatsApp = async (user: User, adminId: string) => {
     try {
         const config = await db.whatsappConfigs.get(adminId);
-        if (!config || !config.isActive || !config.apiKey) return { success: false, message: "WA Gateway inactive" };
+        if (!config || !config.isActive || !config.apiKey) return { success: false, message: "Gateway belum aktif" };
         
-        if (!user.phone || user.phone.length < 8) return { success: false, message: "Invalid Phone" };
+        if (!user.phone || user.phone.length < 8) return { success: false, message: "Nomor HP tidak valid" };
 
         const message = `Halo *${user.fullName}*,\n\nSelamat! Akun Anda di *${user.schoolName || 'Sekolah'}* telah disetujui oleh Admin.\n\nSilakan login ke aplikasi EduAdmin Pro.\n\nTerima kasih.`;
         
@@ -854,11 +854,27 @@ export const saveWhatsAppConfig = async (config: WhatsAppConfig) => {
 
 export const sendWhatsAppBroadcast = async (config: WhatsAppConfig, recipients: any[], message: string) => {
     try {
+        // Sanitasi data penerima agar properti 'phone' tidak hilang saat stringify
+        const safeRecipients = recipients.map(r => ({
+            name: r.name,
+            phone: r.phone || "" // Paksa string kosong jika undefined
+        }));
+
         const res = await fetch('/api/send-whatsapp', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ config, recipients, message })
+            body: JSON.stringify({ config, recipients: safeRecipients, message })
         });
+
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            return {
+                success: 0,
+                failed: recipients.length,
+                errors: [errData.error || errData.message || `HTTP Error ${res.status}`]
+            };
+        }
+
         return await res.json();
     } catch (e: any) {
         return { success: 0, failed: recipients.length, errors: [e.message] };
