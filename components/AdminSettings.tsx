@@ -31,6 +31,7 @@ const AdminSettings: React.FC = () => {
       rppMonthlyLimit: 0 // Default unlimited
   });
 
+  // ... (Keep existing states for DB Config, Master Data, Keys) ...
   // DB Config State
   const [dbTestUrl, setDbTestUrl] = useState('');
   const [dbTestToken, setDbTestToken] = useState('');
@@ -74,13 +75,17 @@ const AdminSettings: React.FC = () => {
         fetchBackupKeys();
     } else if (activeTab === 'system') {
         const settings = await getSystemSettings();
-        setSystemSettings(settings);
+        // Fix: spread fallback if undefined
+        if (settings) {
+            setSystemSettings(prev => ({ ...prev, ...settings }));
+        }
     } else if (activeTab === 'db') {
         const isConn = await checkConnection();
         setCurrentDbStatus(isConn);
     }
   };
 
+  // ... (Keep existing handlers: handleTestConnection, handleInitializeDb, handleSaveSystemSettings, etc.) ...
   // DB Handlers
   const handleTestConnection = async () => {
       setIsLoading(true);
@@ -269,6 +274,7 @@ const AdminSettings: React.FC = () => {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-20">
+      {/* ... (Keep existing UI for Header, Tabs) ... */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-start gap-4">
         <div className="p-3 bg-gray-100 text-gray-600 rounded-full">
           <Settings size={24} />
@@ -335,7 +341,7 @@ const AdminSettings: React.FC = () => {
       {activeTab === 'system' && (
           <div className="animate-in fade-in zoom-in duration-200">
               <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                  {/* ... (Existing System Settings Content) ... */}
+                  {/* ... (Keep existing UI for System Settings) ... */}
                   <div className="flex items-center gap-2 mb-6 border-b border-gray-100 pb-4">
                       <Activity className="text-indigo-600" />
                       <h3 className="font-bold text-gray-800">Manajemen Fitur Global</h3>
@@ -351,7 +357,7 @@ const AdminSettings: React.FC = () => {
                   )}
 
                   <form onSubmit={handleSaveSystemSettings} className="space-y-6">
-                      {/* RPP Quota Limit (NEW) */}
+                      {/* RPP Quota Limit */}
                       <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
                           <h4 className="font-bold text-blue-800 mb-2">Batas Kuota AI RPP Generator</h4>
                           <p className="text-sm text-gray-600 mb-3">
@@ -435,10 +441,12 @@ const AdminSettings: React.FC = () => {
           </div>
       )}
 
+      {/* ... (Other Tabs remain the same) ... */}
       {/* DATABASE TAB */}
       {activeTab === 'db' && (
           <div className="animate-in fade-in zoom-in duration-200 space-y-6">
               <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                  {/* ... (DB Tab Content same as original file) ... */}
                   <div className="flex items-center gap-2 mb-6 border-b border-gray-100 pb-4">
                       <Database className="text-orange-600" />
                       <h3 className="font-bold text-gray-800">Status & Inisialisasi Database</h3>
@@ -533,9 +541,10 @@ const AdminSettings: React.FC = () => {
           </div>
       )}
 
-      {/* ... (Existing Tabs: Email, Keys, WA, Master) ... */}
+      {/* EMAIL TAB */}
       {activeTab === 'email' && (
         <form onSubmit={handleSaveEmail} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden animate-in fade-in zoom-in duration-200">
+          {/* ... (Keep existing UI) ... */}
           <div className="bg-gray-50 px-6 py-4 border-b border-gray-100 flex items-center justify-between">
             <h3 className="font-bold text-gray-800 flex items-center gap-2">
               <Mail size={18} className="text-blue-600" /> Konfigurasi Email Notifikasi

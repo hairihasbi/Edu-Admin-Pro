@@ -100,7 +100,8 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
       const checkFeature = async () => {
           setLoadingSettings(true);
           const sysSettings = await getSystemSettings();
-          setSettings(sysSettings);
+          // Explicit null handling to fix TS error
+          setSettings(sysSettings || null);
           
           if (sysSettings) {
               setQuotaLimit(sysSettings.rppMonthlyLimit || 0);
@@ -117,8 +118,9 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
           setLoadingSettings(false);
       };
       checkFeature();
-  }, [user.rppUsageCount]); // Re-run if user object updates (e.g. after sync)
+  }, [user.rppUsageCount]);
 
+  // ... (Keep the rest of the component implementation exactly as is, just with the fix above) ...
   // --- AUTO SAVE & LOAD LOGIC ---
   useEffect(() => {
     const savedDraft = localStorage.getItem(DRAFT_KEY);
