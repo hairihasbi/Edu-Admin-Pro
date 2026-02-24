@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
 import { User, UserStatus } from '../types';
-import { getTeachers, getPendingTeachers, approveTeacher, rejectTeacher, sendApprovalEmail, deleteTeacher, runManualSync } from '../services/database';
+import { getTeachers, getPendingTeachers, approveTeacher, rejectTeacher, sendApprovalEmail, sendApprovalWhatsApp, deleteTeacher, runManualSync } from '../services/database';
 import { User as UserIcon, CheckCircle, X, Shield, Search, School, Mail, ChevronLeft, ChevronRight, FileSpreadsheet, Smartphone, Trash2, MoreVertical, BookOpen, RefreshCcw } from './Icons';
 import * as XLSX from 'xlsx';
 
@@ -66,15 +65,33 @@ const AdminTeachers: React.FC = () => {
         if (success) {
             setPendingTeachers(prev => prev.filter(u => u.id !== teacher.id));
             
-            // Send Email Notification
+            // 1. Send Email Notification
             const emailResult = await sendApprovalEmail(teacher);
             
-            let message = "Guru berhasil disetujui dan aktif.";
-            if (emailResult.success) {
-                message += " " + emailResult.message;
+            // 2. Send WhatsApp Notification
+            let waMessage = "";
+            const currentUserStr = localStorage.getItem('eduadmin_user');
+            if (currentUserStr) {
+                const currentUser = JSON.parse(currentUserStr);
+                const waResult = await sendApprovalWhatsApp(teacher, currentUser.id);
+                waMessage = waResult.success ? "✅ WA Terkirim" : `❌ WA Gagal (${waResult.message})`;
             } else {
-                message += " (Email notifikasi gagal dikirim: cek konfigurasi).";
+                waMessage = "⚠️ WA Gagal (Admin ID tidak ditemukan)";
             }
+            
+            // Construct Final Message
+            let message = "Guru berhasil disetujui dan aktif.";
+            
+            // Append Email Status
+            if (emailResult.success) {
+                message += "\n📧 Email Terkirim.";
+            } else {
+                message += "\n⚠️ Email Gagal (Cek Konfigurasi SMTP/API).";
+            }
+
+            // Append WA Status
+            message += `\n📱 ${waMessage}`;
+
             alert(message);
         } else {
             alert("Gagal menyetujui guru.");
