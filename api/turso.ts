@@ -377,7 +377,6 @@ const getTableConfig = (collection: string) => {
         columns: ['id', 'user_id', 'school_npsn', 'name', 'description', 'student_count', 'homeroom_teacher_id', 'homeroom_teacher_name', 'last_modified', 'version', 'deleted'], 
         mapFn: (item: any) => [s(item.id), s(item.userId), s(item.schoolNpsn || 'DEFAULT'), s(item.name), s(item.description), s(item.studentCount), s(item.homeroomTeacherId), s(item.homeroomTeacherName), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] 
     };
-    // ... (Other tables remain same but are included in the full block below for completeness if needed, shortened here to avoid XML limit)
     case 'eduadmin_students': return { 
         table: 'students', 
         columns: ['id', 'class_id', 'school_npsn', 'name', 'nis', 'gender', 'phone', 'last_modified', 'version', 'deleted'], 
@@ -550,18 +549,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             await client.batch(statements);
             results.push({ success: true, message: "Schemas created via batch." });
         } catch (e: any) {
-            console.error("Batch init failed, retrying sequentially:", e.message);
+            // Change error to warn, as this is expected during migrations on existing tables
+            console.warn("Batch init interrupted (handling migrations), retrying sequentially..."); 
             for (const schema of DB_SCHEMAS) {
                 try {
                     await client.execute(schema);
                     results.push({ success: true });
                 } catch (innerE: any) {
-                    const msg = innerE.message || '';
-                    if (msg.includes('duplicate column name')) {
+                    const msg = (innerE.message || '').toLowerCase();
+                    const causeMsg = (innerE.cause?.message || '').toLowerCase();
+                    const fullError = msg + ' ' + causeMsg;
+                    
+                    if (fullError.includes('duplicate column name')) {
                         results.push({ success: true, message: "Column already exists (skipped)" });
-                    } else if (msg.includes('already exists')) {
+                    } else if (fullError.includes('already exists')) {
                          results.push({ success: true, message: "Table already exists (skipped)" });
                     } else {
+                        // Log actual errors that aren't "already exists"
+                        console.error("Migration statement failed:", schema, msg);
                         results.push({ success: false, error: msg });
                     }
                 }
