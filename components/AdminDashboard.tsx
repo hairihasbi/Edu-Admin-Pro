@@ -91,11 +91,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
                   else setDbStatus('Sync Error');
               }
           } catch (e: any) {
-              console.warn("Server stats fetch failed (using local):", e.message);
+              // SAFE ERROR HANDLING to prevent blank screen crash
+              const errMsg = e instanceof Error ? e.message : String(e?.message || e || 'Unknown Error');
+              console.warn("Server stats fetch failed (using local):", errMsg);
+              
               const localStats = await getDashboardStats(user);
               setStats(localStats);
               
-              if (e.message.includes('API Missing') || e.message.includes('Unexpected token')) {
+              if (errMsg.includes('API Missing') || errMsg.includes('Unexpected token')) {
                   setDbStatus('Mode Lokal');
               } else {
                   setDbStatus('Sync Error');
@@ -419,30 +422,36 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
                       </div>
                   ) : (
                       <div className="space-y-4">
-                          {recentLogs.map((log) => (
-                              <div key={log.id} className="flex gap-3 items-start group">
-                                  <div className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${
-                                      log.level === 'ERROR' ? 'bg-red-500' : 
-                                      log.level === 'WARNING' ? 'bg-yellow-500' : 
-                                      (log.action || '').includes('Delete') ? 'bg-red-400' :
-                                      (log.action || '').includes('Update') ? 'bg-blue-500' : 'bg-green-500'
-                                  }`}></div>
-                                  <div className="flex-1 min-w-0">
-                                      <div className="flex justify-between items-start">
-                                          <p className="text-sm text-gray-800 font-semibold truncate pr-2">
-                                              {log.action}
+                          {recentLogs.map((log) => {
+                              // Extra Safety Check for Log Object
+                              if (!log) return null;
+                              const safeAction = log.action || 'Unknown Action';
+                              
+                              return (
+                                  <div key={log.id} className="flex gap-3 items-start group">
+                                      <div className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${
+                                          log.level === 'ERROR' ? 'bg-red-500' : 
+                                          log.level === 'WARNING' ? 'bg-yellow-500' : 
+                                          safeAction.includes('Delete') ? 'bg-red-400' :
+                                          safeAction.includes('Update') ? 'bg-blue-500' : 'bg-green-500'
+                                      }`}></div>
+                                      <div className="flex-1 min-w-0">
+                                          <div className="flex justify-between items-start">
+                                              <p className="text-sm text-gray-800 font-semibold truncate pr-2">
+                                                  {safeAction}
+                                              </p>
+                                              <span className="text-[10px] text-gray-400 whitespace-nowrap flex items-center gap-1 bg-gray-50 px-1.5 py-0.5 rounded">
+                                                  <Clock size={10} />
+                                                  {new Date(log.timestamp).toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'})}
+                                              </span>
+                                          </div>
+                                          <p className="text-xs text-gray-500 truncate mt-0.5">
+                                              <span className="font-medium text-gray-700">{log.actor}</span>: {log.details}
                                           </p>
-                                          <span className="text-[10px] text-gray-400 whitespace-nowrap flex items-center gap-1 bg-gray-50 px-1.5 py-0.5 rounded">
-                                              <Clock size={10} />
-                                              {new Date(log.timestamp).toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'})}
-                                          </span>
                                       </div>
-                                      <p className="text-xs text-gray-500 truncate mt-0.5">
-                                          <span className="font-medium text-gray-700">{log.actor}</span>: {log.details}
-                                      </p>
                                   </div>
-                              </div>
-                          ))}
+                              );
+                          })}
                       </div>
                   )}
               </div>
