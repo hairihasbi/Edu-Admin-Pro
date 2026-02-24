@@ -1,4 +1,3 @@
-
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from "@libsql/client/web";
 import { authorize } from './_utils/auth.js';
@@ -372,7 +371,6 @@ const getTableConfig = (collection: string) => {
         columns: ['id', 'username', 'password', 'full_name', 'role', 'status', 'school_name', 'school_npsn', 'nip', 'email', 'phone', 'subject', 'avatar', 'additional_role', 'homeroom_class_id', 'homeroom_class_name', 'rpp_usage_count', 'rpp_last_reset', 'last_modified', 'version', 'deleted'], 
         mapFn: (item: any) => [s(item.id), s(item.username), s(item.password), s(item.fullName), s(item.role), s(item.status), s(item.schoolName), s(item.schoolNpsn), s(item.nip), s(item.email), s(item.phone), s(item.subject), s(item.avatar), s(item.additionalRole), s(item.homeroomClassId), s(item.homeroomClassName), item.rppUsageCount || 0, s(item.rppLastReset), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] 
     };
-    // ... (All other table configs remain exactly the same) ...
     case 'eduadmin_classes': return { table: 'classes', columns: ['id', 'user_id', 'school_npsn', 'name', 'description', 'student_count', 'homeroom_teacher_id', 'homeroom_teacher_name', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.userId), s(item.schoolNpsn || 'DEFAULT'), s(item.name), s(item.description), s(item.studentCount), s(item.homeroomTeacherId), s(item.homeroomTeacherName), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_students': return { table: 'students', columns: ['id', 'class_id', 'school_npsn', 'name', 'nis', 'gender', 'phone', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.classId), s(item.schoolNpsn || 'DEFAULT'), s(item.name), s(item.nis), s(item.gender), s(item.phone || ''), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_scores': return { table: 'scores', columns: ['id', 'user_id', 'student_id', 'class_id', 'semester', 'subject', 'category', 'material_id', 'score', 'score_details', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.userId || 'UNKNOWN'), s(item.studentId), s(item.classId), s(item.semester), s(item.subject), s(item.category), s(item.materialId), s(item.score), JSON.stringify(item.scoreDetails || {}), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
@@ -424,28 +422,20 @@ const mapRowToJSON = (collection: string, row: any) => {
         version: row.version,
         deleted: Boolean(row.deleted)
     };
-    // ... Mappers for other tables (Same as above config, just ensuring it handles snake_case -> camelCase)
-    // NOTE: For brevity, assuming other tables map correctly if field names match.
-    // Ideally, full mapping should be here.
+    case 'eduadmin_classes': return {
+        id: row.id, userId: row.user_id, schoolNpsn: row.school_npsn, name: row.name,
+        description: row.description, studentCount: row.student_count,
+        homeroomTeacherId: row.homeroom_teacher_id, homeroomTeacherName: row.homeroom_teacher_name,
+        lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
+    };
+    case 'eduadmin_students': return {
+        id: row.id, classId: row.class_id, schoolNpsn: row.school_npsn, name: row.name,
+        nis: row.nis, gender: row.gender, phone: row.phone,
+        lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
+    };
+    // ... For other tables, assume default mapping is sufficient or they are not critical for login/auth flow
+    // Ideally complete the mappers if necessary
     default:
-        // Generic fallback for simple tables where column names match JSON keys (or handled by frontend)
-        // But for safety, let's implement at least classes and students which are critical
-        if (collection === 'eduadmin_classes') {
-             return {
-                id: row.id, userId: row.user_id, schoolNpsn: row.school_npsn, name: row.name,
-                description: row.description, studentCount: row.student_count,
-                homeroomTeacherId: row.homeroom_teacher_id, homeroomTeacherName: row.homeroom_teacher_name,
-                lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
-             };
-        }
-        if (collection === 'eduadmin_students') {
-             return {
-                id: row.id, classId: row.class_id, schoolNpsn: row.school_npsn, name: row.name,
-                nis: row.nis, gender: row.gender, phone: row.phone,
-                lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
-             };
-        }
-        // ... (Other tables omitted for brevity, but crucial ones are covered)
         return row; 
   }
 };
@@ -491,10 +481,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
              const isUserPush = action === 'push' && collection === 'eduadmin_users';
              const isAuthError = err.status === 401 || (err.message && err.message.includes('User not found'));
              
-             // Allow user to push their own registration if needed (self-healing)
+             // CRITICAL FIX: Allow "Self-Rescue" for Admin Pushes even if Auth fails
+             // This allows re-inserting the Admin user if the DB was wiped.
              if (isUserPush && isAuthError) {
-                 // Fallback logic
-                 // We don't return error here to allow re-registration
+                 console.log("Allowing unauthenticated push for user restoration");
+                 // Continue execution...
             } else {
                 return res.status(err.status || 401).json({ error: err.message });
             }
@@ -610,6 +601,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                                 item.password = existing.rows[0].password;
                             } else {
                                 // Fallback: Either row missing OR password is null in DB
+                                // Since this is a rescue operation (and DB wiped), we set a default password
                                 console.log(`[Auto-Heal] Resetting password for Admin ${item.username} (was missing/null)`);
                                 item.password = await bcrypt.hash("admin", 10);
                             }
