@@ -298,13 +298,26 @@ export const getSyncStats = async (user: User) => {
 
 // SYNC LOCK VARIABLE
 let isSyncRunning = false;
+let syncStartTime = 0;
+
+export const resetSyncLock = () => {
+    isSyncRunning = false;
+    syncStartTime = 0;
+};
 
 export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', logCallback: (msg: string) => void) => {
+    // Auto-timeout check: If sync has been running for more than 60 seconds, force reset
+    if (isSyncRunning && (Date.now() - syncStartTime > 60000)) {
+        logCallback("Previous sync stuck. Force resetting lock...");
+        resetSyncLock();
+    }
+
     if (isSyncRunning) {
         logCallback("Sync in progress, skipping...");
         return;
     }
     isSyncRunning = true;
+    syncStartTime = Date.now();
 
     try {
         const collections = [
@@ -387,6 +400,7 @@ export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', logCall
         logCallback(`Sync Error: ${e.message}`);
     } finally {
         isSyncRunning = false;
+        syncStartTime = 0;
     }
 };
 
