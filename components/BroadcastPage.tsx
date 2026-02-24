@@ -75,8 +75,11 @@ const BroadcastPage: React.FC<BroadcastPageProps> = ({ user }) => {
     const wa = await getWhatsAppConfig(user.id);
     if (wa && wa.isActive && wa.apiKey) setWaConfigReady(true);
 
-    const em = await getEmailConfig();
-    if (em && em.isActive) setEmailConfigReady(true);
+    // Only check email config for Admin
+    if (user.role === UserRole.ADMIN) {
+        const em = await getEmailConfig();
+        if (em && em.isActive) setEmailConfigReady(true);
+    }
   };
 
   const fetchClasses = async () => {
@@ -113,10 +116,7 @@ const BroadcastPage: React.FC<BroadcastPageProps> = ({ user }) => {
           id: s.id,
           name: s.name,
           phone: s.phone || '',
-          email: '', // Students table usually doesn't have email in this version, check schema? User schema has it.
-          // Note: Current schema only has phone for students. If email needed, schema update required. 
-          // Assuming students might not have email for now or it's not in fetched details.
-          // If User table (teachers) -> has email.
+          email: '', 
           label: s.className,
           selected: true
         }));
@@ -128,7 +128,7 @@ const BroadcastPage: React.FC<BroadcastPageProps> = ({ user }) => {
             id: s.id,
             name: s.name,
             phone: s.phone || '',
-            email: '', // See note above
+            email: '', 
             label: clsName,
             selected: true
           }));
@@ -277,14 +277,16 @@ const BroadcastPage: React.FC<BroadcastPageProps> = ({ user }) => {
              >
                 <Smartphone size={16} /> WhatsApp
              </button>
-             <button 
-                onClick={() => setChannel('EMAIL')}
-                className={`flex-1 py-2 text-sm font-bold rounded-md transition flex items-center justify-center gap-2 ${
-                    channel === 'EMAIL' ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-50'
-                }`}
-             >
-                <Mail size={16} /> Email
-             </button>
+             {user.role === UserRole.ADMIN && (
+                 <button 
+                    onClick={() => setChannel('EMAIL')}
+                    className={`flex-1 py-2 text-sm font-bold rounded-md transition flex items-center justify-center gap-2 ${
+                        channel === 'EMAIL' ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-50'
+                    }`}
+                 >
+                    <Mail size={16} /> Email
+                 </button>
+             )}
           </div>
 
           {/* Config Alert */}
