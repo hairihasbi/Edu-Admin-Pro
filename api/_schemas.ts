@@ -76,3 +76,16 @@ export const SendEmailSchema = z.object({
   user: UserSchema,
   config: EmailConfigSchema,
 });
+
+// --- API: EMAIL BROADCAST (NEW) ---
+export const EmailRecipientSchema = z.object({
+  email: z.string().email(),
+  name: z.string(),
+});
+
+export const EmailBroadcastSchema = z.object({
+  config: EmailConfigSchema,
+  recipients: z.array(EmailRecipientSchema).min(1, "Minimal satu penerima email"),
+  subject: z.string().min(1, "Subjek wajib diisi"),
+  content: z.string().min(1, "Konten email wajib diisi"), // HTML allowed
+});
