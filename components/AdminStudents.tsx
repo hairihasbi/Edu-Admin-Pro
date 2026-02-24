@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { StudentWithDetails, User } from '../types';
-import { deleteStudent, bulkDeleteStudents, addSystemLog, getStudentsServerSide } from '../services/database';
+import { deleteStudent, bulkDeleteStudents, addSystemLog, getStudentsServerSide, updateUserProfile } from '../services/database';
 import { pushToTurso } from '../services/tursoService';
 import { GraduationCap, Trash2, Search, School, User as UserIcon, CheckCircle, ChevronLeft, ChevronRight, Smartphone, RefreshCcw, Database, AlertCircle, Settings, Upload } from './Icons';
 import BroadcastModal from './BroadcastModal';
@@ -96,8 +96,12 @@ const AdminStudents: React.FC = () => {
       if (!currentUser) return;
       setIsFixingAuth(true);
       try {
+          // Force status ACTIVE locally first
+          const updatedUser = { ...currentUser, status: 'ACTIVE' as const };
           // Push current local user to cloud DB to register them
-          await pushToTurso('eduadmin_users', [currentUser], true);
+          // We send the modified user object to ensure it has ACTIVE status
+          await pushToTurso('eduadmin_users', [updatedUser], true);
+          
           // Add small delay for propagation
           await new Promise(r => setTimeout(r, 1500));
           // Retry fetch
