@@ -9,6 +9,7 @@ import {
   BackupData, StudentWithDetails, LessonPlanRequest, DashboardStatsData
 } from '../types';
 import { initTurso, pushToTurso, pullFromTurso } from './tursoService';
+import bcrypt from 'bcryptjs';
 
 const uuidv4 = () => crypto.randomUUID();
 
@@ -67,14 +68,38 @@ export const updateUserProfile = async (id: string, data: Partial<User>) => {
 };
 
 export const updateUserPassword = async (id: string, newPass: string) => {
-    await db.users.update(id, { lastModified: Date.now(), isSynced: false });
+    // FIX: Hash password locally before saving
+    const hashedPassword = await bcrypt.hash(newPass, 10);
+    
+    await db.users.update(id, { 
+        password: hashedPassword, // Update the password field
+        lastModified: Date.now(), 
+        isSynced: false 
+    });
+    
+    // Get full object to ensure all fields are present for sync
+    const updated = await db.users.get(id);
+    if(updated) pushToTurso('eduadmin_users', [updated]);
+    
     return true;
 };
 
 export const resetPassword = async (username: string, newPass: string) => {
     const user = await db.users.where('username').equals(username).first();
     if (!user) return false;
-    await db.users.update(user.id, { lastModified: Date.now(), isSynced: false });
+    
+    // FIX: Hash password for reset too
+    const hashedPassword = await bcrypt.hash(newPass, 10);
+    
+    await db.users.update(user.id, { 
+        password: hashedPassword,
+        lastModified: Date.now(), 
+        isSynced: false 
+    });
+    
+    const updated = await db.users.get(user.id);
+    if(updated) pushToTurso('eduadmin_users', [updated]);
+    
     return true;
 };
 
