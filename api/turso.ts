@@ -547,13 +547,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             await client.batch(statements);
             results.push({ success: true, message: "Schemas created via batch." });
         } catch (e: any) {
-            console.error("Batch init failed, retrying sequentially:", e);
+            console.error("Batch init failed, retrying sequentially:", e.message);
             for (const schema of DB_SCHEMAS) {
                 try {
                     await client.execute(schema);
                     results.push({ success: true });
                 } catch (innerE: any) {
-                    results.push({ success: false, error: innerE.message });
+                    const msg = innerE.message || '';
+                    if (msg.includes('duplicate column name')) {
+                        results.push({ success: true, message: "Column already exists (skipped)" });
+                    } else if (msg.includes('already exists')) {
+                         results.push({ success: true, message: "Table already exists (skipped)" });
+                    } else {
+                        results.push({ success: false, error: msg });
+                    }
                 }
             }
         }
