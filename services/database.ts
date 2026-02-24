@@ -131,6 +131,20 @@ export const sendApprovalEmail = async (user: User) => {
     }
 };
 
+export const sendApprovalWhatsApp = async (user: User, adminId: string) => {
+    try {
+        const config = await db.whatsappConfigs.get(adminId);
+        if (!config || !config.isActive || !config.apiKey) return { success: false, message: "WA Gateway inactive" };
+        
+        if (!user.phone || user.phone.length < 8) return { success: false, message: "Invalid Phone" };
+
+        const message = `Halo *${user.fullName}*,\n\nSelamat! Akun Anda di *${user.schoolName || 'Sekolah'}* telah disetujui oleh Admin.\n\nSilakan login ke aplikasi EduAdmin Pro.\n\nTerima kasih.`;
+        
+        const res = await sendWhatsAppBroadcast(config, [{name: user.fullName, phone: user.phone}], message);
+        return res.success > 0 ? { success: true, message: "Terkirim" } : { success: false, message: res.errors?.[0] || "API Error" };
+    } catch (e: any) { return { success: false, message: e.message || "Connection Error" }; }
+};
+
 // --- CLASS MANAGEMENT ---
 export const getClasses = async (userId: string) => {
     return await db.classes.where('userId').equals(userId).toArray();
