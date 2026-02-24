@@ -18,6 +18,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     currentUser = await authorize(req, ['ADMIN', 'GURU']);
   } catch (err: any) {
+    // 401 specifically means user not found in DB
     return res.status(err.status || 401).json({ error: err.message });
   }
 
