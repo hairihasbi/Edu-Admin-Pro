@@ -1,8 +1,9 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { StudentWithDetails } from '../types';
+import { StudentWithDetails, User } from '../types';
 import { deleteStudent, bulkDeleteStudents, addSystemLog, getStudentsServerSide } from '../services/database';
-import { GraduationCap, Trash2, Search, School, User, CheckCircle, ChevronLeft, ChevronRight, Smartphone, RefreshCcw, Database, AlertCircle, Settings } from './Icons';
+import { pushToTurso } from '../services/tursoService';
+import { GraduationCap, Trash2, Search, School, User as UserIcon, CheckCircle, ChevronLeft, ChevronRight, Smartphone, RefreshCcw, Database, AlertCircle, Settings, Upload } from './Icons';
 import BroadcastModal from './BroadcastModal';
 import { Link, useNavigate } from 'react-router-dom';
 
@@ -31,8 +32,9 @@ const AdminStudents: React.FC = () => {
   // UI State
   const [isLoading, setIsLoading] = useState(true);
   const [authError, setAuthError] = useState(false);
+  const [isFixingAuth, setIsFixingAuth] = useState(false);
   const [isBroadcastOpen, setIsBroadcastOpen] = useState(false);
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   
   const navigate = useNavigate();
 
@@ -90,6 +92,24 @@ const AdminStudents: React.FC = () => {
     setIsLoading(false);
   };
 
+  const handleFixAuth = async () => {
+      if (!currentUser) return;
+      setIsFixingAuth(true);
+      try {
+          // Push current local user to cloud DB to register them
+          await pushToTurso('eduadmin_users', [currentUser], true);
+          // Add small delay for propagation
+          await new Promise(r => setTimeout(r, 1500));
+          // Retry fetch
+          await fetchData(1);
+          alert("Akun berhasil didaftarkan ke Database Cloud. Akses dipulihkan.");
+      } catch (e: any) {
+          alert("Gagal memperbaiki akses: " + e.message);
+      } finally {
+          setIsFixingAuth(false);
+      }
+  };
+
   // Selection Logic
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) {
@@ -135,30 +155,32 @@ const AdminStudents: React.FC = () => {
 
   if (authError) {
       return (
-          <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-6 bg-white rounded-xl shadow-sm border border-gray-100">
+          <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-6 bg-white rounded-xl shadow-sm border border-gray-100 animate-in fade-in zoom-in duration-300">
               <div className="bg-red-50 p-4 rounded-full mb-4">
                   <AlertCircle size={48} className="text-red-500" />
               </div>
               <h2 className="text-2xl font-bold text-gray-800 mb-2">Akses Ditolak (Unauthorized)</h2>
-              <p className="text-gray-600 max-w-md mb-6">
-                  Akun Admin Anda belum terdaftar di Database Server (Cloud). 
-                  Hal ini biasanya terjadi jika Anda baru saja menginstal aplikasi namun belum melakukan <strong>Inisialisasi Database</strong>.
+              <p className="text-gray-600 max-w-lg mb-6 leading-relaxed">
+                  Database Cloud berhasil direset/diinisialisasi, namun akun Admin Anda belum terdaftar kembali di sana.
+                  <br/><br/>
+                  Klik tombol di bawah untuk meng-upload profil Admin Anda ke Cloud.
               </p>
-              <div className="flex gap-4">
+              <div className="flex flex-col sm:flex-row gap-4">
+                  <button 
+                      onClick={handleFixAuth}
+                      disabled={isFixingAuth}
+                      className="flex items-center justify-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-blue-700 transition shadow-lg hover:shadow-blue-500/30"
+                  >
+                      {isFixingAuth ? <RefreshCcw className="animate-spin" size={18} /> : <Upload size={18} />}
+                      {isFixingAuth ? 'Mendaftarkan Akun...' : 'Perbaiki Akses Admin'}
+                  </button>
                   <Link 
                       to="/settings" 
-                      className="flex items-center gap-2 bg-blue-600 text-white px-6 py-2.5 rounded-lg font-bold hover:bg-blue-700 transition"
+                      className="flex items-center justify-center gap-2 bg-white border border-gray-200 text-gray-700 px-6 py-3 rounded-lg font-bold hover:bg-gray-50 transition"
                   >
                       <Settings size={18} />
-                      Ke Pengaturan (Perbaiki Database)
+                      Cek Database
                   </Link>
-                  <button 
-                      onClick={() => fetchData(1)}
-                      className="flex items-center gap-2 bg-gray-100 text-gray-700 px-6 py-2.5 rounded-lg font-bold hover:bg-gray-200 transition"
-                  >
-                      <RefreshCcw size={18} />
-                      Coba Lagi
-                  </button>
               </div>
           </div>
       );
@@ -211,7 +233,7 @@ const AdminStudents: React.FC = () => {
            </div>
 
            <div className="relative flex-1">
-              <User className="absolute left-3 top-2.5 text-gray-400" size={18} />
+              <UserIcon className="absolute left-3 top-2.5 text-gray-400" size={18} />
               <select 
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none appearance-none bg-white text-sm"
                 value={teacherFilter}
@@ -288,9 +310,8 @@ const AdminStudents: React.FC = () => {
                                 <div className="bg-yellow-50 text-yellow-800 p-4 rounded-lg text-left text-sm border border-yellow-200 mt-2 max-w-lg">
                                     <strong>Tips Troubleshooting:</strong>
                                     <ul className="list-disc pl-5 mt-1 space-y-1">
-                                        <li>Pastikan Guru sudah <strong>Online</strong> dan data lokal mereka telah tersinkronisasi.</li>
-                                        <li>Cek <strong>Database</strong> di menu Pengaturan. Klik <Link to="/settings" className="text-blue-600 underline">Inisialisasi Database</Link> untuk memastikan tabel sudah dibuat dengan benar.</li>
-                                        <li>Jika baru dideploy, pastikan <code>TURSO_DB_URL</code> sudah benar.</li>
+                                        <li>Pastikan Guru sudah <strong>Online</strong> dan data lokal mereka telah tersinkronisasi (menu Sync).</li>
+                                        <li>Jika data lokal ada tapi tidak muncul disini, coba klik tombol "Refresh".</li>
                                     </ul>
                                 </div>
                             </div>
