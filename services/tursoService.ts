@@ -37,7 +37,9 @@ const handleApiResponse = async (response: Response) => {
     if (contentType && contentType.includes("application/json")) {
         const data = await response.json();
         if (!response.ok) {
-            throw new Error(data.error || data.message || `API Error: ${response.status}`);
+            // Include details if available
+            const details = data.details ? ` (${typeof data.details === 'object' ? JSON.stringify(data.details) : data.details})` : '';
+            throw new Error((data.error || data.message || `API Error: ${response.status}`) + details);
         }
         return data;
     } else {
