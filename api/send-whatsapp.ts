@@ -10,7 +10,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // --- VALIDATION LAYER (ZOD) ---
   const parseResult = WhatsAppBroadcastSchema.safeParse(req.body);
   if (!parseResult.success) {
-      return res.status(400).json({ error: 'Invalid Request Format', details: parseResult.error.format() });
+      return res.status(400).json({ error: 'Invalid Request Format (Zod)', details: parseResult.error.format() });
   }
 
   const { config, recipients, message } = parseResult.data;
@@ -34,9 +34,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           if (sessionRes.ok) {
               const sessionData = await sessionRes.json();
               flowKirimSessionId = sessionData.data?.id || sessionData.id;
+          } else {
+              const errText = await sessionRes.text();
+              return res.status(400).json({ error: `Gagal inisialisasi FlowKirim: ${sessionRes.statusText}. Detail: ${errText.substring(0, 100)}` });
           }
-      } catch (error) {
+      } catch (error: any) {
           console.error("FlowKirim Init Error:", error);
+          return res.status(500).json({ error: `Koneksi FlowKirim Error: ${error.message}` });
       }
   }
 
@@ -109,12 +113,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             // Parse JSON safely
             try {
                 const responseData = JSON.parse(responseText);
-                // Fonnte returns { status: true/false, detail: ... }
-                if (config.provider === 'FONNTE' && responseData.status === false) {
-                     console.error(`Fonnte Logic Error for ${phone}:`, responseData);
-                     failCount++;
-                     errors.push(`${recipient.name}: ${responseData.reason || 'Fonnte Error'}`);
+                // Fonnte returns { status: true/false, detail: ... } or { status: true, ... }
+                if (config.provider === 'FONNTE') {
+                    if (responseData.status === false) {
+                        console.error(`Fonnte Logic Error for ${phone}:`, responseData);
+                        failCount++;
+                        // Capture reason from Fonnte (usually 'reason' or 'detail')
+                        const reason = responseData.reason || responseData.detail || 'Fonnte menolak request';
+                        errors.push(`${recipient.name}: ${reason}`);
+                    } else {
+                        successCount++;
+                    }
                 } else {
+                     // Assume success for other providers if HTTP 200
                      successCount++;
                 }
             } catch {
@@ -122,19 +133,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 successCount++;
             }
         } else {
-            // Handle HTTP Errors
+            // Handle HTTP Errors (Non-200)
             console.error(`WA Send Failed for ${phone}: ${response.status} - ${responseText}`);
             failCount++;
-            errors.push(`${recipient.name}: HTTP ${response.status}`);
+            // Try to extract readable error from HTML/Text response
+            let errorDetail = responseText.substring(0, 150); // Limit length
+            if (errorDetail.includes("<!DOCTYPE html>")) errorDetail = "Halaman Error HTML (Cek URL)";
+            
+            errors.push(`${recipient.name}: HTTP ${response.status} - ${errorDetail}`);
         }
     } catch (e: any) {
         console.error(`WA Connection Error for ${phone}:`, e);
         failCount++;
-        errors.push(`${recipient.name}: Connection Error`);
+        errors.push(`${recipient.name}: Network/Fetch Error (${e.message})`);
     }
     
     // Slight delay to be polite to the API (especially free tier)
     await new Promise(r => setTimeout(r, 1000));
+  }
+
+  // If ALL failed, return 400 or 500 to trigger 'status: error' on frontend
+  // This allows the frontend to show the first error message clearly
+  if (failCount > 0 && successCount === 0) {
+      return res.status(500).json({ 
+          success: 0, 
+          failed: failCount, 
+          errors: errors,
+          error: errors[0] // Return first error as main error message
+      });
   }
 
   return res.status(200).json({ success: successCount, failed: failCount, errors });
