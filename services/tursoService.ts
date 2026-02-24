@@ -231,7 +231,10 @@ export const pullFromTurso = async (collection: string, localItems: any[]): Prom
     const mergedItems = [...localItems];
 
     remoteMap.forEach((remote, id) => {
-      const localIndex = mergedItems.findIndex(i => i.id === id);
+      // FIX: Ensure ID is strictly a string to prevent type mismatch during findIndex
+      const safeId = String(id);
+      
+      const localIndex = mergedItems.findIndex(i => String(i.id) === safeId);
       
       // FIX 1: Handle Deletion
       // If remote has deleted flag, remove it locally
@@ -245,7 +248,7 @@ export const pullFromTurso = async (collection: string, localItems: any[]): Prom
       }
 
       // CRITICAL FIX 2: Ensure ID is present in the object spread
-      const safeRemoteData = { ...remote.data, id: id, isSynced: true };
+      const safeRemoteData = { ...remote.data, id: safeId, isSynced: true };
 
       if (localIndex === -1) {
         // Item new (remote only)

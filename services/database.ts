@@ -339,10 +339,20 @@ export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', logCall
                 const result = await pullFromTurso(col, localItems);
                 if (result.hasChanges) {
                     logCallback(`Updating local ${col}...`);
+                    
+                    // Deduplicate items to prevent ConstraintError
+                    const uniqueMap = new Map();
+                    result.items.forEach(item => {
+                        if(item.id) uniqueMap.set(String(item.id), item);
+                    });
+                    const uniqueItems = Array.from(uniqueMap.values());
+
                     // USE TRANSACTION FOR ATOMIC UPDATE
                     await db.transaction('rw', table, async () => {
                         await table.clear();
-                        await table.bulkAdd(result.items);
+                        // Use bulkPut instead of bulkAdd to safely overwrite existing keys
+                        // This fixes the ConstraintError when syncing
+                        await table.bulkPut(uniqueItems);
                     });
                 }
             }
