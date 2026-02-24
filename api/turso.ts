@@ -572,6 +572,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 }
             }
         }
+
+        // --- NEW: AUTO-CREATE DEFAULT ADMIN IF USERS TABLE EMPTY ---
+        try {
+            const userCount = await client.execute("SELECT count(*) as count FROM users");
+            if (userCount.rows.length > 0 && userCount.rows[0].count === 0) {
+                const hashedPassword = await bcrypt.hash("admin", 10);
+                const adminId = crypto.randomUUID();
+                
+                await client.execute({
+                    sql: `INSERT INTO users (
+                        id, username, password, full_name, role, status, 
+                        school_name, school_npsn, last_modified, version, deleted
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                    args: [
+                        adminId, 'admin', hashedPassword, 'Administrator', 'ADMIN', 'ACTIVE',
+                        'Sekolah Default', '00000000', Date.now(), 1, 0
+                    ]
+                });
+                results.push({ success: true, message: "Default Admin created (admin/admin)" });
+            }
+        } catch (e: any) {
+            console.error("Failed to create default admin:", e);
+            results.push({ success: false, error: "Failed to create default admin: " + e.message });
+        }
+
         return res.status(200).json({ success: true, message: "Database Initialized & Migrated.", details: results });
     }
 

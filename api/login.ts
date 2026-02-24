@@ -39,7 +39,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     // 1. Ambil user berdasarkan username (termasuk password hash)
-    // Kita ambil deleted juga untuk cek status, tapi user yang dihapus tidak boleh login
     const result = await client.execute({
         sql: "SELECT * FROM users WHERE username = ? LIMIT 1",
         args: [username]
@@ -56,12 +55,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(403).json({ error: "Akun ini telah dihapus oleh Admin." });
     }
 
-    // 3. Cek Status (Harus ACTIVE)
-    if (userRow.status !== 'ACTIVE') {
-        return res.status(403).json({ error: "Akun belum diaktifkan oleh Admin." });
-    }
-
-    // 4. Verifikasi Password
+    // 3. Verifikasi Password DULU (Sebelum cek status, untuk keamanan)
     const storedPassword = (userRow.password as string) || '';
     let isValid = false;
 
@@ -69,12 +63,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // Jika password ter-hash (bcrypt)
         isValid = await bcrypt.compare(password, storedPassword);
     } else {
-        // Jika password plain text (misal: admin default)
+        // Jika password plain text (misal: admin default lama)
         isValid = storedPassword === password;
     }
 
     if (!isValid) {
         return res.status(401).json({ error: "Password salah." });
+    }
+
+    // 4. Cek & Perbaiki Status (Self-Healing untuk ADMIN)
+    // Jika User adalah ADMIN tapi status NULL/PENDING, otomatis aktifkan.
+    if (userRow.status !== 'ACTIVE') {
+        if (userRow.role === 'ADMIN') {
+            console.log(`[Auto-Fix] Activating Admin user ${userRow.username} who had status: ${userRow.status}`);
+            await client.execute({
+                sql: "UPDATE users SET status = 'ACTIVE' WHERE id = ?",
+                args: [userRow.id]
+            });
+            userRow.status = 'ACTIVE'; // Update object local agar login lanjut
+        } else {
+            // Jika Guru biasa, tetap tolak
+            return res.status(403).json({ error: "Akun belum diaktifkan oleh Admin." });
+        }
     }
 
     // 5. Login Sukses - Kembalikan Data User (Tanpa Password)
