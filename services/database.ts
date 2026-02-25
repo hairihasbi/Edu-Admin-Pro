@@ -868,6 +868,10 @@ export const getStudentsServerSide = async (page: number, limit: number, search:
     // If online, use API
     if (navigator.onLine) {
         try {
+            const userStr = localStorage.getItem('eduadmin_user');
+            const user = userStr ? JSON.parse(userStr) : null;
+            const token = user?.id;
+
             const params = new URLSearchParams({
                 page: page.toString(),
                 limit: limit.toString(),
@@ -875,7 +879,13 @@ export const getStudentsServerSide = async (page: number, limit: number, search:
                 school,
                 teacherId
             });
-            const res = await fetch(`/api/students?${params}`);
+            
+            const headers: HeadersInit = {};
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+
+            const res = await fetch(`/api/students?${params}`, { headers });
             if (res.status === 401) return { status: 401, data: [], meta: { total: 0, totalPages: 0 } };
             return await res.json();
         } catch(e) { console.error(e); }
