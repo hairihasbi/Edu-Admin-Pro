@@ -334,6 +334,22 @@ const DB_SCHEMAS = [
         deleted INTEGER DEFAULT 0
     )`,
 
+    // 22. DONATIONS
+    `CREATE TABLE IF NOT EXISTS donations (
+        id TEXT PRIMARY KEY,
+        user_id TEXT,
+        invoice_number TEXT,
+        amount INTEGER,
+        payment_method TEXT,
+        status TEXT,
+        payment_url TEXT,
+        created_at TEXT,
+        paid_at TEXT,
+        last_modified INTEGER,
+        version INTEGER DEFAULT 1,
+        deleted INTEGER DEFAULT 0
+    )`,
+
     // --- MIGRATIONS ---
     `ALTER TABLE system_settings ADD COLUMN ai_provider TEXT`,
     `ALTER TABLE system_settings ADD COLUMN ai_base_url TEXT`,
@@ -347,6 +363,10 @@ const DB_SCHEMAS = [
     `ALTER TABLE classes ADD COLUMN homeroom_teacher_id TEXT`,
     `ALTER TABLE classes ADD COLUMN homeroom_teacher_name TEXT`,
     `ALTER TABLE users ADD COLUMN homeroom_class_name TEXT`,
+    // DOKU PAYMENT GATEWAY
+    `ALTER TABLE system_settings ADD COLUMN doku_client_id TEXT`,
+    `ALTER TABLE system_settings ADD COLUMN doku_secret_key TEXT`,
+    `ALTER TABLE system_settings ADD COLUMN doku_is_production BOOLEAN`,
 ];
 
 // Helper to convert undefined to null for SQL
@@ -384,12 +404,13 @@ const getTableConfig = (collection: string) => {
     case 'eduadmin_bk_counseling': return { table: 'bk_counseling', columns: ['id', 'student_id', 'date', 'issue', 'notes', 'follow_up', 'status', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.studentId), s(item.date), s(item.issue), s(item.notes), s(item.follow_up), s(item.status), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_tickets': return { table: 'tickets', columns: ['id', 'user_id', 'teacher_name', 'subject', 'status', 'last_updated', 'messages', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.userId), s(item.teacherName), s(item.subject), s(item.status), s(item.lastUpdated), JSON.stringify(item.messages || []), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_api_keys': return { table: 'api_keys', columns: ['id', 'key_value', 'provider', 'status', 'added_at', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.key), s(item.provider), s(item.status), s(item.addedAt), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
-    case 'eduadmin_system_settings': return { table: 'system_settings', columns: ['id', 'feature_rpp_enabled', 'maintenance_message', 'app_name', 'school_name', 'app_description', 'app_keywords', 'logo_url', 'favicon_url', 'timezone', 'footer_text', 'ai_provider', 'ai_base_url', 'ai_api_key', 'ai_model', 'rpp_monthly_limit', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), item.featureRppEnabled ? 1 : 0, s(item.maintenanceMessage), s(item.appName), s(item.schoolName), s(item.appDescription), s(item.appKeywords), s(item.logoUrl), s(item.faviconUrl), s(item.timezone), s(item.footerText), s(item.aiProvider), s(item.aiBaseUrl), s(item.aiApiKey), s(item.aiModel), item.rppMonthlyLimit || 0, s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
+    case 'eduadmin_system_settings': return { table: 'system_settings', columns: ['id', 'feature_rpp_enabled', 'maintenance_message', 'app_name', 'school_name', 'app_description', 'app_keywords', 'logo_url', 'favicon_url', 'timezone', 'footer_text', 'ai_provider', 'ai_base_url', 'ai_api_key', 'ai_model', 'rpp_monthly_limit', 'doku_client_id', 'doku_secret_key', 'doku_is_production', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), item.featureRppEnabled ? 1 : 0, s(item.maintenanceMessage), s(item.appName), s(item.schoolName), s(item.appDescription), s(item.appKeywords), s(item.logoUrl), s(item.faviconUrl), s(item.timezone), s(item.footerText), s(item.aiProvider), s(item.aiBaseUrl), s(item.aiApiKey), s(item.aiModel), item.rppMonthlyLimit || 0, s(item.dokuClientId), s(item.dokuSecretKey), item.dokuIsProduction ? 1 : 0, s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_wa_configs': return { table: 'wa_configs', columns: ['user_id', 'provider', 'base_url', 'api_key', 'device_id', 'is_active', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.userId), s(item.provider), s(item.baseUrl), s(item.apiKey), s(item.deviceId), item.isActive ? 1 : 0, s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_notifications': return { table: 'notifications', columns: ['id', 'title', 'message', 'type', 'target_role', 'is_read', 'is_popup', 'created_at', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.title), s(item.message), s(item.type), s(item.targetRole), item.isRead ? 1 : 0, item.isPopup ? 1 : 0, s(item.createdAt), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_logs': return { table: 'logs', columns: ['id', 'timestamp', 'level', 'actor', 'role', 'action', 'details', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.timestamp), s(item.level), s(item.actor), s(item.role), s(item.action), s(item.details), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_master_subjects': return { table: 'master_subjects', columns: ['id', 'name', 'category', 'level', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.name), s(item.category), s(item.level), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_email_config': return { table: 'email_config', columns: ['id', 'provider', 'method', 'api_key', 'smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass', 'from_email', 'from_name', 'is_active', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.provider), s(item.method), s(item.apiKey), s(item.smtpHost), s(item.smtpPort), s(item.smtpUser), s(item.smtpPass), s(item.fromEmail), s(item.fromName), item.isActive ? 1 : 0, s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
+    case 'eduadmin_donations': return { table: 'donations', columns: ['id', 'user_id', 'invoice_number', 'amount', 'payment_method', 'status', 'payment_url', 'created_at', 'paid_at', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.userId), s(item.invoiceNumber), s(item.amount), s(item.paymentMethod), s(item.status), s(item.paymentUrl), s(item.createdAt), s(item.paidAt), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     default:
       return null;
   }
@@ -496,6 +517,7 @@ const mapRowToJSON = (collection: string, row: any) => {
         timezone: row.timezone, footerText: row.footer_text,
         aiProvider: row.ai_provider, aiBaseUrl: row.ai_base_url, aiApiKey: row.ai_api_key, aiModel: row.ai_model,
         rppMonthlyLimit: row.rpp_monthly_limit,
+        dokuClientId: row.doku_client_id, dokuSecretKey: row.doku_secret_key, dokuIsProduction: Boolean(row.doku_is_production),
         lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
     };
     case 'eduadmin_wa_configs': return {
@@ -522,6 +544,12 @@ const mapRowToJSON = (collection: string, row: any) => {
         smtpHost: row.smtp_host, smtpPort: row.smtp_port, smtpUser: row.smtp_user,
         smtpPass: row.smtp_pass, fromEmail: row.from_email, fromName: row.from_name,
         isActive: Boolean(row.is_active), lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
+    };
+    case 'eduadmin_donations': return {
+        id: row.id, userId: row.user_id, invoiceNumber: row.invoice_number, amount: row.amount,
+        paymentMethod: row.payment_method, status: row.status, paymentUrl: row.payment_url,
+        createdAt: row.created_at, paidAt: row.paid_at,
+        lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
     };
     default:
         return row; 
