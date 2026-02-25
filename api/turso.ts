@@ -433,8 +433,96 @@ const mapRowToJSON = (collection: string, row: any) => {
         nis: row.nis, gender: row.gender, phone: row.phone,
         lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
     };
-    // ... For other tables, assume default mapping is sufficient or they are not critical for login/auth flow
-    // Ideally complete the mappers if necessary
+    case 'eduadmin_scores': return {
+        id: row.id, userId: row.user_id, studentId: row.student_id, classId: row.class_id,
+        semester: row.semester, subject: row.subject, category: row.category,
+        materialId: row.material_id, score: row.score, scoreDetails: parseJSONSafe(row.score_details),
+        lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
+    };
+    case 'eduadmin_attendance': return {
+        id: row.id, studentId: row.student_id, classId: row.class_id, date: row.date,
+        status: row.status, lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
+    };
+    case 'eduadmin_journals': return {
+        id: row.id, userId: row.user_id, classId: row.class_id, date: row.date,
+        materialId: row.material_id, learningObjective: row.learning_objective,
+        meetingNo: row.meeting_no, activities: row.activities, reflection: row.reflection,
+        followUp: row.follow_up, lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
+    };
+    case 'eduadmin_materials': return {
+        id: row.id, classId: row.class_id, userId: row.user_id, subject: row.subject,
+        semester: row.semester, code: row.code, phase: row.phase, content: row.content,
+        subScopes: parseJSONSafe(row.sub_scopes), lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
+    };
+    case 'eduadmin_schedules': return {
+        id: row.id, userId: row.user_id, day: row.day, timeStart: row.time_start,
+        timeEnd: row.time_end, className: row.class_name, subject: row.subject,
+        lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
+    };
+    case 'eduadmin_bk_violations': return {
+        id: row.id, studentId: row.student_id, date: row.date, violationName: row.violation_name,
+        points: row.points, description: row.description, reportedBy: row.reported_by,
+        lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
+    };
+    case 'eduadmin_bk_reductions': return {
+        id: row.id, studentId: row.student_id, date: row.date, activityName: row.activity_name,
+        pointsRemoved: row.points_removed, description: row.description,
+        lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
+    };
+    case 'eduadmin_bk_achievements': return {
+        id: row.id, studentId: row.student_id, date: row.date, title: row.title,
+        level: row.level, description: row.description,
+        lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
+    };
+    case 'eduadmin_bk_counseling': return {
+        id: row.id, studentId: row.student_id, date: row.date, issue: row.issue,
+        notes: row.notes, followUp: row.follow_up, status: row.status,
+        lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
+    };
+    case 'eduadmin_tickets': return {
+        id: row.id, userId: row.user_id, teacherName: row.teacher_name, subject: row.subject,
+        status: row.status, lastUpdated: row.last_updated, messages: parseJSONSafe(row.messages),
+        lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
+    };
+    case 'eduadmin_api_keys': return {
+        id: row.id, key: row.key_value, provider: row.provider, status: row.status,
+        addedAt: row.added_at, lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
+    };
+    case 'eduadmin_system_settings': return {
+        id: row.id, featureRppEnabled: Boolean(row.feature_rpp_enabled),
+        maintenanceMessage: row.maintenance_message, appName: row.app_name,
+        schoolName: row.school_name, appDescription: row.app_description,
+        appKeywords: row.app_keywords, logoUrl: row.logo_url, faviconUrl: row.favicon_url,
+        timezone: row.timezone, footerText: row.footer_text,
+        aiProvider: row.ai_provider, aiBaseUrl: row.ai_base_url, aiApiKey: row.ai_api_key, aiModel: row.ai_model,
+        rppMonthlyLimit: row.rpp_monthly_limit,
+        lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
+    };
+    case 'eduadmin_wa_configs': return {
+        userId: row.user_id, provider: row.provider, baseUrl: row.base_url,
+        apiKey: row.api_key, deviceId: row.device_id, isActive: Boolean(row.is_active),
+        lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
+    };
+    case 'eduadmin_notifications': return {
+        id: row.id, title: row.title, message: row.message, type: row.type,
+        targetRole: row.target_role, isRead: Boolean(row.is_read), isPopup: Boolean(row.is_popup),
+        createdAt: row.created_at, lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
+    };
+    case 'eduadmin_logs': return {
+        id: row.id, timestamp: row.timestamp, level: row.level, actor: row.actor,
+        role: row.role, action: row.action, details: row.details,
+        lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
+    };
+    case 'eduadmin_master_subjects': return {
+        id: row.id, name: row.name, category: row.category, level: row.level,
+        lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
+    };
+    case 'eduadmin_email_config': return {
+        id: row.id, provider: row.provider, method: row.method, apiKey: row.api_key,
+        smtpHost: row.smtp_host, smtpPort: row.smtp_port, smtpUser: row.smtp_user,
+        smtpPass: row.smtp_pass, fromEmail: row.from_email, fromName: row.from_name,
+        isActive: Boolean(row.is_active), lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
+    };
     default:
         return row; 
   }
