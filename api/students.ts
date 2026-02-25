@@ -53,8 +53,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let args: any[] = [];
 
     // 1. FILTERING LOGIC
+    const userRole = currentUser.role.toUpperCase();
     
-    if (currentUser.role === 'GURU') {
+    if (userRole === 'GURU') {
         const userRes = await client.execute({ sql: "SELECT school_npsn FROM users WHERE id = ?", args: [currentUser.userId] });
         const userNpsn = userRes.rows[0]?.school_npsn;
         
@@ -68,18 +69,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             args.push(currentUser.userId);
         }
     } else {
-        // ADMIN FILTER
-        if (school) {
+        // ADMIN FILTER (Bypass NPSN filter by default)
+        // Only apply filters if explicitly requested by UI
+        if (school && school.trim() !== '') {
             // Fix: Map School Name (from dropdown) to NPSN via Users table
             // Because students table stores school_npsn, but filter passes school_name
             whereConditions.push("school_npsn IN (SELECT school_npsn FROM users WHERE school_name = ?)");
             args.push(school);
         }
         
-        if (teacherId) {
+        if (teacherId && teacherId.trim() !== '') {
             whereConditions.push("class_id IN (SELECT id FROM classes WHERE user_id = ?)");
             args.push(teacherId);
         }
+        
+        // If no filters provided, Admin sees ALL students (Global View)
     }
 
     // 2. SEARCH FILTER
