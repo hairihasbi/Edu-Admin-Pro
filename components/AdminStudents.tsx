@@ -108,7 +108,8 @@ const AdminStudents: React.FC = () => {
           await fetchData(1);
           alert("Akun berhasil didaftarkan ke Database Cloud. Akses dipulihkan.");
       } catch (e: any) {
-          alert("Gagal memperbaiki akses: " + e.message);
+          console.error("Fix Auth Error:", e);
+          alert("Gagal memperbaiki akses: " + (e.message || JSON.stringify(e)));
       } finally {
           setIsFixingAuth(false);
       }
