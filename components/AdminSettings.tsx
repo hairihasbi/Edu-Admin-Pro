@@ -423,6 +423,54 @@ const AdminSettings: React.FC = () => {
                           )}
                       </div>
 
+                      <div className="bg-orange-50 rounded-lg p-4 border border-orange-200">
+                          <h4 className="font-bold text-orange-800 mb-4 flex items-center gap-2">
+                              <Server size={18} /> Konfigurasi DOKU Payment Gateway
+                          </h4>
+                          <div className="space-y-4">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  <div>
+                                      <label className="block text-sm font-semibold text-gray-700 mb-1">Client ID</label>
+                                      <input 
+                                          type="text" 
+                                          className="w-full border border-orange-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-orange-500 outline-none"
+                                          placeholder="Contoh: BRN-0234-1234"
+                                          value={systemSettings.dokuClientId || ''}
+                                          onChange={(e) => setSystemSettings({...systemSettings, dokuClientId: e.target.value})}
+                                      />
+                                  </div>
+                                  <div>
+                                      <label className="block text-sm font-semibold text-gray-700 mb-1">Secret Key</label>
+                                      <div className="relative">
+                                          <input 
+                                              type="password" 
+                                              className="w-full border border-orange-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-orange-500 outline-none"
+                                              placeholder="••••••••••••••••"
+                                              value={systemSettings.dokuSecretKey || ''}
+                                              onChange={(e) => setSystemSettings({...systemSettings, dokuSecretKey: e.target.value})}
+                                          />
+                                      </div>
+                                  </div>
+                              </div>
+                              
+                              <div className="flex items-center justify-between bg-white p-3 rounded-lg border border-orange-100">
+                                  <div>
+                                      <span className="font-semibold text-gray-700 text-sm">Mode Produksi (Live)</span>
+                                      <p className="text-xs text-gray-500">Aktifkan jika menggunakan akun Production. Matikan untuk Sandbox.</p>
+                                  </div>
+                                  <label className="relative inline-flex items-center cursor-pointer">
+                                      <input 
+                                          type="checkbox" 
+                                          className="sr-only peer"
+                                          checked={systemSettings.dokuIsProduction || false}
+                                          onChange={(e) => setSystemSettings({...systemSettings, dokuIsProduction: e.target.checked})}
+                                      />
+                                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-orange-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-600"></div>
+                                  </label>
+                              </div>
+                          </div>
+                      </div>
+
                       <div className="flex justify-end">
                           <button 
                             type="submit" 

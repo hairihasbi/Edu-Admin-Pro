@@ -1,14 +1,36 @@
 
-import React, { useState } from 'react';
-import { User } from '../types';
-import { Heart, Wallet, Copy, Check, Coffee, Zap, BrainCircuit, MessageCircle } from './Icons';
+import React, { useState, useEffect } from 'react';
+import { User, SystemSettings } from '../types';
+import { Heart, Wallet, Copy, Check, Coffee, Zap, BrainCircuit, MessageCircle, CreditCard, Loader2 } from './Icons';
+import { getSystemSettings } from '../services/database';
 
 interface TeacherDonationProps {
   user: User;
 }
 
+declare global {
+  interface Window {
+    loadJokulCheckout: (url: string) => void;
+  }
+}
+
 const TeacherDonation: React.FC<TeacherDonationProps> = ({ user }) => {
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [selectedAmount, setSelectedAmount] = useState<number>(50000);
+  const [customAmount, setCustomAmount] = useState<string>('');
+  const [isCustom, setIsCustom] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [dokuSettings, setDokuSettings] = useState<{ isProduction: boolean } | null>(null);
+
+  useEffect(() => {
+      const loadSettings = async () => {
+          const settings = await getSystemSettings();
+          if (settings) {
+              setDokuSettings({ isProduction: !!settings.dokuIsProduction });
+          }
+      };
+      loadSettings();
+  }, []);
 
   const donationMethods = [
     {
@@ -42,6 +64,66 @@ const TeacherDonation: React.FC<TeacherDonationProps> = ({ user }) => {
     window.open(url, '_blank');
   };
 
+  const loadDokuScript = (isProduction: boolean): Promise<void> => {
+      return new Promise((resolve, reject) => {
+          if (document.getElementById('doku-script')) {
+              resolve();
+              return;
+          }
+          const script = document.createElement('script');
+          script.id = 'doku-script';
+          script.src = isProduction 
+              ? 'https://jokul.doku.com/jokul-checkout-js/v1/jokul-checkout-1.0.0.js'
+              : 'https://sandbox.doku.com/jokul-checkout-js/v1/jokul-checkout-1.0.0.js';
+          script.onload = () => resolve();
+          script.onerror = () => reject(new Error("Gagal memuat DOKU JS"));
+          document.body.appendChild(script);
+      });
+  };
+
+  const handleDokuPayment = async () => {
+      if (!dokuSettings) return;
+      
+      const finalAmount = isCustom ? parseInt(customAmount.replace(/\D/g, '')) : selectedAmount;
+      if (!finalAmount || finalAmount < 10000) {
+          alert("Minimal donasi Rp 10.000");
+          return;
+      }
+
+      setIsProcessing(true);
+      try {
+          // 1. Load Script
+          await loadDokuScript(dokuSettings.isProduction);
+
+          // 2. Generate Payment URL
+          const res = await fetch('/api/doku', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ 
+                  action: 'generate-payment', 
+                  amount: finalAmount, 
+                  userId: user.id 
+              })
+          });
+
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Gagal membuat pembayaran");
+
+          // 3. Show Popup
+          if (window.loadJokulCheckout) {
+              window.loadJokulCheckout(data.paymentUrl);
+          } else {
+              alert("Gagal memuat popup pembayaran. Silakan coba lagi.");
+          }
+
+      } catch (e: any) {
+          console.error(e);
+          alert(e.message || "Terjadi kesalahan saat memproses pembayaran.");
+      } finally {
+          setIsProcessing(false);
+      }
+  };
+
   return (
     <div className="max-w-4xl mx-auto space-y-8 pb-20">
       
@@ -64,13 +146,80 @@ const TeacherDonation: React.FC<TeacherDonationProps> = ({ user }) => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         {/* Payment Methods */}
-        <div className="space-y-6">
+        <div className="space-y-8">
+          
+          {/* DOKU PAYMENT SECTION */}
+          <div className="bg-white border border-indigo-100 rounded-xl p-6 shadow-sm relative overflow-hidden">
+              <div className="absolute top-0 right-0 bg-indigo-600 text-white text-xs font-bold px-3 py-1 rounded-bl-lg">
+                  Otomatis
+              </div>
+              <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2 mb-4">
+                  <CreditCard className="text-indigo-600" />
+                  Donasi Instan
+              </h3>
+              <p className="text-sm text-gray-500 mb-6">
+                  Pilih nominal donasi dan bayar langsung menggunakan QRIS, E-Wallet (OVO, GoPay, ShopeePay), atau Virtual Account.
+              </p>
+
+              <div className="grid grid-cols-3 gap-3 mb-4">
+                  {[50000, 100000, 150000].map((amt) => (
+                      <button
+                          key={amt}
+                          onClick={() => { setSelectedAmount(amt); setIsCustom(false); }}
+                          className={`py-2 px-1 rounded-lg text-sm font-bold border transition ${
+                              !isCustom && selectedAmount === amt 
+                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-md transform scale-105' 
+                              : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-300 hover:bg-indigo-50'
+                          }`}
+                      >
+                          {amt / 1000}k
+                      </button>
+                  ))}
+              </div>
+
+              <div className="mb-6">
+                  <button
+                      onClick={() => setIsCustom(true)}
+                      className={`text-xs font-semibold mb-2 flex items-center gap-1 ${isCustom ? 'text-indigo-600' : 'text-gray-500'}`}
+                  >
+                      Atau input manual:
+                  </button>
+                  <div className={`relative transition-all ${isCustom ? 'opacity-100' : 'opacity-60'}`}>
+                      <span className="absolute left-3 top-2.5 text-gray-500 font-bold">Rp</span>
+                      <input 
+                          type="text" 
+                          className={`w-full pl-10 pr-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-gray-700 ${
+                              isCustom ? 'border-indigo-300 bg-white' : 'border-gray-200 bg-gray-50'
+                          }`}
+                          placeholder="0"
+                          value={customAmount}
+                          onChange={(e) => {
+                              const val = e.target.value.replace(/\D/g, '');
+                              setCustomAmount(new Intl.NumberFormat('id-ID').format(parseInt(val) || 0));
+                              if (!isCustom) setIsCustom(true);
+                          }}
+                          onClick={() => setIsCustom(true)}
+                      />
+                  </div>
+              </div>
+
+              <button 
+                  onClick={handleDokuPayment}
+                  disabled={isProcessing}
+                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-lg shadow-lg shadow-indigo-200 transition active:scale-95 flex items-center justify-center gap-2"
+              >
+                  {isProcessing ? <Loader2 className="animate-spin" /> : <Heart size={20} fill="currentColor" />}
+                  {isProcessing ? 'Memproses...' : `Donasi Rp ${isCustom ? (customAmount || '0') : new Intl.NumberFormat('id-ID').format(selectedAmount)}`}
+              </button>
+              <p className="text-center text-xs text-gray-400 mt-3">Powered by DOKU Payment Gateway</p>
+          </div>
+
           <div>
             <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2 mb-2">
               <Coffee className="text-gray-600" />
-              Salurkan Dukungan
+              Transfer Manual
             </h3>
-            <p className="text-sm text-gray-500 mb-4">Silakan kirimkan donasi sukarela Anda ke salah satu e-wallet di bawah ini:</p>
+            <p className="text-sm text-gray-500 mb-4">Atau kirim manual ke e-wallet pribadi admin:</p>
             
             <div className="space-y-4">
               {donationMethods.map((method, idx) => (
@@ -106,10 +255,10 @@ const TeacherDonation: React.FC<TeacherDonationProps> = ({ user }) => {
 
           <div className="bg-green-50 border border-green-200 rounded-xl p-5">
              <h4 className="text-green-800 font-bold mb-2 flex items-center gap-2">
-                <Check size={18} /> Sudah melakukan transfer?
+                <Check size={18} /> Konfirmasi Manual
              </h4>
              <p className="text-sm text-green-700 mb-4">
-                Terima kasih orang baik! Silakan konfirmasi ke Admin agar kami dapat mencatat dukungan Anda.
+                Jika melakukan transfer manual, silakan konfirmasi ke Admin. (Untuk donasi otomatis DOKU tidak perlu konfirmasi).
              </p>
              <button 
                 onClick={handleConfirmation}
