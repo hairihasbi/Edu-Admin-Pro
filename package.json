@@ -1,11 +1,10 @@
-
 {
   "name": "eduadmin-pro",
   "private": true,
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "tsx server.ts",
     "build": "tsc && vite build",
     "preview": "vite preview"
   },
@@ -19,6 +18,7 @@
     "bcryptjs": "^2.4.3",
     "dexie": "^3.2.4",
     "dompurify": "^3.1.2",
+    "express": "^5.2.1",
     "html2pdf.js": "^0.10.1",
     "katex": "^0.16.9",
     "lucide-react": "^0.378.0",
@@ -27,12 +27,14 @@
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.23.0",
     "recharts": "^2.12.7",
+    "tsx": "^4.21.0",
     "xlsx": "^0.18.5",
     "zod": "^3.22.4"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
     "@types/dompurify": "^3.0.5",
+    "@types/express": "^5.0.6",
     "@types/node": "^20.12.12",
     "@types/nodemailer": "^6.4.15",
     "@types/react": "^18.2.66",
