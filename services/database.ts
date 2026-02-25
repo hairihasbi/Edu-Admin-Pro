@@ -1040,9 +1040,18 @@ export const copyScopeMaterials = async (sourceClassId: string, targetClassId: s
 };
 
 // --- SCORES ---
-export const saveBulkAssessmentScores = async (scores: Omit<AssessmentScore, 'id'>[], userId: string, teacherName?: string) => {
+export const saveBulkAssessmentScores = async (scores: Omit<AssessmentScore, 'id'>[], userId: string, teacherName?: string, deletedIds?: string[]) => {
     const itemsToSync: any[] = [];
     
+    // Handle Deletions
+    if (deletedIds && deletedIds.length > 0) {
+        await db.assessmentScores.bulkDelete(deletedIds);
+        deletedIds.forEach(id => {
+            itemsToSync.push({ id, deleted: true });
+        });
+    }
+
+    // Handle Upserts
     for (const score of scores) {
         const existing = await db.assessmentScores
             .where({ studentId: score.studentId, category: score.category, materialId: score.materialId || '' })
