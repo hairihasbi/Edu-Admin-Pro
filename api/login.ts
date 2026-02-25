@@ -87,10 +87,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
     }
 
-    // 5. Login Sukses - Kembalikan Data User (Tanpa Password)
+    // 5. Login Sukses - Kembalikan Data User (Termasuk Password Hash untuk Offline Login)
     const user = {
         id: userRow.id,
         username: userRow.username,
+        password: userRow.password, // PENTING: Kirim hash password untuk disimpan di Dexie (Offline Mode)
         fullName: userRow.full_name,
         role: userRow.role,
         status: userRow.status,
@@ -103,6 +104,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         avatar: userRow.avatar,
         additionalRole: userRow.additional_role,
         homeroomClassId: userRow.homeroom_class_id,
+        homeroomClassName: userRow.homeroom_class_name,
+        rppUsageCount: userRow.rpp_usage_count,
+        rppLastReset: userRow.rpp_last_reset,
         lastModified: userRow.last_modified,
         version: userRow.version,
         isSynced: true // Tandai bahwa data ini berasal dari server
