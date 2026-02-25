@@ -12,6 +12,7 @@ import AdminStudents from './components/AdminStudents';
 import AdminAnnouncements from './components/AdminAnnouncements';
 import TeacherDashboard from './components/TeacherDashboard';
 import TeacherProfile from './components/TeacherProfile';
+import TeacherHomeroom from './components/TeacherHomeroom';
 import TeacherClasses from './components/TeacherClasses';
 import TeacherAttendance from './components/TeacherAttendance';
 import TeacherScopeMaterial from './components/TeacherScopeMaterial';
@@ -674,6 +675,9 @@ const AppContent: React.FC = () => {
             {currentUser.role === UserRole.GURU && (
               <>
                 <NavLink to="/classes" icon={BookOpen} label="Manajemen Kelas" />
+                {currentUser.homeroomClassId && (
+                   <NavLink to="/homeroom" icon={Users} label="Wali Kelas" />
+                )}
                 {currentUser.subject === 'Bimbingan Konseling' && (
                    <NavLink to="/guidance" icon={ShieldAlert} label="Bimbingan Konseling" />
                 )}
@@ -777,6 +781,7 @@ const AppContent: React.FC = () => {
               ) : (
                  <>
                    <Route path="/dashboard" element={<TeacherDashboard user={currentUser} />} />
+                   <Route path="/homeroom" element={<TeacherHomeroom user={currentUser} />} />
                    <Route path="/classes" element={<TeacherClasses user={currentUser} />} />
                    {currentUser.subject === 'Bimbingan Konseling' && <Route path="/guidance" element={<TeacherGuidance user={currentUser} />} />}
                    <Route path="/attendance" element={<TeacherAttendance user={currentUser} />} />
