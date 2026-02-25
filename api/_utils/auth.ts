@@ -16,11 +16,16 @@ const cleanEnv = (val: string | undefined) => {
 export async function authorize(req: VercelRequest, allowedRoles: string[] = []): Promise<AuthResult> {
   const authHeader = req.headers.authorization;
 
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    throw { status: 401, message: 'Missing or Invalid Authorization Header' };
+  if (!authHeader) {
+    throw { status: 401, message: 'Missing Authorization Header' };
   }
 
-  const userId = authHeader.split(' ')[1];
+  // FIX: Handle both "Bearer <token>" and raw token
+  let userId = authHeader;
+  if (authHeader.startsWith('Bearer ')) {
+      userId = authHeader.split(' ')[1];
+  }
+  
   if (!userId) {
     throw { status: 401, message: 'Token not found' };
   }
