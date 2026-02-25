@@ -65,13 +65,17 @@ export async function authorize(req: VercelRequest, allowedRoles: string[] = [])
       throw { status: 403, message: 'Account is not active' };
     }
 
-    if (allowedRoles.length > 0 && !allowedRoles.includes(user.role as string)) {
+    const userRole = (user.role as string).toUpperCase();
+    const allowedRolesUpper = allowedRoles.map(r => r.toUpperCase());
+
+    // Admin always has access, or check if role is in allowed list
+    if (allowedRoles.length > 0 && userRole !== 'ADMIN' && !allowedRolesUpper.includes(userRole)) {
       throw { status: 403, message: `Access denied. Required role: ${allowedRoles.join(', ')}` };
     }
 
     return {
       userId: user.id as string,
-      role: user.role as string,
+      role: userRole, // Return normalized role
       username: user.username as string
     };
 
