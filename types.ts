@@ -56,6 +56,22 @@ export interface SystemSettings extends Syncable {
   aiModel?: string; // e.g. gemini-pro, gpt-3.5-turbo (mapped in gateway)
   // Quota Management
   rppMonthlyLimit?: number; // 0 = Unlimited
+  // DOKU Payment Gateway
+  dokuClientId?: string;
+  dokuSecretKey?: string;
+  dokuIsProduction?: boolean;
+}
+
+export interface Donation extends Syncable {
+  id: string;
+  userId: string;
+  invoiceNumber: string;
+  amount: number;
+  paymentMethod: 'DOKU' | 'MANUAL';
+  status: 'PENDING' | 'PAID' | 'EXPIRED' | 'FAILED';
+  paymentUrl?: string;
+  createdAt: string;
+  paidAt?: string;
 }
 
 export interface MasterSubject extends Syncable {
