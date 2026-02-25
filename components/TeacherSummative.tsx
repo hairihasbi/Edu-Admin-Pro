@@ -203,6 +203,33 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
     }
   };
 
+  const handleResetStudent = (studentId: string) => {
+    if (!window.confirm("Yakin ingin mereset/mengosongkan semua nilai untuk siswa ini?")) return;
+
+    const newScores = { ...scores };
+    const newSubScores = { ...subScores };
+
+    // Remove keys related to this student
+    Object.keys(newScores).forEach(key => {
+        if (key.startsWith(`${studentId}-`)) delete newScores[key];
+    });
+    Object.keys(newSubScores).forEach(key => {
+        if (key.startsWith(`${studentId}-`)) delete newSubScores[key];
+    });
+
+    setScores(newScores);
+    setSubScores(newSubScores);
+    setHasChanges(true);
+  };
+
+  const handleResetAll = () => {
+    if (!window.confirm("PERINGATAN: Anda akan mengosongkan SEMUA nilai di halaman ini. Tindakan ini tidak dapat dibatalkan setelah disimpan. Lanjutkan?")) return;
+
+    setScores({});
+    setSubScores({});
+    setHasChanges(true);
+  };
+
   const calculateFinalScore = (studentId: string) => {
     let totalLM = 0;
     let countLM = 0;
@@ -395,6 +422,13 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
 
            <div className="flex gap-2 ml-auto">
               <button 
+                onClick={handleResetAll}
+                className="flex items-center gap-2 bg-red-50 text-red-600 border border-red-200 px-4 py-2 rounded-lg font-medium text-sm hover:bg-red-100 transition"
+                title="Kosongkan Semua Nilai"
+              >
+                 <Trash2 size={16} /> Reset
+              </button>
+              <button 
                 onClick={exportToExcel}
                 className="flex items-center gap-2 bg-green-50 text-green-700 border border-green-200 px-4 py-2 rounded-lg font-medium text-sm hover:bg-green-100 transition"
               >
@@ -508,7 +542,18 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
                     return (
                        <tr key={student.id} className="hover:bg-gray-50 border-b border-gray-100">
                           <td className="p-3 text-center border-r border-gray-100 sticky left-0 bg-white z-10">{rowIdx+1}</td>
-                          <td className="p-3 border-r border-gray-100 sticky left-10 bg-white z-10 font-medium text-gray-800">{student.name}</td>
+                          <td className="p-3 border-r border-gray-100 sticky left-10 bg-white z-10 font-medium text-gray-800 group">
+                              <div className="flex items-center justify-between gap-2">
+                                  <span className="truncate">{student.name}</span>
+                                  <button 
+                                      onClick={() => handleResetStudent(student.id)}
+                                      className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition p-1 rounded hover:bg-red-50"
+                                      title="Reset Nilai Siswa Ini"
+                                  >
+                                      <Trash2 size={14} />
+                                  </button>
+                              </div>
+                          </td>
                           
                           {/* DYNAMIC COLUMNS */}
                           {materials.map((m) => {
