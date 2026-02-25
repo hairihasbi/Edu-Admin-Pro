@@ -550,12 +550,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let rawUrl = cleanEnv(dbUrl) || cleanEnv(process.env.TURSO_DB_URL);
     const authToken = cleanEnv(dbToken) || cleanEnv(process.env.TURSO_AUTH_TOKEN);
 
+    console.log(`[DEBUG] Connection Init - URL: ${rawUrl ? rawUrl.substring(0, 15) + '...' : 'MISSING'}, Token: ${authToken ? 'PRESENT' : 'MISSING'}`);
+
     if (!rawUrl || !authToken) {
         return res.status(503).json({ error: "Database configuration missing." });
     }
 
     // Auto-fix URL scheme
     if (rawUrl && !rawUrl.includes('://')) {
+        // Check if it looks like a hostname only (e.g. "admin") which causes ENOTFOUND
+        if (!rawUrl.includes('.')) {
+             console.error(`[CRITICAL] Invalid DB URL detected: "${rawUrl}". It looks like a simple string, not a URL.`);
+             return res.status(500).json({ error: `Invalid Database URL configuration: "${rawUrl}". Please check TURSO_DB_URL env var.` });
+        }
         rawUrl = 'https://' + rawUrl;
     } else if (rawUrl.startsWith('libsql://')) {
         rawUrl = rawUrl.replace('libsql://', 'https://');
