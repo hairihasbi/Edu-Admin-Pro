@@ -18,6 +18,7 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
   // Scores State
   const [scores, setScores] = useState<{[key: string]: number}>({}); 
   const [subScores, setSubScores] = useState<{[key: string]: number}>({});
+  const [scoreIds, setScoreIds] = useState<{[key: string]: string}>({}); // Map key to DB ID
 
   // UI State
   const [selectedClassId, setSelectedClassId] = useState('');
@@ -82,6 +83,7 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
 
     const scoreDict: {[key: string]: number} = {};
     const subScoreDict: {[key: string]: number} = {};
+    const idDict: {[key: string]: string} = {};
 
     scoreData.forEach(s => {
       if (!s.subject || s.subject === user.subject) {
@@ -89,6 +91,7 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
             ? `${s.studentId}-LM-${s.materialId}`
             : `${s.studentId}-${s.category}`;
           scoreDict[key] = s.score;
+          if (s.id) idDict[key] = s.id;
 
           if (s.scoreDetails) {
               let details = s.scoreDetails;
@@ -107,6 +110,7 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
 
     setScores(scoreDict);
     setSubScores(subScoreDict);
+    setScoreIds(idDict);
     setLoading(false);
     setHasChanges(false);
     setSaveStatus('idle');
@@ -203,33 +207,6 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
     }
   };
 
-  const handleResetStudent = (studentId: string) => {
-    if (!window.confirm("Yakin ingin mereset/mengosongkan semua nilai untuk siswa ini?")) return;
-
-    const newScores = { ...scores };
-    const newSubScores = { ...subScores };
-
-    // Remove keys related to this student
-    Object.keys(newScores).forEach(key => {
-        if (key.startsWith(`${studentId}-`)) delete newScores[key];
-    });
-    Object.keys(newSubScores).forEach(key => {
-        if (key.startsWith(`${studentId}-`)) delete newSubScores[key];
-    });
-
-    setScores(newScores);
-    setSubScores(newSubScores);
-    setHasChanges(true);
-  };
-
-  const handleResetAll = () => {
-    if (!window.confirm("PERINGATAN: Anda akan mengosongkan SEMUA nilai di halaman ini. Tindakan ini tidak dapat dibatalkan setelah disimpan. Lanjutkan?")) return;
-
-    setScores({});
-    setSubScores({});
-    setHasChanges(true);
-  };
-
   const calculateFinalScore = (studentId: string) => {
     let totalLM = 0;
     let countLM = 0;
@@ -247,7 +224,11 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
     return parseFloat(final.toFixed(1));
   };
 
-  const handleSave = () => {
+  const performSave = async (
+      currentScores: {[key: string]: number}, 
+      currentSubScores: {[key: string]: number},
+      deletedIds: string[] = []
+  ) => {
     setSaveStatus('saving');
     const scoresToSave: Omit<AssessmentScore, 'id'>[] = [];
     
@@ -263,22 +244,22 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
             let hasDetail = false;
             subScopes.forEach(sub => {
                 const subKey = `${s.id}-LM-${m.id}-${sub}`;
-                if (subScores[subKey] !== undefined) {
-                    details![sub] = subScores[subKey];
+                if (currentSubScores[subKey] !== undefined) {
+                    details![sub] = currentSubScores[subKey];
                     hasDetail = true;
                 }
             });
             if (!hasDetail) details = undefined;
         }
 
-        if (scores[key] !== undefined || details) {
+        if (currentScores[key] !== undefined || details) {
           scoresToSave.push({
             studentId: s.id,
             classId: selectedClassId,
             semester: selectedSemester,
             category: 'LM',
             materialId: m.id,
-            score: scores[key] || 0,
+            score: currentScores[key] || 0,
             scoreDetails: details,
             subject: user.subject 
           });
@@ -287,7 +268,7 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
       
       // STS & SAS
       ['STS', 'SAS'].forEach(cat => {
-          const val = scores[`${s.id}-${cat}`];
+          const val = currentScores[`${s.id}-${cat}`];
           if (val !== undefined) {
             scoresToSave.push({
                studentId: s.id,
@@ -301,14 +282,52 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
       });
     });
 
-    saveBulkAssessmentScores(scoresToSave, user.id, user.fullName).then(() => {
+    try {
+        await saveBulkAssessmentScores(scoresToSave, user.id, user.fullName, deletedIds);
         setSaveStatus('saved');
         setHasChanges(false);
         setTimeout(() => setSaveStatus('idle'), 3000);
-    }).catch(err => {
+        fetchData(); 
+    } catch (err) {
         console.error("Save failed", err);
         setSaveStatus('error');
+    }
+  };
+
+  const handleResetStudent = (studentId: string) => {
+    if (!window.confirm("Yakin ingin mereset/mengosongkan semua nilai untuk siswa ini?")) return;
+
+    const newScores = { ...scores };
+    const newSubScores = { ...subScores };
+    const idsToDelete: string[] = [];
+
+    // Remove keys related to this student
+    Object.keys(newScores).forEach(key => {
+        if (key.startsWith(`${studentId}-`)) {
+            if (scoreIds[key]) idsToDelete.push(scoreIds[key]);
+            delete newScores[key];
+        }
     });
+    Object.keys(newSubScores).forEach(key => {
+        if (key.startsWith(`${studentId}-`)) delete newSubScores[key];
+    });
+
+    setScores(newScores);
+    setSubScores(newSubScores);
+    performSave(newScores, newSubScores, idsToDelete);
+  };
+
+  const handleResetAll = () => {
+    if (!window.confirm("PERINGATAN: Anda akan mengosongkan SEMUA nilai di halaman ini. Tindakan ini tidak dapat dibatalkan setelah disimpan. Lanjutkan?")) return;
+
+    const idsToDelete = Object.values(scoreIds);
+    setScores({});
+    setSubScores({});
+    performSave({}, {}, idsToDelete);
+  };
+
+  const handleSave = () => {
+      performSave(scores, subScores);
   };
 
   const exportToExcel = () => {
