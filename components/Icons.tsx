@@ -103,7 +103,8 @@ import {
   Maximize2, // Added
   Minimize2, // Added
   PieChart, // Added PieChart
-  ExternalLink // Added ExternalLink
+  ExternalLink, // Added ExternalLink
+  Loader2 // Added Loader2
 } from 'lucide-react';
 
 export {
@@ -210,5 +211,6 @@ export {
   Maximize2,
   Minimize2,
   PieChart,
-  ExternalLink
+  ExternalLink,
+  Loader2
 };
