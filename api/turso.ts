@@ -718,6 +718,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     await client.execute(`ALTER TABLE classes ADD COLUMN homeroom_teacher_id TEXT`).catch(() => {});
                     await client.execute(`ALTER TABLE classes ADD COLUMN homeroom_teacher_name TEXT`).catch(() => {});
                     await client.execute(`ALTER TABLE users ADD COLUMN homeroom_class_name TEXT`).catch(() => {});
+                    await client.execute(`ALTER TABLE users ADD COLUMN additional_role TEXT`).catch(() => {});
+                    await client.execute(`ALTER TABLE users ADD COLUMN homeroom_class_id TEXT`).catch(() => {});
+                    await client.execute(`ALTER TABLE users ADD COLUMN rpp_usage_count INTEGER DEFAULT 0`).catch(() => {});
+                    await client.execute(`ALTER TABLE users ADD COLUMN rpp_last_reset TEXT`).catch(() => {});
                     await client.batch(statements);
                 } else {
                     throw batchError;
