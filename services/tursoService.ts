@@ -216,6 +216,11 @@ export const pullFromTurso = async (collection: string, localItems: any[]): Prom
 
     const { rows } = data;
     
+    // DEBUG LOG
+    if (rows && rows.length > 0) {
+        console.log(`[Turso] Pulled ${rows.length} items for ${collection}`);
+    }
+
     if (!rows || !Array.isArray(rows)) {
         return { items: localItems, hasChanges: false };
     }
