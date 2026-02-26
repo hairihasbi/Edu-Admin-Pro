@@ -616,18 +616,7 @@ export const sendApprovalEmail = async (user: User) => {
     }
 };
 
-export const sendApprovalWhatsApp = async (user: User, adminId: string) => {
-    try {
-        const config = await getWhatsAppConfig(adminId);
-        if (!config || !config.isActive) return { success: false, message: 'WA config inactive' };
-        
-        const message = `Halo ${user.fullName},\n\nAkun Guru Anda di ${user.schoolName} telah disetujui oleh Admin.\nSilakan login dengan username: ${user.username}\n\nTerima kasih.`;
-        const recipients = [{ name: user.fullName, phone: user.phone || '' }];
-        return await sendWhatsAppBroadcast(config, recipients, message);
-    } catch(e: any) {
-        return { success: false, message: e.message };
-    }
-};
+
 
 export const getBackupApiKeys = async () => {
     return await db.apiKeys.toArray();
