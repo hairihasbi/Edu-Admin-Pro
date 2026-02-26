@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { User } from '../types';
-import { getDailyPicket, saveDailyPicket, getTeachersBySchool } from '../services/database';
+import { getDailyPicket, saveDailyPicket, getTeachersBySchool, getSchoolAttendanceSummary, getStudentIncidents } from '../services/database';
 import PicketAttendanceTable from './PicketAttendanceTable';
 import PicketIncidentForm from './PicketIncidentForm';
-import { Calendar, User as UserIcon, Save, RefreshCw } from 'lucide-react';
+import { Calendar, User as UserIcon, Save, RefreshCw, Printer, FileText } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 interface DailyPicketProps {
     currentUser: User;
@@ -18,6 +20,13 @@ const DailyPicket: React.FC<DailyPicketProps> = ({ currentUser }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [picketId, setPicketId] = useState<string | null>(null);
+
+    // PDF Filter State
+    const [showPrintModal, setShowPrintModal] = useState(false);
+    const [printPeriod, setPrintPeriod] = useState<'DAILY' | 'MONTHLY' | 'SEMESTER'>('DAILY');
+    const [printMonth, setPrintMonth] = useState(new Date().getMonth());
+    const [printYear, setPrintYear] = useState(new Date().getFullYear());
+    const [printSemester, setPrintSemester] = useState<'GANJIL' | 'GENAP'>('GANJIL');
 
     useEffect(() => {
         loadTeachers();
@@ -72,6 +81,138 @@ const DailyPicket: React.FC<DailyPicketProps> = ({ currentUser }) => {
         }
     };
 
+    const handlePrint = async () => {
+        setShowPrintModal(false);
+        const doc = new jsPDF();
+        const schoolName = currentUser.schoolName || 'Sekolah';
+        
+        let title = '';
+        let subtitle = '';
+        let dataToPrint: any[] = [];
+        let columns: any[] = [];
+
+        // Determine Date Range
+        let startDate = date;
+        let endDate = date;
+
+        if (printPeriod === 'MONTHLY') {
+            const firstDay = new Date(printYear, printMonth, 1);
+            const lastDay = new Date(printYear, printMonth + 1, 0);
+            startDate = firstDay.toISOString().split('T')[0];
+            endDate = lastDay.toISOString().split('T')[0];
+            title = `Laporan Bulanan Piket - ${new Date(printYear, printMonth).toLocaleString('id-ID', { month: 'long', year: 'numeric' })}`;
+        } else if (printPeriod === 'SEMESTER') {
+            const startMonth = printSemester === 'GANJIL' ? 6 : 0; // July or Jan
+            const endMonth = printSemester === 'GANJIL' ? 11 : 5; // Dec or June
+            const year = printSemester === 'GANJIL' ? printYear : printYear + 1; // Adjust year logic if needed
+            startDate = new Date(year, startMonth, 1).toISOString().split('T')[0];
+            endDate = new Date(year, endMonth + 1, 0).toISOString().split('T')[0];
+            title = `Laporan Semester ${printSemester} Piket - Tahun Ajaran ${printYear}/${printYear+1}`;
+        } else {
+            title = `Laporan Harian Piket - ${new Date(date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}`;
+        }
+
+        // Fetch Data based on Tab
+        if (activeTab === 'ATTENDANCE') {
+            subtitle = 'Rekapitulasi Absensi Siswa';
+            // For daily, we use existing logic. For monthly/semester, we need aggregation (simplified here to fetch daily for now)
+            // NOTE: Aggregating monthly attendance is complex. For now, we print the CURRENT DAY summary if DAILY is selected.
+            // If MONTHLY/SEMESTER, we should ideally loop through dates, but that's heavy.
+            // Let's implement DAILY print first for Attendance as it's the most common use case.
+            
+            if (printPeriod !== 'DAILY') {
+                alert('Saat ini cetak rekap absensi hanya tersedia untuk Harian.');
+                return;
+            }
+
+            const summary = await getSchoolAttendanceSummary(date, currentUser.schoolNpsn || '');
+            columns = [
+                { header: 'No', dataKey: 'no' },
+                { header: 'Kelas', dataKey: 'className' },
+                { header: 'Sakit', dataKey: 'sakit' },
+                { header: 'Izin', dataKey: 'izin' },
+                { header: 'Alfa', dataKey: 'alfa' },
+                { header: 'Hadir', dataKey: 'hadir' },
+                { header: 'Total', dataKey: 'total' },
+                { header: 'Ket. Tidak Hadir', dataKey: 'ket' },
+            ];
+            dataToPrint = summary.map((s, i) => ({
+                no: i + 1,
+                className: s.className,
+                sakit: s.sakit,
+                izin: s.izin,
+                alfa: s.alfa,
+                hadir: s.hadir,
+                total: s.studentCount,
+                ket: s.absentDetails.map((d: any) => `${d.name} (${d.status})`).join(', ') || '-'
+            }));
+
+        } else {
+            subtitle = 'Laporan Kejadian Siswa (Terlambat/Pulang)';
+            // For incidents, we can fetch range easily
+            // We need a range query for incidents. Currently we only have getStudentIncidents by picketId.
+            // We need to fetch pickets in range first, then their incidents.
+            
+            // 1. Get Pickets in Range
+            // This requires a new DB query: getPicketsByDateRange. 
+            // For now, let's implement DAILY.
+             if (printPeriod !== 'DAILY') {
+                alert('Saat ini cetak kejadian siswa hanya tersedia untuk Harian.');
+                return;
+            }
+
+            if (!picketId) {
+                alert('Belum ada data piket untuk tanggal ini.');
+                return;
+            }
+
+            const incidents = await getStudentIncidents(picketId);
+            columns = [
+                { header: 'No', dataKey: 'no' },
+                { header: 'Nama Siswa', dataKey: 'name' },
+                { header: 'Kelas', dataKey: 'class' },
+                { header: 'Jam', dataKey: 'time' },
+                { header: 'Jenis', dataKey: 'type' },
+                { header: 'Alasan', dataKey: 'reason' },
+            ];
+            dataToPrint = incidents.map((inc, i) => ({
+                no: i + 1,
+                name: inc.studentName,
+                class: inc.className,
+                time: inc.time,
+                type: inc.type === 'LATE' ? 'Terlambat' : inc.type === 'PERMIT_EXIT' ? 'Izin Keluar' : 'Pulang Cepat',
+                reason: inc.reason || '-'
+            }));
+        }
+
+        // Generate PDF
+        doc.setFontSize(14);
+        doc.text(schoolName, 14, 15);
+        doc.setFontSize(12);
+        doc.text(title, 14, 22);
+        doc.setFontSize(10);
+        doc.text(subtitle, 14, 28);
+        
+        if (activeTab === 'ATTENDANCE') {
+             doc.text(`Petugas: ${officers.join(', ')}`, 14, 34);
+        }
+
+        autoTable(doc, {
+            startY: 40,
+            head: [columns.map(c => c.header)],
+            body: dataToPrint.map(row => columns.map(c => row[c.dataKey])),
+            theme: 'grid',
+            headStyles: { fillColor: [41, 128, 185], textColor: 255 },
+            styles: { fontSize: 9, cellPadding: 2 },
+        });
+
+        // Footer
+        const finalY = (doc as any).lastAutoTable.finalY || 40;
+        doc.text(`Dicetak pada: ${new Date().toLocaleString('id-ID')}`, 14, finalY + 10);
+        
+        doc.save(`Laporan_Piket_${activeTab}_${date}.pdf`);
+    };
+
     return (
         <div className="space-y-6 max-w-7xl mx-auto p-4 md:p-6">
             {/* Header Section */}
@@ -87,14 +228,24 @@ const DailyPicket: React.FC<DailyPicketProps> = ({ currentUser }) => {
                         </p>
                     </div>
                     
-                    <div className="flex items-center gap-3 bg-gray-50 p-2 rounded-lg border border-gray-200">
-                        <label className="text-sm font-medium text-gray-600">Tanggal:</label>
-                        <input 
-                            type="date" 
-                            value={date}
-                            onChange={(e) => setDate(e.target.value)}
-                            className="bg-white border border-gray-300 text-gray-900 text-sm rounded-md focus:ring-blue-500 focus:border-blue-500 block w-full p-2"
-                        />
+                    <div className="flex items-center gap-3">
+                         {/* Print Button */}
+                        <button 
+                            onClick={() => setShowPrintModal(true)}
+                            className="flex items-center gap-2 bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-50 text-sm font-medium"
+                        >
+                            <Printer size={16} /> Cetak Laporan
+                        </button>
+
+                        <div className="flex items-center gap-2 bg-gray-50 p-2 rounded-lg border border-gray-200">
+                            <label className="text-sm font-medium text-gray-600">Tanggal:</label>
+                            <input 
+                                type="date" 
+                                value={date}
+                                onChange={(e) => setDate(e.target.value)}
+                                className="bg-white border border-gray-300 text-gray-900 text-sm rounded-md focus:ring-blue-500 focus:border-blue-500 block w-full p-2"
+                            />
+                        </div>
                     </div>
                 </div>
 
@@ -188,6 +339,115 @@ const DailyPicket: React.FC<DailyPicketProps> = ({ currentUser }) => {
                     )
                 )}
             </div>
+
+            {/* Print Modal */}
+            {showPrintModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+                        <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                            <Printer size={20} /> Cetak Laporan Piket
+                        </h3>
+                        
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Periode Laporan</label>
+                                <div className="grid grid-cols-3 gap-2">
+                                    <button 
+                                        onClick={() => setPrintPeriod('DAILY')}
+                                        className={`px-3 py-2 text-sm rounded-lg border ${printPeriod === 'DAILY' ? 'bg-blue-50 border-blue-500 text-blue-700' : 'border-gray-300 hover:bg-gray-50'}`}
+                                    >
+                                        Harian
+                                    </button>
+                                    <button 
+                                        onClick={() => setPrintPeriod('MONTHLY')}
+                                        className={`px-3 py-2 text-sm rounded-lg border ${printPeriod === 'MONTHLY' ? 'bg-blue-50 border-blue-500 text-blue-700' : 'border-gray-300 hover:bg-gray-50'}`}
+                                    >
+                                        Bulanan
+                                    </button>
+                                    <button 
+                                        onClick={() => setPrintPeriod('SEMESTER')}
+                                        className={`px-3 py-2 text-sm rounded-lg border ${printPeriod === 'SEMESTER' ? 'bg-blue-50 border-blue-500 text-blue-700' : 'border-gray-300 hover:bg-gray-50'}`}
+                                    >
+                                        Semester
+                                    </button>
+                                </div>
+                            </div>
+
+                            {printPeriod === 'DAILY' && (
+                                <div className="p-3 bg-gray-50 rounded-lg text-sm text-gray-600">
+                                    Laporan akan dicetak untuk tanggal: <strong>{new Date(date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</strong>
+                                </div>
+                            )}
+
+                            {printPeriod === 'MONTHLY' && (
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="block text-xs font-medium text-gray-500 mb-1">Bulan</label>
+                                        <select 
+                                            value={printMonth} 
+                                            onChange={(e) => setPrintMonth(parseInt(e.target.value))}
+                                            className="w-full border border-gray-300 rounded-lg p-2 text-sm"
+                                        >
+                                            {Array.from({length: 12}, (_, i) => (
+                                                <option key={i} value={i}>{new Date(0, i).toLocaleString('id-ID', { month: 'long' })}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-gray-500 mb-1">Tahun</label>
+                                        <input 
+                                            type="number" 
+                                            value={printYear} 
+                                            onChange={(e) => setPrintYear(parseInt(e.target.value))}
+                                            className="w-full border border-gray-300 rounded-lg p-2 text-sm"
+                                        />
+                                    </div>
+                                </div>
+                            )}
+
+                            {printPeriod === 'SEMESTER' && (
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="block text-xs font-medium text-gray-500 mb-1">Semester</label>
+                                        <select 
+                                            value={printSemester} 
+                                            onChange={(e) => setPrintSemester(e.target.value as any)}
+                                            className="w-full border border-gray-300 rounded-lg p-2 text-sm"
+                                        >
+                                            <option value="GANJIL">Ganjil (Juli - Des)</option>
+                                            <option value="GENAP">Genap (Jan - Juni)</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-gray-500 mb-1">Tahun Ajaran Awal</label>
+                                        <input 
+                                            type="number" 
+                                            value={printYear} 
+                                            onChange={(e) => setPrintYear(parseInt(e.target.value))}
+                                            className="w-full border border-gray-300 rounded-lg p-2 text-sm"
+                                        />
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="pt-4 flex gap-3">
+                                <button 
+                                    onClick={() => setShowPrintModal(false)}
+                                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 text-sm font-medium"
+                                >
+                                    Batal
+                                </button>
+                                <button 
+                                    onClick={handlePrint}
+                                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium flex items-center justify-center gap-2"
+                                >
+                                    <FileText size={16} /> Download PDF
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
