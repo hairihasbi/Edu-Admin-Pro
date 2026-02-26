@@ -8,7 +8,7 @@ import {
   EmailConfig, WhatsAppConfig, Notification, ApiKey, SystemSettings,
   BackupData, StudentWithDetails, LessonPlanRequest, DashboardStatsData
 } from '../types';
-import { initTurso, pushToTurso, pullFromTurso } from './tursoService';
+import { initTurso, pushToTurso, pullFromTurso, deleteFromTurso } from './tursoService';
 import bcrypt from 'bcryptjs';
 
 const uuidv4 = () => crypto.randomUUID();
@@ -122,7 +122,8 @@ export const rejectTeacher = async (id: string) => {
     const user = await db.users.get(id);
     if (user) {
         await db.users.delete(id);
-        pushToTurso('eduadmin_users', [{ ...user, deleted: true }]);
+        // HARD DELETE: Remove from Turso completely
+        await deleteFromTurso('eduadmin_users', id);
     }
     return true;
 };
@@ -131,7 +132,8 @@ export const deleteTeacher = async (id: string) => {
     const user = await db.users.get(id);
     if (user) {
         await db.users.delete(id);
-        pushToTurso('eduadmin_users', [{ ...user, deleted: true }]);
+        // HARD DELETE: Remove from Turso completely
+        await deleteFromTurso('eduadmin_users', id);
     }
     return true;
 };

@@ -188,6 +188,35 @@ export const pushToTurso = async (collection: string, items: any[], force: boole
   }
 };
 
+// Delete Remote Data from Turso via API (Hard Delete)
+export const deleteFromTurso = async (collection: string, id: string) => {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      throw new Error("OFFLINE: Cannot delete from Turso");
+  }
+
+  try {
+      const response = await fetch('/api/turso', {
+        method: 'POST',
+        headers: { 
+            'Content-Type': 'application/json',
+            ...getAuthHeader() // Add Auth
+        } as HeadersInit,
+        body: JSON.stringify({ 
+          action: 'delete', 
+          collection, 
+          id,
+          userId: getCurrentUserId()
+        })
+      });
+
+      await handleApiResponse(response);
+      return true;
+  } catch (error: any) {
+      console.error(`Delete failed for ${collection} (id: ${id}):`, error);
+      throw error;
+  }
+};
+
 // Pull Remote Data from Turso via API
 export const pullFromTurso = async (collection: string, localItems: any[]): Promise<{items: any[], hasChanges: boolean}> => {
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
