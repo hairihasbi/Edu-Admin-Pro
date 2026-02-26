@@ -4,13 +4,6 @@ import { getDailyPicket, saveDailyPicket, getTeachersBySchool, getSchoolAttendan
 import PicketAttendanceTable from './PicketAttendanceTable';
 import PicketIncidentForm from './PicketIncidentForm';
 import { Calendar, User as UserIcon, Save, RefreshCw, Printer, FileText } from 'lucide-react';
-import jsPDF from 'jspdf';
-import 'jspdf-autotable';
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const autoTable = (doc: any, options: any) => {
-    (doc as any).autoTable(options);
-};
 
 interface DailyPicketProps {
     currentUser: User;
@@ -88,7 +81,6 @@ const DailyPicket: React.FC<DailyPicketProps> = ({ currentUser }) => {
 
     const handlePrint = async () => {
         setShowPrintModal(false);
-        const doc = new jsPDF();
         const schoolName = currentUser.schoolName || 'Sekolah';
         
         let title = '';
@@ -97,21 +89,9 @@ const DailyPicket: React.FC<DailyPicketProps> = ({ currentUser }) => {
         let columns: any[] = [];
 
         // Determine Date Range
-        let startDate = date;
-        let endDate = date;
-
         if (printPeriod === 'MONTHLY') {
-            const firstDay = new Date(printYear, printMonth, 1);
-            const lastDay = new Date(printYear, printMonth + 1, 0);
-            startDate = firstDay.toISOString().split('T')[0];
-            endDate = lastDay.toISOString().split('T')[0];
             title = `Laporan Bulanan Piket - ${new Date(printYear, printMonth).toLocaleString('id-ID', { month: 'long', year: 'numeric' })}`;
         } else if (printPeriod === 'SEMESTER') {
-            const startMonth = printSemester === 'GANJIL' ? 6 : 0; // July or Jan
-            const endMonth = printSemester === 'GANJIL' ? 11 : 5; // Dec or June
-            const year = printSemester === 'GANJIL' ? printYear : printYear + 1; // Adjust year logic if needed
-            startDate = new Date(year, startMonth, 1).toISOString().split('T')[0];
-            endDate = new Date(year, endMonth + 1, 0).toISOString().split('T')[0];
             title = `Laporan Semester ${printSemester} Piket - Tahun Ajaran ${printYear}/${printYear+1}`;
         } else {
             title = `Laporan Harian Piket - ${new Date(date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}`;
@@ -120,10 +100,6 @@ const DailyPicket: React.FC<DailyPicketProps> = ({ currentUser }) => {
         // Fetch Data based on Tab
         if (activeTab === 'ATTENDANCE') {
             subtitle = 'Rekapitulasi Absensi Siswa';
-            // For daily, we use existing logic. For monthly/semester, we need aggregation (simplified here to fetch daily for now)
-            // NOTE: Aggregating monthly attendance is complex. For now, we print the CURRENT DAY summary if DAILY is selected.
-            // If MONTHLY/SEMESTER, we should ideally loop through dates, but that's heavy.
-            // Let's implement DAILY print first for Attendance as it's the most common use case.
             
             if (printPeriod !== 'DAILY') {
                 alert('Saat ini cetak rekap absensi hanya tersedia untuk Harian.');
@@ -154,13 +130,7 @@ const DailyPicket: React.FC<DailyPicketProps> = ({ currentUser }) => {
 
         } else {
             subtitle = 'Laporan Kejadian Siswa (Terlambat/Pulang)';
-            // For incidents, we can fetch range easily
-            // We need a range query for incidents. Currently we only have getStudentIncidents by picketId.
-            // We need to fetch pickets in range first, then their incidents.
             
-            // 1. Get Pickets in Range
-            // This requires a new DB query: getPicketsByDateRange. 
-            // For now, let's implement DAILY.
              if (printPeriod !== 'DAILY') {
                 alert('Saat ini cetak kejadian siswa hanya tersedia untuk Harian.');
                 return;
@@ -190,32 +160,69 @@ const DailyPicket: React.FC<DailyPicketProps> = ({ currentUser }) => {
             }));
         }
 
-        // Generate PDF
-        doc.setFontSize(14);
-        doc.text(schoolName, 14, 15);
-        doc.setFontSize(12);
-        doc.text(title, 14, 22);
-        doc.setFontSize(10);
-        doc.text(subtitle, 14, 28);
-        
-        if (activeTab === 'ATTENDANCE') {
-             doc.text(`Petugas: ${officers.join(', ')}`, 14, 34);
-        }
+        // Generate HTML for Print
+        const printWindow = window.open('', '', 'height=600,width=900');
+        if (!printWindow) return;
 
-        autoTable(doc, {
-            startY: 40,
-            head: [columns.map(c => c.header)],
-            body: dataToPrint.map(row => columns.map(c => row[c.dataKey])),
-            theme: 'grid',
-            headStyles: { fillColor: [41, 128, 185], textColor: 255 },
-            styles: { fontSize: 9, cellPadding: 2 },
-        });
+        const tableHeaders = columns.map(c => `<th>${c.header}</th>`).join('');
+        const tableRows = dataToPrint.map(row => `
+            <tr>
+                ${columns.map(c => `<td class="${c.dataKey === 'no' || c.dataKey === 'sakit' || c.dataKey === 'izin' || c.dataKey === 'alfa' || c.dataKey === 'hadir' || c.dataKey === 'total' ? 'text-center' : ''}">${row[c.dataKey]}</td>`).join('')}
+            </tr>
+        `).join('');
 
-        // Footer
-        const finalY = (doc as any).lastAutoTable.finalY || 40;
-        doc.text(`Dicetak pada: ${new Date().toLocaleString('id-ID')}`, 14, finalY + 10);
-        
-        doc.save(`Laporan_Piket_${activeTab}_${date}.pdf`);
+        const officerList = activeTab === 'ATTENDANCE' ? `<p><strong>Petugas:</strong> ${officers.join(', ')}</p>` : '';
+
+        printWindow.document.write(`
+            <html>
+                <head>
+                    <title>${title}</title>
+                    <style>
+                        body { font-family: sans-serif; font-size: 12px; color: #333; }
+                        .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 10px; }
+                        h2 { margin: 0; font-size: 18px; text-transform: uppercase; }
+                        h3 { margin: 5px 0; font-size: 14px; font-weight: normal; }
+                        h4 { margin: 5px 0; font-size: 12px; font-weight: normal; font-style: italic; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+                        th, td { border: 1px solid #444; padding: 6px 8px; text-align: left; }
+                        th { background-color: #f2f2f2; font-weight: bold; text-align: center; }
+                        .text-center { text-align: center; }
+                        .footer { margin-top: 30px; font-size: 10px; text-align: right; color: #666; }
+                        @media print {
+                            body { margin: 0; padding: 10px; }
+                            button { display: none; }
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="header">
+                        <h2>${schoolName}</h2>
+                        <h3>${title}</h3>
+                        <h4>${subtitle}</h4>
+                    </div>
+                    
+                    ${officerList}
+
+                    <table>
+                        <thead>
+                            <tr>${tableHeaders}</tr>
+                        </thead>
+                        <tbody>
+                            ${tableRows}
+                        </tbody>
+                    </table>
+
+                    <div class="footer">
+                        Dicetak pada: ${new Date().toLocaleString('id-ID')}
+                    </div>
+
+                    <script>
+                        window.onload = function() { window.print(); window.close(); }
+                    </script>
+                </body>
+            </html>
+        `);
+        printWindow.document.close();
     };
 
     return (
