@@ -809,11 +809,11 @@ export const deleteCounselingSession = async (id: string) => {
 // --- DAILY PICKET ---
 
 export const getTeachersBySchool = async (schoolNpsn: string) => {
-    return await db.users.where({ schoolNpsn, role: 'GURU' }).toArray();
+    return await db.users.where('schoolNpsn').equals(schoolNpsn).filter(u => u.role === 'GURU').toArray();
 };
 
 export const getDailyPicket = async (date: string, schoolNpsn: string) => {
-    return await db.dailyPickets.where({ date, schoolNpsn }).first();
+    return await db.dailyPickets.where('date').equals(date).filter(p => p.schoolNpsn === schoolNpsn).first();
 };
 
 export const saveDailyPicket = async (date: string, schoolNpsn: string, officers: string[], notes?: string) => {
@@ -903,6 +903,74 @@ export const getSchoolAttendanceSummary = async (date: string, schoolNpsn: strin
     })));
 
     return resolvedSummary;
+};
+
+export const getAttendanceSummaryByRange = async (startDate: string, endDate: string, schoolNpsn: string) => {
+    // 1. Get all classes in this school
+    const classes = await db.classes.where('schoolNpsn').equals(schoolNpsn).toArray();
+    const classIds = classes.map(c => c.id);
+
+    // 2. Get all attendance records in range
+    // Dexie string comparison works for ISO dates YYYY-MM-DD
+    const attendance = await db.attendanceRecords
+        .where('date').between(startDate, endDate, true, true)
+        .filter(r => classIds.includes(r.classId))
+        .toArray();
+
+    // 3. Aggregate data per class
+    const summary = classes.map(cls => {
+        const classAttendance = attendance.filter(a => a.classId === cls.id);
+        
+        const sakit = classAttendance.filter(a => a.status === 'S').length;
+        const izin = classAttendance.filter(a => a.status === 'I').length;
+        const alfa = classAttendance.filter(a => a.status === 'A').length;
+        
+        // For range summary, 'Hadir' is sum of all 'H' records, NOT (Total Students * Days) - Absences
+        // because we might not have attendance for every day.
+        const hadir = classAttendance.filter(a => a.status === 'H').length;
+
+        // Total records for this class in this period
+        const totalRecords = classAttendance.length;
+
+        return {
+            className: cls.name,
+            studentCount: cls.studentCount,
+            hadir,
+            sakit,
+            izin,
+            alfa,
+            totalRecords,
+            absentDetails: [] // Not needed for monthly summary usually, or too large
+        };
+    });
+
+    return summary;
+};
+
+export const getIncidentsByDateRange = async (startDate: string, endDate: string, schoolNpsn: string) => {
+    // 1. Get Pickets in range
+    const pickets = await db.dailyPickets
+        .where('date').between(startDate, endDate, true, true)
+        .filter(p => p.schoolNpsn === schoolNpsn)
+        .toArray();
+        
+    const picketIds = pickets.map(p => p.id);
+
+    if (picketIds.length === 0) return [];
+
+    // 2. Get Incidents for these pickets
+    const incidents = await db.studentIncidents
+        .where('picketId').anyOf(picketIds)
+        .toArray();
+
+    // 3. Enrich with date from picket
+    return incidents.map(inc => {
+        const picket = pickets.find(p => p.id === inc.picketId);
+        return {
+            ...inc,
+            date: picket?.date || 'Unknown Date'
+        };
+    }).sort((a, b) => a.date.localeCompare(b.date));
 };
 
 // --- STUDENT OPS ---
