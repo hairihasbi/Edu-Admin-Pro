@@ -5,7 +5,12 @@ import PicketAttendanceTable from './PicketAttendanceTable';
 import PicketIncidentForm from './PicketIncidentForm';
 import { Calendar, User as UserIcon, Save, RefreshCw, Printer, FileText } from 'lucide-react';
 import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import 'jspdf-autotable';
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const autoTable = (doc: any, options: any) => {
+    (doc as any).autoTable(options);
+};
 
 interface DailyPicketProps {
     currentUser: User;
