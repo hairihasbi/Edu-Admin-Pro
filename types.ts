@@ -306,6 +306,24 @@ export interface ApiKey extends Syncable {
   addedAt: string;
 }
 
+export interface DailyPicket extends Syncable {
+  id: string;
+  date: string; // YYYY-MM-DD
+  schoolNpsn: string;
+  officers: string[]; // Array of teacher names
+  notes?: string;
+}
+
+export interface StudentIncident extends Syncable {
+  id: string;
+  picketId: string; // FK to DailyPicket
+  studentName: string;
+  className: string;
+  time: string; // HH:mm
+  type: 'LATE' | 'PERMIT_EXIT' | 'EARLY_HOME';
+  reason?: string;
+}
+
 export interface BackupData {
   meta: {
     version: string;
