@@ -32,7 +32,7 @@ const AdminSystemLogs: React.FC = () => {
   }, [isAutoRefresh]);
 
   const handleClearLogs = async () => {
-    if (window.confirm("Apakah Anda yakin ingin menghapus semua log sistem? Tindakan ini tidak dapat dibatalkan.")) {
+    if (window.confirm("PERINGATAN: Apakah Anda yakin ingin MENGHAPUS SELURUH RIWAYAT LOG secara PERMANEN dari server?\n\nTindakan ini tidak dapat dibatalkan.")) {
       await clearSystemLogs();
       fetchLogs();
     }
@@ -82,7 +82,7 @@ const AdminSystemLogs: React.FC = () => {
              onClick={handleClearLogs}
              className="flex items-center gap-2 bg-red-50 text-red-600 px-4 py-2 rounded-lg font-medium hover:bg-red-100 transition text-sm"
            >
-             <Trash2 size={16} /> Reset Log
+             <Trash2 size={16} /> Hapus History Permanen
            </button>
         </div>
       </div>
