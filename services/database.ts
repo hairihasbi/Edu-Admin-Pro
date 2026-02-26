@@ -8,7 +8,7 @@ import {
   EmailConfig, WhatsAppConfig, Notification, ApiKey, SystemSettings,
   BackupData, StudentWithDetails, LessonPlanRequest, DashboardStatsData
 } from '../types';
-import { initTurso, pushToTurso, pullFromTurso, deleteFromTurso } from './tursoService';
+import { initTurso, pushToTurso, pullFromTurso, deleteFromTurso, clearRemoteTable } from './tursoService';
 import bcrypt from 'bcryptjs';
 
 const uuidv4 = () => crypto.randomUUID();
@@ -1137,6 +1137,12 @@ export const addSystemLog = async (level: LogEntry['level'], actor: string, role
 
 export const clearSystemLogs = async () => {
     await db.logs.clear();
+    // HARD DELETE REMOTE
+    try {
+        await clearRemoteTable('eduadmin_logs');
+    } catch (e) {
+        console.error("Failed to clear remote logs:", e);
+    }
 };
 
 export const getDashboardStats = async (user: User): Promise<DashboardStatsData> => {

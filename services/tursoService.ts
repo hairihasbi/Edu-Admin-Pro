@@ -137,6 +137,34 @@ export const testConnectionConfig = async (dbUrl: string, dbToken: string): Prom
     }
 };
 
+// Clear (Truncate) Remote Table via API
+export const clearRemoteTable = async (collection: string) => {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      throw new Error("OFFLINE: Cannot clear remote table");
+  }
+
+  try {
+      const response = await fetch('/api/turso', {
+        method: 'POST',
+        headers: { 
+            'Content-Type': 'application/json',
+            ...getAuthHeader()
+        } as HeadersInit,
+        body: JSON.stringify({ 
+          action: 'clear', 
+          collection, 
+          userId: getCurrentUserId()
+        })
+      });
+
+      await handleApiResponse(response);
+      return true;
+  } catch (error: any) {
+      console.error(`Clear failed for ${collection}:`, error);
+      throw error;
+  }
+};
+
 // Push Local Data to Turso via API with Batching (Fix 504 Timeout)
 export const pushToTurso = async (collection: string, items: any[], force: boolean = false) => {
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
