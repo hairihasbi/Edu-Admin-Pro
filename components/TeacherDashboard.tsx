@@ -531,6 +531,32 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
           </div>
       </div>
 
+      {/* Donation Banner */}
+      <div className="bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-100 rounded-xl p-6 flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-40 rounded-full blur-3xl transform translate-x-1/2 -translate-y-1/2"></div>
+        
+        <div className="relative z-10 flex-1">
+          <div className="flex items-center gap-3 mb-2">
+             <div className="bg-white p-2 rounded-lg shadow-sm text-pink-500">
+                <Heart size={20} fill="currentColor" />
+             </div>
+             <h3 className="font-bold text-indigo-900 text-lg">Aplikasi Ini 100% Gratis!</h3>
+          </div>
+          <p className="text-indigo-700 text-sm leading-relaxed">
+             EduAdmin Pro dibuat dengan semangat untuk memajukan pendidikan Indonesia. 
+             Jika aplikasi ini membantu pekerjaan Anda, mari berikan dukungan sukarela untuk biaya server dan pengembangan fitur baru agar aplikasi ini bisa terus digunakan oleh ribuan guru lainnya.
+          </p>
+        </div>
+
+        <Link 
+          to="/donation" 
+          className="relative z-10 whitespace-nowrap bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl shadow-lg shadow-indigo-200 transition transform hover:scale-105 flex items-center gap-2"
+        >
+           <Coffee size={20} />
+           Beri Dukungan
+        </Link>
+      </div>
+
       {/* Jadwal Mengajar Section */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden animate-in fade-in slide-in-from-bottom-2">
           {/* ... existing code ... */}
