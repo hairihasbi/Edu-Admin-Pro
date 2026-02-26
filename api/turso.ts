@@ -350,6 +350,34 @@ const DB_SCHEMAS = [
         deleted INTEGER DEFAULT 0
     )`,
 
+    // 23. DAILY TICKETS (PIKET HARIAN)
+    `CREATE TABLE IF NOT EXISTS daily_pickets (
+        id TEXT PRIMARY KEY,
+        date TEXT,
+        school_npsn TEXT,
+        officers TEXT, -- JSON Array
+        notes TEXT,
+        last_modified INTEGER,
+        version INTEGER DEFAULT 1,
+        deleted INTEGER DEFAULT 0
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_pickets_date_npsn ON daily_pickets(date, school_npsn)`,
+
+    // 24. STUDENT INCIDENTS (KEJADIAN SISWA)
+    `CREATE TABLE IF NOT EXISTS student_incidents (
+        id TEXT PRIMARY KEY,
+        picket_id TEXT,
+        student_name TEXT,
+        class_name TEXT,
+        time TEXT,
+        type TEXT,
+        reason TEXT,
+        last_modified INTEGER,
+        version INTEGER DEFAULT 1,
+        deleted INTEGER DEFAULT 0
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_incidents_picket ON student_incidents(picket_id)`,
+
     // --- MIGRATIONS ---
     `ALTER TABLE system_settings ADD COLUMN ai_provider TEXT`,
     `ALTER TABLE system_settings ADD COLUMN ai_base_url TEXT`,
@@ -411,6 +439,8 @@ const getTableConfig = (collection: string) => {
     case 'eduadmin_master_subjects': return { table: 'master_subjects', columns: ['id', 'name', 'category', 'level', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.name), s(item.category), s(item.level), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_email_config': return { table: 'email_config', columns: ['id', 'provider', 'method', 'api_key', 'smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass', 'from_email', 'from_name', 'is_active', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.provider), s(item.method), s(item.apiKey), s(item.smtpHost), s(item.smtpPort), s(item.smtpUser), s(item.smtpPass), s(item.fromEmail), s(item.fromName), item.isActive ? 1 : 0, s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_donations': return { table: 'donations', columns: ['id', 'user_id', 'invoice_number', 'amount', 'payment_method', 'status', 'payment_url', 'created_at', 'paid_at', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.userId), s(item.invoiceNumber), s(item.amount), s(item.paymentMethod), s(item.status), s(item.paymentUrl), s(item.createdAt), s(item.paidAt), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
+    case 'eduadmin_pickets': return { table: 'daily_pickets', columns: ['id', 'date', 'school_npsn', 'officers', 'notes', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.date), s(item.schoolNpsn), JSON.stringify(item.officers || []), s(item.notes), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
+    case 'eduadmin_incidents': return { table: 'student_incidents', columns: ['id', 'picket_id', 'student_name', 'class_name', 'time', 'type', 'reason', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.picketId), s(item.studentName), s(item.className), s(item.time), s(item.type), s(item.reason), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     default:
       return null;
   }
@@ -549,6 +579,16 @@ const mapRowToJSON = (collection: string, row: any) => {
         id: row.id, userId: row.user_id, invoiceNumber: row.invoice_number, amount: row.amount,
         paymentMethod: row.payment_method, status: row.status, paymentUrl: row.payment_url,
         createdAt: row.created_at, paidAt: row.paid_at,
+        lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
+    };
+    case 'eduadmin_pickets': return {
+        id: row.id, date: row.date, schoolNpsn: row.school_npsn,
+        officers: parseJSONSafe(row.officers), notes: row.notes,
+        lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
+    };
+    case 'eduadmin_incidents': return {
+        id: row.id, picketId: row.picket_id, studentName: row.student_name,
+        className: row.class_name, time: row.time, type: row.type, reason: row.reason,
         lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
     };
     default:
