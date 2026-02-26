@@ -4,6 +4,8 @@ import { createServer as createViteServer } from 'vite';
 import tursoHandler from './api/turso';
 // @ts-ignore
 import dokuHandler from './api/doku';
+// @ts-ignore
+import sendEmailHandler from './api/send-email';
 
 async function startServer() {
     const app = express();
@@ -27,6 +29,15 @@ async function startServer() {
             await dokuHandler(req as any, res as any);
         } catch (e) {
             console.error("DOKU Handler Error:", e);
+            if (!res.headersSent) res.status(500).json({ error: "Internal Server Error" });
+        }
+    });
+
+    app.all('/api/send-email', async (req, res) => {
+        try {
+            await sendEmailHandler(req as any, res as any);
+        } catch (e) {
+            console.error("Send Email Handler Error:", e);
             if (!res.headersSent) res.status(500).json({ error: "Internal Server Error" });
         }
     });
