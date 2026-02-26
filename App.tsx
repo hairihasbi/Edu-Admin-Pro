@@ -26,6 +26,7 @@ import TeacherGenQuiz from './components/TeacherGenQuiz';
 import HelpCenter from './components/HelpCenter'; 
 import BroadcastPage from './components/BroadcastPage';
 import SyncPage from './components/SyncPage'; // Import SyncPage
+import DailyPicket from './components/DailyPicket'; // Import DailyPicket
 import NotificationPanel from './components/NotificationPanel';
 import { initDatabase, loginUser, resetPassword, registerUser, getNotifications, createNotification, markNotificationAsRead, clearNotifications, getSystemSettings, syncAllData, checkSchoolNameByNpsn } from './services/database';
 import { 
@@ -678,6 +679,7 @@ const AppContent: React.FC = () => {
                 {currentUser.homeroomClassId && (
                    <NavLink to="/homeroom" icon={Users} label="Wali Kelas" />
                 )}
+                <NavLink to="/picket" icon={CalendarCheck} label="Piket Harian" /> {/* NEW LINK */}
                 {currentUser.subject === 'Bimbingan Konseling' && (
                    <NavLink to="/guidance" icon={ShieldAlert} label="Bimbingan Konseling" />
                 )}
@@ -783,6 +785,7 @@ const AppContent: React.FC = () => {
                    <Route path="/dashboard" element={<TeacherDashboard user={currentUser} />} />
                    <Route path="/homeroom" element={<TeacherHomeroom user={currentUser} />} />
                    <Route path="/classes" element={<TeacherClasses user={currentUser} />} />
+                   <Route path="/picket" element={<DailyPicket currentUser={currentUser} />} /> {/* NEW ROUTE */}
                    {currentUser.subject === 'Bimbingan Konseling' && <Route path="/guidance" element={<TeacherGuidance user={currentUser} />} />}
                    <Route path="/attendance" element={<TeacherAttendance user={currentUser} />} />
                    <Route path="/scope-material" element={<TeacherScopeMaterial user={currentUser} />} />
