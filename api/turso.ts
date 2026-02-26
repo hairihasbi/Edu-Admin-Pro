@@ -696,6 +696,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(200).json({ success: true, message: "Database Initialized & Migrated.", details: results });
     }
 
+    // --- DELETE LOGIC ---
+    if (action === 'delete') {
+        const { id } = body;
+        if (!id) return res.status(400).json({ error: 'ID is required for delete' });
+
+        const tableConfig = getTableConfig(collection);
+        if (!tableConfig) return res.status(400).json({ error: 'Invalid collection' });
+
+        try {
+            await client.execute({
+                sql: `DELETE FROM ${tableConfig.table} WHERE id = ?`,
+                args: [id]
+            });
+            return res.status(200).json({ success: true, message: 'Deleted permanently' });
+        } catch (e: any) {
+            return res.status(500).json({ error: e.message });
+        }
+    }
+
     // --- PUSH LOGIC ---
     if (action === 'push') {
         if (!items || items.length === 0) return res.status(200).json({ success: true });
