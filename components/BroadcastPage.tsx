@@ -38,7 +38,7 @@ const BroadcastPage: React.FC<BroadcastPageProps> = ({ user }) => {
   const [recipients, setRecipients] = useState<Recipient[]>([]);
   
   // UI State
-  const [targetType, setTargetType] = useState<TargetType>('STUDENTS_CLASS');
+  const [targetType, setTargetType] = useState<TargetType>(user.role === UserRole.ADMIN ? 'TEACHERS' : 'STUDENTS_CLASS');
   const [selectedClassId, setSelectedClassId] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoadingData, setIsLoadingData] = useState(false);
@@ -311,20 +311,16 @@ const BroadcastPage: React.FC<BroadcastPageProps> = ({ user }) => {
                 Guru
               </button>
             )}
-            <button 
-              onClick={() => setTargetType('STUDENTS_CLASS')}
-              className={`px-3 py-1.5 text-xs font-bold rounded-md whitespace-nowrap transition ${targetType === 'STUDENTS_CLASS' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}
-            >
-              Per Kelas
-            </button>
-            {user.role === UserRole.ADMIN && (
+            
+            {user.role !== UserRole.ADMIN && (
               <button 
-                onClick={() => setTargetType('ALL_STUDENTS')}
-                className={`px-3 py-1.5 text-xs font-bold rounded-md whitespace-nowrap transition ${targetType === 'ALL_STUDENTS' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}
+                onClick={() => setTargetType('STUDENTS_CLASS')}
+                className={`px-3 py-1.5 text-xs font-bold rounded-md whitespace-nowrap transition ${targetType === 'STUDENTS_CLASS' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}
               >
-                Semua Siswa
+                Per Kelas
               </button>
             )}
+
             <button 
               onClick={() => { setTargetType('MANUAL'); setRecipients([]); }}
               className={`px-3 py-1.5 text-xs font-bold rounded-md whitespace-nowrap transition flex items-center gap-1 ${targetType === 'MANUAL' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}
