@@ -43,7 +43,8 @@ const DailyPicket: React.FC<DailyPicketProps> = ({ currentUser }) => {
             setNotes(data.notes || '');
         } else {
             setPicketId(null);
-            setOfficers([]);
+            // Auto-select current user if no data exists yet
+            setOfficers([currentUser.fullName]);
             setNotes('');
         }
         setIsLoading(false);
@@ -99,8 +100,11 @@ const DailyPicket: React.FC<DailyPicketProps> = ({ currentUser }) => {
 
                 {/* Petugas Piket Selection */}
                 <div className="mb-6">
-                    <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                        <UserIcon size={16} /> Petugas Piket Hari Ini
+                    <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center justify-between">
+                        <span className="flex items-center gap-2"><UserIcon size={16} /> Petugas Piket Hari Ini</span>
+                        <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                            Data ini terlihat oleh semua guru di sekolah Anda
+                        </span>
                     </label>
                     <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2 max-h-40 overflow-y-auto p-2 border rounded-lg bg-gray-50">
                         {teachers.map(teacher => (
