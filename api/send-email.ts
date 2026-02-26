@@ -52,10 +52,12 @@ async function sendBrevo(config: any, to: string, subject: string, html: string)
 
 // Helper for SMTP (Nodemailer)
 async function sendSMTP(config: any, to: string, subject: string, html: string) {
+  const port = parseInt(String(config.smtpPort), 10); // Ensure port is a number
+  
   const transporter = nodemailer.createTransport({
     host: config.smtpHost,
-    port: config.smtpPort,
-    secure: config.smtpPort === 465, // true for 465, false for other ports
+    port: port,
+    secure: port === 465, // true for 465, false for other ports
     auth: {
       user: config.smtpUser,
       pass: config.smtpPass,
@@ -83,24 +85,47 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const subject = `Selamat! Akun Guru Anda Telah Disetujui`;
+  
+  // Professional HTML Template
   const html = `
-    <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
-      <h2 style="color: #2563eb;">Selamat Bergabung, ${user.fullName}!</h2>
-      <p>Pendaftaran akun guru Anda di <strong>${user.schoolName}</strong> telah disetujui oleh Administrator.</p>
-      <p>Anda sekarang dapat masuk ke aplikasi EduAdmin Pro menggunakan username dan password yang Anda buat saat pendaftaran.</p>
-      <br/>
-      <a href="${req.headers.origin || 'https://eduadmin-pro.vercel.app'}/login" style="background-color: #2563eb; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Masuk Sekarang</a>
-      <br/><br/>
-      <p>Terima kasih,<br/>Tim EduAdmin</p>
+    <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 8px; overflow: hidden;">
+      <div style="background-color: #2563eb; padding: 20px; text-align: center;">
+        <h2 style="color: white; margin: 0;">Selamat Datang di EduAdmin Pro</h2>
+      </div>
+      <div style="padding: 30px;">
+        <p>Halo <strong>${user.fullName}</strong>,</p>
+        <p>Selamat! Pendaftaran akun guru Anda di <strong>${user.schoolName}</strong> telah disetujui oleh Administrator.</p>
+        <p>Anda sekarang dapat masuk ke aplikasi EduAdmin Pro menggunakan username dan password yang Anda buat saat pendaftaran.</p>
+        
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${req.headers.origin || 'https://eduadmin-pro.vercel.app'}/login" style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">Masuk ke Aplikasi</a>
+        </div>
+        
+        <p style="font-size: 14px; color: #666;">Jika tombol di atas tidak berfungsi, silakan salin dan tempel tautan berikut ke browser Anda:</p>
+        <p style="font-size: 14px; color: #2563eb;">${req.headers.origin || 'https://eduadmin-pro.vercel.app'}/login</p>
+      </div>
+      <div style="background-color: #f9fafb; padding: 20px; text-align: center; font-size: 12px; color: #888;">
+        <p>Email ini dikirim secara otomatis oleh sistem EduAdmin Pro.<br/>${config.fromName}</p>
+      </div>
     </div>
   `;
 
+  // Determine method: Explicit 'API', or if apiKey exists and method is not explicitly 'SMTP'
+  const method = config.method === 'API' || (config.apiKey && config.method !== 'SMTP') ? 'API' : 'SMTP';
+
   try {
-    if (config.method === 'API') {
+    console.log(`Sending approval email to ${user.email} using ${method} (${method === 'API' ? config.provider : 'SMTP'})`);
+    
+    if (method === 'API') {
+      if (!config.apiKey) throw new Error("API Key is missing for API method");
+
       if (config.provider === 'MAILERSEND') {
         await sendMailerSend(config, user.email, subject, html);
       } else if (config.provider === 'BREVO') {
         await sendBrevo(config, user.email, subject, html);
+      } else {
+        // Fallback or Error
+        throw new Error(`Unknown or Missing API Provider: ${config.provider}`);
       }
     } else {
       await sendSMTP(config, user.email, subject, html);
