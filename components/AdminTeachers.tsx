@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User, UserStatus } from '../types';
-import { getTeachers, getPendingTeachers, approveTeacher, rejectTeacher, sendApprovalEmail, sendApprovalWhatsApp, deleteTeacher, runManualSync } from '../services/database';
+import { getTeachers, getPendingTeachers, approveTeacher, rejectTeacher, sendApprovalEmail, deleteTeacher, runManualSync } from '../services/database';
 import { User as UserIcon, CheckCircle, X, Shield, Search, School, Mail, ChevronLeft, ChevronRight, FileSpreadsheet, Smartphone, Trash2, MoreVertical, BookOpen, RefreshCcw } from './Icons';
 import * as XLSX from 'xlsx';
 
@@ -68,17 +68,6 @@ const AdminTeachers: React.FC = () => {
             // 1. Send Email Notification
             const emailResult = await sendApprovalEmail(teacher);
             
-            // 2. Send WhatsApp Notification
-            let waMessage = "";
-            const currentUserStr = localStorage.getItem('eduadmin_user');
-            if (currentUserStr) {
-                const currentUser = JSON.parse(currentUserStr);
-                const waResult = await sendApprovalWhatsApp(teacher, currentUser.id);
-                waMessage = waResult.success ? "✅ WA Terkirim" : `❌ WA Gagal (${waResult.message})`;
-            } else {
-                waMessage = "⚠️ WA Gagal (Admin ID tidak ditemukan)";
-            }
-            
             // Construct Final Message
             let message = "Guru berhasil disetujui dan aktif.";
             
@@ -88,9 +77,6 @@ const AdminTeachers: React.FC = () => {
             } else {
                 message += "\n⚠️ Email Gagal (Cek Konfigurasi SMTP/API).";
             }
-
-            // Append WA Status
-            message += `\n📱 ${waMessage}`;
 
             alert(message);
         } else {
