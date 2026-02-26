@@ -327,7 +327,8 @@ export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', logCall
             'eduadmin_materials', 'eduadmin_scores', 'eduadmin_journals', 'eduadmin_schedules', 
             'eduadmin_logs', 'eduadmin_email_config', 'eduadmin_master_subjects', 'eduadmin_tickets', 
             'eduadmin_bk_violations', 'eduadmin_bk_reductions', 'eduadmin_bk_achievements', 'eduadmin_bk_counseling',
-            'eduadmin_wa_configs', 'eduadmin_notifications', 'eduadmin_api_keys', 'eduadmin_system_settings'
+            'eduadmin_wa_configs', 'eduadmin_notifications', 'eduadmin_api_keys', 'eduadmin_system_settings',
+            'eduadmin_pickets', 'eduadmin_incidents'
         ];
 
         const tableMap: Record<string, any> = {
@@ -350,7 +351,9 @@ export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', logCall
             'eduadmin_wa_configs': db.whatsappConfigs,
             'eduadmin_notifications': db.notifications,
             'eduadmin_api_keys': db.apiKeys,
-            'eduadmin_system_settings': db.systemSettings
+            'eduadmin_system_settings': db.systemSettings,
+            'eduadmin_pickets': db.dailyPickets,
+            'eduadmin_incidents': db.studentIncidents
         };
 
         if (direction === 'PUSH' || direction === 'FULL') {
@@ -801,6 +804,105 @@ export const addCounselingSession = async (data: Omit<CounselingSession, 'id'|'l
 export const deleteCounselingSession = async (id: string) => {
     await db.counselingSessions.delete(id);
     pushToTurso('eduadmin_bk_counseling', [{id, deleted: true}]);
+};
+
+// --- DAILY PICKET ---
+
+export const getTeachersBySchool = async (schoolNpsn: string) => {
+    return await db.users.where({ schoolNpsn, role: 'GURU' }).toArray();
+};
+
+export const getDailyPicket = async (date: string, schoolNpsn: string) => {
+    return await db.dailyPickets.where({ date, schoolNpsn }).first();
+};
+
+export const saveDailyPicket = async (date: string, schoolNpsn: string, officers: string[], notes?: string) => {
+    const existing = await getDailyPicket(date, schoolNpsn);
+    const id = existing ? existing.id : uuidv4();
+    
+    const item = {
+        id,
+        date,
+        schoolNpsn,
+        officers,
+        notes,
+        lastModified: Date.now(),
+        isSynced: false
+    };
+    
+    await db.dailyPickets.put(item);
+    pushToTurso('eduadmin_pickets', [item]);
+    return item;
+};
+
+export const getStudentIncidents = async (picketId: string) => {
+    return await db.studentIncidents.where('picketId').equals(picketId).toArray();
+};
+
+export const addStudentIncident = async (picketId: string, data: {studentName: string, className: string, time: string, type: 'LATE' | 'PERMIT_EXIT' | 'EARLY_HOME', reason?: string}) => {
+    const item = {
+        id: uuidv4(),
+        picketId,
+        ...data,
+        lastModified: Date.now(),
+        isSynced: false
+    };
+    await db.studentIncidents.add(item);
+    pushToTurso('eduadmin_incidents', [item]);
+    return item;
+};
+
+export const deleteStudentIncident = async (id: string) => {
+    await db.studentIncidents.delete(id);
+    pushToTurso('eduadmin_incidents', [{id, deleted: true}]);
+};
+
+export const getSchoolAttendanceSummary = async (date: string, schoolNpsn: string) => {
+    // 1. Get all classes in this school
+    const classes = await db.classes.where('schoolNpsn').equals(schoolNpsn).toArray();
+    
+    // 2. Get all attendance records for this date and these classes
+    const classIds = classes.map(c => c.id);
+    const attendance = await db.attendanceRecords
+        .where('date').equals(date)
+        .filter(r => classIds.includes(r.classId))
+        .toArray();
+
+    // 3. Aggregate data per class
+    const summary = classes.map(cls => {
+        const classAttendance = attendance.filter(a => a.classId === cls.id);
+        
+        const sakit = classAttendance.filter(a => a.status === 'S').length;
+        const izin = classAttendance.filter(a => a.status === 'I').length;
+        const alfa = classAttendance.filter(a => a.status === 'A').length;
+        const hadir = cls.studentCount - (sakit + izin + alfa);
+
+        // Get names of absent students
+        const absentStudents = classAttendance
+            .filter(a => ['S', 'I', 'A'].includes(a.status))
+            .map(async (a) => {
+                const student = await db.students.get(a.studentId);
+                return { name: student?.name || 'Unknown', status: a.status };
+            });
+
+        return {
+            className: cls.name,
+            studentCount: cls.studentCount,
+            hadir: Math.max(0, hadir), // Prevent negative
+            sakit,
+            izin,
+            alfa,
+            absentDetails: Promise.all(absentStudents)
+        };
+    });
+
+    // Resolve promises for student names
+    const resolvedSummary = await Promise.all(summary.map(async (s) => ({
+        ...s,
+        absentDetails: await s.absentDetails
+    })));
+
+    return resolvedSummary;
 };
 
 // --- STUDENT OPS ---
