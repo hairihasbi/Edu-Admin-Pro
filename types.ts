@@ -389,11 +389,3 @@ export interface ApiKeyStats {
 }
 
 export type ViewState = 'dashboard' | 'students' | 'teachers' | 'classes' | 'ai-assistant' | 'settings' | 'profile';
-
-declare module 'jspdf' {
-    interface jsPDF {
-        lastAutoTable: {
-            finalY: number;
-        };
-    }
-}
