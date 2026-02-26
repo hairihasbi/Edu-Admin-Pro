@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User } from '../types';
-import { getDailyPicket, saveDailyPicket, getTeachersBySchool, getSchoolAttendanceSummary, getStudentIncidents } from '../services/database';
+import { getDailyPicket, saveDailyPicket, getTeachersBySchool, getSchoolAttendanceSummary, getStudentIncidents, getAttendanceSummaryByRange, getIncidentsByDateRange } from '../services/database';
 import PicketAttendanceTable from './PicketAttendanceTable';
 import PicketIncidentForm from './PicketIncidentForm';
 import { Calendar, User as UserIcon, Save, RefreshCw, Printer, FileText } from 'lucide-react';
@@ -89,9 +89,23 @@ const DailyPicket: React.FC<DailyPicketProps> = ({ currentUser }) => {
         let columns: any[] = [];
 
         // Determine Date Range
+        let startDate = date;
+        let endDate = date;
+
         if (printPeriod === 'MONTHLY') {
+            const firstDay = new Date(printYear, printMonth, 1);
+            const lastDay = new Date(printYear, printMonth + 1, 0);
+            startDate = firstDay.toISOString().split('T')[0];
+            endDate = lastDay.toISOString().split('T')[0];
             title = `Laporan Bulanan Piket - ${new Date(printYear, printMonth).toLocaleString('id-ID', { month: 'long', year: 'numeric' })}`;
         } else if (printPeriod === 'SEMESTER') {
+            const startMonth = printSemester === 'GANJIL' ? 6 : 0; // July or Jan
+            const endMonth = printSemester === 'GANJIL' ? 11 : 5; // Dec or June
+            const year = printSemester === 'GANJIL' ? printYear : printYear + 1; 
+            
+            startDate = new Date(year, startMonth, 1).toISOString().split('T')[0];
+            endDate = new Date(year, endMonth + 1, 0).toISOString().split('T')[0];
+            
             title = `Laporan Semester ${printSemester} Piket - Tahun Ajaran ${printYear}/${printYear+1}`;
         } else {
             title = `Laporan Harian Piket - ${new Date(date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}`;
@@ -101,12 +115,13 @@ const DailyPicket: React.FC<DailyPicketProps> = ({ currentUser }) => {
         if (activeTab === 'ATTENDANCE') {
             subtitle = 'Rekapitulasi Absensi Siswa';
             
-            if (printPeriod !== 'DAILY') {
-                alert('Saat ini cetak rekap absensi hanya tersedia untuk Harian.');
-                return;
+            let summary;
+            if (printPeriod === 'DAILY') {
+                summary = await getSchoolAttendanceSummary(date, currentUser.schoolNpsn || '');
+            } else {
+                summary = await getAttendanceSummaryByRange(startDate, endDate, currentUser.schoolNpsn || '');
             }
 
-            const summary = await getSchoolAttendanceSummary(date, currentUser.schoolNpsn || '');
             columns = [
                 { header: 'No', dataKey: 'no' },
                 { header: 'Kelas', dataKey: 'className' },
@@ -117,6 +132,7 @@ const DailyPicket: React.FC<DailyPicketProps> = ({ currentUser }) => {
                 { header: 'Total', dataKey: 'total' },
                 { header: 'Ket. Tidak Hadir', dataKey: 'ket' },
             ];
+            
             dataToPrint = summary.map((s, i) => ({
                 no: i + 1,
                 className: s.className,
@@ -124,34 +140,37 @@ const DailyPicket: React.FC<DailyPicketProps> = ({ currentUser }) => {
                 izin: s.izin,
                 alfa: s.alfa,
                 hadir: s.hadir,
-                total: s.studentCount,
+                total: s.studentCount, // Note: In range summary, totalRecords might be more relevant, but keeping studentCount for consistency
                 ket: s.absentDetails.map((d: any) => `${d.name} (${d.status})`).join(', ') || '-'
             }));
 
         } else {
             subtitle = 'Laporan Kejadian Siswa (Terlambat/Pulang)';
             
-             if (printPeriod !== 'DAILY') {
-                alert('Saat ini cetak kejadian siswa hanya tersedia untuk Harian.');
-                return;
+            let incidents;
+            if (printPeriod === 'DAILY') {
+                if (!picketId) {
+                    alert('Belum ada data piket untuk tanggal ini.');
+                    return;
+                }
+                incidents = await getStudentIncidents(picketId);
+            } else {
+                incidents = await getIncidentsByDateRange(startDate, endDate, currentUser.schoolNpsn || '');
             }
 
-            if (!picketId) {
-                alert('Belum ada data piket untuk tanggal ini.');
-                return;
-            }
-
-            const incidents = await getStudentIncidents(picketId);
             columns = [
                 { header: 'No', dataKey: 'no' },
+                { header: 'Tanggal', dataKey: 'date' },
                 { header: 'Nama Siswa', dataKey: 'name' },
                 { header: 'Kelas', dataKey: 'class' },
                 { header: 'Jam', dataKey: 'time' },
                 { header: 'Jenis', dataKey: 'type' },
                 { header: 'Alasan', dataKey: 'reason' },
             ];
+            
             dataToPrint = incidents.map((inc, i) => ({
                 no: i + 1,
+                date: (inc as any).date ? new Date((inc as any).date).toLocaleDateString('id-ID') : new Date(date).toLocaleDateString('id-ID'),
                 name: inc.studentName,
                 class: inc.className,
                 time: inc.time,
@@ -167,11 +186,11 @@ const DailyPicket: React.FC<DailyPicketProps> = ({ currentUser }) => {
         const tableHeaders = columns.map(c => `<th>${c.header}</th>`).join('');
         const tableRows = dataToPrint.map(row => `
             <tr>
-                ${columns.map(c => `<td class="${c.dataKey === 'no' || c.dataKey === 'sakit' || c.dataKey === 'izin' || c.dataKey === 'alfa' || c.dataKey === 'hadir' || c.dataKey === 'total' ? 'text-center' : ''}">${row[c.dataKey]}</td>`).join('')}
+                ${columns.map(c => `<td class="${['no','sakit','izin','alfa','hadir','total','date','time'].includes(c.dataKey) ? 'text-center' : ''}">${row[c.dataKey]}</td>`).join('')}
             </tr>
         `).join('');
 
-        const officerList = activeTab === 'ATTENDANCE' ? `<p><strong>Petugas:</strong> ${officers.join(', ')}</p>` : '';
+        const officerList = activeTab === 'ATTENDANCE' && printPeriod === 'DAILY' ? `<p><strong>Petugas:</strong> ${officers.join(', ')}</p>` : '';
 
         printWindow.document.write(`
             <html>
