@@ -98,11 +98,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         <p>Anda sekarang dapat masuk ke aplikasi EduAdmin Pro menggunakan username dan password yang Anda buat saat pendaftaran.</p>
         
         <div style="text-align: center; margin: 30px 0;">
-          <a href="${req.headers.origin || 'https://eduadmin-pro.vercel.app'}/login" style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">Masuk ke Aplikasi</a>
+          <a href="${req.headers.origin || 'https://www.eduadmin.my.id'}/login" style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">Masuk ke Aplikasi</a>
         </div>
         
         <p style="font-size: 14px; color: #666;">Jika tombol di atas tidak berfungsi, silakan salin dan tempel tautan berikut ke browser Anda:</p>
-        <p style="font-size: 14px; color: #2563eb;">${req.headers.origin || 'https://eduadmin-pro.vercel.app'}/login</p>
+        <p style="font-size: 14px; color: #2563eb;">${req.headers.origin || 'https://www.eduadmin.my.id'}/login</p>
       </div>
       <div style="background-color: #f9fafb; padding: 20px; text-align: center; font-size: 12px; color: #888;">
         <p>Email ini dikirim secara otomatis oleh sistem EduAdmin Pro.<br/>${config.fromName}</p>
@@ -110,11 +110,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     </div>
   `;
 
-  // Determine method: Explicit 'API', or if apiKey exists and method is not explicitly 'SMTP'
-  const method = config.method === 'API' || (config.apiKey && config.method !== 'SMTP') ? 'API' : 'SMTP';
+  // Determine method:
+  // 1. If config.method is 'API', use API.
+  // 2. If config.method is 'SMTP', use SMTP.
+  // 3. If config.method is undefined/null (legacy), check if apiKey exists -> API, else SMTP.
+  
+  let method = 'SMTP';
+  if (config.method === 'API') {
+      method = 'API';
+  } else if (config.method === 'SMTP') {
+      method = 'SMTP';
+  } else if (config.apiKey) {
+      method = 'API';
+  }
 
   try {
-    console.log(`Sending approval email to ${user.email} using ${method} (${method === 'API' ? config.provider : 'SMTP'})`);
+    console.log(`Sending approval email to ${user.email} using ${method} (${method === 'API' ? config.provider : 'SMTP Host: ' + config.smtpHost})`);
     
     if (method === 'API') {
       if (!config.apiKey) throw new Error("API Key is missing for API method");
@@ -124,16 +135,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } else if (config.provider === 'BREVO') {
         await sendBrevo(config, user.email, subject, html);
       } else {
-        // Fallback or Error
         throw new Error(`Unknown or Missing API Provider: ${config.provider}`);
       }
     } else {
+      // SMTP Logic
+      if (!config.smtpHost || !config.smtpUser || !config.smtpPass) {
+          throw new Error("SMTP Configuration incomplete (Host, User, or Pass missing)");
+      }
       await sendSMTP(config, user.email, subject, html);
     }
     
     return res.status(200).json({ success: true, message: 'Email sent successfully' });
   } catch (error: any) {
     console.error('Email Sending Error:', error);
-    return res.status(500).json({ error: error.message });
+    // Return the specific error message to the frontend for debugging
+    return res.status(500).json({ error: `Email Failed: ${error.message}` });
   }
 }
