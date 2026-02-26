@@ -715,6 +715,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
     }
 
+    // --- CLEAR TABLE LOGIC (TRUNCATE) ---
+    if (action === 'clear') {
+        const tableConfig = getTableConfig(collection);
+        if (!tableConfig) return res.status(400).json({ error: 'Invalid collection' });
+
+        // Safety Guard: Only allow clearing specific tables
+        const ALLOWED_CLEAR_TABLES = ['logs', 'notifications'];
+        if (!ALLOWED_CLEAR_TABLES.includes(tableConfig.table)) {
+             return res.status(403).json({ error: 'Operation not allowed for this table' });
+        }
+
+        try {
+            await client.execute(`DELETE FROM ${tableConfig.table}`);
+            return res.status(200).json({ success: true, message: `Table ${tableConfig.table} cleared.` });
+        } catch (e: any) {
+            return res.status(500).json({ error: e.message });
+        }
+    }
+
     // --- PUSH LOGIC ---
     if (action === 'push') {
         if (!items || items.length === 0) return res.status(200).json({ success: true });
