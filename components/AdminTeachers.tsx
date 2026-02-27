@@ -75,7 +75,7 @@ const AdminTeachers: React.FC = () => {
             if (emailResult.success) {
                 message += "\n📧 Email Terkirim.";
             } else {
-                message += "\n⚠️ Email Gagal (Cek Konfigurasi SMTP/API).";
+                message += `\n⚠️ Email Gagal: ${emailResult.message}`;
             }
 
             alert(message);
