@@ -27,6 +27,7 @@ import HelpCenter from './components/HelpCenter';
 import BroadcastPage from './components/BroadcastPage';
 import SyncPage from './components/SyncPage'; // Import SyncPage
 import DailyPicket from './components/DailyPicket'; // Import DailyPicket
+import DonationHistory from './components/DonationHistory'; // Import DonationHistory
 import NotificationPanel from './components/NotificationPanel';
 import { initDatabase, loginUser, resetPassword, registerUser, getNotifications, createNotification, markNotificationAsRead, clearNotifications, getSystemSettings, syncAllData, checkSchoolNameByNpsn } from './services/database';
 import { 
@@ -67,7 +68,8 @@ import {
   Cloud, 
   CheckCircle,
   ArrowLeftRight,
-  School // Import School
+  School,
+  CreditCard // Import CreditCard
 } from './components/Icons';
 
 // Konstanta Timeout: 15 Menit
@@ -664,6 +666,7 @@ const AppContent: React.FC = () => {
                 <NavLink to="/announcements" icon={Megaphone} label="Live Announcements" /> 
                 <NavLink to="/broadcast" icon={Send} label="Broadcast WhatsApp" />
                 <NavLink to="/backup" icon={DatabaseBackup} label="Backup & Restore" />
+                <NavLink to="/donations" icon={CreditCard} label="Riwayat Donasi" /> {/* NEW LINK */}
                 <NavLink to="/sync" icon={ArrowLeftRight} label="Sinkronisasi Data" /> {/* NEW LINK */}
                 <NavLink to="/site-settings" icon={Globe} label="Pengaturan Situs" /> 
                 <NavLink to="/settings" icon={Settings} label="Konfigurasi Sistem" />
@@ -770,6 +773,7 @@ const AppContent: React.FC = () => {
                    <Route path="/teachers" element={<AdminTeachers />} />
                    <Route path="/students" element={<AdminStudents />} />
                    <Route path="/announcements" element={<AdminAnnouncements />} />
+                   <Route path="/donations" element={<DonationHistory />} /> {/* NEW ROUTE */}
                    <Route path="/broadcast" element={<BroadcastPage user={currentUser} />} />
                    <Route path="/backup" element={<BackupRestore user={currentUser} />} />
                    <Route path="/sync" element={<SyncPage user={currentUser} />} /> {/* NEW ROUTE */}
