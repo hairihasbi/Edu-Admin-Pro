@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { User, Ticket, UserRole } from '../types';
-import { createTicket, getTickets, replyTicket, closeTicket } from '../services/database';
-import { LifeBuoy, Send, Plus, Search, CheckCircle, X, MessageCircle, User as UserIcon, RefreshCcw } from './Icons';
+import { createTicket, getTickets, replyTicket, closeTicket, deleteTicket } from '../services/database';
+import { LifeBuoy, Send, Plus, Search, CheckCircle, X, MessageCircle, User as UserIcon, RefreshCcw, Trash2 } from './Icons';
 
 interface HelpCenterProps {
   user: User;
@@ -105,6 +105,20 @@ const HelpCenter: React.FC<HelpCenterProps> = ({ user }) => {
         await fetchTickets();
       } else {
         alert("Gagal menutup tiket.");
+      }
+    }
+  };
+
+  const handleDeleteTicket = async () => {
+    if (!selectedTicket) return;
+    if (window.confirm("PERINGATAN: Apakah Anda yakin ingin menghapus riwayat pesan ini secara permanen? Data yang dihapus tidak dapat dikembalikan.")) {
+      const success = await deleteTicket(selectedTicket.id);
+      if (success) {
+        setSelectedTicket(null);
+        await fetchTickets();
+        alert("Riwayat pesan berhasil dihapus.");
+      } else {
+        alert("Gagal menghapus riwayat pesan.");
       }
     }
   };
@@ -238,9 +252,18 @@ const HelpCenter: React.FC<HelpCenterProps> = ({ user }) => {
                 </button>
               )}
               {selectedTicket.status === 'CLOSED' && (
-                 <span className="bg-gray-200 text-gray-600 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1">
-                    <CheckCircle size={14} /> Ditutup
-                 </span>
+                 <div className="flex items-center gap-2">
+                     <span className="bg-gray-200 text-gray-600 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1">
+                        <CheckCircle size={14} /> Ditutup
+                     </span>
+                     <button 
+                        onClick={handleDeleteTicket}
+                        className="text-red-600 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1"
+                        title="Hapus Riwayat Pesan Secara Permanen"
+                     >
+                        <Trash2 size={14} /> Hapus Riwayat
+                     </button>
+                 </div>
               )}
             </div>
 
