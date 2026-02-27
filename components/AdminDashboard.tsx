@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { 
   Users, GraduationCap, TrendingUp, ClipboardList, Layout, CalendarDays, 
   Activity, ShieldAlert, Clock, Server, ChevronRight, CheckCircle, Database, 
-  WifiOff, AlertTriangle, RefreshCcw, Megaphone, DatabaseBackup, Settings, Globe
+  WifiOff, AlertTriangle, RefreshCcw, Megaphone, DatabaseBackup, Settings, Globe, CreditCard
 } from './Icons';
 import { getDashboardStats, getPendingTeachers, getSystemLogs, addSystemLog } from '../services/database';
 import { checkConnection } from '../services/tursoService'; 
@@ -257,7 +257,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
            <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
               <Activity size={18} className="text-blue-600" /> Aksi Cepat (Quick Actions)
            </h3>
-           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               <Link to="/teachers" className="flex flex-col items-center justify-center p-4 bg-blue-50 hover:bg-blue-100 rounded-xl transition group">
                  <div className="bg-white p-2 rounded-full mb-2 shadow-sm group-hover:scale-110 transition">
                     <Users size={20} className="text-blue-600" />
@@ -281,6 +281,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
                     <Globe size={20} className="text-orange-600" />
                  </div>
                  <span className="text-xs font-bold text-orange-800">Identitas Situs</span>
+              </Link>
+              <Link to="/donations" className="flex flex-col items-center justify-center p-4 bg-green-50 hover:bg-green-100 rounded-xl transition group">
+                 <div className="bg-white p-2 rounded-full mb-2 shadow-sm group-hover:scale-110 transition">
+                    <CreditCard size={20} className="text-green-600" />
+                 </div>
+                 <span className="text-xs font-bold text-green-800">Donasi</span>
               </Link>
            </div>
         </div>
