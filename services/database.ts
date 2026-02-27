@@ -107,6 +107,10 @@ export const getTeachers = async () => {
     return await db.users.where('role').equals('GURU').and(u => u.status === 'ACTIVE').toArray();
 };
 
+export const getAllUsers = async () => {
+    return await db.users.toArray();
+};
+
 export const getPendingTeachers = async () => {
     return await db.users.where('status').equals('PENDING').toArray();
 };
@@ -737,6 +741,16 @@ export const getTickets = async (user: User) => {
         return await db.tickets.toArray();
     }
     return await db.tickets.where('userId').equals(user.id).toArray();
+};
+
+export const getDonations = async () => {
+    return await db.donations.orderBy('createdAt').reverse().toArray();
+};
+
+export const deleteDonation = async (id: string) => {
+    await db.donations.delete(id);
+    pushToTurso('eduadmin_donations', [{id, deleted: true}]);
+    return true;
 };
 
 export const replyTicket = async (ticketId: string, sender: User, message: string) => {
