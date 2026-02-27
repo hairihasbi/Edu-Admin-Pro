@@ -771,6 +771,12 @@ export const closeTicket = async (id: string) => {
     return true;
 };
 
+export const deleteTicket = async (id: string) => {
+    await db.tickets.delete(id);
+    pushToTurso('eduadmin_tickets', [{id, deleted: true}]);
+    return true;
+};
+
 // --- BK ---
 export const getStudentViolations = async () => await db.violations.toArray();
 export const addStudentViolation = async (data: Omit<StudentViolation, 'id'|'lastModified'|'isSynced'>) => {
