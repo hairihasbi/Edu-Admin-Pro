@@ -332,7 +332,7 @@ export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', logCall
             'eduadmin_logs', 'eduadmin_email_config', 'eduadmin_master_subjects', 'eduadmin_tickets', 
             'eduadmin_bk_violations', 'eduadmin_bk_reductions', 'eduadmin_bk_achievements', 'eduadmin_bk_counseling',
             'eduadmin_wa_configs', 'eduadmin_notifications', 'eduadmin_api_keys', 'eduadmin_system_settings',
-            'eduadmin_pickets', 'eduadmin_incidents'
+            'eduadmin_pickets', 'eduadmin_incidents', 'eduadmin_donations'
         ];
 
         const tableMap: Record<string, any> = {
@@ -357,7 +357,8 @@ export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', logCall
             'eduadmin_api_keys': db.apiKeys,
             'eduadmin_system_settings': db.systemSettings,
             'eduadmin_pickets': db.dailyPickets,
-            'eduadmin_incidents': db.studentIncidents
+            'eduadmin_incidents': db.studentIncidents,
+            'eduadmin_donations': db.donations
         };
 
         if (direction === 'PUSH' || direction === 'FULL') {
