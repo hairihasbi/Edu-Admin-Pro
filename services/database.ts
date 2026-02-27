@@ -849,6 +849,21 @@ export const saveDailyPicket = async (date: string, schoolNpsn: string, officers
     return item;
 };
 
+export const deleteDailyPicket = async (id: string) => {
+    // 1. Delete Picket
+    await db.dailyPickets.delete(id);
+    pushToTurso('eduadmin_pickets', [{id, deleted: true}]);
+
+    // 2. Delete Incidents linked to this picket
+    const incidents = await db.studentIncidents.where('picketId').equals(id).toArray();
+    const incidentIds = incidents.map(i => i.id);
+    
+    if (incidentIds.length > 0) {
+        await db.studentIncidents.bulkDelete(incidentIds);
+        pushToTurso('eduadmin_incidents', incidentIds.map(iid => ({id: iid, deleted: true})));
+    }
+};
+
 export const getStudentIncidents = async (picketId: string) => {
     return await db.studentIncidents.where('picketId').equals(picketId).toArray();
 };
