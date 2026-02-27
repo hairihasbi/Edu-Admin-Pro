@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { User } from '../types';
-import { getDailyPicket, saveDailyPicket, getTeachersBySchool, getSchoolAttendanceSummary, getStudentIncidents, getAttendanceSummaryByRange, getIncidentsByDateRange } from '../services/database';
+import { getDailyPicket, saveDailyPicket, deleteDailyPicket, getTeachersBySchool, getSchoolAttendanceSummary, getStudentIncidents, getAttendanceSummaryByRange, getIncidentsByDateRange } from '../services/database';
 import PicketAttendanceTable from './PicketAttendanceTable';
 import PicketIncidentForm from './PicketIncidentForm';
-import { Calendar, User as UserIcon, Save, RefreshCw, Printer, FileText } from 'lucide-react';
+import { Calendar, User as UserIcon, Save, RefreshCw, Printer, FileText, Trash2 } from 'lucide-react';
 
 interface DailyPicketProps {
     currentUser: User;
@@ -69,6 +69,24 @@ const DailyPicket: React.FC<DailyPicketProps> = ({ currentUser }) => {
             alert('Gagal menyimpan data piket.');
         }
         setIsSaving(false);
+    };
+
+    const handleDeletePicket = async () => {
+        if (!picketId) return;
+        if (window.confirm('PERINGATAN: Menghapus data piket akan menghapus seluruh catatan kejadian siswa untuk tanggal ini.\n\nApakah Anda yakin ingin melanjutkan?')) {
+            setIsSaving(true);
+            try {
+                await deleteDailyPicket(picketId);
+                setPicketId(null);
+                setOfficers([currentUser.fullName]);
+                setNotes('');
+                alert('Data Piket Berhasil Dihapus.');
+            } catch (error) {
+                console.error(error);
+                alert('Gagal menghapus data piket.');
+            }
+            setIsSaving(false);
+        }
     };
 
     const toggleOfficer = (teacherName: string) => {
@@ -317,7 +335,17 @@ const DailyPicket: React.FC<DailyPicketProps> = ({ currentUser }) => {
                     />
                 </div>
 
-                <div className="flex justify-end">
+                <div className="flex justify-end gap-3">
+                    {picketId && (
+                        <button 
+                            onClick={handleDeletePicket}
+                            disabled={isSaving}
+                            className="flex items-center gap-2 bg-red-50 text-red-600 px-5 py-2.5 rounded-lg hover:bg-red-100 transition shadow-sm border border-red-200 disabled:opacity-50"
+                        >
+                            <Trash2 className="w-4 h-4" />
+                            Hapus Data Piket
+                        </button>
+                    )}
                     <button 
                         onClick={handleSavePicketInfo}
                         disabled={isSaving}
