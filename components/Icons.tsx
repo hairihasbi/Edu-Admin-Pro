@@ -104,7 +104,8 @@ import {
   Minimize2, // Added
   PieChart, // Added PieChart
   ExternalLink, // Added ExternalLink
-  Loader2 // Added Loader2
+  Loader2, // Added Loader2
+  XCircle // Added XCircle
 } from 'lucide-react';
 
 export {
@@ -212,5 +213,6 @@ export {
   Minimize2,
   PieChart,
   ExternalLink,
-  Loader2
+  Loader2,
+  XCircle
 };
