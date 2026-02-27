@@ -607,7 +607,7 @@ export const sendApprovalEmail = async (user: User) => {
     try {
         const config = await getEmailConfig();
         if (!config || !config.isActive) {
-            await addSystemLog('WARN', 'SYSTEM', 'ADMIN', 'EMAIL_SKIPPED', `Email config inactive for user ${user.email}`);
+            await addSystemLog('WARNING', 'SYSTEM', 'ADMIN', 'EMAIL_SKIPPED', `Email config inactive for user ${user.email}`);
             return { success: false, message: 'Email config inactive' };
         }
         
