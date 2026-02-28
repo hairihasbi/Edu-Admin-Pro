@@ -23,6 +23,7 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
   // Form State
   const [formData, setFormData] = useState({
     classId: '', // Specific Class ID for Input
+    subject: '', // NEW: Subject for Input
     code: '',
     phase: '',
     content: ''
@@ -50,9 +51,9 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
          setSelectedSubject(subjects[0]);
       }
     } else if (user.subject === 'Matematika') {
-      // Default to first math option if not set
-      if (!selectedSubject || (!MATH_SUBJECT_OPTIONS.includes(selectedSubject) && selectedSubject !== 'ALL')) {
-         setSelectedSubject(MATH_SUBJECT_OPTIONS[0]);
+      // Default to ALL for Math teachers
+      if (!selectedSubject) {
+         setSelectedSubject('ALL');
       }
     } else {
       setSelectedSubject(user.subject || '');
@@ -112,6 +113,7 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
       setEditingId(item.id);
       setFormData({
           classId: item.classId,
+          subject: item.subject || '',
           code: item.code,
           phase: item.phase,
           content: item.content
@@ -124,6 +126,7 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
       setEditingId(null);
       setFormData(prev => ({
           ...prev,
+          subject: '',
           code: '',
           phase: '',
           content: ''
@@ -132,10 +135,31 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.classId || !formData.code || !formData.content) return;
+    
+    // Determine Subject
+    let finalSubject = formData.subject;
+    
+    // If form subject is empty, try to infer or validate
+    if (!finalSubject) {
+        if (user.teacherType === 'CLASS') {
+             // Class teacher must select in form, but if they didn't, maybe use filter if specific?
+             // Better to require it in form.
+             if (selectedSubject !== 'ALL' && SD_SUBJECTS_PHASE_A.includes(selectedSubject)) { // Simplified check
+                 finalSubject = selectedSubject;
+             }
+        } else if (user.subject === 'Matematika') {
+             // Math teacher must select in form
+             if (selectedSubject !== 'ALL') {
+                 finalSubject = selectedSubject;
+             }
+        } else {
+             // Other teachers
+             finalSubject = user.subject || '';
+        }
+    }
 
-    if (selectedSubject === 'ALL') {
-        alert('Mohon pilih mata pelajaran spesifik sebelum menyimpan data.');
+    if (!formData.classId || !formData.code || !formData.content || !finalSubject) {
+        alert("Mohon lengkapi semua data termasuk Mata Pelajaran.");
         return;
     }
 
@@ -143,6 +167,7 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
         // UPDATE MODE
         const updatedItem = await updateScopeMaterial(editingId, {
             classId: formData.classId,
+            subject: finalSubject,
             code: formData.code,
             phase: formData.phase,
             content: formData.content
@@ -158,7 +183,7 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
         const newItem = await addScopeMaterial({
             classId: formData.classId,
             userId: user.id,
-            subject: selectedSubject,
+            subject: finalSubject,
             semester: filterSemester, // Use currently viewed semester for simplicity
             code: formData.code,
             phase: formData.phase,
@@ -260,7 +285,7 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
       {user.teacherType === 'CLASS' ? (
         <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl flex items-center gap-4">
             <div className="flex-1">
-                <label className="block text-sm font-bold text-blue-800 mb-1">Mata Pelajaran (Mode Guru Kelas)</label>
+                <label className="block text-sm font-bold text-blue-800 mb-1">Mata Pelajaran</label>
                 <select 
                     value={selectedSubject}
                     onChange={(e) => setSelectedSubject(e.target.value)}
@@ -272,7 +297,7 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
                 </select>
             </div>
             <div className="text-xs text-blue-600 max-w-md hidden sm:block">
-                *Anda sedang dalam mode Guru Kelas. Pilih mata pelajaran untuk memfilter Lingkup Materi.
+                *Pilih mata pelajaran untuk memfilter Lingkup Materi.
             </div>
         </div>
       ) : (
@@ -286,21 +311,22 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
                 >
                     {user.subject === 'Matematika' ? (
                         <>
+                            <option value="ALL">Tampilkan Semua Data</option>
                             {MATH_SUBJECT_OPTIONS.map(m => (
                                 <option key={m} value={m}>{m}</option>
                             ))}
-                            <option value="ALL">Tampilkan Semua Data</option>
                         </>
                     ) : (
                         <>
                             <option value={user.subject || ''}>{user.subject || 'Mapel Saya'}</option>
-                            <option value="ALL">Tampilkan Semua Data (Termasuk Mapel Lain)</option>
                         </>
                     )}
                 </select>
             </div>
             <div className="text-xs text-gray-500 max-w-md hidden sm:block">
-                *Jika data tidak muncul, coba pilih "Tampilkan Semua Data".
+                {user.subject === 'Matematika' 
+                    ? '*Pilih "Tampilkan Semua Data" untuk melihat semua materi matematika.' 
+                    : '*Menampilkan data mata pelajaran Anda.'}
             </div>
         </div>
       )}
@@ -403,6 +429,31 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
                     onChange={handleInputChange}
                     />
                 </div>
+
+                {/* Subject Selector in Form */}
+                {(user.teacherType === 'CLASS' || user.subject === 'Matematika') && (
+                    <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1 uppercase">Mata Pelajaran</label>
+                        <select
+                            name="subject"
+                            value={formData.subject}
+                            onChange={handleInputChange}
+                            className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                            required
+                        >
+                            <option value="" disabled>-- Pilih Mata Pelajaran --</option>
+                            {user.teacherType === 'CLASS' ? (
+                                ((user.phase === 'B' || user.phase === 'C') ? SD_SUBJECTS_PHASE_BC : SD_SUBJECTS_PHASE_A).map(s => (
+                                    <option key={s} value={s}>{s}</option>
+                                ))
+                            ) : (
+                                MATH_SUBJECT_OPTIONS.map(m => (
+                                    <option key={m} value={m}>{m}</option>
+                                ))
+                            )}
+                        </select>
+                    </div>
+                )}
                 <div>
                     <label className="block text-xs font-medium text-gray-500 mb-1 uppercase">Isian Lingkup Materi</label>
                     <textarea
