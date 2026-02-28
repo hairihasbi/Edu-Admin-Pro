@@ -415,3 +415,8 @@ export const SD_SUBJECTS_PHASE_BC = [
   "Muatan Lokal (Pilihan)",
   "Ilmu Pengetahuan Alam dan Sosial (IPAS)"
 ];
+
+export const MATH_SUBJECT_OPTIONS = [
+  "Matematika Umum",
+  "Matematika Tingkat Lanjut"
+];
