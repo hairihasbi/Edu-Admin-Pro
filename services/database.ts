@@ -1215,7 +1215,8 @@ export const getScopeMaterials = async (classId: string, semester: string, userI
     let collection = db.scopeMaterials.where('userId').equals(userId);
     if (classId) collection = collection.filter(m => m.classId === classId);
     if (semester) collection = collection.filter(m => m.semester === semester);
-    if (subject) collection = collection.filter(m => m.subject === subject);
+    // FIX: Allow legacy data (no subject) to appear for backward compatibility
+    if (subject) collection = collection.filter(m => m.subject === subject || !m.subject);
     return await collection.toArray();
 };
 
@@ -1288,14 +1289,16 @@ export const saveBulkAssessmentScores = async (scores: Omit<AssessmentScore, 'id
 
 export const getAssessmentScores = async (classId: string, semester: string, subject?: string) => {
     let collection = db.assessmentScores.where({ classId, semester });
-    if (subject) collection = collection.filter(s => s.subject === subject);
+    // FIX: Allow legacy data (no subject) to appear
+    if (subject) collection = collection.filter(s => s.subject === subject || !s.subject);
     return await collection.toArray();
 };
 
 // --- JOURNALS ---
 export const getTeachingJournals = async (userId: string, subject?: string) => {
     let collection = db.teachingJournals.where('userId').equals(userId);
-    if (subject) collection = collection.filter(j => j.subject === subject);
+    // FIX: Allow legacy data (no subject) to appear
+    if (subject) collection = collection.filter(j => j.subject === subject || !j.subject);
     return await collection.reverse().sortBy('date');
 };
 
