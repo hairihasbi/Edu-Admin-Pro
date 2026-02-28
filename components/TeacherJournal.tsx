@@ -524,25 +524,7 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
       </div>
 
       {/* --- FILTER SECTION (Moved Below Form) --- */}
-      {user.teacherType === 'CLASS' && (
-        <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl flex items-center gap-4">
-            <div className="flex-1">
-                <label className="block text-sm font-bold text-blue-800 mb-1">Filter Mata Pelajaran (Arsip)</label>
-                <select 
-                    value={selectedSubject}
-                    onChange={(e) => setSelectedSubject(e.target.value)}
-                    className="w-full p-2 border border-blue-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none"
-                >
-                    {((user.phase === 'B' || user.phase === 'C') ? SD_SUBJECTS_PHASE_BC : SD_SUBJECTS_PHASE_A).map(s => (
-                        <option key={s} value={s}>{s}</option>
-                    ))}
-                </select>
-            </div>
-            <div className="text-xs text-blue-600 max-w-md hidden sm:block">
-                *Filter arsip jurnal berdasarkan mata pelajaran.
-            </div>
-        </div>
-      )}
+      {/* Filter removed for Class Teachers as requested */}
 
       {/* --- LIST & FILTER SECTION --- */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col">

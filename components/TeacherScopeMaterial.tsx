@@ -282,25 +282,7 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
     <div className="space-y-6 pb-20">
       
       {/* --- SUBJECT SELECTOR --- */}
-      {user.teacherType === 'CLASS' && (
-        <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl flex items-center gap-4">
-            <div className="flex-1">
-                <label className="block text-sm font-bold text-blue-800 mb-1">Mata Pelajaran</label>
-                <select 
-                    value={selectedSubject}
-                    onChange={(e) => setSelectedSubject(e.target.value)}
-                    className="w-full p-2 border border-blue-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none"
-                >
-                    {((user.phase === 'B' || user.phase === 'C') ? SD_SUBJECTS_PHASE_BC : SD_SUBJECTS_PHASE_A).map(s => (
-                        <option key={s} value={s}>{s}</option>
-                    ))}
-                </select>
-            </div>
-            <div className="text-xs text-blue-600 max-w-md hidden sm:block">
-                *Pilih mata pelajaran untuk memfilter Lingkup Materi.
-            </div>
-        </div>
-      )}
+      {/* Filter removed for Class Teachers as requested */}
 
       {/* Header & Controls */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between gap-6">
