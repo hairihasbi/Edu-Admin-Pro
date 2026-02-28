@@ -31,6 +31,8 @@ export interface User extends Syncable {
   additionalRole?: 'WALI_KELAS'; 
   homeroomClassId?: string;
   homeroomClassName?: string; // Helper for UI
+  teacherType?: 'SUBJECT' | 'CLASS'; // NEW: Teacher Type
+  phase?: 'A' | 'B' | 'C'; // NEW: Phase for Class Teacher
   // RPP Quota Tracking
   rppUsageCount?: number; // Jumlah RPP dibuat bulan ini
   rppLastReset?: string; // Format "YYYY-MM" untuk menandai bulan terakhir reset
@@ -175,6 +177,7 @@ export interface TeachingJournal extends Syncable {
   id: string;
   userId: string;
   classId: string;
+  subject?: string; // NEW: Subject filter
   materialId: string; 
   learningObjective: string; 
   date: string;
@@ -389,3 +392,26 @@ export interface ApiKeyStats {
 }
 
 export type ViewState = 'dashboard' | 'students' | 'teachers' | 'classes' | 'ai-assistant' | 'settings' | 'profile';
+
+export const SD_SUBJECTS_PHASE_A = [
+  "Pendidikan Agama dan Budi Pekerti",
+  "Pendidikan Pancasila",
+  "Bahasa Indonesia",
+  "Matematika",
+  "Pendidikan Jasmani, Olahraga, dan Kesehatan (PJOK)",
+  "Seni dan Budaya (Rupa/Musik/Teater/Tari)",
+  "Bahasa Inggris (Pilihan)",
+  "Muatan Lokal (Pilihan)"
+];
+
+export const SD_SUBJECTS_PHASE_BC = [
+  "Pendidikan Agama dan Budi Pekerti",
+  "Pendidikan Pancasila",
+  "Bahasa Indonesia",
+  "Matematika",
+  "Pendidikan Jasmani, Olahraga, dan Kesehatan (PJOK)",
+  "Seni dan Budaya (Rupa/Musik/Teater/Tari)",
+  "Bahasa Inggris (Pilihan)",
+  "Muatan Lokal (Pilihan)",
+  "Ilmu Pengetahuan Alam dan Sosial (IPAS)"
+];
