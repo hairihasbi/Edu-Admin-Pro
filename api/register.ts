@@ -13,7 +13,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  const { id, username, password, fullName, email, phone, schoolNpsn, schoolName, role, status, subject, avatar, lastModified } = req.body;
+  const { id, username, password, fullName, email, phone, schoolNpsn, schoolName, role, status, subject, avatar, lastModified, teacherType, phase } = req.body;
 
   if (!username || !password || !schoolNpsn) {
       return res.status(400).json({ error: "Missing required fields (username, password, npsn)" });
@@ -60,12 +60,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         sql: `INSERT INTO users (
             id, username, password, full_name, email, phone, 
             school_npsn, school_name, role, status, subject, 
-            avatar, last_modified, version, deleted
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+            avatar, teacher_type, phase, last_modified, version, deleted
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
         args: [
             id, username, hashedPassword, fullName, email || '', phone || '',
             schoolNpsn, schoolName, finalRole, finalStatus, subject || '',
-            avatar, lastModified || Date.now(), 1
+            avatar, teacherType || 'SUBJECT', phase || null, lastModified || Date.now(), 1
         ]
     });
 

@@ -107,6 +107,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         homeroomClassName: userRow.homeroom_class_name,
         rppUsageCount: userRow.rpp_usage_count,
         rppLastReset: userRow.rpp_last_reset,
+        teacherType: userRow.teacher_type,
+        phase: userRow.phase,
         lastModified: userRow.last_modified,
         version: userRow.version,
         isSynced: true // Tandai bahwa data ini berasal dari server
