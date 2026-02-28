@@ -39,8 +39,8 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
          setSelectedSubject(subjects[0]);
       }
     } else if (user.subject === 'Matematika') {
-      // Default to first math option if not set
-      if (!selectedSubject || (!MATH_SUBJECT_OPTIONS.includes(selectedSubject) && selectedSubject !== 'ALL')) {
+      // Default to first math option if not set or if it is ALL (strict mode)
+      if (!selectedSubject || !MATH_SUBJECT_OPTIONS.includes(selectedSubject)) {
          setSelectedSubject(MATH_SUBJECT_OPTIONS[0]);
       }
     } else {
@@ -438,7 +438,7 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
                 *Anda sedang dalam mode Guru Kelas. Pilih mata pelajaran untuk memfilter Jurnal, Lingkup Materi, dan Asesmen.
             </div>
         </div>
-      ) : (
+      ) : user.subject !== 'Matematika' && (
         <div className="bg-gray-50 border border-gray-200 p-4 rounded-xl flex items-center gap-4">
             <div className="flex-1">
                 <label className="block text-sm font-bold text-gray-700 mb-1">Filter Mata Pelajaran</label>
@@ -447,19 +447,8 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
                     onChange={(e) => setSelectedSubject(e.target.value)}
                     className="w-full p-2 border border-gray-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none"
                 >
-                    {user.subject === 'Matematika' ? (
-                        <>
-                            {MATH_SUBJECT_OPTIONS.map(m => (
-                                <option key={m} value={m}>{m}</option>
-                            ))}
-                            <option value="ALL">Tampilkan Semua Data</option>
-                        </>
-                    ) : (
-                        <>
-                            <option value={user.subject || ''}>{user.subject || 'Mapel Saya'}</option>
-                            <option value="ALL">Tampilkan Semua Data (Termasuk Mapel Lain)</option>
-                        </>
-                    )}
+                    <option value={user.subject || ''}>{user.subject || 'Mapel Saya'}</option>
+                    <option value="ALL">Tampilkan Semua Data (Termasuk Mapel Lain)</option>
                 </select>
             </div>
             <div className="text-xs text-gray-500 max-w-md hidden sm:block">
@@ -487,6 +476,20 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
               >
                 {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
+
+              {/* Math Subject Selector in Control Bar */}
+              {user.subject === 'Matematika' && (
+                  <select 
+                    value={selectedSubject}
+                    onChange={(e) => setSelectedSubject(e.target.value)}
+                    className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white text-sm font-medium text-blue-700"
+                  >
+                    {MATH_SUBJECT_OPTIONS.map(m => (
+                        <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+              )}
+
               <select 
                 value={selectedSemester}
                 onChange={(e) => setSelectedSemester(e.target.value)}
