@@ -542,7 +542,7 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
                 *Filter arsip jurnal berdasarkan mata pelajaran.
             </div>
         </div>
-      ) : (
+      ) : user.subject !== 'Matematika' && (
         <div className="bg-gray-50 border border-gray-200 p-4 rounded-xl flex items-center gap-4">
             <div className="flex-1">
                 <label className="block text-sm font-bold text-gray-700 mb-1">Filter Mata Pelajaran (Arsip)</label>
@@ -551,24 +551,11 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
                     onChange={(e) => setSelectedSubject(e.target.value)}
                     className="w-full p-2 border border-gray-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none"
                 >
-                    {user.subject === 'Matematika' ? (
-                        <>
-                            <option value="ALL">Tampilkan Semua Data</option>
-                            {MATH_SUBJECT_OPTIONS.map(m => (
-                                <option key={m} value={m}>{m}</option>
-                            ))}
-                        </>
-                    ) : (
-                        <>
-                            <option value={user.subject || ''}>{user.subject || 'Mapel Saya'}</option>
-                        </>
-                    )}
+                    <option value={user.subject || ''}>{user.subject || 'Mapel Saya'}</option>
                 </select>
             </div>
             <div className="text-xs text-gray-500 max-w-md hidden sm:block">
-                {user.subject === 'Matematika' 
-                    ? '*Pilih "Tampilkan Semua Data" untuk melihat semua jurnal matematika.' 
-                    : '*Menampilkan jurnal mata pelajaran Anda.'}
+                *Menampilkan jurnal mata pelajaran Anda.
             </div>
         </div>
       )}
