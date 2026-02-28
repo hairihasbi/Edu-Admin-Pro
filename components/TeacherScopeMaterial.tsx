@@ -282,7 +282,7 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
     <div className="space-y-6 pb-20">
       
       {/* --- SUBJECT SELECTOR --- */}
-      {user.teacherType === 'CLASS' ? (
+      {user.teacherType === 'CLASS' && (
         <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl flex items-center gap-4">
             <div className="flex-1">
                 <label className="block text-sm font-bold text-blue-800 mb-1">Mata Pelajaran</label>
@@ -298,22 +298,6 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
             </div>
             <div className="text-xs text-blue-600 max-w-md hidden sm:block">
                 *Pilih mata pelajaran untuk memfilter Lingkup Materi.
-            </div>
-        </div>
-      ) : user.subject !== 'Matematika' && (
-        <div className="bg-gray-50 border border-gray-200 p-4 rounded-xl flex items-center gap-4">
-            <div className="flex-1">
-                <label className="block text-sm font-bold text-gray-700 mb-1">Filter Mata Pelajaran</label>
-                <select 
-                    value={selectedSubject}
-                    onChange={(e) => setSelectedSubject(e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none"
-                >
-                    <option value={user.subject || ''}>{user.subject || 'Mapel Saya'}</option>
-                </select>
-            </div>
-            <div className="text-xs text-gray-500 max-w-md hidden sm:block">
-                *Menampilkan data mata pelajaran Anda.
             </div>
         </div>
       )}
