@@ -1215,8 +1215,15 @@ export const getScopeMaterials = async (classId: string, semester: string, userI
     let collection = db.scopeMaterials.where('userId').equals(userId);
     if (classId) collection = collection.filter(m => m.classId === classId);
     if (semester) collection = collection.filter(m => m.semester === semester);
-    // FIX: Allow legacy data (no subject) to appear for backward compatibility
-    if (subject) collection = collection.filter(m => m.subject === subject || !m.subject);
+    
+    // FIX: Robust filtering (Case-insensitive + Allow legacy/empty)
+    if (subject && subject !== 'ALL') {
+        const normSubject = subject.trim().toLowerCase();
+        collection = collection.filter(m => {
+            if (!m.subject) return true; // Keep legacy
+            return m.subject.trim().toLowerCase() === normSubject;
+        });
+    }
     return await collection.toArray();
 };
 
@@ -1289,16 +1296,30 @@ export const saveBulkAssessmentScores = async (scores: Omit<AssessmentScore, 'id
 
 export const getAssessmentScores = async (classId: string, semester: string, subject?: string) => {
     let collection = db.assessmentScores.where({ classId, semester });
-    // FIX: Allow legacy data (no subject) to appear
-    if (subject) collection = collection.filter(s => s.subject === subject || !s.subject);
+    
+    // FIX: Robust filtering
+    if (subject && subject !== 'ALL') {
+        const normSubject = subject.trim().toLowerCase();
+        collection = collection.filter(s => {
+            if (!s.subject) return true;
+            return s.subject.trim().toLowerCase() === normSubject;
+        });
+    }
     return await collection.toArray();
 };
 
 // --- JOURNALS ---
 export const getTeachingJournals = async (userId: string, subject?: string) => {
     let collection = db.teachingJournals.where('userId').equals(userId);
-    // FIX: Allow legacy data (no subject) to appear
-    if (subject) collection = collection.filter(j => j.subject === subject || !j.subject);
+    
+    // FIX: Robust filtering
+    if (subject && subject !== 'ALL') {
+        const normSubject = subject.trim().toLowerCase();
+        collection = collection.filter(j => {
+            if (!j.subject) return true;
+            return j.subject.trim().toLowerCase() === normSubject;
+        });
+    }
     return await collection.reverse().sortBy('date');
 };
 
