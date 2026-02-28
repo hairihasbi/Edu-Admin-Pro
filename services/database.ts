@@ -401,6 +401,9 @@ export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', logCall
                         await table.clear();
                         // Use bulkPut instead of bulkAdd to safely overwrite existing keys
                         // This fixes the ConstraintError when syncing
+                        if (col === 'eduadmin_materials') {
+                            console.log('[Database Debug] Saving materials to local:', uniqueItems);
+                        }
                         await table.bulkPut(uniqueItems);
                     });
                 }
@@ -1216,12 +1219,19 @@ export const getScopeMaterials = async (classId: string, semester: string, userI
     if (classId) collection = collection.filter(m => m.classId === classId);
     if (semester) collection = collection.filter(m => m.semester === semester);
     
-    // FIX: Robust filtering (Case-insensitive + Allow legacy/empty)
+    // FIX: Robust filtering (Case-insensitive + Allow legacy/empty + Math Loose Matching)
     if (subject && subject !== 'ALL') {
         const normSubject = subject.trim().toLowerCase();
         collection = collection.filter(m => {
             if (!m.subject) return true; // Keep legacy
-            return m.subject.trim().toLowerCase() === normSubject;
+            const s = m.subject.trim().toLowerCase();
+            if (s === normSubject) return true;
+            
+            // Math Loose Matching
+            if (normSubject === 'matematika umum' && (s === 'umum' || s === 'matematika')) return true;
+            if (normSubject === 'matematika tingkat lanjut' && s === 'tingkat lanjut') return true;
+            
+            return false;
         });
     }
     return await collection.toArray();
@@ -1297,12 +1307,19 @@ export const saveBulkAssessmentScores = async (scores: Omit<AssessmentScore, 'id
 export const getAssessmentScores = async (classId: string, semester: string, subject?: string) => {
     let collection = db.assessmentScores.where({ classId, semester });
     
-    // FIX: Robust filtering
+    // FIX: Robust filtering (Case-insensitive + Allow legacy/empty + Math Loose Matching)
     if (subject && subject !== 'ALL') {
         const normSubject = subject.trim().toLowerCase();
         collection = collection.filter(s => {
             if (!s.subject) return true;
-            return s.subject.trim().toLowerCase() === normSubject;
+            const sub = s.subject.trim().toLowerCase();
+            if (sub === normSubject) return true;
+
+            // Math Loose Matching
+            if (normSubject === 'matematika umum' && (sub === 'umum' || sub === 'matematika')) return true;
+            if (normSubject === 'matematika tingkat lanjut' && sub === 'tingkat lanjut') return true;
+
+            return false;
         });
     }
     return await collection.toArray();
@@ -1312,12 +1329,19 @@ export const getAssessmentScores = async (classId: string, semester: string, sub
 export const getTeachingJournals = async (userId: string, subject?: string) => {
     let collection = db.teachingJournals.where('userId').equals(userId);
     
-    // FIX: Robust filtering
+    // FIX: Robust filtering (Case-insensitive + Allow legacy/empty + Math Loose Matching)
     if (subject && subject !== 'ALL') {
         const normSubject = subject.trim().toLowerCase();
         collection = collection.filter(j => {
             if (!j.subject) return true;
-            return j.subject.trim().toLowerCase() === normSubject;
+            const s = j.subject.trim().toLowerCase();
+            if (s === normSubject) return true;
+
+            // Math Loose Matching
+            if (normSubject === 'matematika umum' && (s === 'umum' || s === 'matematika')) return true;
+            if (normSubject === 'matematika tingkat lanjut' && s === 'tingkat lanjut') return true;
+
+            return false;
         });
     }
     return await collection.reverse().sortBy('date');
