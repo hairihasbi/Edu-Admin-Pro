@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, ClassRoom, ScopeMaterial } from '../types';
+import { User, ClassRoom, ScopeMaterial, SD_SUBJECTS_PHASE_A, SD_SUBJECTS_PHASE_BC } from '../types';
 import { getClasses, addScopeMaterial, updateScopeMaterial, getScopeMaterials, deleteScopeMaterial, bulkDeleteScopeMaterials, copyScopeMaterials } from '../services/database';
 import { Plus, Trash2, List, Copy, Save, Filter, X, FileText, ChevronLeft, ChevronRight, AlertCircle, ArrowRight, Pencil } from './Icons';
 import { Link } from 'react-router-dom';
@@ -38,6 +38,22 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
   
+  // NEW: Subject State Logic
+  const [selectedSubject, setSelectedSubject] = useState<string>(user.subject || '');
+
+  // Initialize Subject based on Teacher Type
+  useEffect(() => {
+    if (user.teacherType === 'CLASS') {
+      const subjects = (user.phase === 'B' || user.phase === 'C') ? SD_SUBJECTS_PHASE_BC : SD_SUBJECTS_PHASE_A;
+      // Default to first subject if not set or invalid
+      if (!selectedSubject || !subjects.includes(selectedSubject)) {
+         setSelectedSubject(subjects[0]);
+      }
+    } else {
+      setSelectedSubject(user.subject || '');
+    }
+  }, [user, user.teacherType, user.phase]);
+  
   // Copy Modal State
   const [copySourceClassId, setCopySourceClassId] = useState('');
   const [copySourceSemester, setCopySourceSemester] = useState('Ganjil');
@@ -62,7 +78,7 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
   // Fetch Materials when Filter Class or Semester changes
   useEffect(() => {
     fetchMaterials();
-  }, [filterClassId, filterSemester]);
+  }, [filterClassId, filterSemester, selectedSubject]);
 
   // Sync Form Class with Filter Class if user selects a specific class
   useEffect(() => {
@@ -74,7 +90,7 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
   const fetchMaterials = async () => {
     setLoading(true);
     // Fetch materials (supports empty classId for ALL)
-    const data = await getScopeMaterials(filterClassId, filterSemester, user.id);
+    const data = await getScopeMaterials(filterClassId, filterSemester, user.id, selectedSubject);
     setMaterials(data);
     setSelectedIds(new Set()); // Reset selection
     setCurrentPage(1); // Reset page
@@ -132,7 +148,7 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
         const newItem = await addScopeMaterial({
             classId: formData.classId,
             userId: user.id,
-            subject: user.subject || 'Umum',
+            subject: selectedSubject,
             semester: filterSemester, // Use currently viewed semester for simplicity
             code: formData.code,
             phase: formData.phase,
@@ -230,6 +246,27 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
   return (
     <div className="space-y-6 pb-20">
       
+      {/* --- SUBJECT SELECTOR (GURU KELAS ONLY) --- */}
+      {user.teacherType === 'CLASS' && (
+        <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl flex items-center gap-4">
+            <div className="flex-1">
+                <label className="block text-sm font-bold text-blue-800 mb-1">Mata Pelajaran (Mode Guru Kelas)</label>
+                <select 
+                    value={selectedSubject}
+                    onChange={(e) => setSelectedSubject(e.target.value)}
+                    className="w-full p-2 border border-blue-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none"
+                >
+                    {((user.phase === 'B' || user.phase === 'C') ? SD_SUBJECTS_PHASE_BC : SD_SUBJECTS_PHASE_A).map(s => (
+                        <option key={s} value={s}>{s}</option>
+                    ))}
+                </select>
+            </div>
+            <div className="text-xs text-blue-600 max-w-md hidden sm:block">
+                *Anda sedang dalam mode Guru Kelas. Pilih mata pelajaran untuk memfilter Jurnal, Lingkup Materi, dan Asesmen.
+            </div>
+        </div>
+      )}
+
       {/* Header & Controls */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between gap-6">
         <div>

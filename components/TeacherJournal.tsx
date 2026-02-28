@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, ClassRoom, ScopeMaterial, TeachingJournal } from '../types';
+import { User, ClassRoom, ScopeMaterial, TeachingJournal, SD_SUBJECTS_PHASE_A, SD_SUBJECTS_PHASE_BC } from '../types';
 import { getClasses, getScopeMaterials, getTeachingJournals, addTeachingJournal, deleteTeachingJournal, bulkDeleteTeachingJournals } from '../services/database';
 import { Plus, Save, Trash2, Filter, Printer, FileSpreadsheet, NotebookPen, CalendarDays, ChevronLeft, ChevronRight } from './Icons';
 import * as XLSX from 'xlsx';
@@ -15,6 +15,22 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
   const [allMaterials, setAllMaterials] = useState<ScopeMaterial[]>([]); // For Dropdown (filtered by selected class)
   const [materialMap, setMaterialMap] = useState<Record<string, ScopeMaterial>>({}); // For Display/Export (All materials)
   const [journals, setJournals] = useState<TeachingJournal[]>([]);
+  
+  // NEW: Subject State Logic
+  const [selectedSubject, setSelectedSubject] = useState<string>(user.subject || '');
+
+  // Initialize Subject based on Teacher Type
+  useEffect(() => {
+    if (user.teacherType === 'CLASS') {
+      const subjects = (user.phase === 'B' || user.phase === 'C') ? SD_SUBJECTS_PHASE_BC : SD_SUBJECTS_PHASE_A;
+      // Default to first subject if not set or invalid
+      if (!selectedSubject || !subjects.includes(selectedSubject)) {
+         setSelectedSubject(subjects[0]);
+      }
+    } else {
+      setSelectedSubject(user.subject || '');
+    }
+  }, [user, user.teacherType, user.phase]);
 
   // Form States
   const [formData, setFormData] = useState({
@@ -64,8 +80,8 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
       const matMap: Record<string, ScopeMaterial> = {};
       const matPromises = cls.map(async (c) => {
          // PASS user.id to get own materials
-         const ganjil = await getScopeMaterials(c.id, 'Ganjil', user.id);
-         const genap = await getScopeMaterials(c.id, 'Genap', user.id);
+         const ganjil = await getScopeMaterials(c.id, 'Ganjil', user.id, selectedSubject);
+         const genap = await getScopeMaterials(c.id, 'Genap', user.id, selectedSubject);
          return [...ganjil, ...genap];
       });
       const allMatsArrays = await Promise.all(matPromises);
@@ -90,30 +106,30 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
     return () => {
         window.removeEventListener('sync-status', handleSyncStatus);
     };
-  }, [user]);
+  }, [user, selectedSubject]);
 
   // Reset pagination when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [filterClassId, filterMonth, filterYear]);
+  }, [filterClassId, filterMonth, filterYear, selectedSubject]);
 
   // Fetch Materials when Form Class Changes (For Dropdown)
   useEffect(() => {
     if (formData.classId) {
       const fetchMats = async () => {
         // PASS user.id here too
-        const matGanjil = await getScopeMaterials(formData.classId, 'Ganjil', user.id);
-        const matGenap = await getScopeMaterials(formData.classId, 'Genap', user.id);
+        const matGanjil = await getScopeMaterials(formData.classId, 'Ganjil', user.id, selectedSubject);
+        const matGenap = await getScopeMaterials(formData.classId, 'Genap', user.id, selectedSubject);
         setAllMaterials([...matGanjil, ...matGenap]);
       };
       fetchMats();
     } else {
       setAllMaterials([]);
     }
-  }, [formData.classId]);
+  }, [formData.classId, selectedSubject]);
 
   const fetchJournals = async () => {
-    const data = await getTeachingJournals(user.id);
+    const data = await getTeachingJournals(user.id, selectedSubject);
     setJournals(data);
   };
 
@@ -133,7 +149,8 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
     setIsSaving(true);
     const newJournal = await addTeachingJournal({
       ...formData,
-      userId: user.id
+      userId: user.id,
+      subject: selectedSubject
     });
 
     if (newJournal) {
@@ -309,6 +326,27 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
   return (
     <div className="space-y-8 pb-20">
       
+      {/* --- SUBJECT SELECTOR (GURU KELAS ONLY) --- */}
+      {user.teacherType === 'CLASS' && (
+        <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl flex items-center gap-4 mb-6">
+            <div className="flex-1">
+                <label className="block text-sm font-bold text-blue-800 mb-1">Mata Pelajaran (Mode Guru Kelas)</label>
+                <select 
+                    value={selectedSubject}
+                    onChange={(e) => setSelectedSubject(e.target.value)}
+                    className="w-full p-2 border border-blue-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none"
+                >
+                    {((user.phase === 'B' || user.phase === 'C') ? SD_SUBJECTS_PHASE_BC : SD_SUBJECTS_PHASE_A).map(s => (
+                        <option key={s} value={s}>{s}</option>
+                    ))}
+                </select>
+            </div>
+            <div className="text-xs text-blue-600 max-w-md hidden sm:block">
+                *Anda sedang dalam mode Guru Kelas. Pilih mata pelajaran untuk memfilter Jurnal, Lingkup Materi, dan Asesmen.
+            </div>
+        </div>
+      )}
+
       {/* --- FORM SECTION --- */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
          <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2 mb-6">

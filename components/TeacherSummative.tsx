@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { User, ClassRoom, Student, ScopeMaterial, AssessmentScore } from '../types';
+import { User, ClassRoom, Student, ScopeMaterial, AssessmentScore, SD_SUBJECTS_PHASE_A, SD_SUBJECTS_PHASE_BC } from '../types';
 import { getClasses, getStudents, getScopeMaterials, getAssessmentScores, saveBulkAssessmentScores, updateScopeMaterial } from '../services/database';
 import { Calculator, Save, Filter, FileSpreadsheet, AlertCircle, CheckCircle, ArrowRight, RefreshCcw, Settings, Plus, Trash2, X } from './Icons';
 import * as XLSX from 'xlsx';
@@ -26,6 +26,22 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
   const [loading, setLoading] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [hasChanges, setHasChanges] = useState(false);
+  
+  // NEW: Subject State Logic
+  const [selectedSubject, setSelectedSubject] = useState<string>(user.subject || '');
+
+  // Initialize Subject based on Teacher Type
+  useEffect(() => {
+    if (user.teacherType === 'CLASS') {
+      const subjects = (user.phase === 'B' || user.phase === 'C') ? SD_SUBJECTS_PHASE_BC : SD_SUBJECTS_PHASE_A;
+      // Default to first subject if not set or invalid
+      if (!selectedSubject || !subjects.includes(selectedSubject)) {
+         setSelectedSubject(subjects[0]);
+      }
+    } else {
+      setSelectedSubject(user.subject || '');
+    }
+  }, [user, user.teacherType, user.phase]);
 
   // Manage Column Modal State
   const [isManageModalOpen, setIsManageModalOpen] = useState(false);
@@ -49,7 +65,7 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
 
   useEffect(() => {
     if (selectedClassId) fetchData();
-  }, [selectedClassId, selectedSemester]);
+  }, [selectedClassId, selectedSemester, selectedSubject]);
 
   // ROBUST PARSER
   const parseSubScopes = (val: any): string[] => {
@@ -69,8 +85,8 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
     setLoading(true);
     const [stData, matData, scoreData] = await Promise.all([
       getStudents(selectedClassId),
-      getScopeMaterials(selectedClassId, selectedSemester, user.id),
-      getAssessmentScores(selectedClassId, selectedSemester)
+      getScopeMaterials(selectedClassId, selectedSemester, user.id, selectedSubject),
+      getAssessmentScores(selectedClassId, selectedSemester, selectedSubject)
     ]);
 
     setStudents(stData);
@@ -86,7 +102,7 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
     const idDict: {[key: string]: string} = {};
 
     scoreData.forEach(s => {
-      if (!s.subject || s.subject === user.subject) {
+      if (!s.subject || s.subject === selectedSubject) {
           const key = s.category === 'LM' 
             ? `${s.studentId}-LM-${s.materialId}`
             : `${s.studentId}-${s.category}`;
@@ -261,7 +277,7 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
             materialId: m.id,
             score: currentScores[key] || 0,
             scoreDetails: details,
-            subject: user.subject 
+            subject: selectedSubject 
           });
         }
       });
@@ -276,7 +292,7 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
                semester: selectedSemester,
                category: cat as any,
                score: val,
-               subject: user.subject 
+               subject: selectedSubject 
             });
           }
       });
@@ -392,6 +408,27 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
   return (
     <div className="space-y-6 pb-20 relative">
       
+      {/* --- SUBJECT SELECTOR (GURU KELAS ONLY) --- */}
+      {user.teacherType === 'CLASS' && (
+        <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl flex items-center gap-4">
+            <div className="flex-1">
+                <label className="block text-sm font-bold text-blue-800 mb-1">Mata Pelajaran (Mode Guru Kelas)</label>
+                <select 
+                    value={selectedSubject}
+                    onChange={(e) => setSelectedSubject(e.target.value)}
+                    className="w-full p-2 border border-blue-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none"
+                >
+                    {((user.phase === 'B' || user.phase === 'C') ? SD_SUBJECTS_PHASE_BC : SD_SUBJECTS_PHASE_A).map(s => (
+                        <option key={s} value={s}>{s}</option>
+                    ))}
+                </select>
+            </div>
+            <div className="text-xs text-blue-600 max-w-md hidden sm:block">
+                *Anda sedang dalam mode Guru Kelas. Pilih mata pelajaran untuk memfilter Jurnal, Lingkup Materi, dan Asesmen.
+            </div>
+        </div>
+      )}
+
       {/* Header & Controls */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col gap-6">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -431,7 +468,7 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
                   </div>
                ) : (
                   <div className="text-sm text-gray-500">
-                     Mapel: <strong>{user.subject || 'Umum'}</strong> • Klik <Settings size={12} className="inline"/> untuk atur sub-kolom
+                     Mapel: <strong>{selectedSubject || 'Umum'}</strong> • Klik <Settings size={12} className="inline"/> untuk atur sub-kolom
                   </div>
                )}
                <button onClick={fetchData} className="text-gray-400 hover:text-blue-600 p-1.5 rounded-full hover:bg-blue-50 transition" title="Refresh Data">

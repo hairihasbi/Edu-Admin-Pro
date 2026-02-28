@@ -20,7 +20,8 @@ const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onUpdateUser }) =
     nip: user.nip || '',
     phone: user.phone || '',
     subject: user.subject || '',
-    schoolName: user.schoolName || ''
+    schoolName: user.schoolName || '',
+    phase: user.phase || ''
   });
 
   // Master Data State
@@ -40,6 +41,7 @@ const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onUpdateUser }) =
   const [isSaving, setIsSaving] = useState(false);
 
   const isBkTeacher = user.subject === 'Bimbingan Konseling';
+  const isClassTeacher = user.teacherType === 'CLASS';
   const isAdmin = user.role === UserRole.ADMIN;
 
   useEffect(() => {
@@ -235,29 +237,52 @@ const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onUpdateUser }) =
                         />
                     </div>
 
+                    {/* Phase Selector for Class Teacher */}
+                    {isClassTeacher && (
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Fase / Kelas (Guru Kelas)</label>
+                            <select
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition text-sm bg-white"
+                                value={formData.phase}
+                                onChange={(e) => setFormData({ ...formData, phase: e.target.value as any })}
+                            >
+                                <option value="A">Fase A (Kelas 1-2)</option>
+                                <option value="B">Fase B (Kelas 3-4)</option>
+                                <option value="C">Fase C (Kelas 5-6)</option>
+                            </select>
+                            <p className="text-xs text-gray-500 mt-1">Menentukan mata pelajaran yang tersedia.</p>
+                        </div>
+                    )}
+
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Mata Pelajaran</label>
                         <div className="relative">
                         <BookOpen className="absolute left-3 top-2.5 text-gray-400" size={16} />
                         <select
-                            disabled={isBkTeacher}
+                            disabled={isBkTeacher || isClassTeacher}
                             className={`w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition text-sm appearance-none ${
-                                isBkTeacher ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'bg-white'
+                                isBkTeacher || isClassTeacher ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'bg-white'
                             }`}
-                            value={formData.subject}
+                            value={isClassTeacher ? 'Guru Kelas (SD)' : formData.subject}
                             onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
                         >
-                            <option value="">-- Pilih Mata Pelajaran --</option>
-                            {availableSubjects.map(sub => (
-                            <option key={sub.id} value={sub.name}>
-                                {sub.name}
-                            </option>
-                            ))}
+                            {isClassTeacher ? (
+                                <option value="Guru Kelas (SD)">Guru Kelas (SD)</option>
+                            ) : (
+                                <>
+                                    <option value="">-- Pilih Mata Pelajaran --</option>
+                                    {availableSubjects.map(sub => (
+                                    <option key={sub.id} value={sub.name}>
+                                        {sub.name}
+                                    </option>
+                                    ))}
+                                </>
+                            )}
                         </select>
                         </div>
-                        {isBkTeacher && (
+                        {(isBkTeacher || isClassTeacher) && (
                             <p className="text-xs text-orange-600 mt-1 flex items-center gap-1">
-                                <Lock size={10} /> Terkunci sebagai Guru BK.
+                                <Lock size={10} /> {isClassTeacher ? 'Mode Guru Kelas (Multi Mapel)' : 'Terkunci sebagai Guru BK.'}
                             </p>
                         )}
                     </div>
