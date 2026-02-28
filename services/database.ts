@@ -43,7 +43,7 @@ export const loginUser = async (username: string, password: string): Promise<Use
     return null;
 };
 
-export const registerUser = async (fullName: string, username: string, password: string, email: string, phone: string, schoolNpsn: string, schoolName: string, subject: string) => {
+export const registerUser = async (fullName: string, username: string, password: string, email: string, phone: string, schoolNpsn: string, schoolName: string, subject: string, teacherType: 'SUBJECT' | 'CLASS' = 'SUBJECT', phase?: 'A' | 'B' | 'C') => {
     try {
         const id = uuidv4();
         const res = await fetch('/api/register', {
@@ -51,7 +51,8 @@ export const registerUser = async (fullName: string, username: string, password:
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 id, username, password, fullName, email, phone, schoolNpsn, schoolName, subject,
-                role: 'GURU', status: 'PENDING', avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName)}&background=random`
+                role: 'GURU', status: 'PENDING', avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName)}&background=random`,
+                teacherType, phase
             })
         });
         const data = await res.json();
@@ -1210,10 +1211,11 @@ export const updateScopeMaterial = async (id: string, data: Partial<ScopeMateria
     return item;
 };
 
-export const getScopeMaterials = async (classId: string, semester: string, userId: string) => {
+export const getScopeMaterials = async (classId: string, semester: string, userId: string, subject?: string) => {
     let collection = db.scopeMaterials.where('userId').equals(userId);
     if (classId) collection = collection.filter(m => m.classId === classId);
     if (semester) collection = collection.filter(m => m.semester === semester);
+    if (subject) collection = collection.filter(m => m.subject === subject);
     return await collection.toArray();
 };
 
@@ -1284,13 +1286,17 @@ export const saveBulkAssessmentScores = async (scores: Omit<AssessmentScore, 'id
     pushToTurso('eduadmin_scores', itemsToSync);
 };
 
-export const getAssessmentScores = async (classId: string, semester: string) => {
-    return await db.assessmentScores.where({ classId, semester }).toArray();
+export const getAssessmentScores = async (classId: string, semester: string, subject?: string) => {
+    let collection = db.assessmentScores.where({ classId, semester });
+    if (subject) collection = collection.filter(s => s.subject === subject);
+    return await collection.toArray();
 };
 
 // --- JOURNALS ---
-export const getTeachingJournals = async (userId: string) => {
-    return await db.teachingJournals.where('userId').equals(userId).reverse().sortBy('date');
+export const getTeachingJournals = async (userId: string, subject?: string) => {
+    let collection = db.teachingJournals.where('userId').equals(userId);
+    if (subject) collection = collection.filter(j => j.subject === subject);
+    return await collection.reverse().sortBy('date');
 };
 
 export const addTeachingJournal = async (data: Omit<TeachingJournal, 'id'|'lastModified'|'isSynced'>) => {
