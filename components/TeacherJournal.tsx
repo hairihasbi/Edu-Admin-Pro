@@ -146,6 +146,11 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
       return;
     }
 
+    if (selectedSubject === 'ALL') {
+        alert('Mohon pilih mata pelajaran spesifik sebelum menyimpan jurnal.');
+        return;
+    }
+
     setIsSaving(true);
     const newJournal = await addTeachingJournal({
       ...formData,
@@ -209,7 +214,25 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
     const matchClass = filterClassId ? j.classId === filterClassId : true;
     const matchMonth = d.getMonth() === filterMonth;
     const matchYear = d.getFullYear() === filterYear;
-    return matchClass && matchMonth && matchYear;
+    
+    // NEW: Subject Filter Logic
+    let matchSubject = true;
+    if (user.teacherType === 'CLASS') {
+        // Strict match for Class Teacher
+        matchSubject = j.subject === selectedSubject;
+    } else {
+        // Subject Teacher: Match if not ALL
+        if (selectedSubject && selectedSubject !== 'ALL') {
+             // Handle legacy data (missing subject) or case-insensitive
+             const s = (j.subject || '').trim().toLowerCase();
+             const filter = selectedSubject.trim().toLowerCase();
+             // If legacy data has no subject, we might want to include it if it matches user's default subject?
+             // But here we just match the filter.
+             matchSubject = s === filter;
+        }
+    }
+
+    return matchClass && matchMonth && matchYear && matchSubject;
   });
 
   const indexOfLastItem = currentPage * itemsPerPage;

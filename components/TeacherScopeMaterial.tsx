@@ -129,6 +129,11 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
     e.preventDefault();
     if (!formData.classId || !formData.code || !formData.content) return;
 
+    if (selectedSubject === 'ALL') {
+        alert('Mohon pilih mata pelajaran spesifik sebelum menyimpan data.');
+        return;
+    }
+
     if (editingId) {
         // UPDATE MODE
         const updatedItem = await updateScopeMaterial(editingId, {

@@ -245,6 +245,12 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
       currentSubScores: {[key: string]: number},
       deletedIds: string[] = []
   ) => {
+    if (selectedSubject === 'ALL') {
+        alert('Mohon pilih mata pelajaran spesifik sebelum menyimpan nilai.');
+        setSaveStatus('error');
+        return;
+    }
+
     setSaveStatus('saving');
     const scoresToSave: Omit<AssessmentScore, 'id'>[] = [];
     

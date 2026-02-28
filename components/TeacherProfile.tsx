@@ -21,7 +21,8 @@ const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onUpdateUser }) =
     phone: user.phone || '',
     subject: user.subject || '',
     schoolName: user.schoolName || '',
-    phase: user.phase || ''
+    phase: user.phase || '',
+    teacherType: user.teacherType || 'SUBJECT'
   });
 
   // Master Data State
@@ -40,8 +41,8 @@ const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onUpdateUser }) =
   const [status, setStatus] = useState<{ type: 'success' | 'error' | null, message: string }>({ type: null, message: '' });
   const [isSaving, setIsSaving] = useState(false);
 
-  const isBkTeacher = user.subject === 'Bimbingan Konseling';
-  const isClassTeacher = user.teacherType === 'CLASS';
+  const isBkTeacher = formData.subject === 'Bimbingan Konseling';
+  const isClassTeacher = formData.teacherType === 'CLASS';
   const isAdmin = user.role === UserRole.ADMIN;
 
   useEffect(() => {
@@ -226,6 +227,19 @@ const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onUpdateUser }) =
                 {/* Field Khusus Guru */}
                 {!isAdmin && (
                     <>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Tipe Guru</label>
+                        <select
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition text-sm bg-white"
+                            value={formData.teacherType}
+                            onChange={(e) => setFormData({ ...formData, teacherType: e.target.value as any })}
+                        >
+                            <option value="SUBJECT">Guru Mata Pelajaran (SMP/SMA/SMK)</option>
+                            <option value="CLASS">Guru Kelas (SD)</option>
+                        </select>
+                        <p className="text-xs text-gray-500 mt-1">Pilih "Guru Kelas" jika Anda mengajar semua mata pelajaran di SD.</p>
+                    </div>
+
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">NIP / NUPTK</label>
                         <input
