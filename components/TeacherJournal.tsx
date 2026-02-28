@@ -18,6 +18,7 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
   
   // NEW: Subject State Logic
   const [selectedSubject, setSelectedSubject] = useState<string>(user.subject || '');
+  const [formSubject, setFormSubject] = useState<string>(user.subject || '');
 
   // Initialize Subject based on Teacher Type
   useEffect(() => {
@@ -27,13 +28,21 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
       if (!selectedSubject || !subjects.includes(selectedSubject)) {
          setSelectedSubject(subjects[0]);
       }
+      if (!formSubject || !subjects.includes(formSubject)) {
+         setFormSubject(subjects[0]);
+      }
     } else if (user.subject === 'Matematika') {
-      // Default to first math option if not set
-      if (!selectedSubject || (!MATH_SUBJECT_OPTIONS.includes(selectedSubject) && selectedSubject !== 'ALL')) {
-         setSelectedSubject(MATH_SUBJECT_OPTIONS[0]);
+      // Filter defaults to ALL
+      if (selectedSubject !== 'ALL') {
+         setSelectedSubject('ALL');
+      }
+      // Form defaults to Matematika Umum
+      if (!formSubject) {
+         setFormSubject(MATH_SUBJECT_OPTIONS[0]);
       }
     } else {
       setSelectedSubject(user.subject || '');
+      setFormSubject(user.subject || '');
     }
   }, [user, user.teacherType, user.phase]);
 
@@ -123,15 +132,15 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
     if (formData.classId) {
       const fetchMats = async () => {
         // PASS user.id here too
-        const matGanjil = await getScopeMaterials(formData.classId, 'Ganjil', user.id, selectedSubject);
-        const matGenap = await getScopeMaterials(formData.classId, 'Genap', user.id, selectedSubject);
+        const matGanjil = await getScopeMaterials(formData.classId, 'Ganjil', user.id, formSubject);
+        const matGenap = await getScopeMaterials(formData.classId, 'Genap', user.id, formSubject);
         setAllMaterials([...matGanjil, ...matGenap]);
       };
       fetchMats();
     } else {
       setAllMaterials([]);
     }
-  }, [formData.classId, selectedSubject]);
+  }, [formData.classId, formSubject]);
 
   const fetchJournals = async () => {
     const data = await getTeachingJournals(user.id, selectedSubject);
@@ -151,7 +160,7 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
       return;
     }
 
-    if (selectedSubject === 'ALL') {
+    if (user.subject === 'Matematika' && !formSubject) {
         alert('Mohon pilih mata pelajaran spesifik sebelum menyimpan jurnal.');
         return;
     }
@@ -160,7 +169,7 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
     const newJournal = await addTeachingJournal({
       ...formData,
       userId: user.id,
-      subject: selectedSubject
+      subject: formSubject
     });
 
     if (newJournal) {
@@ -354,54 +363,7 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
   return (
     <div className="space-y-8 pb-20">
       
-      {/* --- SUBJECT SELECTOR --- */}
-      {user.teacherType === 'CLASS' ? (
-        <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl flex items-center gap-4 mb-6">
-            <div className="flex-1">
-                <label className="block text-sm font-bold text-blue-800 mb-1">Mata Pelajaran (Mode Guru Kelas)</label>
-                <select 
-                    value={selectedSubject}
-                    onChange={(e) => setSelectedSubject(e.target.value)}
-                    className="w-full p-2 border border-blue-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none"
-                >
-                    {((user.phase === 'B' || user.phase === 'C') ? SD_SUBJECTS_PHASE_BC : SD_SUBJECTS_PHASE_A).map(s => (
-                        <option key={s} value={s}>{s}</option>
-                    ))}
-                </select>
-            </div>
-            <div className="text-xs text-blue-600 max-w-md hidden sm:block">
-                *Anda sedang dalam mode Guru Kelas. Pilih mata pelajaran untuk memfilter Jurnal, Lingkup Materi, dan Asesmen.
-            </div>
-        </div>
-      ) : (
-        <div className="bg-gray-50 border border-gray-200 p-4 rounded-xl flex items-center gap-4 mb-6">
-            <div className="flex-1">
-                <label className="block text-sm font-bold text-gray-700 mb-1">Filter Mata Pelajaran</label>
-                <select 
-                    value={selectedSubject}
-                    onChange={(e) => setSelectedSubject(e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none"
-                >
-                    {user.subject === 'Matematika' ? (
-                        <>
-                            {MATH_SUBJECT_OPTIONS.map(m => (
-                                <option key={m} value={m}>{m}</option>
-                            ))}
-                            <option value="ALL">Tampilkan Semua Data</option>
-                        </>
-                    ) : (
-                        <>
-                            <option value={user.subject || ''}>{user.subject || 'Mapel Saya'}</option>
-                            <option value="ALL">Tampilkan Semua Data (Termasuk Mapel Lain)</option>
-                        </>
-                    )}
-                </select>
-            </div>
-            <div className="text-xs text-gray-500 max-w-md hidden sm:block">
-                *Jika data tidak muncul, coba pilih "Tampilkan Semua Data".
-            </div>
-        </div>
-      )}
+      {/* --- SUBJECT SELECTOR REMOVED FROM TOP --- */}
 
       {/* --- FORM SECTION --- */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
@@ -411,8 +373,8 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
          </h2>
          
          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Baris 1: Kelas, LM, TP */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Baris 1: Kelas, Mapel, LM, TP */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                <div>
                   <label className="block text-sm font-semibold text-blue-700 mb-1">Kelas *</label>
                   <select 
@@ -426,6 +388,30 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
                      {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
                </div>
+
+               {/* Subject Selector in Form */}
+               {(user.teacherType === 'CLASS' || user.subject === 'Matematika') && (
+                   <div>
+                       <label className="block text-sm font-semibold text-blue-700 mb-1">Mata Pelajaran *</label>
+                       <select
+                           value={formSubject}
+                           onChange={(e) => setFormSubject(e.target.value)}
+                           className="w-full border border-gray-300 rounded-lg p-2.5 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition"
+                           required
+                       >
+                           {user.teacherType === 'CLASS' ? (
+                               ((user.phase === 'B' || user.phase === 'C') ? SD_SUBJECTS_PHASE_BC : SD_SUBJECTS_PHASE_A).map(s => (
+                                   <option key={s} value={s}>{s}</option>
+                               ))
+                           ) : (
+                               MATH_SUBJECT_OPTIONS.map(m => (
+                                   <option key={m} value={m}>{m}</option>
+                               ))
+                           )}
+                       </select>
+                   </div>
+               )}
+
                <div>
                   <label className="block text-sm font-semibold text-blue-700 mb-1">Lingkup Materi *</label>
                   <select 
@@ -536,6 +522,56 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
             </div>
          </form>
       </div>
+
+      {/* --- FILTER SECTION (Moved Below Form) --- */}
+      {user.teacherType === 'CLASS' ? (
+        <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl flex items-center gap-4">
+            <div className="flex-1">
+                <label className="block text-sm font-bold text-blue-800 mb-1">Filter Mata Pelajaran (Arsip)</label>
+                <select 
+                    value={selectedSubject}
+                    onChange={(e) => setSelectedSubject(e.target.value)}
+                    className="w-full p-2 border border-blue-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none"
+                >
+                    {((user.phase === 'B' || user.phase === 'C') ? SD_SUBJECTS_PHASE_BC : SD_SUBJECTS_PHASE_A).map(s => (
+                        <option key={s} value={s}>{s}</option>
+                    ))}
+                </select>
+            </div>
+            <div className="text-xs text-blue-600 max-w-md hidden sm:block">
+                *Filter arsip jurnal berdasarkan mata pelajaran.
+            </div>
+        </div>
+      ) : (
+        <div className="bg-gray-50 border border-gray-200 p-4 rounded-xl flex items-center gap-4">
+            <div className="flex-1">
+                <label className="block text-sm font-bold text-gray-700 mb-1">Filter Mata Pelajaran (Arsip)</label>
+                <select 
+                    value={selectedSubject}
+                    onChange={(e) => setSelectedSubject(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none"
+                >
+                    {user.subject === 'Matematika' ? (
+                        <>
+                            <option value="ALL">Tampilkan Semua Data</option>
+                            {MATH_SUBJECT_OPTIONS.map(m => (
+                                <option key={m} value={m}>{m}</option>
+                            ))}
+                        </>
+                    ) : (
+                        <>
+                            <option value={user.subject || ''}>{user.subject || 'Mapel Saya'}</option>
+                        </>
+                    )}
+                </select>
+            </div>
+            <div className="text-xs text-gray-500 max-w-md hidden sm:block">
+                {user.subject === 'Matematika' 
+                    ? '*Pilih "Tampilkan Semua Data" untuk melihat semua jurnal matematika.' 
+                    : '*Menampilkan jurnal mata pelajaran Anda.'}
+            </div>
+        </div>
+      )}
 
       {/* --- LIST & FILTER SECTION --- */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col">
