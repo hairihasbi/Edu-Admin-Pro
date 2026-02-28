@@ -94,7 +94,8 @@ const AppContent: React.FC = () => {
   const [regPhone, setRegPhone] = useState('');
   const [regNpsn, setRegNpsn] = useState(''); // NEW NPSN State
   const [regSchoolName, setRegSchoolName] = useState(''); // NEW School Name State
-  const [regTeacherType, setRegTeacherType] = useState<'MAPEL' | 'BK'>('MAPEL');
+  const [regTeacherType, setRegTeacherType] = useState<'MAPEL' | 'BK' | 'CLASS'>('MAPEL');
+  const [regPhase, setRegPhase] = useState<'A' | 'B' | 'C'>('A'); // NEW Phase State
   const [regMessage, setRegMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
   
   // NPSN Check State
@@ -405,9 +406,16 @@ const AppContent: React.FC = () => {
     }
     
     // Tentukan Subject Awal berdasarkan Pilihan Jenis Guru
-    const initialSubject = regTeacherType === 'BK' ? 'Bimbingan Konseling' : '';
+    let initialSubject = '';
+    if (regTeacherType === 'BK') initialSubject = 'Bimbingan Konseling';
+    if (regTeacherType === 'CLASS') initialSubject = 'GURU KELAS';
 
-    const result = await registerUser(regFullName, regUsername, regPassword, regEmail, regPhone, regNpsn, regSchoolName, initialSubject);
+    const result = await registerUser(
+        regFullName, regUsername, regPassword, regEmail, regPhone, regNpsn, regSchoolName, 
+        initialSubject, 
+        regTeacherType === 'CLASS' ? 'CLASS' : 'SUBJECT', 
+        regTeacherType === 'CLASS' ? regPhase : undefined
+    );
     
     if (result.success) {
         setRegMessage({ type: 'success', text: result.message });
@@ -423,6 +431,7 @@ const AppContent: React.FC = () => {
             setRegSchoolName('');
             setIsSchoolFound(false);
             setRegTeacherType('MAPEL');
+            setRegPhase('A');
         }, 3000);
     } else {
         setRegMessage({ type: 'error', text: result.message });
@@ -555,19 +564,43 @@ const AppContent: React.FC = () => {
                         {/* Pilihan Jenis Guru */}
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">Jenis Guru</label>
-                            <div className="grid grid-cols-2 gap-3">
-                                <label className={`flex items-center justify-center gap-2 p-3 border rounded-lg cursor-pointer transition ${regTeacherType === 'MAPEL' ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500' : 'border-gray-300 hover:bg-gray-50'}`}>
+                            <div className="grid grid-cols-3 gap-3">
+                                <label className={`flex flex-col items-center justify-center gap-2 p-3 border rounded-lg cursor-pointer transition ${regTeacherType === 'MAPEL' ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500' : 'border-gray-300 hover:bg-gray-50'}`}>
                                     <input type="radio" className="hidden" checked={regTeacherType === 'MAPEL'} onChange={() => setRegTeacherType('MAPEL')} />
                                     <BookOpen size={18} className={regTeacherType === 'MAPEL' ? 'text-blue-600' : 'text-gray-400'} />
-                                    <span className={`text-sm font-medium ${regTeacherType === 'MAPEL' ? 'text-blue-700' : 'text-gray-600'}`}>Guru Mapel</span>
+                                    <span className={`text-xs font-medium text-center ${regTeacherType === 'MAPEL' ? 'text-blue-700' : 'text-gray-600'}`}>Guru Mapel</span>
                                 </label>
-                                <label className={`flex items-center justify-center gap-2 p-3 border rounded-lg cursor-pointer transition ${regTeacherType === 'BK' ? 'border-purple-500 bg-purple-50 ring-1 ring-purple-500' : 'border-gray-300 hover:bg-gray-50'}`}>
+                                <label className={`flex flex-col items-center justify-center gap-2 p-3 border rounded-lg cursor-pointer transition ${regTeacherType === 'CLASS' ? 'border-green-500 bg-green-50 ring-1 ring-green-500' : 'border-gray-300 hover:bg-gray-50'}`}>
+                                    <input type="radio" className="hidden" checked={regTeacherType === 'CLASS'} onChange={() => setRegTeacherType('CLASS')} />
+                                    <Users size={18} className={regTeacherType === 'CLASS' ? 'text-green-600' : 'text-gray-400'} />
+                                    <span className={`text-xs font-medium text-center ${regTeacherType === 'CLASS' ? 'text-green-700' : 'text-gray-600'}`}>Guru Kelas (SD)</span>
+                                </label>
+                                <label className={`flex flex-col items-center justify-center gap-2 p-3 border rounded-lg cursor-pointer transition ${regTeacherType === 'BK' ? 'border-purple-500 bg-purple-50 ring-1 ring-purple-500' : 'border-gray-300 hover:bg-gray-50'}`}>
                                     <input type="radio" className="hidden" checked={regTeacherType === 'BK'} onChange={() => setRegTeacherType('BK')} />
                                     <ShieldAlert size={18} className={regTeacherType === 'BK' ? 'text-purple-600' : 'text-gray-400'} />
-                                    <span className={`text-sm font-medium ${regTeacherType === 'BK' ? 'text-purple-700' : 'text-gray-600'}`}>Guru BK</span>
+                                    <span className={`text-xs font-medium text-center ${regTeacherType === 'BK' ? 'text-purple-700' : 'text-gray-600'}`}>Guru BK</span>
                                 </label>
                             </div>
                         </div>
+
+                        {/* Pilihan Fase (Khusus Guru Kelas) */}
+                        {regTeacherType === 'CLASS' && (
+                            <div className="bg-green-50 p-3 rounded-lg border border-green-100">
+                                <label className="block text-sm font-medium text-green-800 mb-2">Pilih Fase / Kelas</label>
+                                <select 
+                                    className="w-full p-2 border border-green-300 rounded-md text-sm focus:ring-2 focus:ring-green-500 outline-none"
+                                    value={regPhase}
+                                    onChange={(e) => setRegPhase(e.target.value as any)}
+                                >
+                                    <option value="A">Fase A (Kelas 1 - 2)</option>
+                                    <option value="B">Fase B (Kelas 3 - 4)</option>
+                                    <option value="C">Fase C (Kelas 5 - 6)</option>
+                                </select>
+                                <p className="text-xs text-green-600 mt-1">
+                                    *Menentukan mata pelajaran yang akan muncul (IPAS hanya di Fase B & C).
+                                </p>
+                            </div>
+                        )}
 
                         {/* Input NPSN & School Name Logic */}
                         <div>
