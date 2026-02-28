@@ -31,12 +31,17 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
   const [selectedSemester, setSelectedSemester] = useState('Ganjil');
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [filterSubject, setFilterSubject] = useState('ALL');
   
   // KKM State
   const [kkm, setKkm] = useState<number>(75);
   
   // Expanded row state for Behavior tab
   const [expandedStudentId, setExpandedStudentId] = useState<string | null>(null);
+
+  const visibleSubjects = filterSubject === 'ALL' 
+      ? detectedSubjects 
+      : detectedSubjects.filter(s => s === filterSubject);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -287,6 +292,18 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                         <p className="text-sm text-gray-500">Nilai Akhir = (2×LM + STS + SAS) / 4. Data dinamis dari input Guru Mapel.</p>
                     </div>
                     <div className="flex gap-2">
+                        {/* Subject Filter */}
+                        <select
+                            value={filterSubject}
+                            onChange={(e) => setFilterSubject(e.target.value)}
+                            className="px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                        >
+                            <option value="ALL">Semua Mapel</option>
+                            {detectedSubjects.map(s => (
+                                <option key={s} value={s}>{s}</option>
+                            ))}
+                        </select>
+
                         <div className="relative">
                             <Search size={16} className="absolute left-3 top-3 text-gray-400" />
                             <input 
@@ -322,7 +339,7 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                                 <th className="p-3 border-r border-gray-300 sticky left-10 bg-gray-100 z-20 min-w-[200px]">Nama Siswa</th>
                                 
                                 {/* Dynamic Subject Columns */}
-                                {detectedSubjects.map(sub => (
+                                {visibleSubjects.map(sub => (
                                    <th key={sub} className="p-2 border-r border-gray-300 text-center min-w-[80px] font-bold" title={sub}>
                                       {sub.length > 15 ? sub.substring(0, 12) + '...' : sub}
                                    </th>
@@ -344,7 +361,7 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                                     </td>
                                     
                                     {/* Subject Grades */}
-                                    {detectedSubjects.map(sub => {
+                                    {visibleSubjects.map(sub => {
                                        const grade = calculateSubjectFinalGrade(student.id, sub);
                                        const isLow = grade > 0 && grade < kkm;
                                        return (

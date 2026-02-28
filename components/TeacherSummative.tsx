@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { User, ClassRoom, Student, ScopeMaterial, AssessmentScore, SD_SUBJECTS_PHASE_A, SD_SUBJECTS_PHASE_BC } from '../types';
+import { User, ClassRoom, Student, ScopeMaterial, AssessmentScore, SD_SUBJECTS_PHASE_A, SD_SUBJECTS_PHASE_BC, MATH_SUBJECT_OPTIONS } from '../types';
 import { getClasses, getStudents, getScopeMaterials, getAssessmentScores, saveBulkAssessmentScores, updateScopeMaterial } from '../services/database';
 import { Calculator, Save, Filter, FileSpreadsheet, AlertCircle, CheckCircle, ArrowRight, RefreshCcw, Settings, Plus, Trash2, X } from './Icons';
 import * as XLSX from 'xlsx';
@@ -37,6 +37,11 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
       // Default to first subject if not set or invalid
       if (!selectedSubject || !subjects.includes(selectedSubject)) {
          setSelectedSubject(subjects[0]);
+      }
+    } else if (user.subject === 'Matematika') {
+      // Default to first math option if not set
+      if (!selectedSubject || (!MATH_SUBJECT_OPTIONS.includes(selectedSubject) && selectedSubject !== 'ALL')) {
+         setSelectedSubject(MATH_SUBJECT_OPTIONS[0]);
       }
     } else {
       setSelectedSubject(user.subject || '');
@@ -442,8 +447,19 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
                     onChange={(e) => setSelectedSubject(e.target.value)}
                     className="w-full p-2 border border-gray-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none"
                 >
-                    <option value={user.subject || ''}>{user.subject || 'Mapel Saya'}</option>
-                    <option value="ALL">Tampilkan Semua Data (Termasuk Mapel Lain)</option>
+                    {user.subject === 'Matematika' ? (
+                        <>
+                            {MATH_SUBJECT_OPTIONS.map(m => (
+                                <option key={m} value={m}>{m}</option>
+                            ))}
+                            <option value="ALL">Tampilkan Semua Data</option>
+                        </>
+                    ) : (
+                        <>
+                            <option value={user.subject || ''}>{user.subject || 'Mapel Saya'}</option>
+                            <option value="ALL">Tampilkan Semua Data (Termasuk Mapel Lain)</option>
+                        </>
+                    )}
                 </select>
             </div>
             <div className="text-xs text-gray-500 max-w-md hidden sm:block">
