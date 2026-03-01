@@ -105,7 +105,8 @@ import {
   PieChart, // Added PieChart
   ExternalLink, // Added ExternalLink
   Loader2, // Added Loader2
-  XCircle // Added XCircle
+  XCircle, // Added XCircle
+  Home // Added Home
 } from 'lucide-react';
 
 export {
@@ -214,5 +215,6 @@ export {
   PieChart,
   ExternalLink,
   Loader2,
-  XCircle
+  XCircle,
+  Home
 };
