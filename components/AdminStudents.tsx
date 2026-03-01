@@ -4,6 +4,7 @@ import { StudentWithDetails, User } from '../types';
 import { deleteStudent, bulkDeleteStudents, addSystemLog, getStudentsServerSide, updateUserProfile } from '../services/database';
 import { pushToTurso } from '../services/tursoService';
 import { GraduationCap, Trash2, Search, School, User as UserIcon, CheckCircle, ChevronLeft, ChevronRight, Smartphone, RefreshCcw, Database, AlertCircle, Settings, Upload } from './Icons';
+import Skeleton from './Skeleton';
 import BroadcastModal from './BroadcastModal';
 import { Link, useNavigate } from 'react-router-dom';
 
@@ -275,89 +276,146 @@ const AdminStudents: React.FC = () => {
 
       {/* Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden relative">
-        {isLoading && (
-            <div className="absolute inset-0 bg-white/80 z-20 flex items-center justify-center backdrop-blur-sm">
-                <div className="flex flex-col items-center gap-2">
-                    <RefreshCcw className="animate-spin text-blue-600" size={32} />
-                    <span className="text-sm font-medium text-gray-600">Memuat data dari server...</span>
-                </div>
-            </div>
-        )}
-
-        <div className="overflow-x-auto">
-             <table className="w-full text-sm text-left">
-               <thead className="bg-gray-50 text-gray-600 font-medium border-b border-gray-200">
-                 <tr>
-                   <th className="p-4 w-10">
-                     <input 
-                       type="checkbox" 
-                       className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                       onChange={handleSelectAll}
-                       checked={students.length > 0 && selectedIds.size === students.length}
-                     />
-                   </th>
-                   <th className="p-4">Nama Siswa</th>
-                   <th className="p-4">NIS</th>
-                   <th className="p-4 text-center">L/P</th>
-                   <th className="p-4">Kelas</th>
-                   <th className="p-4">No. HP</th>
-                   <th className="p-4">Sekolah</th>
-                   <th className="p-4 text-center">Aksi</th>
-                 </tr>
-               </thead>
-               <tbody className="divide-y divide-gray-100">
-                 {students.length === 0 && !isLoading ? (
-                    <tr>
-                        <td colSpan={8} className="p-10 text-center text-gray-400">
-                            <div className="flex flex-col items-center justify-center gap-3">
-                                <Database size={48} className="text-gray-300" />
-                                <p className="font-medium text-gray-500">Tidak ada data siswa ditemukan di Server.</p>
-                                <div className="bg-yellow-50 text-yellow-800 p-4 rounded-lg text-left text-sm border border-yellow-200 mt-2 max-w-lg">
-                                    <strong>Tips Troubleshooting:</strong>
-                                    <ul className="list-disc pl-5 mt-1 space-y-1">
-                                        <li>Pastikan Guru sudah <strong>Online</strong> dan data lokal mereka telah tersinkronisasi (menu Sync).</li>
-                                        <li>Jika data lokal ada tapi tidak muncul disini, coba klik tombol "Refresh".</li>
-                                    </ul>
+        {isLoading ? (
+           <div className="p-6 space-y-4">
+              {Array.from({length: 8}).map((_, i) => (
+                 <div key={i} className="flex items-center gap-4">
+                    <Skeleton variant="rectangular" className="w-5 h-5 rounded" />
+                    <div className="flex-1 space-y-2">
+                       <Skeleton variant="text" className="w-1/3 h-4" />
+                       <Skeleton variant="text" className="w-1/4 h-3" />
+                    </div>
+                    <Skeleton variant="text" className="w-20 h-4 hidden md:block" />
+                    <Skeleton variant="circular" className="w-8 h-8" />
+                 </div>
+              ))}
+           </div>
+        ) : (
+           <>
+              {/* Desktop Table */}
+              <div className="hidden md:block overflow-x-auto">
+                 <table className="w-full text-sm text-left">
+                   <thead className="bg-gray-50 text-gray-600 font-medium border-b border-gray-200">
+                     <tr>
+                       <th className="p-4 w-10">
+                         <input 
+                           type="checkbox" 
+                           className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                           onChange={handleSelectAll}
+                           checked={students.length > 0 && selectedIds.size === students.length}
+                         />
+                       </th>
+                       <th className="p-4">Nama Siswa</th>
+                       <th className="p-4">NIS</th>
+                       <th className="p-4 text-center">L/P</th>
+                       <th className="p-4">Kelas</th>
+                       <th className="p-4">No. HP</th>
+                       <th className="p-4">Sekolah</th>
+                       <th className="p-4 text-center">Aksi</th>
+                     </tr>
+                   </thead>
+                   <tbody className="divide-y divide-gray-100">
+                     {students.length === 0 ? (
+                        <tr>
+                            <td colSpan={8} className="p-10 text-center text-gray-400">
+                                <div className="flex flex-col items-center justify-center gap-3">
+                                    <Database size={48} className="text-gray-300" />
+                                    <p className="font-medium text-gray-500">Tidak ada data siswa ditemukan di Server.</p>
+                                    <div className="bg-yellow-50 text-yellow-800 p-4 rounded-lg text-left text-sm border border-yellow-200 mt-2 max-w-lg">
+                                        <strong>Tips Troubleshooting:</strong>
+                                        <ul className="list-disc pl-5 mt-1 space-y-1">
+                                            <li>Pastikan Guru sudah <strong>Online</strong> dan data lokal mereka telah tersinkronisasi (menu Sync).</li>
+                                            <li>Jika data lokal ada tapi tidak muncul disini, coba klik tombol "Refresh".</li>
+                                        </ul>
+                                    </div>
                                 </div>
-                            </div>
-                        </td>
-                    </tr>
-                 ) : (
-                    students.map(student => (
-                    <tr key={student.id} className={`hover:bg-gray-50 transition ${selectedIds.has(student.id) ? 'bg-blue-50' : ''}`}>
-                        <td className="p-4">
-                        <input 
-                            type="checkbox" 
-                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                            checked={selectedIds.has(student.id)}
-                            onChange={() => handleToggleSelect(student.id)}
-                        />
-                        </td>
-                        <td className="p-4 font-medium text-gray-900">{student.name}</td>
-                        <td className="p-4 text-gray-500">{student.nis}</td>
-                        <td className="p-4 text-center">
-                            <span className={`px-2 py-0.5 rounded text-xs font-bold ${student.gender === 'L' ? 'bg-blue-100 text-blue-700' : 'bg-pink-100 text-pink-700'}`}>
-                            {student.gender}
-                            </span>
-                        </td>
-                        <td className="p-4 font-semibold text-gray-700">{student.className}</td>
-                        <td className="p-4 text-gray-500 text-xs">{student.phone || '-'}</td>
-                        <td className="p-4 text-gray-500">{student.schoolName}</td>
-                        <td className="p-4 text-center">
-                            <button 
-                            onClick={() => handleDelete(student.id)}
-                            className="text-gray-400 hover:text-red-600 p-2 rounded-full hover:bg-red-50 transition"
-                            title="Hapus"
-                            >
-                            <Trash2 size={16} />
-                            </button>
-                        </td>
-                    </tr>
-                    ))
-                 )}
-               </tbody>
-             </table>
-        </div>
+                            </td>
+                        </tr>
+                     ) : (
+                        students.map(student => (
+                        <tr key={student.id} className={`hover:bg-gray-50 transition ${selectedIds.has(student.id) ? 'bg-blue-50' : ''}`}>
+                            <td className="p-4">
+                            <input 
+                                type="checkbox" 
+                                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                checked={selectedIds.has(student.id)}
+                                onChange={() => handleToggleSelect(student.id)}
+                            />
+                            </td>
+                            <td className="p-4 font-medium text-gray-900">{student.name}</td>
+                            <td className="p-4 text-gray-500">{student.nis}</td>
+                            <td className="p-4 text-center">
+                                <span className={`px-2 py-0.5 rounded text-xs font-bold ${student.gender === 'L' ? 'bg-blue-100 text-blue-700' : 'bg-pink-100 text-pink-700'}`}>
+                                {student.gender}
+                                </span>
+                            </td>
+                            <td className="p-4 font-semibold text-gray-700">{student.className}</td>
+                            <td className="p-4 text-gray-500 text-xs">{student.phone || '-'}</td>
+                            <td className="p-4 text-gray-500">{student.schoolName}</td>
+                            <td className="p-4 text-center">
+                                <button 
+                                onClick={() => handleDelete(student.id)}
+                                className="text-gray-400 hover:text-red-600 p-2 rounded-full hover:bg-red-50 transition"
+                                title="Hapus"
+                                >
+                                <Trash2 size={16} />
+                                </button>
+                            </td>
+                        </tr>
+                        ))
+                     )}
+                   </tbody>
+                 </table>
+              </div>
+
+              {/* Mobile Card View */}
+              <div className="md:hidden">
+                 <div className="p-4 bg-gray-50 border-b border-gray-100 flex justify-between items-center sticky top-0 z-10">
+                    <div className="flex items-center gap-2">
+                       <input type="checkbox" className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-5 w-5" onChange={handleSelectAll} checked={students.length > 0 && selectedIds.size === students.length}/>
+                        <span className="text-sm font-medium text-gray-600">Pilih Semua</span>
+                    </div>
+                    <span className="text-xs text-gray-400">{students.length} Total</span>
+                 </div>
+                 <div className="divide-y divide-gray-100">
+                    {students.length === 0 ? (
+                        <div className="p-8 text-center text-gray-400 text-sm">Tidak ada data siswa.</div>
+                    ) : (
+                      students.map(student => (
+                        <div key={student.id} className={`p-4 space-y-3 ${selectedIds.has(student.id) ? 'bg-blue-50' : 'bg-white'}`} onClick={() => handleToggleSelect(student.id)}>
+                           <div className="flex justify-between items-start">
+                              <div className="flex items-center gap-3">
+                                 <input type="checkbox" className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-5 w-5" checked={selectedIds.has(student.id)} onChange={() => handleToggleSelect(student.id)} onClick={(e) => e.stopPropagation()}/>
+                                 <div>
+                                    <h4 className="font-bold text-gray-900">{student.name}</h4>
+                                    <p className="text-xs text-gray-500">{student.nis} • {student.schoolName}</p>
+                                 </div>
+                              </div>
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${student.gender === 'L' ? 'bg-blue-100 text-blue-700' : 'bg-pink-100 text-pink-700'}`}>
+                                 {student.gender}
+                              </span>
+                           </div>
+                           
+                           <div className="flex items-center justify-between text-sm pl-8">
+                              <div className="flex gap-4">
+                                 <div className="flex flex-col">
+                                    <span className="text-[10px] text-gray-400 uppercase">Kelas</span>
+                                    <span className="font-medium text-gray-700">{student.className}</span>
+                                 </div>
+                                 <div className="flex flex-col">
+                                    <span className="text-[10px] text-gray-400 uppercase">No. HP</span>
+                                    <span className="font-medium text-gray-700">{student.phone || '-'}</span>
+                                 </div>
+                              </div>
+                              <button onClick={(e) => { e.stopPropagation(); handleDelete(student.id); }} className="text-gray-400 hover:text-red-500 p-2"><Trash2 size={18} /></button>
+                           </div>
+                        </div>
+                      ))
+                    )}
+                 </div>
+              </div>
+           </>
+        )}
         
         {/* Pagination */}
         <div className="p-4 border-t border-gray-100 flex items-center justify-between bg-gray-50">

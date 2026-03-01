@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { User, ClassRoom, ScopeMaterial, TeachingJournal, SD_SUBJECTS_PHASE_A, SD_SUBJECTS_PHASE_BC, MATH_SUBJECT_OPTIONS } from '../types';
 import { getClasses, getScopeMaterials, getTeachingJournals, addTeachingJournal, deleteTeachingJournal, bulkDeleteTeachingJournals } from '../services/database';
 import { Plus, Save, Trash2, Filter, Printer, FileSpreadsheet, NotebookPen, CalendarDays, ChevronLeft, ChevronRight } from './Icons';
+import Skeleton from './Skeleton';
 import * as XLSX from 'xlsx';
 
 interface TeacherJournalProps {
@@ -592,7 +593,17 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
          {/* List Items */}
          <div className="overflow-x-auto">
             {loading ? (
-               <div className="p-8 text-center text-gray-400">Memuat data...</div>
+               <div className="space-y-4 p-6">
+                  {[1, 2, 3].map(i => (
+                      <div key={i} className="flex gap-4 animate-pulse">
+                          <div className="w-8 h-8 bg-gray-200 rounded-full"></div>
+                          <div className="flex-1 space-y-3">
+                              <div className="h-4 bg-gray-200 rounded w-1/4"></div>
+                              <div className="h-20 bg-gray-200 rounded w-full"></div>
+                          </div>
+                      </div>
+                  ))}
+               </div>
             ) : filteredJournals.length === 0 ? (
                <div className="p-16 text-center text-gray-400">
                   <NotebookPen size={48} className="mx-auto mb-4 opacity-20" />
@@ -600,94 +611,134 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
                </div>
             ) : (
                <>
-                 <table className="w-full text-sm text-left">
-                    <thead className="bg-white text-gray-600 font-semibold border-b border-gray-200">
-                       <tr>
-                          <th className="p-4 w-10">
-                             <input 
-                                type="checkbox" 
-                                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                onChange={handleSelectAll}
-                                checked={filteredJournals.length > 0 && selectedIds.size === filteredJournals.length}
-                             />
-                          </th>
-                          <th className="p-4 w-32">Tanggal</th>
-                          <th className="p-4 w-20 text-center">Ke-</th>
-                          <th className="p-4 w-48">Kelas / Materi</th>
-                          <th className="p-4 min-w-[300px]">Kegiatan Pembelajaran</th>
-                          <th className="p-4 w-20 text-center">Aksi</th>
-                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                       {currentItems.map(journal => {
-                          const cls = classes.find(c => c.id === journal.classId);
-                          const mat = materialMap[journal.materialId];
-                          return (
-                             <tr key={journal.id} className="hover:bg-gray-50 transition group">
-                                <td className="p-4 align-top">
-                                   <input 
-                                      type="checkbox" 
-                                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                      checked={selectedIds.has(journal.id)}
-                                      onChange={() => handleToggleSelect(journal.id)}
-                                   />
-                                </td>
-                                <td className="p-4 align-top">
-                                   <div className="font-medium text-gray-900">
-                                      {new Date(journal.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
-                                   </div>
-                                </td>
-                                <td className="p-4 align-top text-center">
-                                   <span className="inline-block bg-blue-100 text-blue-700 px-2 py-1 rounded-md text-xs font-bold">
-                                      #{journal.meetingNo}
-                                   </span>
-                                </td>
-                                <td className="p-4 align-top">
-                                   <div className="font-bold text-gray-800 mb-1">{cls?.name || 'Unknown Class'}</div>
-                                   <div className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded inline-block" title={mat ? mat.content : 'ID: ' + journal.materialId}>
-                                      {mat ? mat.code : journal.materialId.substring(0,8)}
-                                   </div>
-                                </td>
-                                <td className="p-4 align-top">
-                                   <div className="mb-2">
-                                      <span className="text-xs font-semibold text-blue-600 uppercase tracking-wide">Tujuan:</span>
-                                      <p className="text-gray-900 font-medium">{journal.learningObjective}</p>
-                                   </div>
-                                   <div className="mb-2">
-                                      <span className="text-xs font-semibold text-green-600 uppercase tracking-wide">Kegiatan:</span>
-                                      <p className="text-gray-600 whitespace-pre-line text-xs">{journal.activities}</p>
-                                   </div>
-                                   {(journal.reflection || journal.followUp) && (
-                                      <div className="grid grid-cols-2 gap-4 mt-2">
-                                         {journal.reflection && (
-                                            <div className="bg-yellow-50 p-2 rounded border border-yellow-100">
-                                               <span className="text-[10px] font-bold text-yellow-700 uppercase">Refleksi</span>
-                                               <p className="text-[10px] text-yellow-800 italic">{journal.reflection}</p>
-                                            </div>
-                                         )}
-                                         {journal.followUp && (
-                                            <div className="bg-purple-50 p-2 rounded border border-purple-100">
-                                               <span className="text-[10px] font-bold text-purple-700 uppercase">Tindak Lanjut</span>
-                                               <p className="text-[10px] text-purple-800 italic">{journal.followUp}</p>
-                                            </div>
-                                         )}
-                                      </div>
-                                   )}
-                                </td>
-                                <td className="p-4 align-top text-center">
-                                   <button 
-                                      onClick={() => handleDelete(journal.id)}
-                                      className="text-gray-300 hover:text-red-600 p-2 transition rounded-full hover:bg-red-50"
-                                      title="Hapus Jurnal"
-                                   >
-                                      <Trash2 size={18} />
-                                   </button>
-                                </td>
-                             </tr>
-                          );
-                       })}
-                    </tbody>
-                 </table>
+                 {/* Desktop Table View */}
+                 <div className="hidden md:block">
+                   <table className="w-full text-sm text-left">
+                     <thead className="bg-white text-gray-600 font-semibold border-b border-gray-200">
+                        <tr>
+                           <th className="p-4 w-10">
+                              <input 
+                                 type="checkbox" 
+                                 className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                 onChange={handleSelectAll}
+                                 checked={filteredJournals.length > 0 && selectedIds.size === filteredJournals.length}
+                              />
+                           </th>
+                           <th className="p-4 w-32">Tanggal</th>
+                           <th className="p-4 w-20 text-center">Ke-</th>
+                           <th className="p-4 w-48">Kelas / Materi</th>
+                           <th className="p-4 min-w-[300px]">Kegiatan Pembelajaran</th>
+                           <th className="p-4 w-20 text-center">Aksi</th>
+                        </tr>
+                     </thead>
+                     <tbody className="divide-y divide-gray-100">
+                        {currentItems.map(journal => {
+                           const cls = classes.find(c => c.id === journal.classId);
+                           const mat = materialMap[journal.materialId];
+                           return (
+                              <tr key={journal.id} className="hover:bg-gray-50 transition group">
+                                 <td className="p-4 align-top">
+                                    <input 
+                                       type="checkbox" 
+                                       className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                       checked={selectedIds.has(journal.id)}
+                                       onChange={() => handleToggleSelect(journal.id)}
+                                    />
+                                 </td>
+                                 <td className="p-4 align-top">
+                                    <div className="font-medium text-gray-900">
+                                       {new Date(journal.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                                    </div>
+                                 </td>
+                                 <td className="p-4 align-top text-center">
+                                    <span className="inline-block bg-blue-100 text-blue-700 px-2 py-1 rounded-md text-xs font-bold">
+                                       #{journal.meetingNo}
+                                    </span>
+                                 </td>
+                                 <td className="p-4 align-top">
+                                    <div className="font-bold text-gray-800 mb-1">{cls?.name || 'Unknown Class'}</div>
+                                    <div className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded inline-block" title={mat ? mat.content : 'ID: ' + journal.materialId}>
+                                       {mat ? mat.code : journal.materialId.substring(0,8)}
+                                    </div>
+                                 </td>
+                                 <td className="p-4 align-top">
+                                    <div className="mb-2">
+                                       <span className="text-xs font-semibold text-blue-600 uppercase tracking-wide">Tujuan:</span>
+                                       <p className="text-gray-900 font-medium">{journal.learningObjective}</p>
+                                    </div>
+                                    <div className="mb-2">
+                                       <span className="text-xs font-semibold text-green-600 uppercase tracking-wide">Kegiatan:</span>
+                                       <p className="text-gray-600 whitespace-pre-line text-xs">{journal.activities}</p>
+                                    </div>
+                                    {(journal.reflection || journal.followUp) && (
+                                       <div className="grid grid-cols-2 gap-4 mt-2">
+                                          {journal.reflection && (
+                                             <div className="bg-yellow-50 p-2 rounded border border-yellow-100">
+                                                <span className="text-[10px] font-bold text-yellow-700 uppercase">Refleksi</span>
+                                                <p className="text-[10px] text-yellow-800 italic">{journal.reflection}</p>
+                                             </div>
+                                          )}
+                                          {journal.followUp && (
+                                             <div className="bg-purple-50 p-2 rounded border border-purple-100">
+                                                <span className="text-[10px] font-bold text-purple-700 uppercase">Tindak Lanjut</span>
+                                                <p className="text-[10px] text-purple-800 italic">{journal.followUp}</p>
+                                             </div>
+                                          )}
+                                       </div>
+                                    )}
+                                 </td>
+                                 <td className="p-4 align-top text-center">
+                                    <button 
+                                       onClick={() => handleDelete(journal.id)}
+                                       className="text-gray-300 hover:text-red-600 p-2 transition rounded-full hover:bg-red-50"
+                                       title="Hapus Jurnal"
+                                    >
+                                       <Trash2 size={18} />
+                                    </button>
+                                 </td>
+                              </tr>
+                           );
+                        })}
+                     </tbody>
+                   </table>
+                 </div>
+
+                 {/* Mobile Card View */}
+                 <div className="md:hidden space-y-4 p-4">
+                    {currentItems.map(journal => {
+                        const cls = classes.find(c => c.id === journal.classId);
+                        const mat = materialMap[journal.materialId];
+                        return (
+                            <div key={journal.id} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm space-y-3 relative">
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                                            Pertemuan #{journal.meetingNo}
+                                        </span>
+                                        <h3 className="font-bold text-gray-800 mt-2">{cls?.name || 'Unknown Class'}</h3>
+                                        <p className="text-xs text-gray-500">{new Date(journal.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                                    </div>
+                                    <button 
+                                       onClick={() => handleDelete(journal.id)}
+                                       className="text-gray-400 hover:text-red-600 p-1"
+                                    >
+                                       <Trash2 size={18} />
+                                    </button>
+                                </div>
+                                
+                                <div className="text-sm text-gray-700 bg-gray-50 p-3 rounded-lg border border-gray-100">
+                                    <p className="font-semibold text-xs text-gray-500 uppercase mb-1">Materi</p>
+                                    <p className="text-xs">{mat ? `${mat.code} - ${mat.content}` : journal.materialId}</p>
+                                </div>
+
+                                <div>
+                                    <p className="font-semibold text-xs text-gray-500 uppercase mb-1">Kegiatan</p>
+                                    <p className="text-sm text-gray-600 line-clamp-3">{journal.activities}</p>
+                                </div>
+                            </div>
+                        );
+                    })}
+                 </div>
 
                  {/* Pagination Controls */}
                  {totalPages > 1 && (

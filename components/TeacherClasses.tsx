@@ -9,6 +9,7 @@ import {
   Plus, Search, Trash2, Users, ChevronLeft, Upload, 
   Download, FileSpreadsheet, MoreVertical, CheckCircle, X, Check, Filter, Smartphone 
 } from './Icons';
+import Skeleton from './Skeleton';
 import BroadcastModal from './BroadcastModal';
 
 interface TeacherClassesProps {
@@ -419,14 +420,17 @@ const TeacherClasses: React.FC<TeacherClassesProps> = ({ user }) => {
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         {loading ? (
-           <div className="p-4">
-              <div className="hidden md:block">
-                 <table className="w-full">
-                    <thead><tr>{[1,2,3,4,5,6].map(i => <th key={i} className="p-4"><div className="h-4 bg-gray-200 rounded w-full"></div></th>)}</tr></thead>
-                    <tbody>{Array.from({length: 5}).map((_, i) => (<tr key={i} className="animate-pulse"><td className="p-4"><div className="w-4 h-4 bg-gray-200 rounded"></div></td><td className="p-4"><div className="h-4 bg-gray-200 rounded w-32"></div></td><td className="p-4"><div className="h-4 bg-gray-200 rounded w-20"></div></td><td className="p-4"><div className="h-6 w-8 bg-gray-200 rounded mx-auto"></div></td><td className="p-4"><div className="h-4 bg-gray-200 rounded w-24"></div></td><td className="p-4"><div className="h-8 w-8 bg-gray-200 rounded-full mx-auto"></div></td></tr>))}</tbody>
-                 </table>
-              </div>
-              <div className="md:hidden space-y-4">{Array.from({length: 5}).map((_, i) => (<div key={i} className="flex justify-between items-center p-2 animate-pulse"><div className="flex gap-3 items-center"><div className="w-5 h-5 bg-gray-200 rounded"></div><div className="space-y-2"><div className="h-4 bg-gray-200 rounded w-32"></div><div className="h-3 bg-gray-200 rounded w-20"></div></div></div><div className="w-8 h-8 bg-gray-200 rounded"></div></div>))}</div>
+           <div className="p-6 space-y-4">
+              {Array.from({length: 5}).map((_, i) => (
+                 <div key={i} className="flex items-center gap-4">
+                    <Skeleton variant="rectangular" className="w-5 h-5 rounded" />
+                    <div className="flex-1 space-y-2">
+                       <Skeleton variant="text" className="w-1/3 h-4" />
+                       <Skeleton variant="text" className="w-1/4 h-3" />
+                    </div>
+                    <Skeleton variant="circular" className="w-8 h-8" />
+                 </div>
+              ))}
            </div>
         ) : (
           <>
@@ -488,7 +492,7 @@ const TeacherClasses: React.FC<TeacherClassesProps> = ({ user }) => {
             </div>
 
             <div className="md:hidden">
-              <div className="p-4 bg-gray-50 border-b border-gray-100 flex justify-between items-center">
+              <div className="p-4 bg-gray-50 border-b border-gray-100 flex justify-between items-center sticky top-0 z-10">
                 <div className="flex items-center gap-2">
                    <input type="checkbox" className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-5 w-5" onChange={handleSelectAll} checked={students.length > 0 && selectedStudentIds.size === students.length}/>
                     <span className="text-sm font-medium text-gray-600">Pilih Semua</span>
@@ -500,20 +504,21 @@ const TeacherClasses: React.FC<TeacherClassesProps> = ({ user }) => {
                     <div className="p-8 text-center text-gray-400 text-sm">Belum ada siswa.</div>
                 ) : (
                   students.map(student => (
-                    <div key={student.id} className={`p-4 flex items-center justify-between ${selectedStudentIds.has(student.id) ? 'bg-blue-50' : 'bg-white'}`} onClick={() => handleToggleSelectStudent(student.id)}>
-                      <div className="flex items-center gap-4">
-                        <div onClick={(e) => e.stopPropagation()}>
+                    <div key={student.id} className={`p-4 flex items-center justify-between transition active:bg-gray-50 ${selectedStudentIds.has(student.id) ? 'bg-blue-50' : 'bg-white'}`} onClick={() => handleToggleSelectStudent(student.id)}>
+                      <div className="flex items-center gap-4 flex-1 min-w-0">
+                        <div onClick={(e) => e.stopPropagation()} className="flex-shrink-0">
                            <input type="checkbox" className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-5 w-5" checked={selectedStudentIds.has(student.id)} onChange={() => handleToggleSelectStudent(student.id)}/>
                         </div>
-                        <div>
-                          <h4 className="font-semibold text-gray-900">{student.name}</h4>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-semibold text-gray-900 truncate">{student.name}</h4>
                           <div className="flex items-center gap-2 mt-1">
-                             <span className="text-xs text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">{student.nis}</span>
+                             <span className="text-xs text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded font-mono">{student.nis}</span>
                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${student.gender === 'L' ? 'bg-blue-100 text-blue-700' : 'bg-pink-100 text-pink-700'}`}>{student.gender}</span>
                           </div>
+                          {student.phone && <p className="text-xs text-gray-400 mt-1">{student.phone}</p>}
                         </div>
                       </div>
-                      <button onClick={(e) => { e.stopPropagation(); handleDeleteStudent(student.id); }} className="text-gray-400 hover:text-red-500 p-2"><Trash2 size={20} /></button>
+                      <button onClick={(e) => { e.stopPropagation(); handleDeleteStudent(student.id); }} className="text-gray-300 hover:text-red-500 p-2 ml-2"><Trash2 size={20} /></button>
                     </div>
                   ))
                 )}

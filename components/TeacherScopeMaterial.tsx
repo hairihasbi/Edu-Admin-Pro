@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { User, ClassRoom, ScopeMaterial, SD_SUBJECTS_PHASE_A, SD_SUBJECTS_PHASE_BC, MATH_SUBJECT_OPTIONS } from '../types';
 import { getClasses, addScopeMaterial, updateScopeMaterial, getScopeMaterials, deleteScopeMaterial, bulkDeleteScopeMaterials, copyScopeMaterials } from '../services/database';
 import { Plus, Trash2, List, Copy, Save, Filter, X, FileText, ChevronLeft, ChevronRight, AlertCircle, ArrowRight, Pencil } from './Icons';
+import Skeleton from './Skeleton';
 import { Link } from 'react-router-dom';
 
 interface TeacherScopeMaterialProps {
@@ -470,7 +471,21 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
             {/* List Body */}
             <div className="flex-1">
               {loading ? (
-                <div className="p-10 text-center text-gray-400">Memuat data...</div>
+                 <div className="p-4 space-y-4">
+                    {Array.from({length: 5}).map((_, i) => (
+                       <div key={i} className="flex gap-4 items-start">
+                          <Skeleton variant="rectangular" className="w-5 h-5 rounded mt-1" />
+                          <div className="flex-1 space-y-2">
+                             <div className="flex gap-2">
+                                <Skeleton variant="text" className="w-16 h-5" />
+                                <Skeleton variant="text" className="w-24 h-5" />
+                             </div>
+                             <Skeleton variant="text" className="w-full h-4" />
+                             <Skeleton variant="text" className="w-3/4 h-4" />
+                          </div>
+                       </div>
+                    ))}
+                 </div>
               ) : materials.length === 0 ? (
                 <div className="flex flex-col items-center justify-center p-12 text-gray-400">
                   <FileText size={48} className="mb-3 opacity-20" />
@@ -516,14 +531,14 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
                       <div className="flex gap-1">
                           <button
                             onClick={() => handleEdit(item)}
-                            className="text-gray-300 hover:text-orange-500 p-2 opacity-0 group-hover:opacity-100 transition"
+                            className="text-gray-300 hover:text-orange-500 p-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition"
                             title="Edit"
                           >
                             <Pencil size={18} />
                           </button>
                           <button
                             onClick={() => handleDelete(item.id)}
-                            className="text-gray-300 hover:text-red-500 p-2 opacity-0 group-hover:opacity-100 transition"
+                            className="text-gray-300 hover:text-red-500 p-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition"
                             title="Hapus"
                           >
                             <Trash2 size={18} />
