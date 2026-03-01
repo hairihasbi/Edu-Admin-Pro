@@ -29,6 +29,7 @@ import SyncPage from './components/SyncPage'; // Import SyncPage
 import DailyPicket from './components/DailyPicket'; // Import DailyPicket
 import DonationHistory from './components/DonationHistory'; // Import DonationHistory
 import NotificationPanel from './components/NotificationPanel';
+import Breadcrumbs from './components/Breadcrumbs';
 import { initDatabase, loginUser, resetPassword, registerUser, getNotifications, createNotification, markNotificationAsRead, clearNotifications, getSystemSettings, syncAllData, checkSchoolNameByNpsn } from './services/database';
 import { 
   LayoutDashboard, 
@@ -798,7 +799,10 @@ const AppContent: React.FC = () => {
         </header>
 
         {/* Page Content */}
-        <div className="flex-1 overflow-y-auto p-4 md:p-6" onClick={() => { setIsNotifPanelOpen(false); if(window.innerWidth < 1024) setIsSidebarOpen(false); }}>
+        <div className="px-6 py-2 border-b border-gray-100 bg-white">
+            <Breadcrumbs />
+        </div>
+        <div className="flex-1 overflow-y-auto p-4 md:p-6 pb-24 md:pb-6" onClick={() => { setIsNotifPanelOpen(false); if(window.innerWidth < 1024) setIsSidebarOpen(false); }}>
            <Routes>
               {currentUser.role === UserRole.ADMIN ? (
                  <>
@@ -840,6 +844,42 @@ const AppContent: React.FC = () => {
                  </>
               )}
            </Routes>
+        </div>
+        {/* Bottom Navigation for Mobile */}
+        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around items-center h-16 z-50 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+          <Link to="/dashboard" className={`flex flex-col items-center justify-center w-full h-full ${location.pathname === '/dashboard' ? 'text-blue-600' : 'text-gray-500'}`}>
+            <LayoutDashboard size={20} />
+            <span className="text-[10px] mt-1 font-medium">Home</span>
+          </Link>
+          
+          {currentUser.role === UserRole.GURU ? (
+             <>
+               <Link to="/classes" className={`flex flex-col items-center justify-center w-full h-full ${location.pathname.includes('/classes') ? 'text-blue-600' : 'text-gray-500'}`}>
+                 <BookOpen size={20} />
+                 <span className="text-[10px] mt-1 font-medium">Kelas</span>
+               </Link>
+               <Link to="/journal" className={`flex flex-col items-center justify-center w-full h-full ${location.pathname.includes('/journal') ? 'text-blue-600' : 'text-gray-500'}`}>
+                 <NotebookPen size={20} />
+                 <span className="text-[10px] mt-1 font-medium">Jurnal</span>
+               </Link>
+             </>
+          ) : (
+             <>
+               <Link to="/teachers" className={`flex flex-col items-center justify-center w-full h-full ${location.pathname.includes('/teachers') ? 'text-blue-600' : 'text-gray-500'}`}>
+                 <Users size={20} />
+                 <span className="text-[10px] mt-1 font-medium">Guru</span>
+               </Link>
+               <Link to="/students" className={`flex flex-col items-center justify-center w-full h-full ${location.pathname.includes('/students') ? 'text-blue-600' : 'text-gray-500'}`}>
+                 <GraduationCap size={20} />
+                 <span className="text-[10px] mt-1 font-medium">Siswa</span>
+               </Link>
+             </>
+          )}
+
+          <button onClick={() => setIsSidebarOpen(true)} className="flex flex-col items-center justify-center w-full h-full text-gray-500">
+            <Menu size={20} />
+            <span className="text-[10px] mt-1 font-medium">Menu</span>
+          </button>
         </div>
       </main>
 
