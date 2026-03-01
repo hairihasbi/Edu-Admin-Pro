@@ -668,7 +668,16 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
                                               {materials.map(m => (
                                                   <div key={m.id} className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
                                                       <div className="flex justify-between items-center mb-2 pb-2 border-b border-gray-50">
-                                                          <span className="font-bold text-xs text-gray-700">{m.code}</span>
+                                                          <div className="flex items-center gap-2">
+                                                              <span className="font-bold text-xs text-gray-700">{m.code}</span>
+                                                              <button 
+                                                                  onClick={() => handleOpenManage(m)}
+                                                                  className="text-gray-400 hover:text-blue-600 p-2 rounded-full hover:bg-gray-100 transition"
+                                                                  title="Atur Sub-kolom"
+                                                              >
+                                                                  <Settings size={16} />
+                                                              </button>
+                                                          </div>
                                                           <span className="text-[10px] text-gray-400 truncate max-w-[150px]">{m.content}</span>
                                                       </div>
                                                       
