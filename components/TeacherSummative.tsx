@@ -2,8 +2,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { User, ClassRoom, Student, ScopeMaterial, AssessmentScore, SD_SUBJECTS_PHASE_A, SD_SUBJECTS_PHASE_BC, MATH_SUBJECT_OPTIONS } from '../types';
 import { getClasses, getStudents, getScopeMaterials, getAssessmentScores, saveBulkAssessmentScores, updateScopeMaterial } from '../services/database';
-import { Calculator, Save, Filter, FileSpreadsheet, AlertCircle, CheckCircle, ArrowRight, RefreshCcw, Settings, Plus, Trash2, X } from './Icons';
+import { Calculator, Save, Filter, FileSpreadsheet, AlertCircle, CheckCircle, ArrowRight, RefreshCcw, Settings, Plus, Trash2, X, ChevronDown, ChevronUp, User as UserIcon, Layout } from './Icons';
 import * as XLSX from 'xlsx';
+import Skeleton from './Skeleton';
 
 interface TeacherSummativeProps {
   user: User;
@@ -53,6 +54,60 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
   const [manageMaterial, setManageMaterial] = useState<ScopeMaterial | null>(null);
   const [tempSubScopes, setTempSubScopes] = useState<string[]>([]);
   const [newSubInput, setNewSubInput] = useState('');
+
+  // --- MOBILE VIEW STATE ---
+  const [viewMode, setViewMode] = useState<'student' | 'material'>('student');
+  const [expandedStudentIds, setExpandedStudentIds] = useState<Set<string>>(new Set());
+  const [selectedColumnId, setSelectedColumnId] = useState<string>('');
+
+  const toggleStudentExpansion = (id: string) => {
+    const newSet = new Set(expandedStudentIds);
+    if (newSet.has(id)) newSet.delete(id);
+    else newSet.add(id);
+    setExpandedStudentIds(newSet);
+  };
+
+  // Generate Column Options for "Per Material" View
+  const columnOptions = React.useMemo(() => {
+      const options: { id: string, label: string, type: 'LM' | 'STS' | 'SAS', materialId?: string, subScope?: string }[] = [];
+      
+      materials.forEach(m => {
+          if (m.subScopes && m.subScopes.length > 0) {
+              m.subScopes.forEach(sub => {
+                  options.push({ 
+                      id: `LM-${m.id}-${sub}`, 
+                      label: `${m.code} - ${sub}`, 
+                      type: 'LM', 
+                      materialId: m.id, 
+                      subScope: sub 
+                  });
+              });
+          } else {
+              options.push({ 
+                  id: `LM-${m.id}`, 
+                  label: `${m.code} - Nilai Utuh`, 
+                  type: 'LM', 
+                  materialId: m.id 
+              });
+          }
+      });
+      
+      options.push({ id: 'STS', label: 'STS (Sumatif Tengah Semester)', type: 'STS' });
+      options.push({ id: 'SAS', label: 'SAS (Sumatif Akhir Semester)', type: 'SAS' });
+      
+      return options;
+  }, [materials]);
+
+  // Set default column if none selected
+  useEffect(() => {
+      if (columnOptions.length > 0 && !selectedColumnId) {
+          setSelectedColumnId(columnOptions[0].id);
+      }
+  }, [columnOptions, selectedColumnId]);
+
+  const getSelectedColumnDetails = () => {
+      return columnOptions.find(c => c.id === selectedColumnId);
+  };
 
   // Refs for Excel-like navigation
   const inputRefs = useRef<{[key: string]: HTMLInputElement | null}>({});
@@ -538,8 +593,217 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
         </div>
       </div>
 
-      {/* Table Section */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      {/* --- MOBILE VIEW --- */}
+      <div className="md:hidden space-y-4">
+          {/* View Switcher */}
+          <div className="flex bg-gray-100 p-1 rounded-lg">
+              <button 
+                  onClick={() => setViewMode('student')}
+                  className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition flex items-center justify-center gap-2 ${viewMode === 'student' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                  <UserIcon size={16} /> Per Siswa
+              </button>
+              <button 
+                  onClick={() => setViewMode('material')}
+                  className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition flex items-center justify-center gap-2 ${viewMode === 'material' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                  <Layout size={16} /> Per Materi
+              </button>
+          </div>
+
+          {/* Content */}
+          {loading ? (
+              <div className="space-y-3">
+                  {[1,2,3].map(i => (
+                      <div key={i} className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex justify-between items-center">
+                          <div className="flex items-center gap-3">
+                              <Skeleton variant="circular" width={40} height={40} />
+                              <div className="space-y-2">
+                                  <Skeleton width={120} />
+                                  <Skeleton width={80} />
+                              </div>
+                          </div>
+                          <Skeleton width={40} height={20} />
+                      </div>
+                  ))}
+              </div>
+          ) : students.length === 0 ? (
+              <div className="p-8 text-center text-gray-400">Tidak ada siswa.</div>
+          ) : (
+              <>
+                  {/* MODE: PER SISWA (ACCORDION) */}
+                  {viewMode === 'student' && (
+                      <div className="space-y-3">
+                          {students.map(student => {
+                              const isExpanded = expandedStudentIds.has(student.id);
+                              const finalScore = calculateFinalScore(student.id);
+                              
+                              return (
+                                  <div key={student.id} className={`bg-white border rounded-xl overflow-hidden transition-all ${isExpanded ? 'border-blue-200 shadow-md' : 'border-gray-200 shadow-sm'}`}>
+                                      <div 
+                                          onClick={() => toggleStudentExpansion(student.id)}
+                                          className="p-4 flex justify-between items-center cursor-pointer bg-white active:bg-gray-50"
+                                      >
+                                          <div className="flex items-center gap-3">
+                                              <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-sm border border-blue-100">
+                                                  {student.name.substring(0,2).toUpperCase()}
+                                              </div>
+                                              <div>
+                                                  <h4 className="font-bold text-gray-800 text-sm">{student.name}</h4>
+                                                  <p className="text-xs text-gray-500">{student.nis}</p>
+                                              </div>
+                                          </div>
+                                          <div className="flex items-center gap-3">
+                                              <div className="text-right">
+                                                  <span className="block text-[10px] text-gray-400 uppercase font-bold">Akhir</span>
+                                                  <span className={`text-sm font-bold ${finalScore >= 75 ? 'text-green-600' : 'text-orange-500'}`}>{finalScore}</span>
+                                              </div>
+                                              {isExpanded ? <ChevronUp size={20} className="text-gray-400" /> : <ChevronDown size={20} className="text-gray-400" />}
+                                          </div>
+                                      </div>
+
+                                      {/* Expanded Content */}
+                                      {isExpanded && (
+                                          <div className="bg-gray-50 p-4 border-t border-gray-100 space-y-4 animate-in slide-in-from-top-2 duration-200">
+                                              {materials.map(m => (
+                                                  <div key={m.id} className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
+                                                      <div className="flex justify-between items-center mb-2 pb-2 border-b border-gray-50">
+                                                          <span className="font-bold text-xs text-gray-700">{m.code}</span>
+                                                          <span className="text-[10px] text-gray-400 truncate max-w-[150px]">{m.content}</span>
+                                                      </div>
+                                                      
+                                                      <div className="grid grid-cols-2 gap-3">
+                                                          {m.subScopes && m.subScopes.length > 0 ? (
+                                                              m.subScopes.map(sub => (
+                                                                  <div key={sub}>
+                                                                      <label className="block text-[10px] text-gray-500 mb-1">{sub}</label>
+                                                                      <input 
+                                                                          type="number" inputMode="numeric"
+                                                                          className="w-full p-2 border border-gray-300 rounded text-center text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                                                          value={subScores[`${student.id}-LM-${m.id}-${sub}`] ?? ''}
+                                                                          onChange={(e) => handleScoreChange(student.id, 'LM', e.target.value, m.id, sub)}
+                                                                          placeholder="0"
+                                                                      />
+                                                                  </div>
+                                                              ))
+                                                          ) : (
+                                                              <div className="col-span-2">
+                                                                  <label className="block text-[10px] text-gray-500 mb-1">Nilai Utuh</label>
+                                                                  <input 
+                                                                      type="number" inputMode="numeric"
+                                                                      className="w-full p-2 border border-gray-300 rounded text-center text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                                                      value={scores[`${student.id}-LM-${m.id}`] ?? ''}
+                                                                      onChange={(e) => handleScoreChange(student.id, 'LM', e.target.value, m.id)}
+                                                                      placeholder="0"
+                                                                  />
+                                                              </div>
+                                                          )}
+                                                      </div>
+                                                  </div>
+                                              ))}
+
+                                              <div className="grid grid-cols-2 gap-3 pt-2">
+                                                  <div className="bg-purple-50 p-3 rounded-lg border border-purple-100">
+                                                      <label className="block text-xs font-bold text-purple-700 mb-1 text-center">STS</label>
+                                                      <input 
+                                                          type="number" inputMode="numeric"
+                                                          className="w-full p-2 border border-purple-200 rounded text-center text-sm focus:ring-2 focus:ring-purple-500 outline-none"
+                                                          value={scores[`${student.id}-STS`] ?? ''}
+                                                          onChange={(e) => handleScoreChange(student.id, 'STS', e.target.value)}
+                                                          placeholder="0"
+                                                      />
+                                                  </div>
+                                                  <div className="bg-orange-50 p-3 rounded-lg border border-orange-100">
+                                                      <label className="block text-xs font-bold text-orange-700 mb-1 text-center">SAS</label>
+                                                      <input 
+                                                          type="number" inputMode="numeric"
+                                                          className="w-full p-2 border border-orange-200 rounded text-center text-sm focus:ring-2 focus:ring-orange-500 outline-none"
+                                                          value={scores[`${student.id}-SAS`] ?? ''}
+                                                          onChange={(e) => handleScoreChange(student.id, 'SAS', e.target.value)}
+                                                          placeholder="0"
+                                                      />
+                                                  </div>
+                                              </div>
+                                          </div>
+                                      )}
+                                  </div>
+                              );
+                          })}
+                      </div>
+                  )}
+
+                  {/* MODE: PER MATERI (FOCUS LIST) */}
+                  {viewMode === 'material' && (
+                      <div className="space-y-4">
+                          {/* Column Selector */}
+                          <div className="bg-blue-50 p-3 rounded-xl border border-blue-100 sticky top-0 z-20 shadow-sm">
+                              <label className="block text-xs font-bold text-blue-800 mb-1 uppercase">Pilih Kolom Input</label>
+                              <div className="relative">
+                                  <select 
+                                      value={selectedColumnId}
+                                      onChange={(e) => setSelectedColumnId(e.target.value)}
+                                      className="w-full p-3 pr-10 border border-blue-300 rounded-lg text-sm font-bold text-gray-700 focus:ring-2 focus:ring-blue-500 outline-none appearance-none bg-white"
+                                  >
+                                      {columnOptions.map(opt => (
+                                          <option key={opt.id} value={opt.id}>{opt.label}</option>
+                                      ))}
+                                  </select>
+                                  <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+                              </div>
+                          </div>
+
+                          <div className="space-y-2">
+                              {students.map((student, idx) => {
+                                  const colDetails = getSelectedColumnDetails();
+                                  let val: string | number = '';
+                                  let onChange: (val: string) => void = () => {};
+
+                                  if (colDetails) {
+                                      if (colDetails.type === 'LM') {
+                                          if (colDetails.subScope) {
+                                              val = subScores[`${student.id}-LM-${colDetails.materialId}-${colDetails.subScope}`] ?? '';
+                                              onChange = (v) => handleScoreChange(student.id, 'LM', v, colDetails.materialId, colDetails.subScope);
+                                          } else {
+                                              val = scores[`${student.id}-LM-${colDetails.materialId}`] ?? '';
+                                              onChange = (v) => handleScoreChange(student.id, 'LM', v, colDetails.materialId);
+                                          }
+                                      } else {
+                                          val = scores[`${student.id}-${colDetails.type}`] ?? '';
+                                          onChange = (v) => handleScoreChange(student.id, colDetails.type as any, v);
+                                      }
+                                  }
+
+                                  return (
+                                      <div key={student.id} className="bg-white border border-gray-200 rounded-lg p-3 flex items-center justify-between shadow-sm">
+                                          <div className="flex items-center gap-3 overflow-hidden">
+                                              <div className="w-8 h-8 rounded-full bg-gray-100 text-gray-500 flex items-center justify-center font-bold text-xs shrink-0">
+                                                  {idx + 1}
+                                              </div>
+                                              <div className="min-w-0">
+                                                  <h4 className="font-bold text-gray-800 text-sm truncate">{student.name}</h4>
+                                              </div>
+                                          </div>
+                                          <div className="w-20 shrink-0">
+                                              <input 
+                                                  type="number" inputMode="numeric"
+                                                  className={`w-full p-2 border rounded-lg text-center font-bold text-lg focus:ring-2 outline-none ${val ? 'border-blue-300 bg-blue-50 text-blue-800' : 'border-gray-300 bg-white'}`}
+                                                  value={val}
+                                                  onChange={(e) => onChange(e.target.value)}
+                                                  placeholder="-"
+                                              />
+                                          </div>
+                                      </div>
+                                  );
+                              })}
+                          </div>
+                      </div>
+                  )}
+              </>
+          )}
+      </div>
+
+      {/* Table Section (Desktop Only) */}
+      <div className="hidden md:block bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         {loading ? (
            <div className="p-10 text-center text-gray-400">Memuat data nilai...</div>
         ) : students.length === 0 ? (
