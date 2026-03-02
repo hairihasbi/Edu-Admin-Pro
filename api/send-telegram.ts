@@ -1,7 +1,7 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-const TELEGRAM_BOT_TOKEN = '8666531321:AAGG7dMnajlZ6X3T0i24MGrEJj2AWxgbEsg';
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
