@@ -64,7 +64,7 @@ export const registerUser = async (fullName: string, username: string, password:
 export const updateUserProfile = async (id: string, data: Partial<User>) => {
     await db.users.update(id, { ...data, lastModified: Date.now(), isSynced: false });
     const updated = await db.users.get(id);
-    if(updated) pushToTurso('eduadmin_users', [updated]);
+    if(updated) triggerDebouncedSync();
     return true;
 };
 
@@ -80,7 +80,7 @@ export const updateUserPassword = async (id: string, newPass: string) => {
     
     // Get full object to ensure all fields are present for sync
     const updated = await db.users.get(id);
-    if(updated) pushToTurso('eduadmin_users', [updated]);
+    if(updated) triggerDebouncedSync();
     
     return true;
 };
@@ -99,7 +99,7 @@ export const resetPassword = async (username: string, newPass: string) => {
     });
     
     const updated = await db.users.get(user.id);
-    if(updated) pushToTurso('eduadmin_users', [updated]);
+    if(updated) triggerDebouncedSync();
     
     return true;
 };
@@ -119,7 +119,7 @@ export const getPendingTeachers = async () => {
 export const approveTeacher = async (id: string) => {
     await db.users.update(id, { status: 'ACTIVE', lastModified: Date.now(), isSynced: false });
     const user = await db.users.get(id);
-    if(user) pushToTurso('eduadmin_users', [user]);
+    if(user) triggerDebouncedSync();
     return true;
 };
 
@@ -191,8 +191,7 @@ export const claimHomeroomClass = async (classId: string, teacher: User) => {
         };
         await db.users.put(updatedUser);
 
-        pushToTurso('eduadmin_classes', [updatedClass]);
-        pushToTurso('eduadmin_users', [updatedUser]);
+        triggerDebouncedSync();
 
         return { success: true, user: updatedUser };
     } catch (e: any) {
@@ -236,9 +235,7 @@ export const releaseHomeroomClass = async (classId: string, teacher: User) => {
         await db.users.put(updatedUser);
 
         // @ts-ignore
-        pushToTurso('eduadmin_classes', [{...updatedClass, homeroomTeacherId: null, homeroomTeacherName: null}]);
-        // @ts-ignore
-        pushToTurso('eduadmin_users', [{...updatedUser, additionalRole: null, homeroomClassId: null}]);
+        triggerDebouncedSync();
 
         return { success: true, user: updatedUser };
     } catch (e: any) {
@@ -259,7 +256,7 @@ export const addClass = async (userId: string, name: string, description: string
         isSynced: false
     };
     await db.classes.add(newItem);
-    pushToTurso('eduadmin_classes', [newItem]);
+    triggerDebouncedSync();
     return newItem;
 };
 
@@ -277,7 +274,7 @@ export const getSystemSettings = async () => {
 export const saveSystemSettings = async (settings: SystemSettings) => {
     const toSave = { ...settings, id: 'global-settings', lastModified: Date.now(), isSynced: false };
     await db.systemSettings.put(toSave);
-    pushToTurso('eduadmin_system_settings', [toSave]);
+    triggerDebouncedSync();
     return true;
 };
 
@@ -307,10 +304,20 @@ export const getSyncStats = async (user: User) => {
 // SYNC LOCK VARIABLE
 let isSyncRunning = false;
 let syncStartTime = 0;
+let lastSyncTime = 0;
+let syncDebounceTimer: any = null;
 
 export const resetSyncLock = () => {
     isSyncRunning = false;
     syncStartTime = 0;
+};
+
+export const triggerDebouncedSync = () => {
+    if (syncDebounceTimer) clearTimeout(syncDebounceTimer);
+    syncDebounceTimer = setTimeout(() => {
+        console.log("[Debounce] Triggering auto-sync...");
+        syncAllData(false);
+    }, 3000);
 };
 
 export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', logCallback: (msg: string) => void) => {
@@ -417,10 +424,20 @@ export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', logCall
     } finally {
         isSyncRunning = false;
         syncStartTime = 0;
+        lastSyncTime = Date.now();
     }
 };
 
 export const syncAllData = async (force = false) => {
+    // Rate Limiting for Manual Sync (10 seconds)
+    if (force) {
+        const now = Date.now();
+        if (now - lastSyncTime < 10000) {
+            console.warn("Manual sync rate limited. Please wait.");
+            return;
+        }
+    }
+    
     // Silent Sync Wrapper
     await runManualSync('FULL', (msg) => { /* console.log('[AutoSync]', msg) */ });
 };
@@ -556,7 +573,7 @@ export const addMasterSubject = async (name: string, category: MasterSubject['ca
         isSynced: false
     };
     await db.masterSubjects.add(newItem);
-    pushToTurso('eduadmin_master_subjects', [newItem]);
+    triggerDebouncedSync();
     return newItem;
 };
 
@@ -573,7 +590,7 @@ export const saveEmailConfig = async (config: EmailConfig) => {
     const id = (config as any).id || uuidv4();
     const toSave = { ...config, id, lastModified: Date.now(), isSynced: false };
     await db.emailConfig.put(toSave);
-    pushToTurso('eduadmin_email_config', [toSave]);
+    triggerDebouncedSync();
     return true;
 };
 
@@ -584,7 +601,7 @@ export const getWhatsAppConfig = async (userId: string) => {
 export const saveWhatsAppConfig = async (config: WhatsAppConfig) => {
     const toSave = { ...config, lastModified: Date.now(), isSynced: false };
     await db.whatsappConfigs.put(toSave);
-    pushToTurso('eduadmin_wa_configs', [toSave]);
+    triggerDebouncedSync();
     return true;
 };
 
@@ -661,7 +678,7 @@ export const addBackupApiKey = async (key: string) => {
         isSynced: false
     };
     await db.apiKeys.add(newItem);
-    pushToTurso('eduadmin_api_keys', [newItem]);
+    triggerDebouncedSync();
     return newItem;
 };
 
@@ -700,7 +717,7 @@ export const createNotification = async (title: string, message: string, type: N
         isSynced: false
     };
     await db.notifications.add(newItem);
-    pushToTurso('eduadmin_notifications', [newItem]);
+    triggerDebouncedSync();
     return newItem;
 };
 
@@ -739,7 +756,7 @@ export const createTicket = async (user: User, subject: string, message: string)
         isSynced: false
     };
     await db.tickets.add(newItem);
-    pushToTurso('eduadmin_tickets', [newItem]);
+    triggerDebouncedSync();
     return newItem;
 };
 
@@ -781,14 +798,14 @@ export const replyTicket = async (ticketId: string, sender: User, message: strin
     };
     
     await db.tickets.put(updated);
-    pushToTurso('eduadmin_tickets', [updated]);
+    triggerDebouncedSync();
     return true;
 };
 
 export const closeTicket = async (id: string) => {
     await db.tickets.update(id, { status: 'CLOSED', lastModified: Date.now(), isSynced: false });
     const ticket = await db.tickets.get(id);
-    if(ticket) pushToTurso('eduadmin_tickets', [ticket]);
+    if(ticket) triggerDebouncedSync();
     return true;
 };
 
@@ -803,7 +820,7 @@ export const getStudentViolations = async () => await db.violations.toArray();
 export const addStudentViolation = async (data: Omit<StudentViolation, 'id'|'lastModified'|'isSynced'>) => {
     const item = { ...data, id: uuidv4(), lastModified: Date.now(), isSynced: false };
     await db.violations.add(item);
-    pushToTurso('eduadmin_bk_violations', [item]);
+    triggerDebouncedSync();
     return item;
 };
 export const deleteStudentViolation = async (id: string) => {
@@ -815,7 +832,7 @@ export const getStudentPointReductions = async () => await db.pointReductions.to
 export const addStudentPointReduction = async (data: Omit<StudentPointReduction, 'id'|'lastModified'|'isSynced'>) => {
     const item = { ...data, id: uuidv4(), lastModified: Date.now(), isSynced: false };
     await db.pointReductions.add(item);
-    pushToTurso('eduadmin_bk_reductions', [item]);
+    triggerDebouncedSync();
     return item;
 };
 export const deleteStudentPointReduction = async (id: string) => {
@@ -827,7 +844,7 @@ export const getStudentAchievements = async () => await db.achievements.toArray(
 export const addStudentAchievement = async (data: Omit<StudentAchievement, 'id'|'lastModified'|'isSynced'>) => {
     const item = { ...data, id: uuidv4(), lastModified: Date.now(), isSynced: false };
     await db.achievements.add(item);
-    pushToTurso('eduadmin_bk_achievements', [item]);
+    triggerDebouncedSync();
     return item;
 };
 export const deleteStudentAchievement = async (id: string) => {
@@ -839,7 +856,7 @@ export const getCounselingSessions = async () => await db.counselingSessions.toA
 export const addCounselingSession = async (data: Omit<CounselingSession, 'id'|'lastModified'|'isSynced'>) => {
     const item = { ...data, id: uuidv4(), lastModified: Date.now(), isSynced: false };
     await db.counselingSessions.add(item);
-    pushToTurso('eduadmin_bk_counseling', [item]);
+    triggerDebouncedSync();
     return item;
 };
 export const deleteCounselingSession = async (id: string) => {
@@ -872,7 +889,7 @@ export const saveDailyPicket = async (date: string, schoolNpsn: string, officers
     };
     
     await db.dailyPickets.put(item);
-    pushToTurso('eduadmin_pickets', [item]);
+    triggerDebouncedSync();
     return item;
 };
 
@@ -904,7 +921,7 @@ export const addStudentIncident = async (picketId: string, data: {studentName: s
         isSynced: false
     };
     await db.studentIncidents.add(item);
-    pushToTurso('eduadmin_incidents', [item]);
+    triggerDebouncedSync();
     return item;
 };
 
@@ -1045,7 +1062,7 @@ export const addStudent = async (classId: string, name: string, nis: string, gen
     if (cls) {
         await db.classes.update(classId, { studentCount: (cls.studentCount || 0) + 1 });
     }
-    pushToTurso('eduadmin_students', [item]);
+    triggerDebouncedSync();
     return item;
 };
 
@@ -1167,7 +1184,7 @@ export const importStudentsFromCSV = async (classId: string, csvText: string) =>
 export const saveAttendanceRecords = async (records: Omit<AttendanceRecord, 'id'>[]) => {
     const items = records.map(r => ({ ...r, id: uuidv4(), lastModified: Date.now(), isSynced: false }));
     await db.attendanceRecords.bulkAdd(items);
-    pushToTurso('eduadmin_attendance', items);
+    triggerDebouncedSync();
 };
 
 export const deleteAttendanceRecords = async (classId: string, month: number, year: number, day?: number) => {
@@ -1205,14 +1222,14 @@ export const getAttendanceRecordsByRange = async (classId: string, startDate: st
 export const addScopeMaterial = async (data: Omit<ScopeMaterial, 'id'|'lastModified'|'isSynced'>) => {
     const item = { ...data, id: uuidv4(), lastModified: Date.now(), isSynced: false };
     await db.scopeMaterials.add(item);
-    pushToTurso('eduadmin_materials', [item]);
+    triggerDebouncedSync();
     return item;
 };
 
 export const updateScopeMaterial = async (id: string, data: Partial<ScopeMaterial>) => {
     await db.scopeMaterials.update(id, { ...data, lastModified: Date.now(), isSynced: false });
     const item = await db.scopeMaterials.get(id);
-    if(item) pushToTurso('eduadmin_materials', [item]);
+    if(item) triggerDebouncedSync();
     return item;
 };
 
@@ -1268,7 +1285,7 @@ export const copyScopeMaterials = async (sourceClassId: string, targetClassId: s
     }));
     
     await db.scopeMaterials.bulkAdd(newItems);
-    pushToTurso('eduadmin_materials', newItems);
+    triggerDebouncedSync();
     return true;
 };
 
@@ -1303,7 +1320,7 @@ export const saveBulkAssessmentScores = async (scores: Omit<AssessmentScore, 'id
         itemsToSync.push(payload);
     }
     
-    pushToTurso('eduadmin_scores', itemsToSync);
+    triggerDebouncedSync();
 };
 
 export const getAssessmentScores = async (classId: string, semester: string, subject?: string) => {
@@ -1352,7 +1369,7 @@ export const getTeachingJournals = async (userId: string, subject?: string) => {
 export const addTeachingJournal = async (data: Omit<TeachingJournal, 'id'|'lastModified'|'isSynced'>) => {
     const item = { ...data, id: uuidv4(), lastModified: Date.now(), isSynced: false };
     await db.teachingJournals.add(item);
-    pushToTurso('eduadmin_journals', [item]);
+    triggerDebouncedSync();
     return item;
 };
 
@@ -1374,7 +1391,7 @@ export const getTeachingSchedules = async (userId: string) => {
 export const addTeachingSchedule = async (data: Omit<TeachingSchedule, 'id'|'lastModified'|'isSynced'>) => {
     const item = { ...data, id: uuidv4(), lastModified: Date.now(), isSynced: false };
     await db.teachingSchedules.add(item);
-    pushToTurso('eduadmin_schedules', [item]);
+    triggerDebouncedSync();
     return item;
 };
 
@@ -1397,7 +1414,7 @@ export const addSystemLog = async (level: LogEntry['level'], actor: string, role
         isSynced: false
     };
     await db.logs.add(item);
-    pushToTurso('eduadmin_logs', [item]);
+    triggerDebouncedSync();
 };
 
 export const clearSystemLogs = async () => {
@@ -1456,7 +1473,7 @@ export const addCalendarEvent = async (userId: string, date: string, type: 'HOLI
         isSynced: false
     };
     await db.teacherCalendar.put(newEvent);
-    pushToTurso('eduadmin_teacher_calendar', [newEvent]);
+    triggerDebouncedSync();
     return newEvent;
 };
 
