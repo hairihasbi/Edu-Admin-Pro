@@ -1,7 +1,7 @@
 
 // services/telegramService.ts
 
-const ADMIN_CHAT_ID = '180353619'; // Your Admin Chat ID
+const ADMIN_CHAT_ID = import.meta.env.VITE_TELEGRAM_ADMIN_CHAT_ID;
 
 export const sendTelegramMessage = async (chatId: string, message: string) => {
     try {
