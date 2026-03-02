@@ -327,6 +327,14 @@ export interface StudentIncident extends Syncable {
   reason?: string;
 }
 
+export interface TeacherCalendarEvent extends Syncable {
+  id: string;
+  userId: string; // Foreign Key ke User (Guru)
+  date: string;   // Format YYYY-MM-DD
+  type: 'HOLIDAY' | 'LEAVE' | 'SCHOOL_EVENT' | 'OTHER';
+  description: string;
+}
+
 export interface BackupData {
   meta: {
     version: string;
