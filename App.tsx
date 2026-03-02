@@ -295,7 +295,7 @@ const AppContent: React.FC = () => {
   }, [handleLogout]); // Add handleLogout to dependencies
 
   // --- AUTOMATIC SYNC HEARTBEAT ---
-  // Runs every 15 seconds to ensure data flows between Guru <-> Admin
+  // Runs every 40 seconds to ensure data flows between Guru <-> Admin
   useEffect(() => {
       if (!currentUser) return;
       
@@ -305,7 +305,7 @@ const AppContent: React.FC = () => {
               syncAllData(false).catch(() => {}); // Silent sync
               refreshNotifications(currentUser.role);
           }
-      }, 15000); // 15 Seconds Interval
+      }, 40000); // 40 Seconds Interval
 
       return () => clearInterval(syncInterval);
   }, [currentUser]);
