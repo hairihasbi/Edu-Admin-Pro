@@ -5,7 +5,8 @@ import {
   ScopeMaterial, AssessmentScore, TeachingJournal, 
   TeachingSchedule, LogEntry, MasterSubject, Ticket, 
   StudentViolation, StudentPointReduction, StudentAchievement, CounselingSession, EmailConfig,
-  WhatsAppConfig, Notification, ApiKey, SystemSettings, Donation, DailyPicket, StudentIncident
+  WhatsAppConfig, Notification, ApiKey, SystemSettings, Donation, DailyPicket, StudentIncident,
+  TeacherCalendarEvent
 } from '../types';
 
 export class EduAdminDatabase extends Dexie {
@@ -34,6 +35,7 @@ export class EduAdminDatabase extends Dexie {
   donations!: Table<Donation>;
   dailyPickets!: Table<DailyPicket>;
   studentIncidents!: Table<StudentIncident>;
+  teacherCalendar!: Table<TeacherCalendarEvent>;
 
   constructor() {
     super('EduAdminDB');
@@ -44,7 +46,7 @@ export class EduAdminDatabase extends Dexie {
     // [field] = Indexed field for searching
     // Added schoolNpsn indexes for multi-tenancy filtering
     // Bumped to version 17 to include status index on attendanceRecords
-    (this as any).version(20).stores({
+    (this as any).version(21).stores({
       users: '&id, username, role, status, schoolNpsn, isSynced',
       classes: '&id, userId, schoolNpsn, name, homeroomTeacherId, isSynced', 
       students: '&id, classId, schoolNpsn, name, nis, gender, isSynced', 
@@ -67,7 +69,8 @@ export class EduAdminDatabase extends Dexie {
       systemSettings: '&id, isSynced',
       donations: '&id, userId, invoiceNumber, status, createdAt, isSynced',
       dailyPickets: '&id, date, schoolNpsn, isSynced',
-      studentIncidents: '&id, picketId, type, isSynced'
+      studentIncidents: '&id, picketId, type, isSynced',
+      teacherCalendar: '&id, userId, date, type, isSynced'
     });
   }
 }

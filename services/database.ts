@@ -6,7 +6,7 @@ import {
   TeachingSchedule, LogEntry, MasterSubject, Ticket, 
   StudentViolation, StudentPointReduction, StudentAchievement, CounselingSession, 
   EmailConfig, WhatsAppConfig, Notification, ApiKey, SystemSettings,
-  BackupData, StudentWithDetails, LessonPlanRequest, DashboardStatsData
+  BackupData, StudentWithDetails, LessonPlanRequest, DashboardStatsData, TeacherCalendarEvent
 } from '../types';
 import { initTurso, pushToTurso, pullFromTurso, deleteFromTurso, clearRemoteTable } from './tursoService';
 import bcrypt from 'bcryptjs';
@@ -286,7 +286,8 @@ export const getSyncStats = async (user: User) => {
         'users', 'classes', 'students', 'attendanceRecords', 'scopeMaterials', 
         'assessmentScores', 'teachingJournals', 'teachingSchedules', 'logs',
         'emailConfig', 'masterSubjects', 'tickets', 'violations', 'pointReductions',
-        'achievements', 'counselingSessions', 'whatsappConfigs', 'notifications', 'apiKeys', 'systemSettings'
+        'achievements', 'counselingSessions', 'whatsappConfigs', 'notifications', 'apiKeys', 'systemSettings',
+        'teacherCalendar'
     ];
     
     let totalUnsynced = 0;
@@ -333,7 +334,7 @@ export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', logCall
             'eduadmin_logs', 'eduadmin_email_config', 'eduadmin_master_subjects', 'eduadmin_tickets', 
             'eduadmin_bk_violations', 'eduadmin_bk_reductions', 'eduadmin_bk_achievements', 'eduadmin_bk_counseling',
             'eduadmin_wa_configs', 'eduadmin_notifications', 'eduadmin_api_keys', 'eduadmin_system_settings',
-            'eduadmin_pickets', 'eduadmin_incidents', 'eduadmin_donations'
+            'eduadmin_pickets', 'eduadmin_incidents', 'eduadmin_donations', 'eduadmin_teacher_calendar'
         ];
 
         const tableMap: Record<string, any> = {
@@ -359,7 +360,8 @@ export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', logCall
             'eduadmin_system_settings': db.systemSettings,
             'eduadmin_pickets': db.dailyPickets,
             'eduadmin_incidents': db.studentIncidents,
-            'eduadmin_donations': db.donations
+            'eduadmin_donations': db.donations,
+            'eduadmin_teacher_calendar': db.teacherCalendar
         };
 
         if (direction === 'PUSH' || direction === 'FULL') {
@@ -1432,4 +1434,33 @@ export const getDashboardStats = async (user: User): Promise<DashboardStatsData>
         ],
         weeklyAttendance: [] 
     };
+};
+
+// --- TEACHER CALENDAR ---
+
+export const getCalendarEvents = async (userId: string, startDate: string, endDate: string) => {
+    return await db.teacherCalendar
+        .where('userId').equals(userId)
+        .and(e => e.date >= startDate && e.date <= endDate)
+        .toArray();
+};
+
+export const addCalendarEvent = async (userId: string, date: string, type: 'HOLIDAY' | 'LEAVE' | 'SCHOOL_EVENT' | 'OTHER', description: string) => {
+    const newEvent: TeacherCalendarEvent = {
+        id: uuidv4(),
+        userId,
+        date,
+        type,
+        description,
+        lastModified: Date.now(),
+        isSynced: false
+    };
+    await db.teacherCalendar.put(newEvent);
+    pushToTurso('eduadmin_teacher_calendar', [newEvent]);
+    return newEvent;
+};
+
+export const deleteCalendarEvent = async (id: string) => {
+    await db.teacherCalendar.delete(id);
+    pushToTurso('eduadmin_teacher_calendar', [{id, deleted: true}]);
 };
