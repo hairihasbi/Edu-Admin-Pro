@@ -4,6 +4,8 @@ import { createServer as createViteServer } from 'vite';
 import tursoHandler from './api/turso';
 // @ts-ignore
 import dokuHandler from './api/doku';
+// @ts-ignore
+import telegramHandler from './api/send-telegram';
 
 
 async function startServer() {
@@ -28,6 +30,15 @@ async function startServer() {
             await dokuHandler(req as any, res as any);
         } catch (e) {
             console.error("DOKU Handler Error:", e);
+            if (!res.headersSent) res.status(500).json({ error: "Internal Server Error" });
+        }
+    });
+
+    app.all('/api/send-telegram', async (req, res) => {
+        try {
+            await telegramHandler(req as any, res as any);
+        } catch (e) {
+            console.error("Telegram Handler Error:", e);
             if (!res.headersSent) res.status(500).json({ error: "Internal Server Error" });
         }
     });
