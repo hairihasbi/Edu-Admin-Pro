@@ -106,7 +106,9 @@ import {
   ExternalLink, // Added ExternalLink
   Loader2, // Added Loader2
   XCircle, // Added XCircle
-  Home // Added Home
+  Home, // Added Home
+  Moon,
+  Sun
 } from 'lucide-react';
 
 export {
@@ -216,5 +218,7 @@ export {
   ExternalLink,
   Loader2,
   XCircle,
-  Home
+  Home,
+  Moon,
+  Sun
 };
