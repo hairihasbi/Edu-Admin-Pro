@@ -1,9 +1,10 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { User, ClassRoom, Student, AttendanceRecord } from '../types';
-import { getClasses, getStudents, saveAttendanceRecords, getAttendanceRecords, deleteAttendanceRecords, getAttendanceRecordsByRange } from '../services/database';
-import { CalendarCheck, FileSpreadsheet, Printer, Save, CheckCircle, Filter, ChevronLeft, ChevronRight, User as UserIcon, X, Check, Activity, AlertCircle, RotateCcw, Trash2, FileText, Layout } from './Icons';
+import { User, ClassRoom, Student, AttendanceRecord, TeacherCalendarEvent } from '../types';
+import { getClasses, getStudents, saveAttendanceRecords, getAttendanceRecords, deleteAttendanceRecords, getAttendanceRecordsByRange, getCalendarEvents } from '../services/database';
+import { CalendarCheck, FileSpreadsheet, Printer, Save, CheckCircle, Filter, ChevronLeft, ChevronRight, User as UserIcon, X, Check, Activity, AlertCircle, RotateCcw, Trash2, FileText, Layout, Calendar } from './Icons';
 import * as XLSX from 'xlsx';
+import TeacherCalendarManager from './TeacherCalendarManager';
 
 interface TeacherAttendanceProps {
   user: User;
@@ -38,11 +39,13 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
   
   // View Mode: 'input' (Daily/Monthly) or 'recap' (Semester/Yearly)
   const [viewMode, setViewMode] = useState<'input' | 'recap'>('input');
+  const [showCalendarManager, setShowCalendarManager] = useState(false);
 
   // Input Mode State
   const [attendance, setAttendance] = useState<AttendanceState>({});
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [calendarEvents, setCalendarEvents] = useState<TeacherCalendarEvent[]>([]);
 
   // Recap Mode State
   const [recapFilter, setRecapFilter] = useState<'ganjil' | 'genap' | 'full'>('ganjil');
@@ -106,12 +109,19 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
   // FETCH: Input Mode
   const fetchInputData = async (classId: string) => {
     setLoading(true);
-    const [studentData, attendanceData] = await Promise.all([
+    
+    // Calculate date range for calendar events
+    const start = new Date(selectedYear, selectedMonth, 1);
+    const end = new Date(selectedYear, selectedMonth + 1, 0);
+    
+    const [studentData, attendanceData, eventsData] = await Promise.all([
       getStudents(classId),
-      getAttendanceRecords(classId, selectedMonth, selectedYear)
+      getAttendanceRecords(classId, selectedMonth, selectedYear),
+      getCalendarEvents(user.id, start.toISOString().split('T')[0], end.toISOString().split('T')[0])
     ]);
     
     setStudents(studentData);
+    setCalendarEvents(eventsData);
     
     const attState: AttendanceState = {};
     attendanceData.forEach(record => {
@@ -183,8 +193,28 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
   };
 
   // --- HANDLERS (INPUT MODE) ---
+  
+  const getEventForDay = (day: number) => {
+      const dateStr = new Date(selectedYear, selectedMonth, day).toISOString().split('T')[0];
+      // Adjust for timezone offset if needed, but here we construct date from year/month/day
+      // Actually, constructing Date(y, m, d) uses local time. toISOString uses UTC.
+      // Better to compare manually.
+      const target = new Date(selectedYear, selectedMonth, day);
+      const y = target.getFullYear();
+      const m = String(target.getMonth() + 1).padStart(2, '0');
+      const d = String(target.getDate()).padStart(2, '0');
+      const formatted = `${y}-${m}-${d}`;
+      
+      return calendarEvents.find(e => e.date === formatted);
+  };
 
   const handleCellClick = (studentId: string, day: number) => {
+    const event = getEventForDay(day);
+    if (event && (event.type === 'HOLIDAY' || event.type === 'LEAVE')) {
+        alert(`Tanggal ini ditandai sebagai: ${event.description}`);
+        return;
+    }
+
     setSaveStatus('idle'); 
     setHasChanges(true);
     setAttendance(prev => {
@@ -209,6 +239,12 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
 
   // --- SWIPE LOGIC ---
   const handleMarkDaily = (status: AttendanceStatus) => {
+    const event = getEventForDay(dailyDay);
+    if (event && (event.type === 'HOLIDAY' || event.type === 'LEAVE')) {
+        alert(`Tanggal ini ditandai sebagai: ${event.description}`);
+        return;
+    }
+
     const student = students[currentStudentIndex];
     if (!student) return;
 
@@ -496,6 +532,9 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
                     </div>
 
                     <div className="flex items-center gap-2 w-full xl:w-auto justify-end">
+                        <button onClick={() => setShowCalendarManager(true)} className="px-4 py-2 bg-purple-50 text-purple-600 rounded-lg text-sm font-medium hover:bg-purple-100 transition flex items-center gap-2 border border-purple-200">
+                            <Calendar size={16} /> <span className="hidden md:inline">Kalender Libur</span>
+                        </button>
                         <button onClick={handleOpenReset} disabled={students.length === 0} className="px-4 py-2 bg-red-50 text-red-600 rounded-lg text-sm font-medium hover:bg-red-100 transition flex items-center gap-2 border border-red-200">
                             <RotateCcw size={16} /> <span className="hidden md:inline">Reset</span>
                         </button>
@@ -543,6 +582,19 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
       {viewMode === 'input' ? (
           /* EXISTING INPUT VIEW */
           <>
+            {showCalendarManager && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto relative">
+                        <button onClick={() => { setShowCalendarManager(false); fetchInputData(selectedClassId); }} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 z-10">
+                            <X size={24} />
+                        </button>
+                        <div className="p-1">
+                            <TeacherCalendarManager user={user} />
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {isResetModalOpen && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
                     <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 animate-in fade-in zoom-in duration-200">
@@ -601,7 +653,13 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
                             <tr className="bg-gray-100 text-gray-700 border-b border-gray-200">
                                 <th className="p-3 border-r border-gray-200 w-10 md:sticky md:left-0 bg-gray-100 z-10">No</th>
                                 <th className="p-3 border-r border-gray-200 min-w-[150px] text-left md:sticky md:left-10 bg-gray-100 z-10">Nama Siswa</th>
-                                {days.map(d => <th key={d} className={`p-1 border-r border-gray-200 min-w-[28px] text-center font-normal ${d === dailyDay && mobileView === 'monthly' ? 'bg-blue-200 font-bold' : ''}`}>{d}</th>)}
+                                {days.map(d => {
+                                    const event = getEventForDay(d);
+                                    const isHoliday = event && (event.type === 'HOLIDAY' || event.type === 'LEAVE');
+                                    return (
+                                        <th key={d} title={event?.description} className={`p-1 border-r border-gray-200 min-w-[28px] text-center font-normal ${d === dailyDay && mobileView === 'monthly' ? 'bg-blue-200 font-bold' : ''} ${isHoliday ? 'bg-red-50 text-red-500' : ''}`}>{d}</th>
+                                    );
+                                })}
                                 <th className="p-2 border-r border-gray-200 bg-yellow-50 min-w-[30px] text-center font-bold text-yellow-700">S</th>
                                 <th className="p-2 border-r border-gray-200 bg-blue-50 min-w-[30px] text-center font-bold text-blue-700">I</th>
                                 <th className="p-2 border-r border-gray-200 bg-red-50 min-w-[30px] text-center font-bold text-red-700">A</th>
@@ -616,11 +674,24 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
                                     <tr key={student.id} className="hover:bg-gray-50 transition-colors">
                                         <td className="p-3 text-center border-r border-gray-100 md:sticky md:left-0 bg-white z-10">{idx + 1}</td>
                                         <td className="p-3 border-r border-gray-100 font-medium text-gray-800 md:sticky md:left-10 bg-white z-10 truncate max-w-[150px]">{student.name}</td>
-                                        {days.map(d => (
-                                            <td key={d} onClick={() => handleCellClick(student.id, d)} className={`p-1 border-r border-gray-100 text-center cursor-pointer select-none transition-colors ${getStatusColor(attendance[student.id]?.[d] || '')}`}>
-                                                {attendance[student.id]?.[d] || ''}
-                                            </td>
-                                        ))}
+                                        {days.map(d => {
+                                            const event = getEventForDay(d);
+                                            const isHoliday = event && (event.type === 'HOLIDAY' || event.type === 'LEAVE');
+                                            
+                                            let cellClass = `p-1 border-r border-gray-100 text-center cursor-pointer select-none transition-colors ${getStatusColor(attendance[student.id]?.[d] || '')}`;
+                                            let cellContent = attendance[student.id]?.[d] || '';
+                                            
+                                            if (isHoliday) {
+                                                cellClass = `p-1 border-r border-gray-100 text-center bg-red-50 text-red-300 cursor-not-allowed`;
+                                                cellContent = '-';
+                                            }
+
+                                            return (
+                                                <td key={d} onClick={() => !isHoliday && handleCellClick(student.id, d)} className={cellClass} title={event?.description}>
+                                                    {cellContent}
+                                                </td>
+                                            );
+                                        })}
                                         <td className="p-2 text-center border-r border-gray-100 bg-yellow-50/50 font-medium">{summary.s}</td>
                                         <td className="p-2 text-center border-r border-gray-100 bg-blue-50/50 font-medium">{summary.i}</td>
                                         <td className="p-2 text-center border-r border-gray-100 bg-red-50/50 font-medium">{summary.a}</td>
