@@ -88,10 +88,10 @@ const AdminSiteSettings: React.FC = () => {
       )}
 
       {/* Tabs */}
-      <div className="flex space-x-1 bg-gray-200 p-1 rounded-lg w-fit">
+      <div className="flex space-x-1 bg-gray-200 p-1 rounded-lg w-full sm:w-fit overflow-x-auto">
         <button
           onClick={() => setActiveTab('general')}
-          className={`px-6 py-2.5 rounded-md text-sm font-medium transition flex items-center gap-2 ${
+          className={`px-4 sm:px-6 py-2.5 rounded-md text-sm font-medium transition flex items-center gap-2 whitespace-nowrap ${
             activeTab === 'general' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-800'
           }`}
         >
@@ -99,7 +99,7 @@ const AdminSiteSettings: React.FC = () => {
         </button>
         <button
           onClick={() => setActiveTab('seo')}
-          className={`px-6 py-2.5 rounded-md text-sm font-medium transition flex items-center gap-2 ${
+          className={`px-4 sm:px-6 py-2.5 rounded-md text-sm font-medium transition flex items-center gap-2 whitespace-nowrap ${
             activeTab === 'seo' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-800'
           }`}
         >
@@ -107,7 +107,7 @@ const AdminSiteSettings: React.FC = () => {
         </button>
         <button
           onClick={() => setActiveTab('appearance')}
-          className={`px-6 py-2.5 rounded-md text-sm font-medium transition flex items-center gap-2 ${
+          className={`px-4 sm:px-6 py-2.5 rounded-md text-sm font-medium transition flex items-center gap-2 whitespace-nowrap ${
             activeTab === 'appearance' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-800'
           }`}
         >
@@ -115,7 +115,7 @@ const AdminSiteSettings: React.FC = () => {
         </button>
         <button
           onClick={() => setActiveTab('ai')}
-          className={`px-6 py-2.5 rounded-md text-sm font-medium transition flex items-center gap-2 ${
+          className={`px-4 sm:px-6 py-2.5 rounded-md text-sm font-medium transition flex items-center gap-2 whitespace-nowrap ${
             activeTab === 'ai' ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-600 hover:text-gray-800'
           }`}
         >

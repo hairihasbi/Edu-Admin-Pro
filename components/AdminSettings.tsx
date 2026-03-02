@@ -283,10 +283,10 @@ const AdminSettings: React.FC = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex space-x-1 bg-gray-200 p-1 rounded-lg w-fit overflow-x-auto">
+      <div className="flex space-x-1 bg-gray-200 p-1 rounded-lg w-full sm:w-fit overflow-x-auto">
         <button
           onClick={() => setActiveTab('system')}
-          className={`px-6 py-2.5 rounded-md text-sm font-medium transition flex items-center gap-2 whitespace-nowrap ${
+          className={`px-4 sm:px-6 py-2.5 rounded-md text-sm font-medium transition flex items-center gap-2 whitespace-nowrap ${
             activeTab === 'system' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-600 hover:text-gray-800'
           }`}
         >
@@ -361,7 +361,7 @@ const AdminSettings: React.FC = () => {
                               Atur berapa kali seorang Guru dapat menggunakan fitur generate RPP dalam satu bulan.
                               Ini berguna untuk menjaga penggunaan API agar tidak melampaui batas biaya/kuota.
                           </p>
-                          <div className="flex items-center gap-3">
+                          <div className="flex flex-wrap items-center gap-3">
                               <label className="text-sm font-semibold text-gray-700">Limit per Bulan:</label>
                               <input 
                                   type="number" 
@@ -375,7 +375,7 @@ const AdminSettings: React.FC = () => {
                       </div>
 
                       <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                          <div className="flex justify-between items-start">
+                          <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
                               <div className="flex-1">
                                   <h4 className="font-bold text-gray-800 text-lg flex items-center gap-2">
                                       <Zap className="text-purple-500" size={20} /> AI RPP Generator (Master Switch)
@@ -385,7 +385,7 @@ const AdminSettings: React.FC = () => {
                                       Guru akan melihat pesan pemeliharaan saat mengakses fitur ini.
                                   </p>
                               </div>
-                              <div className="ml-4">
+                              <div className="ml-0 sm:ml-4">
                                   <label className="flex items-center cursor-pointer">
                                       <div className="relative">
                                           <input 

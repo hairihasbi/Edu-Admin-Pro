@@ -531,14 +531,14 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-2 w-full xl:w-auto justify-end">
+                    <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto justify-end">
                         <button onClick={() => setShowCalendarManager(true)} className="px-4 py-2 bg-purple-50 text-purple-600 rounded-lg text-sm font-medium hover:bg-purple-100 transition flex items-center gap-2 border border-purple-200">
-                            <Calendar size={16} /> <span className="hidden md:inline">Kalender Libur</span>
+                            <Calendar size={16} /> <span>Kalender Libur</span>
                         </button>
                         <button onClick={handleOpenReset} disabled={students.length === 0} className="px-4 py-2 bg-red-50 text-red-600 rounded-lg text-sm font-medium hover:bg-red-100 transition flex items-center gap-2 border border-red-200">
                             <RotateCcw size={16} /> <span className="hidden md:inline">Reset</span>
                         </button>
-                        <button onClick={exportToExcel} disabled={students.length === 0} className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition flex items-center gap-2 shadow-sm disabled:opacity-50 hidden md:flex">
+                        <button onClick={exportToExcel} disabled={students.length === 0} className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition flex items-center gap-2 shadow-sm disabled:opacity-50">
                             <FileSpreadsheet size={16} /> Excel
                         </button>
                         <button onClick={handleSave} disabled={students.length === 0} className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-2 rounded-lg text-sm font-medium transition shadow-sm ${saveStatus === 'success' ? 'bg-green-600 text-white' : saveStatus === 'error' ? 'bg-red-600 text-white' : hasChanges ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-400'}`}>

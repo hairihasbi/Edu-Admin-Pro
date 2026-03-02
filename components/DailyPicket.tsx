@@ -277,7 +277,7 @@ const DailyPicket: React.FC<DailyPicketProps> = ({ currentUser }) => {
                         </p>
                     </div>
                     
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-3">
                          {/* Print Button */}
                         <button 
                             onClick={() => setShowPrintModal(true)}
@@ -287,7 +287,7 @@ const DailyPicket: React.FC<DailyPicketProps> = ({ currentUser }) => {
                         </button>
 
                         <div className="flex items-center gap-2 bg-gray-50 p-2 rounded-lg border border-gray-200">
-                            <label className="text-sm font-medium text-gray-600">Tanggal:</label>
+                            <label className="text-sm font-medium text-gray-600 whitespace-nowrap">Tanggal:</label>
                             <input 
                                 type="date" 
                                 value={date}
