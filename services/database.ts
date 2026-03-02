@@ -631,35 +631,7 @@ export const sendEmailBroadcast = async (config: EmailConfig, recipients: {name:
     }
 };
 
-export const sendApprovalEmail = async (user: User) => {
-    try {
-        const config = await getEmailConfig();
-        if (!config || !config.isActive) {
-            await addSystemLog('WARNING', 'SYSTEM', 'ADMIN', 'EMAIL_SKIPPED', `Email config inactive for user ${user.email}`);
-            return { success: false, message: 'Email config inactive' };
-        }
-        
-        const res = await fetch('/api/send-email', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ user, config })
-        });
 
-        const data = await res.json();
-
-        if (!res.ok) {
-            const errorMsg = data.error || 'Unknown error';
-            await addSystemLog('ERROR', 'SYSTEM', 'ADMIN', 'EMAIL_FAILED', `Failed to send to ${user.email}: ${errorMsg}`);
-            return { success: false, message: errorMsg };
-        }
-
-        await addSystemLog('INFO', 'SYSTEM', 'ADMIN', 'EMAIL_SENT', `Approval email sent to ${user.email}`);
-        return data;
-    } catch(e: any) {
-        await addSystemLog('ERROR', 'SYSTEM', 'ADMIN', 'EMAIL_ERROR', `Exception sending to ${user.email}: ${e.message}`);
-        return { success: false, message: e.message };
-    }
-};
 
 
 
