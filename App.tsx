@@ -30,6 +30,7 @@ import DailyPicket from './components/DailyPicket'; // Import DailyPicket
 import DonationHistory from './components/DonationHistory'; // Import DonationHistory
 import NotificationPanel from './components/NotificationPanel';
 import Breadcrumbs from './components/Breadcrumbs';
+import OnboardingTour from './components/OnboardingTour';
 import { initDatabase, loginUser, resetPassword, registerUser, getNotifications, createNotification, markNotificationAsRead, clearNotifications, getSystemSettings, syncAllData, checkSchoolNameByNpsn } from './services/database';
 import { 
   LayoutDashboard, 
@@ -70,7 +71,9 @@ import {
   CheckCircle,
   ArrowLeftRight,
   School,
-  CreditCard // Import CreditCard
+  CreditCard, // Import CreditCard
+  Sun,
+  Moon
 } from './components/Icons';
 
 // Konstanta Timeout: 15 Menit
@@ -81,6 +84,22 @@ const AppContent: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    const saved = localStorage.getItem('darkMode');
+    return saved ? JSON.parse(saved) : false;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('darkMode', JSON.stringify(isDarkMode));
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [isDarkMode]);
+
+  const toggleDarkMode = () => setIsDarkMode(!isDarkMode);
+
   // Login State
   const [loginUsername, setLoginUsername] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
@@ -676,15 +695,16 @@ const AppContent: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="min-h-screen bg-gray-50 flex dark:bg-gray-900 dark:text-gray-100">
+      <OnboardingTour user={currentUser} />
       {/* Sidebar */}
-      <aside className={`fixed inset-y-0 left-0 z-[60] w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <aside className={`fixed inset-y-0 left-0 z-[60] w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} dark:bg-gray-800 dark:border-r dark:border-gray-700`}>
         <div className="h-full flex flex-col">
-          <div className="h-20 flex items-center justify-center border-b border-gray-100 px-4">
+          <div className="h-20 flex items-center justify-center border-b border-gray-100 px-4 dark:border-gray-700">
             {appConfig.logoUrl ? (
                 <img src={appConfig.logoUrl} alt="Logo" className="max-h-12 max-w-full object-contain" />
             ) : (
-                <h1 className="text-2xl font-bold text-blue-600 flex items-center gap-2">
+                <h1 className="text-2xl font-bold text-blue-600 flex items-center gap-2 dark:text-blue-400">
                     <GraduationCap /> EduAdmin
                 </h1>
             )}
@@ -750,12 +770,12 @@ const AppContent: React.FC = () => {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 min-w-0 overflow-hidden flex flex-col">
+      <main className="flex-1 min-w-0 overflow-hidden flex flex-col dark:bg-gray-900">
         {/* ... Header ... */}
-        <header className="bg-white shadow-sm h-16 flex items-center justify-between px-6 z-30">
+        <header className="bg-white shadow-sm h-16 flex items-center justify-between px-6 z-30 dark:bg-gray-800 dark:border-b dark:border-gray-700">
            <div className="flex items-center gap-4">
-              <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="lg:hidden text-gray-500 hover:text-gray-700"><Menu size={24} /></button>
-              <h2 className="text-xl font-semibold text-gray-800">{getPageTitle()}</h2>
+              <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="lg:hidden text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"><Menu size={24} /></button>
+              <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-100">{getPageTitle()}</h2>
            </div>
 
            <div className="flex items-center gap-4">
@@ -772,6 +792,11 @@ const AppContent: React.FC = () => {
                  {connStatus.icon}
                  <span>{connStatus.label}</span>
               </div>
+
+              {/* Dark Mode Toggle */}
+              <button onClick={toggleDarkMode} className="p-2 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 rounded-full transition" title={isDarkMode ? "Mode Terang" : "Mode Gelap"}>
+                  {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
+              </button>
 
               {/* Notification */}
               <div className="relative">
@@ -846,37 +871,37 @@ const AppContent: React.FC = () => {
            </Routes>
         </div>
         {/* Bottom Navigation for Mobile */}
-        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around items-center h-16 z-50 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-          <Link to="/dashboard" className={`flex flex-col items-center justify-center w-full h-full ${location.pathname === '/dashboard' ? 'text-blue-600' : 'text-gray-500'}`}>
+        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around items-center h-16 z-50 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] dark:bg-gray-800 dark:border-gray-700">
+          <Link to="/dashboard" className={`flex flex-col items-center justify-center w-full h-full ${location.pathname === '/dashboard' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}>
             <LayoutDashboard size={20} />
             <span className="text-[10px] mt-1 font-medium">Home</span>
           </Link>
           
           {currentUser.role === UserRole.GURU ? (
              <>
-               <Link to="/classes" className={`flex flex-col items-center justify-center w-full h-full ${location.pathname.includes('/classes') ? 'text-blue-600' : 'text-gray-500'}`}>
+               <Link to="/classes" className={`flex flex-col items-center justify-center w-full h-full ${location.pathname.includes('/classes') ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}>
                  <BookOpen size={20} />
                  <span className="text-[10px] mt-1 font-medium">Kelas</span>
                </Link>
-               <Link to="/journal" className={`flex flex-col items-center justify-center w-full h-full ${location.pathname.includes('/journal') ? 'text-blue-600' : 'text-gray-500'}`}>
+               <Link to="/journal" className={`flex flex-col items-center justify-center w-full h-full ${location.pathname.includes('/journal') ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}>
                  <NotebookPen size={20} />
                  <span className="text-[10px] mt-1 font-medium">Jurnal</span>
                </Link>
              </>
           ) : (
              <>
-               <Link to="/teachers" className={`flex flex-col items-center justify-center w-full h-full ${location.pathname.includes('/teachers') ? 'text-blue-600' : 'text-gray-500'}`}>
+               <Link to="/teachers" className={`flex flex-col items-center justify-center w-full h-full ${location.pathname.includes('/teachers') ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}>
                  <Users size={20} />
                  <span className="text-[10px] mt-1 font-medium">Guru</span>
                </Link>
-               <Link to="/students" className={`flex flex-col items-center justify-center w-full h-full ${location.pathname.includes('/students') ? 'text-blue-600' : 'text-gray-500'}`}>
+               <Link to="/students" className={`flex flex-col items-center justify-center w-full h-full ${location.pathname.includes('/students') ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}>
                  <GraduationCap size={20} />
                  <span className="text-[10px] mt-1 font-medium">Siswa</span>
                </Link>
              </>
           )}
 
-          <button onClick={() => setIsSidebarOpen(true)} className="flex flex-col items-center justify-center w-full h-full text-gray-500">
+          <button onClick={() => setIsSidebarOpen(true)} className="flex flex-col items-center justify-center w-full h-full text-gray-500 dark:text-gray-400">
             <Menu size={20} />
             <span className="text-[10px] mt-1 font-medium">Menu</span>
           </button>
