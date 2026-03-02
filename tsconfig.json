@@ -23,6 +23,7 @@
     
     /* Path mapping for Vercel API if needed */
     "baseUrl": ".",
+    "types": ["vite/client"],
     "paths": {
       "*": ["*"]
     }
