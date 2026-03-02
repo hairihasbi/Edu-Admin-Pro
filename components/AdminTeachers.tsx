@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User, UserStatus } from '../types';
-import { getTeachers, getPendingTeachers, approveTeacher, rejectTeacher, sendApprovalEmail, deleteTeacher, runManualSync } from '../services/database';
+import { getTeachers, getPendingTeachers, approveTeacher, rejectTeacher, deleteTeacher, runManualSync } from '../services/database';
 import { User as UserIcon, CheckCircle, X, Shield, Search, School, Mail, ChevronLeft, ChevronRight, FileSpreadsheet, Smartphone, Trash2, MoreVertical, BookOpen, RefreshCcw } from './Icons';
 import * as XLSX from 'xlsx';
 
@@ -65,19 +65,9 @@ const AdminTeachers: React.FC = () => {
         if (success) {
             setPendingTeachers(prev => prev.filter(u => u.id !== teacher.id));
             
-            // 1. Send Email Notification
-            const emailResult = await sendApprovalEmail(teacher);
-            
             // Construct Final Message
             let message = "Guru berhasil disetujui dan aktif.";
             
-            // Append Email Status
-            if (emailResult.success) {
-                message += "\n📧 Email Terkirim.";
-            } else {
-                message += `\n⚠️ Email Gagal: ${emailResult.message}`;
-            }
-
             alert(message);
         } else {
             alert("Gagal menyetujui guru.");
