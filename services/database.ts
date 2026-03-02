@@ -43,6 +43,8 @@ export const loginUser = async (username: string, password: string): Promise<Use
     return null;
 };
 
+import { notifyAdminNewRegistration } from './telegramService';
+
 export const registerUser = async (fullName: string, username: string, password: string, email: string, phone: string, schoolNpsn: string, schoolName: string, subject: string, teacherType: 'SUBJECT' | 'CLASS' = 'SUBJECT', phase?: 'A' | 'B' | 'C') => {
     try {
         const id = uuidv4();
@@ -57,6 +59,10 @@ export const registerUser = async (fullName: string, username: string, password:
         });
         const data = await res.json();
         if (!res.ok) return { success: false, message: data.error };
+        
+        // Notify Admin via Telegram (Fire and Forget)
+        notifyAdminNewRegistration(fullName, schoolName).catch(err => console.error("Telegram Notification Failed:", err));
+
         return { success: true, message: 'Pendaftaran berhasil. Tunggu persetujuan Admin.' };
     } catch (e: any) { return { success: false, message: e.message || 'Gagal menghubungi server.' }; }
 };
