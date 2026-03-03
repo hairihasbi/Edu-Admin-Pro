@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User } from '../types';
-import { getDailyPicket, saveDailyPicket, deleteDailyPicket, getTeachersBySchool, getSchoolAttendanceSummary, getStudentIncidents, getAttendanceSummaryByRange, getIncidentsByDateRange } from '../services/database';
+import { getDailyPicket, saveDailyPicket, deleteDailyPicket, getPicketOfficers, getSchoolAttendanceSummary, getStudentIncidents, getAttendanceSummaryByRange, getIncidentsByDateRange } from '../services/database';
 import PicketAttendanceTable from './PicketAttendanceTable';
 import PicketIncidentForm from './PicketIncidentForm';
 import { Calendar, User as UserIcon, Save, RefreshCw, Printer, FileText, Trash2 } from 'lucide-react';
@@ -36,7 +36,7 @@ const DailyPicket: React.FC<DailyPicketProps> = ({ currentUser }) => {
 
     const loadTeachers = async () => {
         if (currentUser.schoolNpsn) {
-            const data = await getTeachersBySchool(currentUser.schoolNpsn);
+            const data = await getPicketOfficers(currentUser.schoolNpsn);
             setTeachers(data);
         }
     };

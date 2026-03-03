@@ -43,6 +43,7 @@ const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onUpdateUser }) =
 
   const isBkTeacher = formData.subject === 'Bimbingan Konseling';
   const isClassTeacher = formData.teacherType === 'CLASS';
+  const isTendik = user.role === UserRole.TENDIK;
   const isAdmin = user.role === UserRole.ADMIN;
 
   useEffect(() => {
@@ -225,7 +226,7 @@ const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onUpdateUser }) =
                 </div>
 
                 {/* Field Khusus Guru */}
-                {!isAdmin && (
+                {!isAdmin && !isTendik && (
                     <>
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Tipe Guru</label>
@@ -273,15 +274,17 @@ const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onUpdateUser }) =
                         <div className="relative">
                         <BookOpen className="absolute left-3 top-2.5 text-gray-400" size={16} />
                         <select
-                            disabled={isBkTeacher || isClassTeacher}
+                            disabled={isBkTeacher || isClassTeacher || isTendik}
                             className={`w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition text-sm appearance-none ${
-                                isBkTeacher || isClassTeacher ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'bg-white'
+                                isBkTeacher || isClassTeacher || isTendik ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'bg-white'
                             }`}
-                            value={isClassTeacher ? 'Guru Kelas (SD)' : formData.subject}
+                            value={isClassTeacher ? 'Guru Kelas (SD)' : isTendik ? 'TENAGA KEPENDIDIKAN' : formData.subject}
                             onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
                         >
                             {isClassTeacher ? (
                                 <option value="Guru Kelas (SD)">Guru Kelas (SD)</option>
+                            ) : isTendik ? (
+                                <option value="TENAGA KEPENDIDIKAN">TENAGA KEPENDIDIKAN</option>
                             ) : (
                                 <>
                                     <option value="">-- Pilih Mata Pelajaran --</option>
@@ -294,9 +297,9 @@ const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onUpdateUser }) =
                             )}
                         </select>
                         </div>
-                        {(isBkTeacher || isClassTeacher) && (
+                        {(isBkTeacher || isClassTeacher || isTendik) && (
                             <p className="text-xs text-orange-600 mt-1 flex items-center gap-1">
-                                <Lock size={10} /> {isClassTeacher ? 'Mode Guru Kelas (Multi Mapel)' : 'Terkunci sebagai Guru BK.'}
+                                <Lock size={10} /> {isClassTeacher ? 'Mode Guru Kelas (Multi Mapel)' : isTendik ? 'Terkunci sebagai Tenaga Kependidikan' : 'Terkunci sebagai Guru BK.'}
                             </p>
                         )}
                     </div>
@@ -319,7 +322,7 @@ const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onUpdateUser }) =
         <div className="space-y-6">
             
             {/* WALI KELAS MANAGEMENT */}
-            {!isAdmin && (
+            {!isAdmin && !isTendik && (
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden h-fit">
                     <div className="bg-orange-50 px-6 py-4 border-b border-orange-100 flex items-center gap-2">
                         <Layout size={18} className="text-orange-600" />
@@ -472,7 +475,7 @@ const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onUpdateUser }) =
             </div>
 
             {/* WHATSAPP CONFIG FOR TEACHER */}
-            {!isAdmin && (
+            {!isAdmin && !isTendik && (
                 <WhatsAppSettings user={user} />
             )}
         </div>

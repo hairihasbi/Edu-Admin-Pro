@@ -66,6 +66,27 @@ const OnboardingTour: React.FC<OnboardingTourProps> = ({ user }) => {
           } 
         }
       );
+    } else if (user.role === UserRole.TENDIK) {
+      steps.push(
+        { 
+          element: 'a[href="#/picket"]', 
+          popover: { 
+            title: 'Piket Harian', 
+            description: 'Catat kejadian siswa, perizinan, dan keterlambatan.',
+            side: "right" as const, 
+            align: 'start' as const 
+          } 
+        },
+        { 
+          element: 'a[href="#/backup"]', 
+          popover: { 
+            title: 'Backup & Restore', 
+            description: 'Amankan data sekolah secara berkala.',
+            side: "right" as const, 
+            align: 'start' as const 
+          } 
+        }
+      );
     } else {
       steps.push(
         { 

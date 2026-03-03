@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { User, UserStatus } from '../types';
-import { getTeachers, getPendingTeachers, approveTeacher, rejectTeacher, deleteTeacher, runManualSync } from '../services/database';
-import { User as UserIcon, CheckCircle, X, Shield, Search, School, Mail, ChevronLeft, ChevronRight, FileSpreadsheet, Smartphone, Trash2, MoreVertical, BookOpen, RefreshCcw } from './Icons';
+import { User, UserStatus, UserRole } from '../types';
+import { getTeachers, getTendik, getPendingTeachers, approveTeacher, rejectTeacher, deleteTeacher, runManualSync } from '../services/database';
+import { User as UserIcon, CheckCircle, X, Shield, Search, School, Mail, ChevronLeft, ChevronRight, FileSpreadsheet, Smartphone, Trash2, MoreVertical, BookOpen, RefreshCcw, Settings } from './Icons';
 import * as XLSX from 'xlsx';
 
 const AdminTeachers: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'active' | 'pending'>('active');
+  const [activeTab, setActiveTab] = useState<'active' | 'tendik' | 'pending'>('active');
   const [activeTeachers, setActiveTeachers] = useState<User[]>([]);
+  const [activeTendik, setActiveTendik] = useState<User[]>([]);
   const [pendingTeachers, setPendingTeachers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -43,6 +44,9 @@ const AdminTeachers: React.FC = () => {
     if (activeTab === 'active') {
       const data = await getTeachers();
       setActiveTeachers(data);
+    } else if (activeTab === 'tendik') {
+      const data = await getTendik();
+      setActiveTendik(data);
     } else {
       const data = await getPendingTeachers();
       setPendingTeachers(data);
@@ -88,21 +92,28 @@ const AdminTeachers: React.FC = () => {
   };
 
   const handleDeleteAccount = async (teacher: User) => {
-    if (window.confirm(`Yakin ingin MENGHAPUS AKUN guru: ${teacher.fullName}?\n\nPERINGATAN: Tindakan ini tidak dapat dibatalkan.`)) {
+    if (window.confirm(`Yakin ingin MENGHAPUS AKUN: ${teacher.fullName}?\n\nPERINGATAN: Tindakan ini tidak dapat dibatalkan.`)) {
         setIsLoading(true);
         const success = await deleteTeacher(teacher.id);
         if (success) {
-            setActiveTeachers(prev => prev.filter(u => u.id !== teacher.id));
-            alert("Akun guru berhasil dihapus.");
+            if (teacher.role === UserRole.TENDIK) {
+                setActiveTendik(prev => prev.filter(u => u.id !== teacher.id));
+            } else {
+                setActiveTeachers(prev => prev.filter(u => u.id !== teacher.id));
+            }
+            alert("Akun berhasil dihapus.");
         } else {
-            alert("Gagal menghapus akun guru.");
+            alert("Gagal menghapus akun.");
         }
         setIsLoading(false);
     }
   };
 
   const handleExportExcel = () => {
-    const dataToExport = activeTab === 'active' ? activeTeachers : pendingTeachers;
+    let dataToExport: User[] = [];
+    if (activeTab === 'active') dataToExport = activeTeachers;
+    else if (activeTab === 'tendik') dataToExport = activeTendik;
+    else dataToExport = pendingTeachers;
     
     if (dataToExport.length === 0) {
         alert("Tidak ada data untuk diekspor.");
@@ -117,6 +128,7 @@ const AdminTeachers: React.FC = () => {
         'No. WhatsApp': t.phone || '-',
         'Username': t.username,
         'Sekolah': t.schoolName || '-',
+        'Role': t.role,
         'Mata Pelajaran': t.subject || '-',
         'Status': t.status,
         'Role Tambahan': t.additionalRole || '-'
@@ -124,12 +136,16 @@ const AdminTeachers: React.FC = () => {
 
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Data Guru");
-    XLSX.writeFile(wb, `Data_Guru_${activeTab}_${new Date().toISOString().split('T')[0]}.xlsx`);
+    XLSX.utils.book_append_sheet(wb, ws, "Data User");
+    XLSX.writeFile(wb, `Data_${activeTab}_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
   // Filter Logic
-  const allData = activeTab === 'active' ? activeTeachers : pendingTeachers;
+  let allData: User[] = [];
+  if (activeTab === 'active') allData = activeTeachers;
+  else if (activeTab === 'tendik') allData = activeTendik;
+  else allData = pendingTeachers;
+
   const filteredTeachers = allData.filter(t => 
     (t.fullName || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
     (t.username || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -172,6 +188,15 @@ const AdminTeachers: React.FC = () => {
                     }`}
                 >
                     Guru Aktif
+                </button>
+                <button 
+                    onClick={() => setActiveTab('tendik')}
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition flex items-center gap-2 ${
+                        activeTab === 'tendik' ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                >
+                    <Settings size={14} />
+                    Tendik
                 </button>
                 <button 
                     onClick={() => setActiveTab('pending')}

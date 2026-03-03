@@ -9,7 +9,8 @@ const AdminAnnouncements: React.FC = () => {
   const [form, setForm] = useState({
     title: '',
     message: '',
-    type: 'info' as Notification['type']
+    type: 'info' as Notification['type'],
+    targetRole: 'ALL' as 'ALL' | UserRole
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -31,10 +32,10 @@ const AdminAnnouncements: React.FC = () => {
         form.title, 
         form.message, 
         form.type, 
-        UserRole.GURU, 
+        form.targetRole, 
         true // isPopup = true
     );
-    setForm({ title: '', message: '', type: 'info' });
+    setForm({ title: '', message: '', type: 'info', targetRole: 'ALL' });
     setIsSubmitting(false);
     await fetchData();
     alert('Pengumuman Live berhasil diterbitkan!');
@@ -96,6 +97,19 @@ const AdminAnnouncements: React.FC = () => {
                       onChange={e => setForm({...form, title: e.target.value})}
                       required
                     />
+                 </div>
+
+                 <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Target Penerima</label>
+                    <select
+                      className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                      value={form.targetRole}
+                      onChange={e => setForm({...form, targetRole: e.target.value as any})}
+                    >
+                      <option value="ALL">Semua Pengguna</option>
+                      <option value={UserRole.GURU}>Hanya Guru</option>
+                      <option value={UserRole.TENDIK}>Hanya Tendik</option>
+                    </select>
                  </div>
                  
                  <div>

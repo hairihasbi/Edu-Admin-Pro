@@ -155,7 +155,7 @@ const HelpCenter: React.FC<HelpCenterProps> = ({ user }) => {
                 <button onClick={fetchTickets} className="p-2 text-gray-500 hover:text-blue-600 hover:bg-white rounded-lg transition" title="Refresh">
                     <RefreshCcw size={18} />
                 </button>
-                {user.role === UserRole.GURU && (
+                {user.role !== UserRole.ADMIN && (
                 <button 
                     onClick={() => setIsModalOpen(true)}
                     className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-lg shadow-sm transition"

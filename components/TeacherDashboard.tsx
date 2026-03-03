@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { BookOpen, School, User, IdCard, CalendarDays, Layout, Users, ClipboardList, TrendingUp, Plus, Trash2, X, Settings, Heart, Coffee, Megaphone, AlertCircle, Info, Zap, DatabaseBackup, AlertTriangle, Database, WifiOff, RefreshCcw, Cloud, ArrowRight } from './Icons';
-import { User as UserType, TeachingSchedule, DashboardStatsData, Notification } from '../types';
+import { User as UserType, TeachingSchedule, DashboardStatsData, Notification, UserRole } from '../types';
 import { getDashboardStats, getTeachingSchedules, addTeachingSchedule, deleteTeachingSchedule, getActiveAnnouncements, getSyncStats } from '../services/database';
 import { checkConnection } from '../services/tursoService';
 
@@ -15,6 +15,7 @@ const DAYS = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
 const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(true);
+  const isTendik = user.role === UserRole.TENDIK;
   
   // Identity State
   const [academicPeriod, setAcademicPeriod] = useState({ year: '', semester: '' });
@@ -410,6 +411,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
       </div>
 
       {/* Statistik Ringkas */}
+      {!isTendik && (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {isLoading ? (
           // Skeleton for Stats
@@ -470,6 +472,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
           </>
         )}
       </div>
+      )}
 
       {/* Status Database Card (REAL TIME) */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -558,6 +561,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
       </div>
 
       {/* Jadwal Mengajar Section */}
+      {!isTendik && (
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden animate-in fade-in slide-in-from-bottom-2">
           {/* ... existing code ... */}
           <div className="p-6 border-b border-gray-100 flex justify-between items-center">
@@ -617,6 +621,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
             )}
           </div>
       </div>
+      )}
 
       {/* Schedule Management Modal */}
       {isScheduleModalOpen && (
