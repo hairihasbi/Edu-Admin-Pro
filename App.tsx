@@ -114,7 +114,7 @@ const AppContent: React.FC = () => {
   const [regPhone, setRegPhone] = useState('');
   const [regNpsn, setRegNpsn] = useState(''); // NEW NPSN State
   const [regSchoolName, setRegSchoolName] = useState(''); // NEW School Name State
-  const [regTeacherType, setRegTeacherType] = useState<'MAPEL' | 'BK' | 'CLASS'>('MAPEL');
+  const [regTeacherType, setRegTeacherType] = useState<'MAPEL' | 'BK' | 'CLASS' | 'TENDIK'>('MAPEL');
   const [regPhase, setRegPhase] = useState<'A' | 'B' | 'C'>('A'); // NEW Phase State
   const [regMessage, setRegMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
   
@@ -429,12 +429,14 @@ const AppContent: React.FC = () => {
     let initialSubject = '';
     if (regTeacherType === 'BK') initialSubject = 'Bimbingan Konseling';
     if (regTeacherType === 'CLASS') initialSubject = 'GURU KELAS';
+    if (regTeacherType === 'TENDIK') initialSubject = 'TENAGA KEPENDIDIKAN';
 
     const result = await registerUser(
         regFullName, regUsername, regPassword, regEmail, regPhone, regNpsn, regSchoolName, 
         initialSubject, 
         regTeacherType === 'CLASS' ? 'CLASS' : 'SUBJECT', 
-        regTeacherType === 'CLASS' ? regPhase : undefined
+        regTeacherType === 'CLASS' ? regPhase : undefined,
+        regTeacherType === 'TENDIK' ? 'TENDIK' : 'GURU'
     );
     
     if (result.success) {
@@ -583,8 +585,8 @@ const AppContent: React.FC = () => {
                         
                         {/* Pilihan Jenis Guru */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Jenis Guru</label>
-                            <div className="grid grid-cols-3 gap-3">
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Jenis Pendaftar</label>
+                            <div className="grid grid-cols-2 gap-3">
                                 <label className={`flex flex-col items-center justify-center gap-2 p-3 border rounded-lg cursor-pointer transition ${regTeacherType === 'MAPEL' ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500' : 'border-gray-300 hover:bg-gray-50'}`}>
                                     <input type="radio" className="hidden" checked={regTeacherType === 'MAPEL'} onChange={() => setRegTeacherType('MAPEL')} />
                                     <BookOpen size={18} className={regTeacherType === 'MAPEL' ? 'text-blue-600' : 'text-gray-400'} />
@@ -599,6 +601,11 @@ const AppContent: React.FC = () => {
                                     <input type="radio" className="hidden" checked={regTeacherType === 'BK'} onChange={() => setRegTeacherType('BK')} />
                                     <ShieldAlert size={18} className={regTeacherType === 'BK' ? 'text-purple-600' : 'text-gray-400'} />
                                     <span className={`text-xs font-medium text-center ${regTeacherType === 'BK' ? 'text-purple-700' : 'text-gray-600'}`}>Guru BK</span>
+                                </label>
+                                <label className={`flex flex-col items-center justify-center gap-2 p-3 border rounded-lg cursor-pointer transition ${regTeacherType === 'TENDIK' ? 'border-orange-500 bg-orange-50 ring-1 ring-orange-500' : 'border-gray-300 hover:bg-gray-50'}`}>
+                                    <input type="radio" className="hidden" checked={regTeacherType === 'TENDIK'} onChange={() => setRegTeacherType('TENDIK')} />
+                                    <Settings size={18} className={regTeacherType === 'TENDIK' ? 'text-orange-600' : 'text-gray-400'} />
+                                    <span className={`text-xs font-medium text-center ${regTeacherType === 'TENDIK' ? 'text-orange-700' : 'text-gray-600'}`}>Tenaga Kependidikan</span>
                                 </label>
                             </div>
                         </div>
@@ -754,6 +761,17 @@ const AppContent: React.FC = () => {
                 <NavLink to="/donation" icon={Heart} label="Dukungan Aplikasi" />
               </>
             )}
+
+            {currentUser.role === UserRole.TENDIK && (
+              <>
+                <NavLink to="/picket" icon={CalendarCheck} label="Piket Harian" />
+                <NavLink to="/sync" icon={ArrowLeftRight} label="Sinkronisasi Data" />
+                <NavLink to="/backup" icon={DatabaseBackup} label="Backup & Restore" />
+                <NavLink to="/help-center" icon={LifeBuoy} label="Pusat Bantuan" />
+                <NavLink to="/profile" icon={UserIcon} label="Profil & Akun" />
+                <NavLink to="/donation" icon={Heart} label="Dukungan Aplikasi" />
+              </>
+            )}
           </nav>
           
           <div className="p-4 border-t border-gray-100 space-y-2">
@@ -853,6 +871,17 @@ const AppContent: React.FC = () => {
                    <Route path="/system-logs" element={<AdminSystemLogs />} />
                    <Route path="/help-center" element={<HelpCenter user={currentUser} />} />
                    <Route path="/profile" element={<TeacherProfile user={currentUser} onUpdateUser={handleProfileUpdate} />} />
+                   <Route path="*" element={<Navigate to="/dashboard" replace />} />
+                 </>
+              ) : currentUser.role === UserRole.TENDIK ? (
+                 <>
+                   <Route path="/dashboard" element={<TeacherDashboard user={currentUser} />} />
+                   <Route path="/picket" element={<DailyPicket currentUser={currentUser} />} />
+                   <Route path="/backup" element={<BackupRestore user={currentUser} />} /> 
+                   <Route path="/sync" element={<SyncPage user={currentUser} />} />
+                   <Route path="/help-center" element={<HelpCenter user={currentUser} />} />
+                   <Route path="/profile" element={<TeacherProfile user={currentUser} onUpdateUser={handleProfileUpdate} />} />
+                   <Route path="/donation" element={<TeacherDonation user={currentUser} />} />
                    <Route path="*" element={<Navigate to="/dashboard" replace />} />
                  </>
               ) : (
