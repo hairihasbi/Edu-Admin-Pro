@@ -2,6 +2,7 @@
 export enum UserRole {
   ADMIN = 'ADMIN',
   GURU = 'GURU',
+  TENDIK = 'TENDIK',
 }
 
 export type UserStatus = 'ACTIVE' | 'PENDING' | 'REJECTED';
@@ -387,6 +388,7 @@ export interface WhatsAppConfig extends Syncable {
   baseUrl: string; // API Endpoint
   apiKey: string;
   deviceId?: string; // Optional device ID for some providers
+  rotatorId?: string; // NEW: Optional Rotator ID for Fonnte
   isActive: boolean;
 }
 
