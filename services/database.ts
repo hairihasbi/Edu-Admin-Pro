@@ -45,7 +45,7 @@ export const loginUser = async (username: string, password: string): Promise<Use
 
 import { notifyAdminNewRegistration } from './telegramService';
 
-export const registerUser = async (fullName: string, username: string, password: string, email: string, phone: string, schoolNpsn: string, schoolName: string, subject: string, teacherType: 'SUBJECT' | 'CLASS' = 'SUBJECT', phase?: 'A' | 'B' | 'C') => {
+export const registerUser = async (fullName: string, username: string, password: string, email: string, phone: string, schoolNpsn: string, schoolName: string, subject: string, teacherType: 'SUBJECT' | 'CLASS' = 'SUBJECT', phase?: 'A' | 'B' | 'C', role: 'GURU' | 'TENDIK' = 'GURU') => {
     try {
         const id = uuidv4();
         const res = await fetch('/api/register', {
@@ -53,7 +53,7 @@ export const registerUser = async (fullName: string, username: string, password:
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 id, username, password, fullName, email, phone, schoolNpsn, schoolName, subject,
-                role: 'GURU', status: 'PENDING', avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName)}&background=random`,
+                role, status: 'PENDING', avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName)}&background=random`,
                 teacherType, phase
             })
         });
@@ -112,6 +112,10 @@ export const resetPassword = async (username: string, newPass: string) => {
 
 export const getTeachers = async () => {
     return await db.users.where('role').equals('GURU').and(u => u.status === 'ACTIVE').toArray();
+};
+
+export const getTendik = async () => {
+    return await db.users.where('role').equals('TENDIK').and(u => u.status === 'ACTIVE').toArray();
 };
 
 export const getAllUsers = async () => {
@@ -604,6 +608,24 @@ export const getWhatsAppConfig = async (userId: string) => {
     return await db.whatsappConfigs.get(userId);
 };
 
+export const fetchFonnteRotators = async (token: string) => {
+    try {
+        const res = await fetch('/api/get-rotators', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token })
+        });
+        const data = await res.json();
+        if (data.status) {
+            return data.data; // Array of { id: "rotator#1", name: "1" }
+        }
+        return [];
+    } catch (e) {
+        console.error("Error fetching rotators:", e);
+        return [];
+    }
+};
+
 export const saveWhatsAppConfig = async (config: WhatsAppConfig) => {
     const toSave = { ...config, lastModified: Date.now(), isSynced: false };
     await db.whatsappConfigs.put(toSave);
@@ -846,6 +868,12 @@ export const deleteCounselingSession = async (id: string) => {
 
 export const getTeachersBySchool = async (schoolNpsn: string) => {
     return await db.users.where('schoolNpsn').equals(schoolNpsn).filter(u => u.role === 'GURU').toArray();
+};
+
+export const getPicketOfficers = async (schoolNpsn: string) => {
+    return await db.users.where('schoolNpsn').equals(schoolNpsn)
+        .filter(u => u.role === 'GURU' || u.role === 'TENDIK')
+        .toArray();
 };
 
 export const getDailyPicket = async (date: string, schoolNpsn: string) => {
