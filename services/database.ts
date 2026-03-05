@@ -695,7 +695,8 @@ export const clearBackupApiKeys = async () => {
 };
 
 export const getActiveAnnouncements = async () => {
-    const list = await db.notifications.where('isPopup').equals(1).toArray();
+    // FIX: Use filter to correctly match boolean true, avoiding index type mismatch (1 vs true)
+    const list = await db.notifications.filter(n => n.isPopup === true).toArray();
     return list.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 };
 
