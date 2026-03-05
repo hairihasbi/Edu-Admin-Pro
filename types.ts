@@ -230,6 +230,7 @@ export interface LessonPlanRequest {
   
   // Fitur Tambahan
   useSearch?: boolean; // NEW: AI Fact Check / Grounding
+  useEEAT?: boolean; // NEW: EEAT Standard (Experience, Expertise, Authoritativeness, Trustworthiness)
 }
 
 export interface Notification extends Syncable {
