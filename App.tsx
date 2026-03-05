@@ -31,7 +31,8 @@ import DonationHistory from './components/DonationHistory'; // Import DonationHi
 import NotificationPanel from './components/NotificationPanel';
 import Breadcrumbs from './components/Breadcrumbs';
 import OnboardingTour from './components/OnboardingTour';
-import { initDatabase, loginUser, resetPassword, registerUser, getNotifications, createNotification, markNotificationAsRead, clearNotifications, getSystemSettings, syncAllData, checkSchoolNameByNpsn } from './services/database';
+import { initDatabase, loginUser, resetPassword, registerUser, getNotifications, createNotification, markNotificationAsRead, clearNotifications, getSystemSettings, syncAllData, checkSchoolNameByNpsn, updateUserProfile } from './services/database';
+import { db } from './services/db';
 import { 
   LayoutDashboard, 
   Users, 
@@ -476,6 +477,14 @@ const AppContent: React.FC = () => {
     localStorage.setItem('eduadmin_user', JSON.stringify(updatedUser));
   };
 
+  // NEW: Handle Quota Update (Local Only to avoid race condition with Server)
+  const handleQuotaUpdate = async (updatedUser: User) => {
+    setCurrentUser(updatedUser);
+    localStorage.setItem('eduadmin_user', JSON.stringify(updatedUser));
+    // Update IndexedDB but DO NOT call pushToTurso (api/gemini.ts handles server increment)
+    await db.users.put(updatedUser);
+  };
+
   const NavLink = ({ to, icon: Icon, label }: { to: string, icon: any, label: string }) => {
     const isActive = location.pathname === to || location.pathname.startsWith(to + '/');
     return (
@@ -896,7 +905,7 @@ const AppContent: React.FC = () => {
                    <Route path="/journal" element={<TeacherJournal user={currentUser} />} />
                    <Route path="/summative" element={<TeacherSummative user={currentUser} />} />
                    <Route path="/gen-quiz" element={<TeacherGenQuiz />} />
-                   <Route path="/rpp-generator" element={<TeacherRPPGenerator user={currentUser} />} />
+                   <Route path="/rpp-generator" element={<TeacherRPPGenerator user={currentUser} onUpdateUser={handleQuotaUpdate} />} />
                    <Route path="/broadcast" element={<BroadcastPage user={currentUser} />} />
                    <Route path="/backup" element={<BackupRestore user={currentUser} />} /> 
                    <Route path="/sync" element={<SyncPage user={currentUser} />} /> {/* NEW ROUTE */}
