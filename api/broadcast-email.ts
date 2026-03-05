@@ -23,7 +23,14 @@ async function sendMailerSend(config: any, to: string, subject: string, html: st
   
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`MailerSend Error: ${errorText}`);
+    let errorMessage = errorText;
+    try {
+        const errorJson = JSON.parse(errorText);
+        if (errorJson.message) errorMessage = errorJson.message;
+    } catch (e) {
+        // Keep original text if not JSON
+    }
+    throw new Error(`MailerSend Error: ${errorMessage}`);
   }
   return true;
 }
