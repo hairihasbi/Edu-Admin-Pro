@@ -246,12 +246,7 @@ const AppContent: React.FC = () => {
 
     init();
 
-    const handleSyncStatus = (e: any) => {
-        setSyncStatus(e.detail);
-        if (e.detail === 'success' && currentUser) {
-            refreshNotifications(currentUser.role);
-        }
-    };
+
     
     // NEW Listener for Unsaved Changes
     const handleUnsavedStatus = (e: any) => {
@@ -271,7 +266,7 @@ const AppContent: React.FC = () => {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
     
-    window.addEventListener('sync-status', handleSyncStatus);
+
     window.addEventListener('unsaved-changes', handleUnsavedStatus);
     window.addEventListener('auth-error', handleAuthError); // Register Auth Listener
     window.addEventListener('online', handleOnline);
@@ -286,7 +281,7 @@ const AppContent: React.FC = () => {
 
     return () => {
       isMounted = false;
-      window.removeEventListener('sync-status', handleSyncStatus);
+
       window.removeEventListener('unsaved-changes', handleUnsavedStatus);
       window.removeEventListener('auth-error', handleAuthError);
       window.removeEventListener('online', handleOnline);
@@ -294,6 +289,38 @@ const AppContent: React.FC = () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     };
   }, [handleLogout]); // Add handleLogout to dependencies
+
+  // --- SYNC STATUS LISTENER (Refreshes User Data) ---
+  useEffect(() => {
+      const handleSyncStatus = async (e: any) => {
+          setSyncStatus(e.detail);
+          
+          if (e.detail === 'success' && currentUser) {
+              refreshNotifications(currentUser.role);
+              
+              // CRITICAL: Refresh user data from DB to get latest quota/profile updates
+              try {
+                  const freshUser = await db.users.get(currentUser.id);
+                  if (freshUser) {
+                      // Only update if critical fields changed to avoid loops
+                      if (freshUser.rppUsageCount !== currentUser.rppUsageCount || 
+                          freshUser.rppLastReset !== currentUser.rppLastReset ||
+                          freshUser.role !== currentUser.role) {
+                          
+                          console.log("[App] Sync updated user data:", freshUser);
+                          setCurrentUser(freshUser);
+                          localStorage.setItem('eduadmin_user', JSON.stringify(freshUser));
+                      }
+                  }
+              } catch (err) {
+                  console.error("Failed to refresh user after sync:", err);
+              }
+          }
+      };
+
+      window.addEventListener('sync-status', handleSyncStatus);
+      return () => window.removeEventListener('sync-status', handleSyncStatus);
+  }, [currentUser]);
 
   // --- AUTOMATIC SYNC HEARTBEAT ---
   // Runs every 40 seconds to ensure data flows between Guru <-> Admin
