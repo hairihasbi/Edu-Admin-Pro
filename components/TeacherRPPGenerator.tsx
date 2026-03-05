@@ -17,6 +17,7 @@ import katex from 'katex';
 
 interface TeacherRPPGeneratorProps {
   user: User;
+  onUpdateUser?: (user: User) => void;
 }
 
 // --- DATA LISTS ---
@@ -46,7 +47,7 @@ const ASSESSMENT_INSTRUMENTS = [
   "Rubrik Penilaian", "Checklist", "Rating Scale", "Anecdotal Record", "Soal Pilihan Ganda", "Soal Uraian", "Lembar Observasi"
 ];
 
-const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
+const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user, onUpdateUser }) => {
   const DRAFT_KEY = `rpp_draft_${user.id}`;
   const [isDraftLoaded, setIsDraftLoaded] = useState(false);
   const [rppStep, setRppStep] = useState(1);
@@ -204,9 +205,17 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
     
     // Optimistic update of quota usage
     if (!isQuotaExceeded) {
-        setQuotaUsage(prev => prev + 1);
-        if (quotaLimit > 0 && quotaUsage + 1 >= quotaLimit) {
+        const newUsage = quotaUsage + 1;
+        setQuotaUsage(newUsage);
+        
+        if (quotaLimit > 0 && newUsage >= quotaLimit) {
             setIsQuotaExceeded(true);
+        }
+
+        // UPDATE GLOBAL USER STATE & LOCAL STORAGE
+        if (onUpdateUser) {
+            const updatedUser = { ...user, rppUsageCount: newUsage };
+            onUpdateUser(updatedUser);
         }
     }
   };
