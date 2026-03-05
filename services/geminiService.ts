@@ -22,8 +22,28 @@ export const generateLessonPlan = async (
         cpInstruction = `Gunakan CP berikut: "${request.cpManualContent}".`;
     }
 
+    let eeatInstruction = "";
+    if (request.useEEAT) {
+        eeatInstruction = `
+        **INSTRUKSI KHUSUS E-E-A-T (Experience, Expertise, Authoritativeness, Trustworthiness):**
+        1. **Experience (Pengalaman Nyata):**
+           - Sertakan "Catatan Lapangan" atau "Tips Manajemen Kelas" berdasarkan pengalaman riil guru.
+           - Tambahkan bagian "Antisipasi Respon Siswa" (misal: "Siswa mungkin kesulitan di bagian X, maka guru perlu Y").
+        2. **Expertise (Keahlian Pedagogis):**
+           - Jelaskan *mengapa* strategi ini dipilih (rasionalisasi pedagogis singkat).
+           - Gunakan istilah teknis pendidikan dengan tepat (scaffolding, diferensiasi konten/proses/produk, asesmen diagnostik).
+        3. **Authoritativeness (Otoritas/Referensi):**
+           - Wajib menyertakan minimal 2 referensi kredibel (Buku Teks Kemendikbud, Jurnal Pendidikan, atau Teori Belajar relevan) di bagian Daftar Pustaka.
+        4. **Trustworthiness (Kepercayaan/Akurasi):**
+           - Pastikan semua fakta materi akurat. Jika menggunakan data, sebutkan sumbernya.
+           - Hindari bias. Sajikan materi secara objektif.
+        `;
+    }
+
     const prompt = `
       Bertindaklah sebagai Ahli Kurikulum Senior dan Spesialis Deep Learning. Tugas Anda adalah menyusun **MODUL AJAR KURIKULUM MERDEKA** dengan struktur yang SANGAT SPESIFIK dan DETIL.
+      
+      ${eeatInstruction}
 
       **DATA INPUT:**
       - Guru: ${request.teacherName} (NIP: ${request.teacherNip})
@@ -93,6 +113,12 @@ export const generateLessonPlan = async (
 
       **F. TARGET PESERTA DIDIK**
       (Peserta didik reguler/tipikal).
+      
+      ${request.useEEAT ? `
+      **G. CATATAN PEDAGOGIS (EEAT - Experience & Expertise)**
+      - **Rasionalisasi Strategi:** (Mengapa model ${request.learningModel} dipilih untuk materi ini?)
+      - **Antisipasi Tantangan:** (Prediksi kesulitan siswa dan mitigasinya).
+      ` : ''}
 
       ---
 
@@ -128,12 +154,24 @@ export const generateLessonPlan = async (
       | :--- | :--- | :--- |
       | ... | ... | ... |
 
+      ${request.useEEAT ? `
+      **4. REFLEKSI & TINDAK LANJUT (EEAT)**
+      - **Refleksi Guru:** (Pertanyaan kunci untuk evaluasi diri).
+      - **Refleksi Siswa:** (Pertanyaan pemantik untuk siswa).
+      ` : ''}
+
       **D. ASESMEN**
       Jenis: ${request.assessmentType}
       Instrumen: ${request.assessmentInstrument}
       
       **Lampiran Instrumen Asesmen:**
       (Buatkan contoh konkret instrumen penilaian di sini).
+
+      ${request.useEEAT ? `
+      **E. DAFTAR PUSTAKA (Authoritativeness)**
+      1. (Referensi 1 - Buku Teks/Jurnal)
+      2. (Referensi 2 - Sumber Digital Kredibel)
+      ` : ''}
 
       <br><br>
       | Mengetahui,<br>Kepala Sekolah<br><br><br><br>**${request.headmasterName}**<br>NIP. ${request.headmasterNip} | ${request.city}, ${request.date}<br>Guru Mata Pelajaran<br><br><br><br>**${request.teacherName}**<br>NIP. ${request.teacherNip} |
