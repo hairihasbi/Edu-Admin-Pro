@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { StudentIncident } from '../types';
-import { getAvailableClassesForHomeroom, addStudentIncident, deleteStudentIncident, getStudentIncidents } from '../services/database';
-import { Trash2, Plus, Clock, User, School } from './Icons';
+import { StudentIncident, Student } from '../types';
+import { getAvailableClassesForHomeroom, addStudentIncident, deleteStudentIncident, getStudentIncidents, getStudents } from '../services/database';
+import { Trash2, Plus, Clock, User, School } from 'lucide-react';
 
 interface PicketIncidentFormProps {
     picketId: string;
@@ -11,11 +11,13 @@ interface PicketIncidentFormProps {
 const PicketIncidentForm: React.FC<PicketIncidentFormProps> = ({ picketId, schoolNpsn }) => {
     const [incidents, setIncidents] = useState<StudentIncident[]>([]);
     const [classes, setClasses] = useState<any[]>([]);
+    const [students, setStudents] = useState<Student[]>([]);
     const [isLoading, setIsLoading] = useState(false);
 
     // Form State
     const [studentName, setStudentName] = useState('');
     const [className, setClassName] = useState('');
+    const [selectedClassId, setSelectedClassId] = useState('');
     const [time, setTime] = useState('');
     const [type, setType] = useState<'LATE' | 'PERMIT_EXIT' | 'EARLY_HOME'>('LATE');
     const [reason, setReason] = useState('');
@@ -33,6 +35,25 @@ const PicketIncidentForm: React.FC<PicketIncidentFormProps> = ({ picketId, schoo
         setIncidents(incidentsData);
         setClasses(classesData);
         setIsLoading(false);
+    };
+
+    const handleClassChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const classId = e.target.value;
+        setSelectedClassId(classId);
+        
+        if (classId) {
+            const selectedClass = classes.find(c => c.id === classId);
+            setClassName(selectedClass ? selectedClass.name : '');
+            
+            // Fetch students for this class
+            const studentsData = await getStudents(classId);
+            setStudents(studentsData);
+            setStudentName(''); // Reset student selection
+        } else {
+            setClassName('');
+            setStudents([]);
+            setStudentName('');
+        }
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -70,29 +91,34 @@ const PicketIncidentForm: React.FC<PicketIncidentFormProps> = ({ picketId, schoo
                     <Plus size={18} /> Tambah Kejadian Siswa
                 </h3>
                 <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3 items-end">
-                    <div className="lg:col-span-2">
-                        <label className="text-xs font-medium text-gray-500 mb-1 block">Nama Siswa</label>
-                        <input 
-                            type="text" 
-                            required
-                            className="w-full px-3 py-2 border rounded-md text-sm"
-                            placeholder="Nama Lengkap..."
-                            value={studentName}
-                            onChange={e => setStudentName(e.target.value)}
-                        />
-                    </div>
                     
                     <div className="lg:col-span-1">
                         <label className="text-xs font-medium text-gray-500 mb-1 block">Kelas</label>
                         <select 
                             required
                             className="w-full px-3 py-2 border rounded-md text-sm"
-                            value={className}
-                            onChange={e => setClassName(e.target.value)}
+                            value={selectedClassId}
+                            onChange={handleClassChange}
                         >
                             <option value="">Pilih Kelas</option>
                             {classes.map(c => (
-                                <option key={c.id} value={c.name}>{c.name}</option>
+                                <option key={c.id} value={c.id}>{c.name}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="lg:col-span-2">
+                        <label className="text-xs font-medium text-gray-500 mb-1 block">Nama Siswa</label>
+                        <select 
+                            required
+                            className="w-full px-3 py-2 border rounded-md text-sm"
+                            value={studentName}
+                            onChange={e => setStudentName(e.target.value)}
+                            disabled={!selectedClassId}
+                        >
+                            <option value="">Pilih Siswa</option>
+                            {students.map(s => (
+                                <option key={s.id} value={s.name}>{s.name}</option>
                             ))}
                         </select>
                     </div>
