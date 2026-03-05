@@ -8,7 +8,7 @@ import {
 } from '../services/database';
 import { 
   Smartphone, Send, Users, Search, 
-  CheckCircle, Check, UserPlus, Trash2, Mail, FileText, WifiOff 
+  CheckCircle, Check, UserPlus, Trash2, Mail, FileText, WifiOff, AlertCircle 
 } from './Icons';
 
 interface BroadcastPageProps {
@@ -229,7 +229,11 @@ const BroadcastPage: React.FC<BroadcastPageProps> = ({ user }) => {
 
         } catch (e: any) {
             failCount += batch.length;
-            errors.push(`Batch Error: ${e.message}`);
+            let errMsg = e.message;
+            if (errMsg.includes('trial account unique recipients limit')) {
+                errMsg = "Limit Akun Trial MailerSend Tercapai (Max Recipient).";
+            }
+            errors.push(`Batch Error: ${errMsg}`);
         }
 
         setProgress(prev => ({
@@ -505,10 +509,19 @@ const BroadcastPage: React.FC<BroadcastPageProps> = ({ user }) => {
            {sendingStatus === 'idle' || sendingStatus === 'error' ? (
              <div className="space-y-3">
                  {sendingStatus === 'error' && (
-                     <div className="text-xs text-red-600 bg-red-50 p-2 rounded border border-red-200 max-h-24 overflow-y-auto">
-                         <strong>Pengiriman Gagal Sebagian:</strong>
-                         <ul className="list-disc pl-4 mt-1">
-                             {resultErrors.map((err, i) => <li key={i}>{err}</li>)}
+                     <div className="text-xs text-red-600 bg-red-50 p-3 rounded-lg border border-red-200 max-h-32 overflow-y-auto">
+                         <strong className="flex items-center gap-1"><AlertCircle size={12}/> Pengiriman Gagal:</strong>
+                         <ul className="list-disc pl-4 mt-1 space-y-1">
+                             {resultErrors.map((err, i) => (
+                                 <li key={i} className="break-words">
+                                     {err}
+                                     {err.includes('Limit Akun Trial') && (
+                                         <div className="mt-1 p-1 bg-white rounded border border-red-100 text-red-500 font-bold">
+                                             Solusi: Upgrade akun MailerSend Anda atau gunakan SMTP lain.
+                                         </div>
+                                     )}
+                                 </li>
+                             ))}
                          </ul>
                      </div>
                  )}
