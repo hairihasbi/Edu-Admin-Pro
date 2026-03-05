@@ -629,6 +629,34 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user }) => {
                           </label>
                       </div>
 
+                      <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center justify-between">
+                          <div>
+                              <h4 className="text-emerald-800 font-bold flex items-center gap-2">
+                                  <ShieldCheck size={16} /> Mode Standar EEAT
+                              </h4>
+                              <p className="text-xs text-emerald-600 mt-1">
+                                  Menambahkan elemen Experience, Expertise, Authoritativeness, & Trustworthiness.
+                                  (Antisipasi respon siswa, referensi valid, dan strategi nyata).
+                              </p>
+                          </div>
+                          <label className="flex items-center cursor-pointer">
+                              <div className="relative">
+                                  <input 
+                                    type="checkbox" 
+                                    className="sr-only"
+                                    checked={rppData.useEEAT || false}
+                                    onChange={(e) => handleRppChange('useEEAT', e.target.checked)}
+                                  />
+                                  <div className={`block w-12 h-7 rounded-full transition ${
+                                      rppData.useEEAT ? 'bg-emerald-600' : 'bg-gray-300'
+                                  }`}></div>
+                                  <div className={`dot absolute left-1 top-1 bg-white w-5 h-5 rounded-full transition transform ${
+                                      rppData.useEEAT ? 'translate-x-5' : 'translate-x-0'
+                                  }`}></div>
+                              </div>
+                          </label>
+                      </div>
+
                       {isGenerating ? (
                           <div className="w-full bg-white border border-gray-200 rounded-xl p-4 shadow-sm text-center">
                               <div className="text-sm font-bold text-purple-700 mb-2">{genStatus} ({genProgress}%)</div>
