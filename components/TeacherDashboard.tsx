@@ -185,7 +185,14 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
       // might be stale. Ideally we trust the effect dependencies or use functional updates, 
       // but for simple polling, re-fetching is okay.
       
-      const activeAnnouncements = await getActiveAnnouncements();
+      const allAnnouncements = await getActiveAnnouncements();
+      
+      // Filter by role
+      const activeAnnouncements = allAnnouncements.filter(n => 
+          n.targetRole === 'ALL' || 
+          (isTendik && n.targetRole === UserRole.TENDIK) || 
+          (!isTendik && n.targetRole === UserRole.GURU)
+      );
       
       if (activeAnnouncements.length > 0) {
           // Take the most recent one
