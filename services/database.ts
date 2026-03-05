@@ -343,6 +343,11 @@ export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', logCall
     }
     isSyncRunning = true;
     syncStartTime = Date.now();
+    
+    // Dispatch Sync Start Event
+    if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('sync-status', { detail: 'syncing' }));
+    }
 
     try {
         const collections = [
@@ -429,8 +434,18 @@ export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', logCall
             }
             logCallback("PULL Completed.");
         }
+        
+        // Dispatch Sync Success Event
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('sync-status', { detail: 'success' }));
+        }
+
     } catch (e: any) {
         logCallback(`Sync Error: ${e.message}`);
+        // Dispatch Sync Error Event
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('sync-status', { detail: 'error' }));
+        }
     } finally {
         isSyncRunning = false;
         syncStartTime = 0;
