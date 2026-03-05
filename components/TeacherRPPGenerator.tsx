@@ -106,7 +106,16 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user, onUpdat
           
           if (sysSettings) {
               setQuotaLimit(sysSettings.rppMonthlyLimit || 0);
-              const currentUsage = user.rppUsageCount || 0;
+              
+              // CLIENT-SIDE MONTHLY RESET CHECK
+              const currentMonth = new Date().toISOString().slice(0, 7); // "YYYY-MM"
+              let currentUsage = user.rppUsageCount || 0;
+              
+              // If last reset was not this month, treat usage as 0 (Lazy Reset Visual)
+              if (user.rppLastReset !== currentMonth) {
+                  currentUsage = 0;
+              }
+
               setQuotaUsage(currentUsage);
               // Check quota (0 means unlimited)
               if (sysSettings.rppMonthlyLimit && sysSettings.rppMonthlyLimit > 0 && currentUsage >= sysSettings.rppMonthlyLimit) {
@@ -118,7 +127,16 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user, onUpdat
           
           setLoadingSettings(false);
       };
+      
       checkFeature();
+
+      // Listen for sync updates (e.g. admin changed limit)
+      const handleSync = (e: any) => {
+          if (e.detail === 'success') checkFeature();
+      };
+      window.addEventListener('sync-status', handleSync);
+      return () => window.removeEventListener('sync-status', handleSync);
+
   }, [user.rppUsageCount]);
 
   // --- AUTO SAVE & LOAD LOGIC ---
