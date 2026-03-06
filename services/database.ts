@@ -129,7 +129,40 @@ export const getPendingTeachers = async () => {
 export const approveTeacher = async (id: string) => {
     await db.users.update(id, { status: 'ACTIVE', lastModified: Date.now(), isSynced: false });
     const user = await db.users.get(id);
-    if(user) triggerDebouncedSync();
+    if(user) {
+        triggerDebouncedSync();
+
+        // Send Email Notification
+        const emailConfig = await getEmailConfig();
+        if (emailConfig && emailConfig.isActive) {
+            try {
+                // Construct login URL (assuming standard Vercel deployment or localhost)
+                const loginUrl = window.location.origin + '/login';
+                
+                await fetch('/api/broadcast-email', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: 'USER_APPROVAL',
+                        config: emailConfig,
+                        recipients: [{ email: user.email, name: user.fullName }],
+                        subject: 'Info Login', // Will be overridden by backend
+                        content: '...', // Will be overridden by backend
+                        userData: {
+                            fullName: user.fullName,
+                            username: user.username,
+                            // Password is NOT available here as it is hashed. 
+                            // We only send username and login URL.
+                            loginUrl: loginUrl
+                        }
+                    })
+                });
+                console.log(`Email notification sent to ${user.email}`);
+            } catch (error) {
+                console.error("Failed to send approval email:", error);
+            }
+        }
+    }
     return true;
 };
 
