@@ -393,6 +393,19 @@ const DB_SCHEMAS = [
     )`,
     `CREATE INDEX IF NOT EXISTS idx_calendar_user_date ON teacher_calendar(user_id, date)`,
 
+    // 26. PASSWORD RESETS
+    `CREATE TABLE IF NOT EXISTS password_resets (
+        id TEXT PRIMARY KEY,
+        user_id TEXT,
+        token TEXT,
+        expiry TEXT,
+        used BOOLEAN,
+        last_modified INTEGER,
+        version INTEGER DEFAULT 1,
+        deleted INTEGER DEFAULT 0
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_resets_token ON password_resets(token)`,
+
     // --- MIGRATIONS ---
     `ALTER TABLE system_settings ADD COLUMN ai_provider TEXT`,
     `ALTER TABLE system_settings ADD COLUMN ai_base_url TEXT`,
@@ -460,6 +473,7 @@ const getTableConfig = (collection: string) => {
     case 'eduadmin_pickets': return { table: 'daily_pickets', columns: ['id', 'date', 'school_npsn', 'officers', 'notes', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.date), s(item.schoolNpsn), JSON.stringify(item.officers || []), s(item.notes), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_incidents': return { table: 'student_incidents', columns: ['id', 'picket_id', 'student_name', 'class_name', 'time', 'type', 'reason', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.picketId), s(item.studentName), s(item.className), s(item.time), s(item.type), s(item.reason), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_teacher_calendar': return { table: 'teacher_calendar', columns: ['id', 'user_id', 'date', 'type', 'description', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.userId), s(item.date), s(item.type), s(item.description), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
+    case 'eduadmin_password_resets': return { table: 'password_resets', columns: ['id', 'user_id', 'token', 'expiry', 'used', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.userId), s(item.token), s(item.expiry), item.used ? 1 : 0, s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     default:
       return null;
   }
@@ -614,6 +628,10 @@ const mapRowToJSON = (collection: string, row: any) => {
     };
     case 'eduadmin_teacher_calendar': return {
         id: row.id, userId: row.user_id, date: row.date, type: row.type, description: row.description,
+        lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
+    };
+    case 'eduadmin_password_resets': return {
+        id: row.id, userId: row.user_id, token: row.token, expiry: row.expiry, used: Boolean(row.used),
         lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
     };
     default:
