@@ -247,10 +247,11 @@ export const deleteFromTurso = async (collection: string, id: string) => {
 
 // Password Reset API Helpers
 export const requestPasswordResetApi = async (email: string) => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const response = await fetch('/api/turso', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'request_password_reset', email })
+        body: JSON.stringify({ action: 'request_password_reset', email, origin })
     });
     return await handleApiResponse(response);
 };
