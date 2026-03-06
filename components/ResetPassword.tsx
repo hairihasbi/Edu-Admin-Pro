@@ -22,12 +22,18 @@ const ResetPassword: React.FC = () => {
     }
 
     const verify = async () => {
-      const result = await verifyResetToken(token);
-      if (result.valid) {
-        setStatus('valid');
-      } else {
+      try {
+        const result = await verifyResetToken(token);
+        if (result.valid) {
+          setStatus('valid');
+        } else {
+          setStatus('invalid');
+          setMessage(result.message || 'Token tidak valid atau kedaluwarsa.');
+        }
+      } catch (error) {
+        console.error("Verification error:", error);
         setStatus('invalid');
-        setMessage(result.message || 'Token tidak valid atau kedaluwarsa.');
+        setMessage('Terjadi kesalahan saat memverifikasi token. Silakan coba lagi.');
       }
     };
     verify();
