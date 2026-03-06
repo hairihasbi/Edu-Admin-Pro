@@ -85,7 +85,7 @@ export const EmailRecipientSchema = z.object({
 });
 
 export const EmailBroadcastSchema = z.object({
-  type: z.enum(['BROADCAST', 'USER_APPROVAL', 'PAYMENT_RECEIPT']).default('BROADCAST'),
+  type: z.enum(['BROADCAST', 'USER_APPROVAL', 'PAYMENT_RECEIPT', 'RESET_PASSWORD']).default('BROADCAST'),
   config: EmailConfigSchema,
   recipients: z.array(EmailRecipientSchema).min(1, "Minimal satu penerima email"),
   subject: z.string().min(1, "Subjek wajib diisi"),
@@ -102,5 +102,9 @@ export const EmailBroadcastSchema = z.object({
     amount: z.number(),
     paymentDate: z.string(),
     paymentMethod: z.string().optional(),
+  }).optional(),
+  resetData: z.object({
+    resetLink: z.string().url(),
+    expiryTime: z.string(),
   }).optional(),
 });

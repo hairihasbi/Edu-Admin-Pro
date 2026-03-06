@@ -92,7 +92,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Invalid Request Format', details: parseResult.error.format() });
   }
 
-  const { config, recipients, subject, content, type, userData, paymentData } = parseResult.data;
+  const { config, recipients, subject, content, type, userData, paymentData, resetData } = parseResult.data;
 
   if (!config.isActive) {
       return res.status(400).json({ error: 'Konfigurasi Email tidak aktif.' });
@@ -159,6 +159,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ` : ''}
       </table>
       <p>Dukungan Anda sangat berarti bagi pengembangan aplikasi ini.</p>
+    `;
+  } else if (type === 'RESET_PASSWORD') {
+    if (!resetData) {
+      return res.status(400).json({ error: 'Data reset tidak ditemukan untuk tipe RESET_PASSWORD' });
+    }
+    finalSubject = `Permintaan Reset Password - EduAdmin Pro`;
+    finalContent = `
+      <h2>Reset Password</h2>
+      <p>Kami menerima permintaan untuk mereset password akun Anda.</p>
+      <p>Silakan klik tombol di bawah ini untuk membuat password baru:</p>
+      <div style="text-align: center; margin: 30px 0;">
+        <a href="${resetData.resetLink}" style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">Reset Password</a>
+      </div>
+      <p>Link ini akan kedaluwarsa pada: ${resetData.expiryTime}</p>
+      <p style="font-size: 12px; color: #666;">Jika Anda tidak meminta reset password, abaikan email ini.</p>
     `;
   }
 
