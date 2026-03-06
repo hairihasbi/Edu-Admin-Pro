@@ -6,7 +6,7 @@ import {
   TeachingSchedule, LogEntry, MasterSubject, Ticket, 
   StudentViolation, StudentPointReduction, StudentAchievement, CounselingSession, 
   EmailConfig, WhatsAppConfig, Notification, ApiKey, SystemSettings,
-  BackupData, StudentWithDetails, LessonPlanRequest, DashboardStatsData, TeacherCalendarEvent
+  BackupData, StudentWithDetails, LessonPlanRequest, DashboardStatsData, TeacherCalendarEvent, PasswordReset
 } from '../types';
 import { initTurso, pushToTurso, pullFromTurso, deleteFromTurso, clearRemoteTable } from './tursoService';
 import bcrypt from 'bcryptjs';
@@ -91,23 +91,95 @@ export const updateUserPassword = async (id: string, newPass: string) => {
     return true;
 };
 
-export const resetPassword = async (username: string, newPass: string) => {
-    const user = await db.users.where('username').equals(username).first();
-    if (!user) return false;
+export const requestPasswordReset = async (email: string) => {
+    const user = await db.users.where('email').equals(email).first();
+    if (!user) return { success: false, message: 'Email tidak ditemukan.' };
+
+    const token = uuidv4();
+    const expiry = Date.now() + 3600000; // 1 hour
+
+    const resetItem: PasswordReset = {
+        id: uuidv4(),
+        userId: user.id,
+        token: token,
+        expiry: new Date(expiry).toISOString(),
+        used: false,
+        lastModified: Date.now(),
+        isSynced: false
+    };
     
-    // FIX: Hash password for reset too
+    await db.passwordResets.add(resetItem);
+    triggerDebouncedSync();
+
+    // Send Email
+    const emailConfig = await getEmailConfig();
+    if (emailConfig && emailConfig.isActive) {
+        try {
+            const resetLink = `${window.location.origin}/reset-password?token=${token}`;
+            await fetch('/api/broadcast-email', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    type: 'RESET_PASSWORD',
+                    config: emailConfig,
+                    recipients: [{ email: user.email, name: user.fullName }],
+                    subject: 'Reset Password',
+                    content: '...',
+                    resetData: {
+                        resetLink,
+                        expiryTime: new Date(expiry).toLocaleString('id-ID')
+                    }
+                })
+            });
+        } catch (e) {
+            console.error("Failed to send reset email", e);
+            return { success: false, message: 'Gagal mengirim email.' };
+        }
+    } else {
+        return { success: false, message: 'Sistem email belum dikonfigurasi.' };
+    }
+
+    return { success: true, message: 'Link reset password telah dikirim ke email Anda.' };
+};
+
+export const verifyResetToken = async (token: string) => {
+    // Find token in passwordResets
+    const resetItem = await db.passwordResets.where('token').equals(token).first();
+    
+    if (!resetItem || resetItem.used) {
+        return { valid: false, message: 'Token tidak valid atau sudah digunakan.' };
+    }
+
+    const expiry = new Date(resetItem.expiry).getTime();
+    if (Date.now() > expiry) {
+        // Mark as used or delete? Let's just mark used or leave it for cleanup job
+        // But for UX, tell them it expired
+        return { valid: false, message: 'Token telah kedaluwarsa.' };
+    }
+
+    return { valid: true, userId: resetItem.userId };
+};
+
+export const completePasswordReset = async (token: string, newPass: string) => {
+    const verification = await verifyResetToken(token);
+    if (!verification.valid || !verification.userId) return { success: false, message: verification.message };
+
     const hashedPassword = await bcrypt.hash(newPass, 10);
     
-    await db.users.update(user.id, { 
+    await db.users.update(verification.userId, { 
         password: hashedPassword,
         lastModified: Date.now(), 
         isSynced: false 
     });
+
+    // Mark token as used
+    const resetItem = await db.passwordResets.where('token').equals(token).first();
+    if (resetItem) {
+        await db.passwordResets.update(resetItem.id, { used: true, isSynced: false, lastModified: Date.now() });
+    }
     
-    const updated = await db.users.get(user.id);
-    if(updated) triggerDebouncedSync();
-    
-    return true;
+    triggerDebouncedSync();
+    return { success: true, message: 'Password berhasil diubah. Silakan login.' };
 };
 
 export const getTeachers = async () => {
@@ -389,7 +461,8 @@ export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', logCall
             'eduadmin_logs', 'eduadmin_email_config', 'eduadmin_master_subjects', 'eduadmin_tickets', 
             'eduadmin_bk_violations', 'eduadmin_bk_reductions', 'eduadmin_bk_achievements', 'eduadmin_bk_counseling',
             'eduadmin_wa_configs', 'eduadmin_notifications', 'eduadmin_api_keys', 'eduadmin_system_settings',
-            'eduadmin_pickets', 'eduadmin_incidents', 'eduadmin_donations', 'eduadmin_teacher_calendar'
+            'eduadmin_pickets', 'eduadmin_incidents', 'eduadmin_donations', 'eduadmin_teacher_calendar',
+            'eduadmin_password_resets'
         ];
 
         const tableMap: Record<string, any> = {
@@ -416,7 +489,8 @@ export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', logCall
             'eduadmin_pickets': db.dailyPickets,
             'eduadmin_incidents': db.studentIncidents,
             'eduadmin_donations': db.donations,
-            'eduadmin_teacher_calendar': db.teacherCalendar
+            'eduadmin_teacher_calendar': db.teacherCalendar,
+            'eduadmin_password_resets': db.passwordResets
         };
 
         if (direction === 'PUSH' || direction === 'FULL') {
