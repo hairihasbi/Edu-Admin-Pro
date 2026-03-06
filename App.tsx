@@ -31,7 +31,9 @@ import DonationHistory from './components/DonationHistory'; // Import DonationHi
 import NotificationPanel from './components/NotificationPanel';
 import Breadcrumbs from './components/Breadcrumbs';
 import OnboardingTour from './components/OnboardingTour';
-import { initDatabase, loginUser, resetPassword, registerUser, getNotifications, createNotification, markNotificationAsRead, clearNotifications, getSystemSettings, syncAllData, checkSchoolNameByNpsn, updateUserProfile } from './services/database';
+import ForgotPassword from './components/ForgotPassword';
+import ResetPassword from './components/ResetPassword';
+import { initDatabase, loginUser, registerUser, getNotifications, createNotification, markNotificationAsRead, clearNotifications, getSystemSettings, syncAllData, checkSchoolNameByNpsn, updateUserProfile } from './services/database';
 import { db } from './services/db';
 import { 
   LayoutDashboard, 
@@ -124,10 +126,11 @@ const AppContent: React.FC = () => {
   const [isSchoolFound, setIsSchoolFound] = useState(false);
 
   // Reset Password State
-  const [isResetMode, setIsResetMode] = useState(false);
-  const [resetUsername, setResetUsername] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [resetMessage, setResetMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
+  // Removed as we use dedicated routes now
+  // const [isResetMode, setIsResetMode] = useState(false);
+  // const [resetUsername, setResetUsername] = useState('');
+  // const [newPassword, setNewPassword] = useState('');
+  // const [resetMessage, setResetMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
 
   // UI State
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -488,16 +491,8 @@ const AppContent: React.FC = () => {
     }
   };
 
-  const handleResetPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const success = await resetPassword(resetUsername, newPassword);
-    if (success) {
-      setResetMessage({ type: 'success', text: 'Password berhasil diubah! Silakan login.' });
-      setTimeout(() => { setIsResetMode(false); setResetMessage(null); setResetUsername(''); setNewPassword(''); }, 2000);
-    } else {
-      setResetMessage({ type: 'error', text: 'Username tidak ditemukan atau gagal mengubah password.' });
-    }
-  };
+  // handleResetPassword removed
+
 
   const handleProfileUpdate = (updatedUser: User) => {
     setCurrentUser(updatedUser);
@@ -601,6 +596,8 @@ const AppContent: React.FC = () => {
     return (
       <Routes>
         <Route path="/" element={<HomePage />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/login" element={
           <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4 py-10">
              <div className="max-w-md w-full bg-white rounded-2xl shadow-xl overflow-hidden">
@@ -710,22 +707,14 @@ const AppContent: React.FC = () => {
                         <button type="submit" className="w-full bg-blue-600 text-white font-semibold py-2.5 rounded-lg hover:bg-blue-700">Daftar Sekarang</button>
                         <button type="button" onClick={() => setIsRegisterMode(false)} className="text-sm text-gray-600 hover:text-blue-600 w-full text-center mt-2">Sudah punya akun? Login</button>
                      </form>
-                  ) : !isResetMode ? (
+                  ) : (
                     <form onSubmit={handleLogin} className="space-y-6">
                       <h2 className="text-2xl font-semibold text-gray-800">Masuk Akun</h2>
                       {loginError && <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm">{loginError}</div>}
                       <input type="text" required className="w-full px-4 py-2.5 border border-gray-300 rounded-lg" placeholder="Username" value={loginUsername} onChange={e => setLoginUsername(e.target.value)} />
                       <input type="password" required className="w-full px-4 py-2.5 border border-gray-300 rounded-lg" placeholder="Password" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} />
-                      <div className="flex justify-between text-sm"><button type="button" onClick={() => setIsRegisterMode(true)} className="text-blue-600">Daftar Guru</button><button type="button" onClick={() => setIsResetMode(true)} className="text-gray-500">Lupa Password?</button></div>
+                      <div className="flex justify-between text-sm"><button type="button" onClick={() => setIsRegisterMode(true)} className="text-blue-600">Daftar Guru</button><Link to="/forgot-password" className="text-gray-500">Lupa Password?</Link></div>
                       <button type="submit" className="w-full bg-blue-600 text-white font-semibold py-3 rounded-lg">Masuk</button>
-                    </form>
-                  ) : (
-                    <form onSubmit={handleResetPassword} className="space-y-6">
-                      <h2 className="text-2xl font-semibold text-gray-800">Reset Password</h2>
-                      {resetMessage && <div className={`p-3 rounded-lg text-sm ${resetMessage.type === 'success' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>{resetMessage.text}</div>}
-                      <input type="text" required className="w-full px-4 py-2.5 border border-gray-300 rounded-lg" placeholder="Username" value={resetUsername} onChange={e => setResetUsername(e.target.value)} />
-                      <input type="password" required className="w-full px-4 py-2.5 border border-gray-300 rounded-lg" placeholder="Password Baru" value={newPassword} onChange={e => setNewPassword(e.target.value)} />
-                      <div className="flex gap-2"><button type="button" onClick={() => setIsResetMode(false)} className="flex-1 bg-gray-100 py-2 rounded-lg">Batal</button><button type="submit" className="flex-1 bg-blue-600 text-white py-2 rounded-lg">Simpan</button></div>
                     </form>
                   )}
                 </div>
