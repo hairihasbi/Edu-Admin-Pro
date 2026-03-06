@@ -245,6 +245,34 @@ export const deleteFromTurso = async (collection: string, id: string) => {
   }
 };
 
+// Password Reset API Helpers
+export const requestPasswordResetApi = async (email: string) => {
+    const response = await fetch('/api/turso', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'request_password_reset', email })
+    });
+    return await handleApiResponse(response);
+};
+
+export const verifyResetTokenApi = async (token: string) => {
+    const response = await fetch('/api/turso', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'verify_reset_token', token })
+    });
+    return await handleApiResponse(response);
+};
+
+export const completePasswordResetApi = async (token: string, newPassword: string) => {
+    const response = await fetch('/api/turso', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'complete_password_reset', token, newPassword })
+    });
+    return await handleApiResponse(response);
+};
+
 // Pull Remote Data from Turso via API
 export const pullFromTurso = async (collection: string, localItems: any[]): Promise<{items: any[], hasChanges: boolean}> => {
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
@@ -276,6 +304,11 @@ export const pullFromTurso = async (collection: string, localItems: any[]): Prom
     // DEBUG LOG
     if (rows && rows.length > 0) {
         console.log(`[Turso] Pulled ${rows.length} items for ${collection}`);
+        if (collection === 'eduadmin_materials') {
+             console.log('[Turso Debug] Materials Pulled:', rows);
+        }
+    } else if (collection === 'eduadmin_materials') {
+        console.warn('[Turso Debug] No materials found in remote for this user.');
     }
 
     if (!rows || !Array.isArray(rows)) {

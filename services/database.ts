@@ -8,7 +8,7 @@ import {
   EmailConfig, WhatsAppConfig, Notification, ApiKey, SystemSettings,
   BackupData, StudentWithDetails, LessonPlanRequest, DashboardStatsData, TeacherCalendarEvent, PasswordReset
 } from '../types';
-import { initTurso, pushToTurso, pullFromTurso, deleteFromTurso, clearRemoteTable } from './tursoService';
+import { initTurso, pushToTurso, pullFromTurso, deleteFromTurso, clearRemoteTable, requestPasswordResetApi, verifyResetTokenApi, completePasswordResetApi } from './tursoService';
 import bcrypt from 'bcryptjs';
 
 const uuidv4 = () => crypto.randomUUID();
@@ -93,165 +93,44 @@ export const updateUserPassword = async (id: string, newPass: string) => {
 
 export const requestPasswordReset = async (email: string) => {
     try {
-        if (!db.passwordResets) {
-            console.error("Database schema mismatch: passwordResets table missing.");
-            return { success: false, message: 'Terjadi kesalahan database. Silakan refresh halaman.' };
+        if (!navigator.onLine) {
+            return { success: false, message: 'Koneksi internet diperlukan untuk reset password.' };
         }
-
-        // 1. Cari User Lokal (Case Insensitive)
-        let user = await db.users.filter(u => !!u.email && u.email.toLowerCase() === email.toLowerCase()).first();
-
-        // 2. Jika tidak ketemu, coba Sync dari Server (Self-Healing)
-        if (!user && navigator.onLine) {
-            console.log("[ResetPassword] User not found locally, attempting to pull from server...");
-            try {
-                const localUsers = await db.users.toArray();
-                const pullResult = await pullFromTurso('eduadmin_users', localUsers);
-                
-                if (pullResult.hasChanges) {
-                    await db.transaction('rw', db.users, async () => {
-                        const uniqueMap = new Map();
-                        pullResult.items.forEach((item: any) => { if(item.id) uniqueMap.set(String(item.id), item); });
-                        await db.users.bulkPut(Array.from(uniqueMap.values()));
-                    });
-                    // Cari lagi setelah sync
-                    user = await db.users.filter(u => !!u.email && u.email.toLowerCase() === email.toLowerCase()).first();
-                }
-            } catch (syncErr) {
-                console.warn("Failed to auto-sync users during password reset:", syncErr);
-            }
-        }
-
-        if (!user) return { success: false, message: 'Email tidak ditemukan.' };
-
-        const token = uuidv4();
-        const expiry = Date.now() + 3600000; // 1 hour
-
-        const resetItem: PasswordReset = {
-            id: uuidv4(),
-            userId: user.id,
-            token: token,
-            expiry: new Date(expiry).toISOString(),
-            used: false,
-            lastModified: Date.now(),
-            isSynced: false
-        };
         
-        await db.passwordResets.add(resetItem);
-        triggerDebouncedSync();
+        // Use Server-Side API (Handles Token Generation & Email Sending)
+        const result = await requestPasswordResetApi(email);
+        return { success: true, message: result.message || 'Link reset password telah dikirim ke email Anda.' };
 
-        // Send Email
-        const emailConfig = await getEmailConfig();
-        if (emailConfig && emailConfig.isActive) {
-            try {
-                const resetLink = `${window.location.origin}/#/reset-password?token=${token}`; // Add hash for HashRouter
-                await fetch('/api/broadcast-email', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        type: 'RESET_PASSWORD',
-                        config: emailConfig,
-                        recipients: [{ email: user.email, name: user.fullName }],
-                        subject: 'Reset Password',
-                        content: '...',
-                        resetData: {
-                            resetLink,
-                            expiryTime: new Date(expiry).toLocaleString('id-ID')
-                        }
-                    })
-                });
-            } catch (e) {
-                console.error("Failed to send reset email", e);
-                return { success: false, message: 'Gagal mengirim email.' };
-            }
-        } else {
-            return { success: false, message: 'Sistem email belum dikonfigurasi.' };
-        }
-
-        return { success: true, message: 'Link reset password telah dikirim ke email Anda.' };
-
-    } catch (error) {
-        console.error("System Error in requestPasswordReset:", error);
-        return { success: false, message: `Terjadi kesalahan sistem: ${error instanceof Error ? error.message : String(error)}` };
+    } catch (error: any) {
+        console.error("Reset Request Error:", error);
+        return { success: false, message: error.message || 'Gagal memproses permintaan.' };
     }
 };
 
 export const verifyResetToken = async (token: string) => {
-    if (!db.passwordResets) {
-        console.error("Database schema mismatch: passwordResets table missing.");
-        return { valid: false, message: 'Terjadi kesalahan database. Silakan refresh halaman.' };
-    }
-
-    // 1. Cari Token Lokal
-    let resetItem = await db.passwordResets.where('token').equals(token).first();
-
-    // 2. Jika tidak ketemu, coba Sync dari Server (Penting untuk cross-device)
-    if (!resetItem && navigator.onLine) {
-        console.log("[ResetPassword] Token not found locally, attempting to pull from server...");
-        try {
-            const localResets = await db.passwordResets.toArray();
-            const pullResult = await pullFromTurso('eduadmin_password_resets', localResets);
-            
-            if (pullResult.hasChanges) {
-                await db.transaction('rw', db.passwordResets, async () => {
-                    const uniqueMap = new Map();
-                    pullResult.items.forEach((item: any) => { if(item.id) uniqueMap.set(String(item.id), item); });
-                    await db.passwordResets.bulkPut(Array.from(uniqueMap.values()));
-                });
-                // Cari lagi setelah sync
-                resetItem = await db.passwordResets.where('token').equals(token).first();
-            }
-        } catch (syncErr) {
-            console.warn("Failed to auto-sync password resets:", syncErr);
+    try {
+        if (!navigator.onLine) {
+             return { valid: false, message: 'Koneksi internet diperlukan.' };
         }
+        const result = await verifyResetTokenApi(token);
+        return { valid: true, message: 'Token valid.' };
+    } catch (error: any) {
+        return { valid: false, message: error.message || 'Token tidak valid atau sudah kadaluarsa.' };
     }
-    
-    if (!resetItem || resetItem.used) {
-        return { valid: false, message: 'Token tidak valid atau sudah digunakan.' };
-    }
-
-    const expiry = new Date(resetItem.expiry).getTime();
-    if (Date.now() > expiry) {
-        // Mark as used or delete? Let's just mark used or leave it for cleanup job
-        // But for UX, tell them it expired
-        return { valid: false, message: 'Token telah kedaluwarsa.' };
-    }
-
-    return { valid: true, userId: resetItem.userId };
 };
 
 export const completePasswordReset = async (token: string, newPass: string) => {
     try {
-        if (!db.passwordResets) {
-            throw new Error("Database schema mismatch: passwordResets table missing.");
-        }
-
-        const verification = await verifyResetToken(token);
-        if (!verification.valid || !verification.userId) return { success: false, message: verification.message };
-
-        const hashedPassword = await bcrypt.hash(newPass, 10);
-        
-        const updated = await db.users.update(verification.userId, { 
-            password: hashedPassword,
-            lastModified: Date.now(), 
-            isSynced: false 
-        });
-
-        if (updated === 0) {
-            return { success: false, message: 'User tidak ditemukan.' };
-        }
-
-        // Mark token as used
-        const resetItem = await db.passwordResets.where('token').equals(token).first();
-        if (resetItem) {
-            await db.passwordResets.update(resetItem.id, { used: true, isSynced: false, lastModified: Date.now() });
+        if (!navigator.onLine) {
+             return { success: false, message: 'Koneksi internet diperlukan.' };
         }
         
-        triggerDebouncedSync();
-        return { success: true, message: 'Password berhasil diubah. Silakan login.' };
-    } catch (error) {
-        console.error("Error completing password reset:", error);
-        return { success: false, message: `Gagal mengubah password: ${error instanceof Error ? error.message : String(error)}` };
+        const result = await completePasswordResetApi(token, newPass);
+        return { success: true, message: result.message || 'Password berhasil diubah. Silakan login.' };
+
+    } catch (error: any) {
+        console.error("Complete Reset Error:", error);
+        return { success: false, message: error.message || 'Gagal mengubah password.' };
     }
 };
 
