@@ -303,6 +303,14 @@ export interface CounselingSession extends Syncable {
 }
 
 // Backup API Key
+export interface PasswordReset extends Syncable {
+  id: string;
+  userId: string;
+  token: string;
+  expiry: string; // ISO String
+  used: boolean;
+}
+
 export interface ApiKey extends Syncable {
   id: string;
   key: string;
