@@ -92,6 +92,11 @@ export const updateUserPassword = async (id: string, newPass: string) => {
 };
 
 export const requestPasswordReset = async (email: string) => {
+    if (!db.passwordResets) {
+        console.error("Database schema mismatch: passwordResets table missing.");
+        return { success: false, message: 'Terjadi kesalahan database. Silakan refresh halaman.' };
+    }
+
     const user = await db.users.where('email').equals(email).first();
     if (!user) return { success: false, message: 'Email tidak ditemukan.' };
 
@@ -143,6 +148,11 @@ export const requestPasswordReset = async (email: string) => {
 };
 
 export const verifyResetToken = async (token: string) => {
+    if (!db.passwordResets) {
+        console.error("Database schema mismatch: passwordResets table missing.");
+        return { valid: false, message: 'Terjadi kesalahan database. Silakan refresh halaman.' };
+    }
+
     // Find token in passwordResets
     const resetItem = await db.passwordResets.where('token').equals(token).first();
     
@@ -161,25 +171,38 @@ export const verifyResetToken = async (token: string) => {
 };
 
 export const completePasswordReset = async (token: string, newPass: string) => {
-    const verification = await verifyResetToken(token);
-    if (!verification.valid || !verification.userId) return { success: false, message: verification.message };
+    try {
+        if (!db.passwordResets) {
+            throw new Error("Database schema mismatch: passwordResets table missing.");
+        }
 
-    const hashedPassword = await bcrypt.hash(newPass, 10);
-    
-    await db.users.update(verification.userId, { 
-        password: hashedPassword,
-        lastModified: Date.now(), 
-        isSynced: false 
-    });
+        const verification = await verifyResetToken(token);
+        if (!verification.valid || !verification.userId) return { success: false, message: verification.message };
 
-    // Mark token as used
-    const resetItem = await db.passwordResets.where('token').equals(token).first();
-    if (resetItem) {
-        await db.passwordResets.update(resetItem.id, { used: true, isSynced: false, lastModified: Date.now() });
+        const hashedPassword = await bcrypt.hash(newPass, 10);
+        
+        const updated = await db.users.update(verification.userId, { 
+            password: hashedPassword,
+            lastModified: Date.now(), 
+            isSynced: false 
+        });
+
+        if (updated === 0) {
+            return { success: false, message: 'User tidak ditemukan.' };
+        }
+
+        // Mark token as used
+        const resetItem = await db.passwordResets.where('token').equals(token).first();
+        if (resetItem) {
+            await db.passwordResets.update(resetItem.id, { used: true, isSynced: false, lastModified: Date.now() });
+        }
+        
+        triggerDebouncedSync();
+        return { success: true, message: 'Password berhasil diubah. Silakan login.' };
+    } catch (error) {
+        console.error("Error completing password reset:", error);
+        return { success: false, message: `Gagal mengubah password: ${error instanceof Error ? error.message : String(error)}` };
     }
-    
-    triggerDebouncedSync();
-    return { success: true, message: 'Password berhasil diubah. Silakan login.' };
 };
 
 export const getTeachers = async () => {
