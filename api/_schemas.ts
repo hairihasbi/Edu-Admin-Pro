@@ -39,6 +39,7 @@ export const WhatsAppConfigSchema = z.object({
   baseUrl: z.string().url(),
   apiKey: z.string().min(1),
   deviceId: z.string().optional(),
+  rotatorId: z.string().optional(), // NEW: Optional Rotator ID for Fonnte
 });
 
 export const RecipientSchema = z.object({
@@ -84,8 +85,22 @@ export const EmailRecipientSchema = z.object({
 });
 
 export const EmailBroadcastSchema = z.object({
+  type: z.enum(['BROADCAST', 'USER_APPROVAL', 'PAYMENT_RECEIPT']).default('BROADCAST'),
   config: EmailConfigSchema,
   recipients: z.array(EmailRecipientSchema).min(1, "Minimal satu penerima email"),
   subject: z.string().min(1, "Subjek wajib diisi"),
   content: z.string().min(1, "Konten email wajib diisi"), // HTML allowed
+  // Data tambahan untuk notifikasi spesifik
+  userData: z.object({
+    fullName: z.string(),
+    username: z.string(),
+    password: z.string().optional(),
+    loginUrl: z.string(),
+  }).optional(),
+  paymentData: z.object({
+    invoiceNumber: z.string(),
+    amount: z.number(),
+    paymentDate: z.string(),
+    paymentMethod: z.string().optional(),
+  }).optional(),
 });

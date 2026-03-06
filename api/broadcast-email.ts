@@ -92,10 +92,74 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Invalid Request Format', details: parseResult.error.format() });
   }
 
-  const { config, recipients, subject, content } = parseResult.data;
+  const { config, recipients, subject, content, type, userData, paymentData } = parseResult.data;
 
   if (!config.isActive) {
       return res.status(400).json({ error: 'Konfigurasi Email tidak aktif.' });
+  }
+
+  let finalSubject = subject;
+  let finalContent = content;
+
+  // --- LOGIC KHUSUS BERDASARKAN TIPE ---
+  if (type === 'USER_APPROVAL') {
+    if (!userData) {
+      return res.status(400).json({ error: 'Data user tidak ditemukan untuk tipe USER_APPROVAL' });
+    }
+    // Override subject & content for specific notification
+    finalSubject = `Selamat Datang di EduAdmin Pro - Akun Anda Telah Aktif`;
+    finalContent = `
+      <h2>Halo ${userData.fullName},</h2>
+      <p>Selamat! Akun Anda telah disetujui oleh Administrator.</p>
+      <p>Berikut adalah detail login Anda:</p>
+      <table style="background: #f4f4f4; padding: 15px; border-radius: 5px; width: 100%;">
+        <tr>
+          <td style="width: 100px; font-weight: bold;">Username:</td>
+          <td>${userData.username}</td>
+        </tr>
+        ${userData.password ? `
+        <tr>
+          <td style="font-weight: bold;">Password:</td>
+          <td>${userData.password}</td>
+        </tr>
+        ` : ''}
+        <tr>
+          <td style="font-weight: bold;">Login URL:</td>
+          <td><a href="${userData.loginUrl}">${userData.loginUrl}</a></td>
+        </tr>
+      </table>
+      <p>Harap segera mengganti password Anda setelah login pertama kali.</p>
+    `;
+  } else if (type === 'PAYMENT_RECEIPT') {
+    if (!paymentData) {
+      return res.status(400).json({ error: 'Data pembayaran tidak ditemukan untuk tipe PAYMENT_RECEIPT' });
+    }
+    finalSubject = `Bukti Pembayaran Donasi - ${paymentData.invoiceNumber}`;
+    finalContent = `
+      <h2>Terima Kasih atas Donasi Anda!</h2>
+      <p>Pembayaran Anda telah kami terima dengan detail sebagai berikut:</p>
+      <table style="background: #f4f4f4; padding: 15px; border-radius: 5px; width: 100%;">
+        <tr>
+          <td style="width: 120px; font-weight: bold;">No. Invoice:</td>
+          <td>${paymentData.invoiceNumber}</td>
+        </tr>
+        <tr>
+          <td style="font-weight: bold;">Tanggal:</td>
+          <td>${paymentData.paymentDate}</td>
+        </tr>
+        <tr>
+          <td style="font-weight: bold;">Jumlah:</td>
+          <td>Rp ${paymentData.amount.toLocaleString('id-ID')}</td>
+        </tr>
+        ${paymentData.paymentMethod ? `
+        <tr>
+          <td style="font-weight: bold;">Metode:</td>
+          <td>${paymentData.paymentMethod}</td>
+        </tr>
+        ` : ''}
+      </table>
+      <p>Dukungan Anda sangat berarti bagi pengembangan aplikasi ini.</p>
+    `;
   }
 
   let successCount = 0;
@@ -104,10 +168,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // Iterate recipients (Sequential to avoid rate limits on free tiers)
   for (const recipient of recipients) {
-      // Basic personalization
-      const personalizedHtml = content
-        .replace(/{{name}}/g, recipient.name)
-        .replace(/\n/g, '<br/>'); // Convert newlines to BR for basic HTML support
+      // Basic personalization (Only applies if content is not overridden by specific types, or if we want to support {{name}} in templates too)
+      // For specific types, we already constructed the HTML, but we can still replace {{name}} if it exists in the template (though we used userData.fullName above)
+      
+      let personalizedHtml = finalContent;
+      
+      // Only do replacement if it's a BROADCAST or if the template uses it
+      if (type === 'BROADCAST') {
+         personalizedHtml = finalContent
+          .replace(/{{name}}/g, recipient.name)
+          .replace(/\n/g, '<br/>');
+      }
 
       // Wrapper HTML for professional look
       const finalHtml = `
@@ -124,18 +195,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       try {
           if (config.method === 'API') {
               if (config.provider === 'MAILERSEND') {
-                  await sendMailerSend(config, recipient.email, subject, finalHtml);
+                  await sendMailerSend(config, recipient.email, finalSubject, finalHtml);
               } else if (config.provider === 'BREVO') {
-                  await sendBrevo(config, recipient.email, subject, finalHtml);
+                  await sendBrevo(config, recipient.email, finalSubject, finalHtml);
               }
           } else {
-              await sendSMTP(config, recipient.email, subject, finalHtml);
+              await sendSMTP(config, recipient.email, finalSubject, finalHtml);
           }
           successCount++;
       } catch (error: any) {
           console.error(`Email fail for ${recipient.email}:`, error);
           failCount++;
-          errors.push(`${recipient.email}: ${error.message}`);
+          // Enhance error message for MailerSend limit
+          let msg = error.message;
+          if (msg.includes('trial account unique recipients limit')) {
+             msg += ' (Solusi: Upgrade akun MailerSend Anda atau gunakan SMTP/Provider lain)';
+          }
+          errors.push(`${recipient.email}: ${msg}`);
       }
 
       // Small delay to be polite to SMTP servers
