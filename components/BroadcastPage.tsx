@@ -8,23 +8,172 @@ import {
 } from '../services/database';
 import { 
   Smartphone, Send, Users, Search, 
-  CheckCircle, Check, UserPlus, Trash2, Mail, FileText, WifiOff, AlertCircle, Loader2, XCircle 
+  CheckCircle, Check, UserPlus, Trash2, Mail, FileText, WifiOff, AlertCircle 
 } from './Icons';
 
-// ...
+interface BroadcastPageProps {
+  user: User;
+}
 
-interface LogItem {
+type TargetType = 'TEACHERS' | 'STUDENTS_CLASS' | 'ALL_STUDENTS' | 'MANUAL';
+type ChannelType = 'WHATSAPP' | 'EMAIL';
+
+interface Recipient {
+  id: string;
   name: string;
-  contact: string;
-  status: 'pending' | 'processing' | 'success' | 'failed';
-  message?: string;
+  phone: string;
+  email: string; // NEW
+  label: string; 
+  selected: boolean;
 }
 
 const BroadcastPage: React.FC<BroadcastPageProps> = ({ user }) => {
-  // ... existing state ...
-  const [sendingLogs, setSendingLogs] = useState<LogItem[]>([]);
+  // --- STATE ---
+  const [channel, setChannel] = useState<ChannelType>('WHATSAPP');
+  const [waConfigReady, setWaConfigReady] = useState(false);
+  const [emailConfigReady, setEmailConfigReady] = useState(false);
+  
+  // Data State
+  const [classes, setClasses] = useState<ClassRoom[]>([]);
+  const [recipients, setRecipients] = useState<Recipient[]>([]);
+  
+  // UI State
+  const [targetType, setTargetType] = useState<TargetType>(user.role === UserRole.ADMIN ? 'TEACHERS' : 'STUDENTS_CLASS');
+  const [selectedClassId, setSelectedClassId] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isLoadingData, setIsLoadingData] = useState(false);
 
-  // ... existing effects ...
+  // Manual Input State
+  const [manualName, setManualName] = useState('');
+  const [manualContact, setManualContact] = useState(''); // Shared for phone/email
+  
+  // Composer State
+  const [emailSubject, setEmailSubject] = useState(''); // NEW
+  const [message, setMessage] = useState('Halo {{name}},\n\nBerikut informasi dari sekolah:\n...');
+  const [sendingStatus, setSendingStatus] = useState<'idle' | 'sending' | 'completed' | 'error'>('idle');
+  const [progress, setProgress] = useState({ current: 0, total: 0, success: 0, failed: 0 });
+  const [resultErrors, setResultErrors] = useState<string[]>([]);
+
+  // --- INIT ---
+  useEffect(() => {
+    checkConfigs();
+    fetchClasses();
+  }, [user]);
+
+  // Load recipients when filters change
+  useEffect(() => {
+    if (targetType === 'MANUAL') {
+        if (recipients.length > 0 && recipients[0].label !== 'Manual') {
+            setRecipients([]);
+        }
+    } else {
+        fetchRecipients();
+    }
+  }, [targetType, selectedClassId]);
+
+  const checkConfigs = async () => {
+    const wa = await getWhatsAppConfig(user.id);
+    if (wa && wa.isActive && wa.apiKey) setWaConfigReady(true);
+
+    // Only check email config for Admin
+    if (user.role === UserRole.ADMIN) {
+        const em = await getEmailConfig();
+        if (em && em.isActive) setEmailConfigReady(true);
+    }
+  };
+
+  const fetchClasses = async () => {
+    if (user.role === UserRole.ADMIN) {
+        const { getAllClasses } = await import('../services/database'); 
+        const all = await getAllClasses();
+        setClasses(all);
+        if (all.length > 0) setSelectedClassId(all[0].id);
+    } else {
+        const cls = await getClasses(user.id);
+        setClasses(cls);
+        if (cls.length > 0) setSelectedClassId(cls[0].id);
+    }
+  };
+
+  const fetchRecipients = async () => {
+    setIsLoadingData(true);
+    let rawData: Recipient[] = [];
+
+    try {
+      if (targetType === 'TEACHERS' && user.role === UserRole.ADMIN) {
+        const teachers = await getTeachers();
+        rawData = teachers.map(t => ({
+          id: t.id,
+          name: t.fullName,
+          phone: t.phone || '',
+          email: t.email || '',
+          label: 'Guru',
+          selected: true
+        }));
+      } else if (targetType === 'ALL_STUDENTS' && user.role === UserRole.ADMIN) {
+        const students = await getAllStudentsWithDetails();
+        rawData = students.map(s => ({
+          id: s.id,
+          name: s.name,
+          phone: s.phone || '',
+          email: '', 
+          label: s.className,
+          selected: true
+        }));
+      } else if (targetType === 'STUDENTS_CLASS') {
+        if (selectedClassId) {
+          const students = await getStudents(selectedClassId);
+          const clsName = classes.find(c => c.id === selectedClassId)?.name || 'Kelas';
+          rawData = students.map(s => ({
+            id: s.id,
+            name: s.name,
+            phone: s.phone || '',
+            email: '', 
+            label: clsName,
+            selected: true
+          }));
+        }
+      }
+    } catch (e) {
+      console.error("Error fetching recipients", e);
+    }
+
+    setRecipients(rawData);
+    setIsLoadingData(false);
+  };
+
+  // --- HANDLERS ---
+
+  const handleToggleSelect = (id: string) => {
+    setRecipients(prev => prev.map(r => r.id === id ? { ...r, selected: !r.selected } : r));
+  };
+
+  const handleSelectAll = (select: boolean) => {
+    const filteredIds = new Set(filteredRecipients.map(r => r.id));
+    setRecipients(prev => prev.map(r => filteredIds.has(r.id) ? { ...r, selected: select } : r));
+  };
+
+  const handleAddManualRecipient = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!manualName || !manualContact) return;
+
+    const newRecipient: Recipient = {
+      id: `manual-${Date.now()}`,
+      name: manualName,
+      phone: channel === 'WHATSAPP' ? manualContact : '',
+      email: channel === 'EMAIL' ? manualContact : '',
+      label: 'Manual',
+      selected: true
+    };
+
+    setRecipients(prev => [newRecipient, ...prev]);
+    setManualName('');
+    setManualContact('');
+  };
+
+  const handleDeleteManual = (id: string) => {
+    setRecipients(prev => prev.filter(r => r.id !== id));
+  };
 
   const handleSendBroadcast = async () => {
     const selectedTargets = recipients.filter(r => {
@@ -49,29 +198,18 @@ const BroadcastPage: React.FC<BroadcastPageProps> = ({ user }) => {
     setSendingStatus('sending');
     setProgress({ current: 0, total: selectedTargets.length, success: 0, failed: 0 });
     setResultErrors([]);
-    
-    // Initialize Logs
-    setSendingLogs(selectedTargets.map(t => ({
-        name: t.name,
-        contact: channel === 'WHATSAPP' ? t.phone : t.email,
-        status: 'pending'
-    })));
 
     let successCount = 0;
     let failCount = 0;
     const errors: string[] = [];
     
-    // Force Batch Size 1 for Animation Effect
-    const BATCH_SIZE = 1;
+    // Batch configuration
+    // Email: 50 per batch (API timeout limit ~60s, processing takes ~25s for 50 items)
+    // WhatsApp: 10 per batch (Typical generic rate limit safety)
+    const BATCH_SIZE = channel === 'EMAIL' ? 50 : 10;
 
     for (let i = 0; i < selectedTargets.length; i += BATCH_SIZE) {
         const batch = selectedTargets.slice(i, i + BATCH_SIZE);
-        
-        // Mark current as processing
-        setSendingLogs(prev => prev.map((log, idx) => {
-            if (idx >= i && idx < i + BATCH_SIZE) return { ...log, status: 'processing' };
-            return log;
-        }));
         
         try {
             let res;
@@ -89,32 +227,13 @@ const BroadcastPage: React.FC<BroadcastPageProps> = ({ user }) => {
             failCount += res.failed;
             if (res.errors) errors.push(...res.errors);
 
-            // Update Log Status
-            setSendingLogs(prev => prev.map((log, idx) => {
-                if (idx >= i && idx < i + BATCH_SIZE) {
-                    const isSuccess = res.success > 0;
-                    return { 
-                        ...log, 
-                        status: isSuccess ? 'success' : 'failed',
-                        message: isSuccess ? 'Terkirim' : (res.errors && res.errors[0] ? res.errors[0] : 'Gagal')
-                    };
-                }
-                return log;
-            }));
-
         } catch (e: any) {
             failCount += batch.length;
             let errMsg = e.message;
             if (errMsg.includes('trial account unique recipients limit')) {
-                errMsg = "Limit Akun Trial MailerSend Tercapai.";
+                errMsg = "Limit Akun Trial MailerSend Tercapai (Max Recipient).";
             }
             errors.push(`Batch Error: ${errMsg}`);
-
-            // Mark Log as Failed
-            setSendingLogs(prev => prev.map((log, idx) => {
-                if (idx >= i && idx < i + BATCH_SIZE) return { ...log, status: 'failed', message: errMsg };
-                return log;
-            }));
         }
 
         setProgress(prev => ({
@@ -124,59 +243,15 @@ const BroadcastPage: React.FC<BroadcastPageProps> = ({ user }) => {
             failed: failCount
         }));
 
-        // Delay for animation effect & rate limiting
+        // Delay between batches to prevent rate limiting
         if (i + BATCH_SIZE < selectedTargets.length) {
-            await new Promise(r => setTimeout(r, 1000)); // 1s delay for visual effect
+            await new Promise(r => setTimeout(r, 2000));
         }
     }
 
     setResultErrors(errors);
     setSendingStatus(failCount > 0 && successCount === 0 ? 'error' : 'completed');
   };
-
-  // ...
-
-  // Render Section for Sending Status
-  // ...
-            ) : sendingStatus === 'sending' ? (
-              <div className="space-y-3 flex-1 flex flex-col min-h-0">
-                 <div className="flex justify-between text-sm font-medium text-gray-600">
-                    <span>Mengirim... ({progress.current}/{progress.total})</span>
-                    <span>{Math.round((progress.current / progress.total) * 100)}%</span>
-                 </div>
-                 <div className="w-full bg-gray-200 rounded-full h-2.5 shrink-0">
-                    <div className="bg-blue-600 h-2.5 rounded-full transition-all duration-300" style={{ width: `${(progress.current / progress.total) * 100}%` }}></div>
-                 </div>
-                 
-                 {/* Live Log List */}
-                 <div className="flex-1 overflow-y-auto border border-gray-200 rounded-lg bg-gray-50 p-2 space-y-2 min-h-[200px]">
-                    {sendingLogs.map((log, idx) => (
-                        <div key={idx} className="flex items-center gap-3 p-2 bg-white rounded border border-gray-100 text-sm">
-                            <div className="w-5 h-5 flex items-center justify-center shrink-0">
-                                {log.status === 'pending' && <div className="w-2 h-2 bg-gray-300 rounded-full" />}
-                                {log.status === 'processing' && <Loader2 size={16} className="animate-spin text-blue-600" />}
-                                {log.status === 'success' && <CheckCircle size={16} className="text-green-600" />}
-                                {log.status === 'failed' && <XCircle size={16} className="text-red-600" />}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                                <div className="flex justify-between">
-                                    <span className={`font-medium truncate ${log.status === 'processing' ? 'text-blue-700' : 'text-gray-700'}`}>
-                                        {log.name}
-                                    </span>
-                                    <span className="text-xs text-gray-400 ml-2">{log.contact}</span>
-                                </div>
-                                {log.message && (
-                                    <p className={`text-xs truncate ${log.status === 'failed' ? 'text-red-500' : 'text-green-600'}`}>
-                                        {log.message}
-                                    </p>
-                                )}
-                            </div>
-                        </div>
-                    ))}
-                 </div>
-                 <p className="text-center text-xs text-gray-400">Mohon tunggu, jangan tutup halaman ini.</p>
-              </div>
-            ) : (
 
   const filteredRecipients = recipients.filter(r => 
     r.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -463,43 +538,16 @@ const BroadcastPage: React.FC<BroadcastPageProps> = ({ user }) => {
                  </button>
              </div>
            ) : sendingStatus === 'sending' ? (
-              <div className="space-y-3 flex-1 flex flex-col min-h-0">
-                 <div className="flex justify-between text-sm font-medium text-gray-600">
-                    <span>Mengirim... ({progress.current}/{progress.total})</span>
-                    <span>{Math.round((progress.current / progress.total) * 100)}%</span>
-                 </div>
-                 <div className="w-full bg-gray-200 rounded-full h-2.5 shrink-0">
-                    <div className="bg-blue-600 h-2.5 rounded-full transition-all duration-300" style={{ width: `${(progress.current / progress.total) * 100}%` }}></div>
-                 </div>
-                 
-                 {/* Live Log List */}
-                 <div className="flex-1 overflow-y-auto border border-gray-200 rounded-lg bg-gray-50 p-2 space-y-2 min-h-[200px]">
-                    {sendingLogs.map((log, idx) => (
-                        <div key={idx} className="flex items-center gap-3 p-2 bg-white rounded border border-gray-100 text-sm">
-                            <div className="w-5 h-5 flex items-center justify-center shrink-0">
-                                {log.status === 'pending' && <div className="w-2 h-2 bg-gray-300 rounded-full" />}
-                                {log.status === 'processing' && <Loader2 size={16} className="animate-spin text-blue-600" />}
-                                {log.status === 'success' && <CheckCircle size={16} className="text-green-600" />}
-                                {log.status === 'failed' && <XCircle size={16} className="text-red-600" />}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                                <div className="flex justify-between">
-                                    <span className={`font-medium truncate ${log.status === 'processing' ? 'text-blue-700' : 'text-gray-700'}`}>
-                                        {log.name}
-                                    </span>
-                                    <span className="text-xs text-gray-400 ml-2">{log.contact}</span>
-                                </div>
-                                {log.message && (
-                                    <p className={`text-xs truncate ${log.status === 'failed' ? 'text-red-500' : 'text-green-600'}`}>
-                                        {log.message}
-                                    </p>
-                                )}
-                            </div>
-                        </div>
-                    ))}
-                 </div>
-                 <p className="text-center text-xs text-gray-400">Mohon tunggu, jangan tutup halaman ini.</p>
-              </div>
+             <div className="space-y-2">
+                <div className="flex justify-between text-sm font-medium text-gray-600">
+                   <span>Mengirim...</span>
+                   <span>{Math.round((progress.current / progress.total) * 100)}%</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2.5">
+                   <div className="bg-blue-600 h-2.5 rounded-full transition-all duration-300" style={{ width: `${(progress.current / progress.total) * 100}%` }}></div>
+                </div>
+                <p className="text-center text-xs text-gray-400">Mohon tunggu, jangan tutup halaman ini.</p>
+             </div>
            ) : (
              <div className="text-center p-4 bg-green-50 rounded-xl border border-green-100 animate-in fade-in zoom-in">
                 <CheckCircle size={32} className="mx-auto text-green-600 mb-2" />
