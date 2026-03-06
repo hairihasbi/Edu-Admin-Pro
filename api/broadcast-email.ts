@@ -6,7 +6,7 @@ import { EmailBroadcastSchema } from './_schemas.js';
 // --- HELPER FUNCTIONS (Isolated Scope) ---
 
 // Helper for MailerSend API
-async function sendMailerSend(config: any, to: string, subject: string, html: string) {
+export async function sendMailerSend(config: any, to: string, subject: string, html: string) {
   const response = await fetch('https://api.mailersend.com/v1/email', {
     method: 'POST',
     headers: {
@@ -36,7 +36,7 @@ async function sendMailerSend(config: any, to: string, subject: string, html: st
 }
 
 // Helper for Brevo API (SMTP API)
-async function sendBrevo(config: any, to: string, subject: string, html: string) {
+export async function sendBrevo(config: any, to: string, subject: string, html: string) {
   const response = await fetch('https://api.brevo.com/v3/smtp/email', {
     method: 'POST',
     headers: {
@@ -59,7 +59,7 @@ async function sendBrevo(config: any, to: string, subject: string, html: string)
 }
 
 // Helper for SMTP (Nodemailer)
-async function sendSMTP(config: any, to: string, subject: string, html: string) {
+export async function sendSMTP(config: any, to: string, subject: string, html: string) {
   const transporter = nodemailer.createTransport({
     host: config.smtpHost,
     port: config.smtpPort,

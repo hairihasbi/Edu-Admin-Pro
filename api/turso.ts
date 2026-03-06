@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from "@libsql/client/web";
 import { authorize } from './_utils/auth.js';
 import bcrypt from 'bcryptjs';
+import { sendSMTP, sendMailerSend, sendBrevo } from './broadcast-email.js';
 
 // --- CONFIGURATION ---
 const GENERIC_TABLE = "sync_store";
@@ -680,7 +681,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     let currentUser;
-    if (action !== 'init' && action !== 'check') {
+    // Allow public access for password reset flow
+    const publicActions = ['init', 'check', 'request_password_reset', 'verify_reset_token', 'complete_password_reset'];
+    
+    if (!publicActions.includes(action)) {
         try {
             currentUser = await authorize(req, ['ADMIN', 'GURU']);
         } catch (err: any) {
@@ -719,6 +723,168 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             return res.status(200).json({ success: true, message: "Connection OK" });
         } catch (e: any) {
             return res.status(500).json({ error: "Connection Failed", details: e.message });
+        }
+    }
+
+    // --- PASSWORD RESET ACTIONS ---
+    if (action === 'request_password_reset') {
+        const { email, origin } = body; // Expect origin from client
+        if (!email) return res.status(400).json({ error: 'Email is required' });
+
+        try {
+            // 1. Find User (Case Insensitive)
+            const userResult = await client.execute({
+                sql: "SELECT id, email, full_name FROM users WHERE lower(email) = lower(?) AND deleted = 0",
+                args: [email]
+            });
+
+            if (userResult.rows.length === 0) {
+                // Return generic success to prevent enumeration, or specific error if desired.
+                // For this app, specific error is better for UX.
+                return res.status(404).json({ error: 'Email tidak ditemukan.' });
+            }
+
+            const user = userResult.rows[0];
+
+            // 2. Get Email Config
+            const configResult = await client.execute("SELECT * FROM email_config WHERE is_active = 1 AND deleted = 0 LIMIT 1");
+            if (configResult.rows.length === 0) {
+                return res.status(500).json({ error: 'Sistem email belum dikonfigurasi oleh Admin.' });
+            }
+            
+            // Map config row to object (snake_case to camelCase for helpers)
+            const row = configResult.rows[0];
+            const config = {
+                provider: row.provider,
+                method: row.method,
+                apiKey: row.api_key,
+                smtpHost: row.smtp_host,
+                smtpPort: row.smtp_port,
+                smtpUser: row.smtp_user,
+                smtpPass: row.smtp_pass,
+                fromEmail: row.from_email,
+                fromName: row.from_name
+            };
+
+            const token = crypto.randomUUID();
+            const expiry = Date.now() + 3600000; // 1 hour
+
+            // 3. Insert Token
+            await client.execute({
+                sql: "INSERT INTO password_resets (id, user_id, token, expiry, used, last_modified, version, deleted) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                args: [crypto.randomUUID(), user.id, token, expiry, 0, Date.now(), 1, 0]
+            });
+
+            // 4. Send Email
+            const baseUrl = origin || 'https://eduadmin-pro.vercel.app'; // Fallback
+            const resetLink = `${baseUrl}/#/reset-password?token=${token}`;
+            const expiryTime = new Date(expiry).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
+
+            const subject = `Permintaan Reset Password - EduAdmin Pro`;
+            const html = `
+              <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                  <h2>Reset Password</h2>
+                  <p>Halo ${user.full_name},</p>
+                  <p>Kami menerima permintaan untuk mereset password akun Anda.</p>
+                  <p>Silakan klik tombol di bawah ini untuk membuat password baru:</p>
+                  <div style="text-align: center; margin: 30px 0;">
+                    <a href="${resetLink}" style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">Reset Password</a>
+                  </div>
+                  <p>Link ini akan kedaluwarsa pada: ${expiryTime}</p>
+                  <p style="font-size: 12px; color: #666;">Jika Anda tidak meminta reset password, abaikan email ini.</p>
+                  <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
+                  <p style="font-size: 12px; color: #888;">
+                      Email ini dikirim melalui sistem EduAdmin Pro.<br/>
+                      ${config.fromName}
+                  </p>
+              </div>
+            `;
+
+            if (config.method === 'API') {
+                if (config.provider === 'MAILERSEND') {
+                    await sendMailerSend(config, user.email as string, subject, html);
+                } else if (config.provider === 'BREVO') {
+                    await sendBrevo(config, user.email as string, subject, html);
+                }
+            } else {
+                await sendSMTP(config, user.email as string, subject, html);
+            }
+
+            return res.status(200).json({ success: true, message: 'Email reset password telah dikirim.' });
+
+        } catch (e: any) {
+            console.error("Reset Request Error:", e);
+            return res.status(500).json({ error: "Gagal memproses permintaan reset password: " + e.message });
+        }
+    }
+
+    if (action === 'verify_reset_token') {
+        const { token } = body;
+        if (!token) return res.status(400).json({ error: 'Token is required' });
+
+        try {
+            const result = await client.execute({
+                sql: "SELECT * FROM password_resets WHERE token = ? AND deleted = 0",
+                args: [token]
+            });
+
+            if (result.rows.length === 0) {
+                return res.status(404).json({ valid: false, message: 'Token tidak ditemukan.' });
+            }
+
+            const resetItem = result.rows[0];
+            
+            if (resetItem.used) {
+                return res.status(400).json({ valid: false, message: 'Token sudah digunakan.' });
+            }
+
+            if (Number(resetItem.expiry) < Date.now()) {
+                return res.status(400).json({ valid: false, message: 'Token sudah kadaluarsa.' });
+            }
+
+            return res.status(200).json({ valid: true });
+
+        } catch (e: any) {
+            return res.status(500).json({ error: "Gagal memverifikasi token." });
+        }
+    }
+
+    if (action === 'complete_password_reset') {
+        const { token, newPassword } = body;
+        if (!token || !newPassword) return res.status(400).json({ error: 'Token and new password are required' });
+
+        try {
+            // 1. Verify Token again
+            const tokenResult = await client.execute({
+                sql: "SELECT * FROM password_resets WHERE token = ? AND deleted = 0",
+                args: [token]
+            });
+
+            if (tokenResult.rows.length === 0) return res.status(404).json({ error: 'Token tidak ditemukan.' });
+            const resetItem = tokenResult.rows[0];
+            if (resetItem.used) return res.status(400).json({ error: 'Token sudah digunakan.' });
+            if (Number(resetItem.expiry) < Date.now()) return res.status(400).json({ error: 'Token sudah kadaluarsa.' });
+
+            // 2. Hash Password
+            const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+            // 3. Update User Password
+            await client.execute({
+                sql: "UPDATE users SET password = ?, last_modified = ?, version = version + 1 WHERE id = ?",
+                args: [hashedPassword, Date.now(), resetItem.user_id]
+            });
+
+            // 4. Mark Token Used
+            await client.execute({
+                sql: "UPDATE password_resets SET used = 1, last_modified = ?, version = version + 1 WHERE id = ?",
+                args: [Date.now(), resetItem.id]
+            });
+
+            return res.status(200).json({ success: true, message: 'Password berhasil diubah.' });
+
+        } catch (e: any) {
+            console.error("Complete Reset Error:", e);
+            return res.status(500).json({ error: "Gagal mengubah password." });
         }
     }
 
