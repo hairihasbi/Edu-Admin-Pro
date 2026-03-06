@@ -776,7 +776,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             });
 
             // 4. Send Email
-            const baseUrl = origin || 'https://eduadmin-pro.vercel.app'; // Fallback
+            // Use origin if provided, otherwise try to infer from referer, or fallback to a safe default
+            let baseUrl = origin;
+            if (!baseUrl) {
+                const referer = req.headers.referer;
+                if (referer) {
+                    try {
+                        const url = new URL(referer);
+                        baseUrl = url.origin;
+                    } catch (e) {
+                        // ignore invalid referer
+                    }
+                }
+            }
+            if (!baseUrl) {
+                 baseUrl = 'https://eduadmin-pro.vercel.app'; // Ultimate fallback
+            }
+
             const resetLink = `${baseUrl}/#/reset-password?token=${token}`;
             const expiryTime = new Date(expiry).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
 
