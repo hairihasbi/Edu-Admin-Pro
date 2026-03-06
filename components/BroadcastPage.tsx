@@ -3,176 +3,139 @@ import React, { useState, useEffect } from 'react';
 import { User, UserRole, ClassRoom } from '../types';
 import { 
   getWhatsAppConfig, sendWhatsAppBroadcast, 
-  getClasses, getStudents, getAllStudentsWithDetails, getTeachers, 
+  getAllClasses, getStudents, getTeachers, 
   getEmailConfig, sendEmailBroadcast 
 } from '../services/database';
 import { 
   Smartphone, Send, Users, Search, 
-  CheckCircle, Check, UserPlus, Trash2, Mail, FileText, WifiOff, AlertCircle 
+  CheckCircle, Check, UserPlus, Trash2, Mail, FileText, WifiOff, AlertCircle, Loader2, XCircle 
 } from './Icons';
 
 interface BroadcastPageProps {
   user: User;
 }
 
-type TargetType = 'TEACHERS' | 'STUDENTS_CLASS' | 'ALL_STUDENTS' | 'MANUAL';
-type ChannelType = 'WHATSAPP' | 'EMAIL';
-
 interface Recipient {
   id: string;
   name: string;
-  phone: string;
-  email: string; // NEW
-  label: string; 
+  phone?: string;
+  email?: string;
+  label: string;
   selected: boolean;
 }
 
+interface LogItem {
+  name: string;
+  contact: string;
+  status: 'pending' | 'processing' | 'success' | 'failed';
+  message?: string;
+}
+
 const BroadcastPage: React.FC<BroadcastPageProps> = ({ user }) => {
-  // --- STATE ---
-  const [channel, setChannel] = useState<ChannelType>('WHATSAPP');
-  const [waConfigReady, setWaConfigReady] = useState(false);
-  const [emailConfigReady, setEmailConfigReady] = useState(false);
-  
-  // Data State
-  const [classes, setClasses] = useState<ClassRoom[]>([]);
   const [recipients, setRecipients] = useState<Recipient[]>([]);
-  
-  // UI State
-  const [targetType, setTargetType] = useState<TargetType>(user.role === UserRole.ADMIN ? 'TEACHERS' : 'STUDENTS_CLASS');
+  const [channel, setChannel] = useState<'WHATSAPP' | 'EMAIL'>('WHATSAPP');
+  const [targetType, setTargetType] = useState<'TEACHERS' | 'STUDENTS_CLASS' | 'MANUAL'>('TEACHERS');
+  const [manualName, setManualName] = useState('');
+  const [manualContact, setManualContact] = useState('');
   const [selectedClassId, setSelectedClassId] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [isLoadingData, setIsLoadingData] = useState(false);
-
-  // Manual Input State
-  const [manualName, setManualName] = useState('');
-  const [manualContact, setManualContact] = useState(''); // Shared for phone/email
-  
-  // Composer State
-  const [emailSubject, setEmailSubject] = useState(''); // NEW
-  const [message, setMessage] = useState('Halo {{name}},\n\nBerikut informasi dari sekolah:\n...');
+  const [emailSubject, setEmailSubject] = useState('');
+  const [message, setMessage] = useState('');
   const [sendingStatus, setSendingStatus] = useState<'idle' | 'sending' | 'completed' | 'error'>('idle');
   const [progress, setProgress] = useState({ current: 0, total: 0, success: 0, failed: 0 });
   const [resultErrors, setResultErrors] = useState<string[]>([]);
+  const [waConfigReady, setWaConfigReady] = useState(false);
+  const [emailConfigReady, setEmailConfigReady] = useState(false);
+  const [isLoadingData, setIsLoadingData] = useState(false);
+  const [classes, setClasses] = useState<ClassRoom[]>([]);
+  const [sendingLogs, setSendingLogs] = useState<LogItem[]>([]);
 
-  // --- INIT ---
+  // Check Configs & Load Classes
   useEffect(() => {
-    checkConfigs();
-    fetchClasses();
-  }, [user]);
-
-  // Load recipients when filters change
-  useEffect(() => {
-    if (targetType === 'MANUAL') {
-        if (recipients.length > 0 && recipients[0].label !== 'Manual') {
-            setRecipients([]);
-        }
-    } else {
-        fetchRecipients();
-    }
-  }, [targetType, selectedClassId]);
-
-  const checkConfigs = async () => {
-    const wa = await getWhatsAppConfig(user.id);
-    if (wa && wa.isActive && wa.apiKey) setWaConfigReady(true);
-
-    // Only check email config for Admin
-    if (user.role === UserRole.ADMIN) {
+    const init = async () => {
+        const wa = await getWhatsAppConfig(user.id);
+        setWaConfigReady(!!wa && wa.isActive);
+        
         const em = await getEmailConfig();
-        if (em && em.isActive) setEmailConfigReady(true);
-    }
-  };
+        setEmailConfigReady(!!em && em.isActive);
 
-  const fetchClasses = async () => {
-    if (user.role === UserRole.ADMIN) {
-        const { getAllClasses } = await import('../services/database'); 
-        const all = await getAllClasses();
-        setClasses(all);
-        if (all.length > 0) setSelectedClassId(all[0].id);
-    } else {
-        const cls = await getClasses(user.id);
+        const cls = await getAllClasses();
         setClasses(cls);
         if (cls.length > 0) setSelectedClassId(cls[0].id);
-    }
-  };
+    };
+    init();
+  }, [user.id]);
 
-  const fetchRecipients = async () => {
-    setIsLoadingData(true);
-    let rawData: Recipient[] = [];
-
-    try {
-      if (targetType === 'TEACHERS' && user.role === UserRole.ADMIN) {
-        const teachers = await getTeachers();
-        rawData = teachers.map(t => ({
-          id: t.id,
-          name: t.fullName,
-          phone: t.phone || '',
-          email: t.email || '',
-          label: 'Guru',
-          selected: true
-        }));
-      } else if (targetType === 'ALL_STUDENTS' && user.role === UserRole.ADMIN) {
-        const students = await getAllStudentsWithDetails();
-        rawData = students.map(s => ({
-          id: s.id,
-          name: s.name,
-          phone: s.phone || '',
-          email: '', 
-          label: s.className,
-          selected: true
-        }));
-      } else if (targetType === 'STUDENTS_CLASS') {
-        if (selectedClassId) {
-          const students = await getStudents(selectedClassId);
-          const clsName = classes.find(c => c.id === selectedClassId)?.name || 'Kelas';
-          rawData = students.map(s => ({
-            id: s.id,
-            name: s.name,
-            phone: s.phone || '',
-            email: '', 
-            label: clsName,
-            selected: true
-          }));
+  // Load Recipients
+  useEffect(() => {
+    const loadRecipients = async () => {
+        if (targetType === 'MANUAL') return;
+        setIsLoadingData(true);
+        try {
+            let data: Recipient[] = [];
+            if (targetType === 'TEACHERS') {
+                const teachers = await getTeachers();
+                data = teachers.map(t => ({
+                    id: t.id,
+                    name: t.fullName,
+                    phone: t.phone,
+                    email: t.email,
+                    label: 'Guru',
+                    selected: false
+                }));
+            } else if (targetType === 'STUDENTS_CLASS' && selectedClassId) {
+                const students = await getStudents(selectedClassId);
+                const clsName = classes.find(c => c.id === selectedClassId)?.name || 'Kelas';
+                data = students.map(s => ({
+                    id: s.id,
+                    name: s.name,
+                    phone: s.phone,
+                    email: '', 
+                    label: clsName,
+                    selected: false
+                }));
+            }
+            setRecipients(data);
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setIsLoadingData(false);
         }
-      }
-    } catch (e) {
-      console.error("Error fetching recipients", e);
-    }
-
-    setRecipients(rawData);
-    setIsLoadingData(false);
-  };
-
-  // --- HANDLERS ---
-
-  const handleToggleSelect = (id: string) => {
-    setRecipients(prev => prev.map(r => r.id === id ? { ...r, selected: !r.selected } : r));
-  };
-
-  const handleSelectAll = (select: boolean) => {
-    const filteredIds = new Set(filteredRecipients.map(r => r.id));
-    setRecipients(prev => prev.map(r => filteredIds.has(r.id) ? { ...r, selected: select } : r));
-  };
+    };
+    loadRecipients();
+  }, [targetType, selectedClassId, classes]);
 
   const handleAddManualRecipient = (e: React.FormEvent) => {
     e.preventDefault();
     if (!manualName || !manualContact) return;
-
-    const newRecipient: Recipient = {
-      id: `manual-${Date.now()}`,
-      name: manualName,
-      phone: channel === 'WHATSAPP' ? manualContact : '',
-      email: channel === 'EMAIL' ? manualContact : '',
-      label: 'Manual',
-      selected: true
+    const newR: Recipient = {
+        id: `manual-${Date.now()}`,
+        name: manualName,
+        phone: channel === 'WHATSAPP' ? manualContact : undefined,
+        email: channel === 'EMAIL' ? manualContact : undefined,
+        label: 'Manual',
+        selected: true
     };
-
-    setRecipients(prev => [newRecipient, ...prev]);
+    setRecipients(prev => [...prev, newR]);
     setManualName('');
     setManualContact('');
   };
 
   const handleDeleteManual = (id: string) => {
     setRecipients(prev => prev.filter(r => r.id !== id));
+  };
+
+  const handleToggleSelect = (id: string) => {
+    setRecipients(prev => prev.map(r => r.id === id ? { ...r, selected: !r.selected } : r));
+  };
+
+  const handleSelectAll = (shouldSelect: boolean) => {
+    setRecipients(prev => prev.map(r => {
+        if (r.name.toLowerCase().includes(searchTerm.toLowerCase())) {
+            return { ...r, selected: shouldSelect };
+        }
+        return r;
+    }));
   };
 
   const handleSendBroadcast = async () => {
@@ -198,42 +161,74 @@ const BroadcastPage: React.FC<BroadcastPageProps> = ({ user }) => {
     setSendingStatus('sending');
     setProgress({ current: 0, total: selectedTargets.length, success: 0, failed: 0 });
     setResultErrors([]);
+    
+    // Initialize Logs
+    setSendingLogs(selectedTargets.map(t => ({
+        name: t.name,
+        contact: (channel === 'WHATSAPP' ? t.phone : t.email) || '-',
+        status: 'pending'
+    })));
 
     let successCount = 0;
     let failCount = 0;
     const errors: string[] = [];
     
-    // Batch configuration
-    // Email: 50 per batch (API timeout limit ~60s, processing takes ~25s for 50 items)
-    // WhatsApp: 10 per batch (Typical generic rate limit safety)
-    const BATCH_SIZE = channel === 'EMAIL' ? 50 : 10;
+    // Force Batch Size 1 for Animation Effect
+    const BATCH_SIZE = 1;
 
     for (let i = 0; i < selectedTargets.length; i += BATCH_SIZE) {
         const batch = selectedTargets.slice(i, i + BATCH_SIZE);
+        
+        // Mark current as processing
+        setSendingLogs(prev => prev.map((log, idx) => {
+            if (idx >= i && idx < i + BATCH_SIZE) return { ...log, status: 'processing' };
+            return log;
+        }));
         
         try {
             let res;
             if (channel === 'WHATSAPP') {
                 const config = await getWhatsAppConfig(user.id);
                 if (!config) throw new Error("Config WA hilang");
-                res = await sendWhatsAppBroadcast(config, batch, message);
+                const waBatch = batch.map(b => ({ name: b.name, phone: b.phone || '' }));
+                res = await sendWhatsAppBroadcast(config, waBatch, message);
             } else {
                 const config = await getEmailConfig();
                 if (!config) throw new Error("Config Email hilang");
-                res = await sendEmailBroadcast(config, batch, emailSubject, message);
+                const emailBatch = batch.map(b => ({ name: b.name, email: b.email || '' }));
+                res = await sendEmailBroadcast(config, emailBatch, emailSubject, message);
             }
 
             successCount += res.success;
             failCount += res.failed;
             if (res.errors) errors.push(...res.errors);
 
+            // Update Log Status
+            setSendingLogs(prev => prev.map((log, idx) => {
+                if (idx >= i && idx < i + BATCH_SIZE) {
+                    const isSuccess = res.success > 0;
+                    return { 
+                        ...log, 
+                        status: isSuccess ? 'success' : 'failed',
+                        message: isSuccess ? 'Terkirim' : (res.errors && res.errors[0] ? res.errors[0] : 'Gagal')
+                    };
+                }
+                return log;
+            }));
+
         } catch (e: any) {
             failCount += batch.length;
             let errMsg = e.message;
             if (errMsg.includes('trial account unique recipients limit')) {
-                errMsg = "Limit Akun Trial MailerSend Tercapai (Max Recipient).";
+                errMsg = "Limit Akun Trial MailerSend Tercapai.";
             }
             errors.push(`Batch Error: ${errMsg}`);
+
+            // Mark Log as Failed
+            setSendingLogs(prev => prev.map((log, idx) => {
+                if (idx >= i && idx < i + BATCH_SIZE) return { ...log, status: 'failed', message: errMsg };
+                return log;
+            }));
         }
 
         setProgress(prev => ({
@@ -243,9 +238,9 @@ const BroadcastPage: React.FC<BroadcastPageProps> = ({ user }) => {
             failed: failCount
         }));
 
-        // Delay between batches to prevent rate limiting
+        // Delay for animation effect & rate limiting
         if (i + BATCH_SIZE < selectedTargets.length) {
-            await new Promise(r => setTimeout(r, 2000));
+            await new Promise(r => setTimeout(r, 1000)); // 1s delay for visual effect
         }
     }
 
@@ -259,7 +254,6 @@ const BroadcastPage: React.FC<BroadcastPageProps> = ({ user }) => {
 
   const selectedCount = filteredRecipients.filter(r => r.selected).length;
   
-  // Dynamic validation count based on channel
   const validCount = filteredRecipients.filter(r => 
       r.selected && (channel === 'WHATSAPP' ? (r.phone && r.phone.length > 5) : (r.email && r.email.includes('@')))
   ).length;
@@ -538,16 +532,43 @@ const BroadcastPage: React.FC<BroadcastPageProps> = ({ user }) => {
                  </button>
              </div>
            ) : sendingStatus === 'sending' ? (
-             <div className="space-y-2">
-                <div className="flex justify-between text-sm font-medium text-gray-600">
-                   <span>Mengirim...</span>
-                   <span>{Math.round((progress.current / progress.total) * 100)}%</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2.5">
-                   <div className="bg-blue-600 h-2.5 rounded-full transition-all duration-300" style={{ width: `${(progress.current / progress.total) * 100}%` }}></div>
-                </div>
-                <p className="text-center text-xs text-gray-400">Mohon tunggu, jangan tutup halaman ini.</p>
-             </div>
+              <div className="space-y-3 flex-1 flex flex-col min-h-0">
+                 <div className="flex justify-between text-sm font-medium text-gray-600">
+                    <span>Mengirim... ({progress.current}/{progress.total})</span>
+                    <span>{Math.round((progress.current / progress.total) * 100)}%</span>
+                 </div>
+                 <div className="w-full bg-gray-200 rounded-full h-2.5 shrink-0">
+                    <div className="bg-blue-600 h-2.5 rounded-full transition-all duration-300" style={{ width: `${(progress.current / progress.total) * 100}%` }}></div>
+                 </div>
+                 
+                 {/* Live Log List */}
+                 <div className="flex-1 overflow-y-auto border border-gray-200 rounded-lg bg-gray-50 p-2 space-y-2 min-h-[200px]">
+                    {sendingLogs.map((log, idx) => (
+                        <div key={idx} className="flex items-center gap-3 p-2 bg-white rounded border border-gray-100 text-sm">
+                            <div className="w-5 h-5 flex items-center justify-center shrink-0">
+                                {log.status === 'pending' && <div className="w-2 h-2 bg-gray-300 rounded-full" />}
+                                {log.status === 'processing' && <Loader2 size={16} className="animate-spin text-blue-600" />}
+                                {log.status === 'success' && <CheckCircle size={16} className="text-green-600" />}
+                                {log.status === 'failed' && <XCircle size={16} className="text-red-600" />}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <div className="flex justify-between">
+                                    <span className={`font-medium truncate ${log.status === 'processing' ? 'text-blue-700' : 'text-gray-700'}`}>
+                                        {log.name}
+                                    </span>
+                                    <span className="text-xs text-gray-400 ml-2">{log.contact}</span>
+                                </div>
+                                {log.message && (
+                                    <p className={`text-xs truncate ${log.status === 'failed' ? 'text-red-500' : 'text-green-600'}`}>
+                                        {log.message}
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                 </div>
+                 <p className="text-center text-xs text-gray-400">Mohon tunggu, jangan tutup halaman ini.</p>
+              </div>
            ) : (
              <div className="text-center p-4 bg-green-50 rounded-xl border border-green-100 animate-in fade-in zoom-in">
                 <CheckCircle size={32} className="mx-auto text-green-600 mb-2" />
