@@ -92,59 +92,88 @@ export const updateUserPassword = async (id: string, newPass: string) => {
 };
 
 export const requestPasswordReset = async (email: string) => {
-    if (!db.passwordResets) {
-        console.error("Database schema mismatch: passwordResets table missing.");
-        return { success: false, message: 'Terjadi kesalahan database. Silakan refresh halaman.' };
-    }
-
-    const user = await db.users.where('email').equals(email).first();
-    if (!user) return { success: false, message: 'Email tidak ditemukan.' };
-
-    const token = uuidv4();
-    const expiry = Date.now() + 3600000; // 1 hour
-
-    const resetItem: PasswordReset = {
-        id: uuidv4(),
-        userId: user.id,
-        token: token,
-        expiry: new Date(expiry).toISOString(),
-        used: false,
-        lastModified: Date.now(),
-        isSynced: false
-    };
-    
-    await db.passwordResets.add(resetItem);
-    triggerDebouncedSync();
-
-    // Send Email
-    const emailConfig = await getEmailConfig();
-    if (emailConfig && emailConfig.isActive) {
-        try {
-            const resetLink = `${window.location.origin}/reset-password?token=${token}`;
-            await fetch('/api/broadcast-email', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    type: 'RESET_PASSWORD',
-                    config: emailConfig,
-                    recipients: [{ email: user.email, name: user.fullName }],
-                    subject: 'Reset Password',
-                    content: '...',
-                    resetData: {
-                        resetLink,
-                        expiryTime: new Date(expiry).toLocaleString('id-ID')
-                    }
-                })
-            });
-        } catch (e) {
-            console.error("Failed to send reset email", e);
-            return { success: false, message: 'Gagal mengirim email.' };
+    try {
+        if (!db.passwordResets) {
+            console.error("Database schema mismatch: passwordResets table missing.");
+            return { success: false, message: 'Terjadi kesalahan database. Silakan refresh halaman.' };
         }
-    } else {
-        return { success: false, message: 'Sistem email belum dikonfigurasi.' };
-    }
 
-    return { success: true, message: 'Link reset password telah dikirim ke email Anda.' };
+        // 1. Cari User Lokal (Case Insensitive)
+        let user = await db.users.filter(u => !!u.email && u.email.toLowerCase() === email.toLowerCase()).first();
+
+        // 2. Jika tidak ketemu, coba Sync dari Server (Self-Healing)
+        if (!user && navigator.onLine) {
+            console.log("[ResetPassword] User not found locally, attempting to pull from server...");
+            try {
+                const localUsers = await db.users.toArray();
+                const pullResult = await pullFromTurso('eduadmin_users', localUsers);
+                
+                if (pullResult.hasChanges) {
+                    await db.transaction('rw', db.users, async () => {
+                        const uniqueMap = new Map();
+                        pullResult.items.forEach((item: any) => { if(item.id) uniqueMap.set(String(item.id), item); });
+                        await db.users.bulkPut(Array.from(uniqueMap.values()));
+                    });
+                    // Cari lagi setelah sync
+                    user = await db.users.filter(u => !!u.email && u.email.toLowerCase() === email.toLowerCase()).first();
+                }
+            } catch (syncErr) {
+                console.warn("Failed to auto-sync users during password reset:", syncErr);
+            }
+        }
+
+        if (!user) return { success: false, message: 'Email tidak ditemukan.' };
+
+        const token = uuidv4();
+        const expiry = Date.now() + 3600000; // 1 hour
+
+        const resetItem: PasswordReset = {
+            id: uuidv4(),
+            userId: user.id,
+            token: token,
+            expiry: new Date(expiry).toISOString(),
+            used: false,
+            lastModified: Date.now(),
+            isSynced: false
+        };
+        
+        await db.passwordResets.add(resetItem);
+        triggerDebouncedSync();
+
+        // Send Email
+        const emailConfig = await getEmailConfig();
+        if (emailConfig && emailConfig.isActive) {
+            try {
+                const resetLink = `${window.location.origin}/#/reset-password?token=${token}`; // Add hash for HashRouter
+                await fetch('/api/broadcast-email', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: 'RESET_PASSWORD',
+                        config: emailConfig,
+                        recipients: [{ email: user.email, name: user.fullName }],
+                        subject: 'Reset Password',
+                        content: '...',
+                        resetData: {
+                            resetLink,
+                            expiryTime: new Date(expiry).toLocaleString('id-ID')
+                        }
+                    })
+                });
+            } catch (e) {
+                console.error("Failed to send reset email", e);
+                return { success: false, message: 'Gagal mengirim email.' };
+            }
+        } else {
+            return { success: false, message: 'Sistem email belum dikonfigurasi.' };
+        }
+
+        return { success: true, message: 'Link reset password telah dikirim ke email Anda.' };
+
+    } catch (error) {
+        console.error("System Error in requestPasswordReset:", error);
+        return { success: false, message: `Terjadi kesalahan sistem: ${error instanceof Error ? error.message : String(error)}` };
+    }
 };
 
 export const verifyResetToken = async (token: string) => {
@@ -153,8 +182,29 @@ export const verifyResetToken = async (token: string) => {
         return { valid: false, message: 'Terjadi kesalahan database. Silakan refresh halaman.' };
     }
 
-    // Find token in passwordResets
-    const resetItem = await db.passwordResets.where('token').equals(token).first();
+    // 1. Cari Token Lokal
+    let resetItem = await db.passwordResets.where('token').equals(token).first();
+
+    // 2. Jika tidak ketemu, coba Sync dari Server (Penting untuk cross-device)
+    if (!resetItem && navigator.onLine) {
+        console.log("[ResetPassword] Token not found locally, attempting to pull from server...");
+        try {
+            const localResets = await db.passwordResets.toArray();
+            const pullResult = await pullFromTurso('eduadmin_password_resets', localResets);
+            
+            if (pullResult.hasChanges) {
+                await db.transaction('rw', db.passwordResets, async () => {
+                    const uniqueMap = new Map();
+                    pullResult.items.forEach((item: any) => { if(item.id) uniqueMap.set(String(item.id), item); });
+                    await db.passwordResets.bulkPut(Array.from(uniqueMap.values()));
+                });
+                // Cari lagi setelah sync
+                resetItem = await db.passwordResets.where('token').equals(token).first();
+            }
+        } catch (syncErr) {
+            console.warn("Failed to auto-sync password resets:", syncErr);
+        }
+    }
     
     if (!resetItem || resetItem.used) {
         return { valid: false, message: 'Token tidak valid atau sudah digunakan.' };
