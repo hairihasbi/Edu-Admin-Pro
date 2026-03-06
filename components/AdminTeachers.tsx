@@ -71,6 +71,9 @@ const AdminTeachers: React.FC = () => {
             
             // Construct Final Message
             let message = "Guru berhasil disetujui dan aktif.";
+            if (teacher.email) {
+                message += "\n\nNotifikasi email sedang dikirim ke " + teacher.email;
+            }
             
             alert(message);
         } else {
