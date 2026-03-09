@@ -3,6 +3,7 @@ import { User } from '../types';
 import { getDailyPicket, saveDailyPicket, deleteDailyPicket, getPicketOfficers, getSchoolAttendanceSummary, getStudentIncidents, getAttendanceSummaryByRange, getIncidentsByDateRange } from '../services/database';
 import PicketAttendanceTable from './PicketAttendanceTable';
 import PicketIncidentForm from './PicketIncidentForm';
+import PermitExitLetter from './PermitExitLetter';
 import { Calendar, User as UserIcon, Save, RefreshCw, Printer, FileText, Trash2 } from 'lucide-react';
 
 interface DailyPicketProps {
@@ -11,7 +12,7 @@ interface DailyPicketProps {
 
 const DailyPicket: React.FC<DailyPicketProps> = ({ currentUser }) => {
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-    const [activeTab, setActiveTab] = useState<'ATTENDANCE' | 'INCIDENTS'>('ATTENDANCE');
+    const [activeTab, setActiveTab] = useState<'ATTENDANCE' | 'INCIDENTS' | 'PERMIT_EXIT_LETTER'>('ATTENDANCE');
     const [officers, setOfficers] = useState<string[]>([]);
     const [notes, setNotes] = useState('');
     const [teachers, setTeachers] = useState<User[]>([]);
@@ -191,7 +192,7 @@ const DailyPicket: React.FC<DailyPicketProps> = ({ currentUser }) => {
                 date: (inc as any).date ? new Date((inc as any).date).toLocaleDateString('id-ID') : new Date(date).toLocaleDateString('id-ID'),
                 name: inc.studentName,
                 class: inc.className,
-                time: inc.time,
+                time: inc.returnTime ? `${inc.time} - ${inc.returnTime}` : inc.time,
                 type: inc.type === 'LATE' ? 'Terlambat' : inc.type === 'PERMIT_EXIT' ? 'Izin Keluar' : 'Pulang Cepat',
                 reason: inc.reason || '-'
             }));
@@ -359,7 +360,7 @@ const DailyPicket: React.FC<DailyPicketProps> = ({ currentUser }) => {
 
             {/* Tabs Navigation */}
             <div className="border-b border-gray-200">
-                <nav className="-mb-px flex space-x-8" aria-label="Tabs">
+                <nav className="-mb-px flex space-x-8 overflow-x-auto" aria-label="Tabs">
                     <button
                         onClick={() => setActiveTab('ATTENDANCE')}
                         className={`${
@@ -380,6 +381,16 @@ const DailyPicket: React.FC<DailyPicketProps> = ({ currentUser }) => {
                     >
                         Kejadian Siswa (Terlambat/Pulang)
                     </button>
+                    <button
+                        onClick={() => setActiveTab('PERMIT_EXIT_LETTER')}
+                        className={`${
+                            activeTab === 'PERMIT_EXIT_LETTER'
+                            ? 'border-blue-500 text-blue-600'
+                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2`}
+                    >
+                        Surat Izin Keluar
+                    </button>
                 </nav>
             </div>
 
@@ -387,13 +398,22 @@ const DailyPicket: React.FC<DailyPicketProps> = ({ currentUser }) => {
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 min-h-[400px]">
                 {activeTab === 'ATTENDANCE' ? (
                     <PicketAttendanceTable date={date} schoolNpsn={currentUser.schoolNpsn || ''} />
-                ) : (
+                ) : activeTab === 'INCIDENTS' ? (
                     picketId ? (
                         <PicketIncidentForm picketId={picketId} schoolNpsn={currentUser.schoolNpsn || ''} />
                     ) : (
                         <div className="text-center py-12 text-gray-500 bg-gray-50 rounded-lg border border-dashed border-gray-300">
                             <p className="mb-2">Data Piket Belum Disimpan.</p>
                             <p className="text-sm">Silakan simpan data petugas piket terlebih dahulu di bagian atas untuk mulai mencatat kejadian siswa.</p>
+                        </div>
+                    )
+                ) : (
+                    picketId ? (
+                        <PermitExitLetter picketId={picketId} currentUser={currentUser} date={date} />
+                    ) : (
+                        <div className="text-center py-12 text-gray-500 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+                            <p className="mb-2">Data Piket Belum Disimpan.</p>
+                            <p className="text-sm">Silakan simpan data petugas piket terlebih dahulu di bagian atas untuk melihat surat izin keluar.</p>
                         </div>
                     )
                 )}

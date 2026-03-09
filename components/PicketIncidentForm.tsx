@@ -19,6 +19,7 @@ const PicketIncidentForm: React.FC<PicketIncidentFormProps> = ({ picketId, schoo
     const [className, setClassName] = useState('');
     const [selectedClassId, setSelectedClassId] = useState('');
     const [time, setTime] = useState('');
+    const [returnTime, setReturnTime] = useState('');
     const [type, setType] = useState<'LATE' | 'PERMIT_EXIT' | 'EARLY_HOME'>('LATE');
     const [reason, setReason] = useState('');
 
@@ -64,6 +65,7 @@ const PicketIncidentForm: React.FC<PicketIncidentFormProps> = ({ picketId, schoo
             studentName,
             className,
             time,
+            returnTime: type === 'PERMIT_EXIT' ? returnTime : undefined,
             type,
             reason
         });
@@ -73,6 +75,7 @@ const PicketIncidentForm: React.FC<PicketIncidentFormProps> = ({ picketId, schoo
         // Reset Form
         setStudentName('');
         setReason('');
+        setReturnTime('');
         // Keep class and time for faster entry if needed
     };
 
@@ -147,6 +150,30 @@ const PicketIncidentForm: React.FC<PicketIncidentFormProps> = ({ picketId, schoo
                         </select>
                     </div>
 
+                    {type === 'PERMIT_EXIT' && (
+                        <>
+                            <div className="lg:col-span-1">
+                                <label className="text-xs font-medium text-gray-500 mb-1 block">Jam Kembali</label>
+                                <input 
+                                    type="time" 
+                                    className="w-full px-3 py-2 border rounded-md text-sm"
+                                    value={returnTime}
+                                    onChange={e => setReturnTime(e.target.value)}
+                                />
+                            </div>
+                            <div className="lg:col-span-2">
+                                <label className="text-xs font-medium text-gray-500 mb-1 block">Alasan</label>
+                                <input 
+                                    type="text" 
+                                    placeholder="Alasan izin keluar"
+                                    className="w-full px-3 py-2 border rounded-md text-sm"
+                                    value={reason}
+                                    onChange={e => setReason(e.target.value)}
+                                />
+                            </div>
+                        </>
+                    )}
+
                     <div className="lg:col-span-1">
                         <button 
                             type="submit" 
@@ -167,6 +194,7 @@ const PicketIncidentForm: React.FC<PicketIncidentFormProps> = ({ picketId, schoo
                             <th className="px-4 py-3">Nama Siswa</th>
                             <th className="px-4 py-3">Kelas</th>
                             <th className="px-4 py-3 w-24 text-center">Jam</th>
+                            <th className="px-4 py-3">Keterangan</th>
                             <th className="px-4 py-3 w-32 text-center">Status</th>
                             <th className="px-4 py-3 text-right w-20">Aksi</th>
                         </tr>
@@ -174,7 +202,7 @@ const PicketIncidentForm: React.FC<PicketIncidentFormProps> = ({ picketId, schoo
                     <tbody className="divide-y divide-gray-100">
                         {incidents.length === 0 ? (
                             <tr>
-                                <td colSpan={6} className="px-4 py-8 text-center text-gray-400 italic">
+                                <td colSpan={7} className="px-4 py-8 text-center text-gray-400 italic">
                                     Belum ada data kejadian hari ini.
                                 </td>
                             </tr>
@@ -184,7 +212,10 @@ const PicketIncidentForm: React.FC<PicketIncidentFormProps> = ({ picketId, schoo
                                     <td className="px-4 py-3 text-center text-gray-500">{index + 1}</td>
                                     <td className="px-4 py-3 font-medium text-gray-800">{item.studentName}</td>
                                     <td className="px-4 py-3 text-gray-600">{item.className}</td>
-                                    <td className="px-4 py-3 text-center font-mono text-gray-600 bg-gray-50 rounded mx-2">{item.time}</td>
+                                    <td className="px-4 py-3 text-center font-mono text-gray-600 bg-gray-50 rounded mx-2">
+                                        {item.time} {item.returnTime ? `- ${item.returnTime}` : ''}
+                                    </td>
+                                    <td className="px-4 py-3 text-gray-600 text-xs">{item.reason || '-'}</td>
                                     <td className="px-4 py-3 text-center">
                                         <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${
                                             item.type === 'LATE' ? 'bg-yellow-100 text-yellow-700' :
