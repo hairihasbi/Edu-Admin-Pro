@@ -993,7 +993,7 @@ export const getStudentIncidents = async (picketId: string) => {
     return await db.studentIncidents.where('picketId').equals(picketId).toArray();
 };
 
-export const addStudentIncident = async (picketId: string, data: {studentName: string, className: string, time: string, type: 'LATE' | 'PERMIT_EXIT' | 'EARLY_HOME', reason?: string}) => {
+export const addStudentIncident = async (picketId: string, data: {studentName: string, className: string, time: string, returnTime?: string, type: 'LATE' | 'PERMIT_EXIT' | 'EARLY_HOME', reason?: string}) => {
     const item = {
         id: uuidv4(),
         picketId,
