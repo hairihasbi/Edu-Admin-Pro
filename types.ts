@@ -333,6 +333,7 @@ export interface StudentIncident extends Syncable {
   studentName: string;
   className: string;
   time: string; // HH:mm
+  returnTime?: string; // HH:mm for PERMIT_EXIT
   type: 'LATE' | 'PERMIT_EXIT' | 'EARLY_HOME';
   reason?: string;
 }
