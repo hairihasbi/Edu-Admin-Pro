@@ -1263,39 +1263,74 @@ export const importStudentsFromCSV = async (classId: string, csvText: string) =>
 
 // --- ATTENDANCE ---
 export const saveAttendanceRecords = async (records: Omit<AttendanceRecord, 'id'>[]) => {
-    const items = records.map(r => ({ ...r, id: uuidv4(), lastModified: Date.now(), isSynced: false }));
-    await db.attendanceRecords.bulkAdd(items);
+    if (records.length === 0) return;
+    
+    const classId = records[0].classId;
+    // Fetch existing records for this class to check for duplicates
+    const existingRecords = await db.attendanceRecords.where('classId').equals(classId).toArray();
+    
+    const itemsToPut: AttendanceRecord[] = [];
+    
+    for (const record of records) {
+        // Find if there's already a record for this student on this date
+        const existing = existingRecords.find(r => r.studentId === record.studentId && r.date === record.date);
+        
+        if (existing) {
+            // Update existing record
+            itemsToPut.push({
+                ...existing,
+                ...record,
+                lastModified: Date.now(),
+                isSynced: false
+            });
+        } else {
+            // Add new record
+            itemsToPut.push({
+                ...record,
+                id: uuidv4(),
+                lastModified: Date.now(),
+                isSynced: false
+            } as AttendanceRecord);
+        }
+    }
+    
+    await db.attendanceRecords.bulkPut(itemsToPut);
     triggerDebouncedSync();
 };
 
-export const deleteAttendanceRecords = async (classId: string, month: number, year: number, day?: number) => {
+export const deleteAttendanceRecords = async (classId: string, month: number, year: number, userId: string, day?: number) => {
     const all = await db.attendanceRecords.where('classId').equals(classId).toArray();
     const toDelete = all.filter(r => {
         const d = new Date(r.date);
         const matchMonth = d.getMonth() === month && d.getFullYear() === year;
-        if (day) return matchMonth && d.getDate() === day;
-        return matchMonth;
+        const isOwner = r.userId === userId;
+        if (day) return matchMonth && d.getDate() === day && isOwner;
+        return matchMonth && isOwner;
     });
     const ids = toDelete.map(r => r.id);
     await db.attendanceRecords.bulkDelete(ids);
     pushToTurso('eduadmin_attendance', ids.map(id => ({id, deleted: true})));
 };
 
-export const getAttendanceRecords = async (classId: string, month: number, year: number) => {
+export const getAttendanceRecords = async (classId: string, month: number, year: number, userId: string) => {
     const all = await db.attendanceRecords.where('classId').equals(classId).toArray();
     return all.filter(r => {
         const d = new Date(r.date);
-        return d.getMonth() === month && d.getFullYear() === year;
+        const isOwner = r.userId === userId;
+        const isShared = r.visibility === 'SHARED';
+        return d.getMonth() === month && d.getFullYear() === year && (isOwner || isShared);
     });
 };
 
-export const getAttendanceRecordsByRange = async (classId: string, startDate: string, endDate: string) => {
+export const getAttendanceRecordsByRange = async (classId: string, startDate: string, endDate: string, userId: string) => {
     const all = await db.attendanceRecords.where('classId').equals(classId).toArray();
     const start = new Date(startDate).getTime();
     const end = new Date(endDate).getTime();
     return all.filter(r => {
         const t = new Date(r.date).getTime();
-        return t >= start && t <= end;
+        const isOwner = r.userId === userId;
+        const isShared = r.visibility === 'SHARED';
+        return t >= start && t <= end && (isOwner || isShared);
     });
 };
 
