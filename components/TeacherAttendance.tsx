@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { User, ClassRoom, Student, AttendanceRecord, TeacherCalendarEvent } from '../types';
 import { getClasses, getStudents, saveAttendanceRecords, getAttendanceRecords, deleteAttendanceRecords, getAttendanceRecordsByRange, getCalendarEvents } from '../services/database';
-import { CalendarCheck, FileSpreadsheet, Printer, Save, CheckCircle, Filter, ChevronLeft, ChevronRight, User as UserIcon, X, Check, Activity, AlertCircle, RotateCcw, Trash2, FileText, Layout, Calendar } from './Icons';
+import { CalendarCheck, FileSpreadsheet, Printer, Save, CheckCircle, Filter, ChevronLeft, ChevronRight, User as UserIcon, X, Check, Activity, AlertCircle, RotateCcw, Trash2, FileText, Layout, Calendar, Lock, Eye } from './Icons';
 import * as XLSX from 'xlsx';
 import TeacherCalendarManager from './TeacherCalendarManager';
 
@@ -36,6 +36,7 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
   const [loading, setLoading] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [hasChanges, setHasChanges] = useState(false);
+  const [visibility, setVisibility] = useState<'PRIVATE' | 'SHARED'>('SHARED');
   
   // View Mode: 'input' (Daily/Monthly) or 'recap' (Semester/Yearly)
   const [viewMode, setViewMode] = useState<'input' | 'recap'>('input');
@@ -116,7 +117,7 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
     
     const [studentData, attendanceData, eventsData] = await Promise.all([
       getStudents(classId),
-      getAttendanceRecords(classId, selectedMonth, selectedYear),
+      getAttendanceRecords(classId, selectedMonth, selectedYear, user.id),
       getCalendarEvents(user.id, start.toISOString().split('T')[0], end.toISOString().split('T')[0])
     ]);
     
@@ -161,7 +162,7 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
 
       const [studentData, attRecords] = await Promise.all([
           getStudents(classId),
-          getAttendanceRecordsByRange(classId, startDate, endDate)
+          getAttendanceRecordsByRange(classId, startDate, endDate, user.id)
       ]);
 
       setStudents(studentData);
@@ -309,6 +310,7 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
                   selectedClassId, 
                   selectedMonth, 
                   selectedYear, 
+                  user.id,
                   resetType === 'daily' ? resetDay : undefined
               );
 
@@ -349,8 +351,10 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
           recordsToSave.push({
             studentId,
             classId: selectedClassId,
+            userId: user.id,
             date: localDate,
-            status: status as 'H' | 'S' | 'I' | 'A'
+            status: status as 'H' | 'S' | 'I' | 'A',
+            visibility: visibility
           });
         }
       });
@@ -509,7 +513,31 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
 
                 <div className="flex flex-col xl:flex-row justify-between gap-4">
                     <div className="flex flex-col sm:flex-row items-center gap-3 w-full xl:w-auto">
+                        <div className="flex flex-col gap-1">
+                            <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Visibilitas</label>
+                            <div className="flex bg-gray-100 p-1 rounded-lg">
+                                <button 
+                                    onClick={() => setVisibility('SHARED')}
+                                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition flex items-center gap-2 ${
+                                        visibility === 'SHARED' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                                    }`}
+                                    title="Data dapat dilihat oleh guru lain di sekolah yang sama"
+                                >
+                                    <Eye size={14} /> Berbagi
+                                </button>
+                                <button 
+                                    onClick={() => setVisibility('PRIVATE')}
+                                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition flex items-center gap-2 ${
+                                        visibility === 'PRIVATE' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                                    }`}
+                                    title="Data hanya dapat dilihat oleh Anda sendiri"
+                                >
+                                    <Lock size={14} /> Pribadi
+                                </button>
+                            </div>
+                        </div>
                         <div className="relative w-full sm:w-auto flex-1 md:flex-none">
+                            <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Kelas</label>
                             <select value={selectedClassId} onChange={(e) => setSelectedClassId(e.target.value)} className="w-full md:w-48 pl-3 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white text-sm">
                                 {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                                 {classes.length === 0 && <option>Belum ada kelas</option>}
