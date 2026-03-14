@@ -145,8 +145,10 @@ export interface AttendanceRecord extends Syncable {
   id: string;
   studentId: string;
   classId: string;
+  userId: string; // NEW: Owner of the record
   date: string; 
   status: 'H' | 'S' | 'I' | 'A';
+  visibility: 'PRIVATE' | 'SHARED'; // NEW: Visibility control
 }
 
 export interface ScopeMaterial extends Syncable {
