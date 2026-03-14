@@ -38,6 +38,8 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
   const [hasChanges, setHasChanges] = useState(false);
   const [visibility, setVisibility] = useState<'PRIVATE' | 'SHARED'>('SHARED');
   
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  
   // View Mode: 'input' (Daily/Monthly) or 'recap' (Semester/Yearly)
   const [viewMode, setViewMode] = useState<'input' | 'recap'>('input');
   const [showCalendarManager, setShowCalendarManager] = useState(false);
@@ -76,6 +78,13 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
   // Stats
   const [maleCount, setMaleCount] = useState(0);
   const [femaleCount, setFemaleCount] = useState(0);
+
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
 
   // --- INIT ---
   useEffect(() => {
@@ -212,7 +221,7 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
   const handleCellClick = (studentId: string, day: number) => {
     const event = getEventForDay(day);
     if (event && (event.type === 'HOLIDAY' || event.type === 'LEAVE')) {
-        alert(`Tanggal ini ditandai sebagai: ${event.description}`);
+        setToast({ message: `Tanggal ini ditandai sebagai: ${event.description}`, type: 'success' });
         return;
     }
 
@@ -242,7 +251,7 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
   const handleMarkDaily = (status: AttendanceStatus) => {
     const event = getEventForDay(dailyDay);
     if (event && (event.type === 'HOLIDAY' || event.type === 'LEAVE')) {
-        alert(`Tanggal ini ditandai sebagai: ${event.description}`);
+        setToast({ message: `Tanggal ini ditandai sebagai: ${event.description}`, type: 'success' });
         return;
     }
 
@@ -303,34 +312,32 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
   const performReset = async () => {
       if (!selectedClassId) return;
       
-      if (confirm(`Apakah Anda yakin ingin menghapus data absensi?`)) {
-          setLoading(true);
-          try {
-              await deleteAttendanceRecords(
-                  selectedClassId, 
-                  selectedMonth, 
-                  selectedYear, 
-                  user.id,
-                  resetType === 'daily' ? resetDay : undefined
-              );
+      setLoading(true);
+      try {
+          await deleteAttendanceRecords(
+              selectedClassId, 
+              selectedMonth, 
+              selectedYear, 
+              user.id,
+              resetType === 'daily' ? resetDay : undefined
+          );
 
-              setAttendance(prev => {
-                  const newState = { ...prev };
-                  if (resetType === 'monthly') {
-                      Object.keys(newState).forEach(sid => { newState[sid] = {}; });
-                  } else {
-                      Object.keys(newState).forEach(sid => { if (newState[sid]) delete newState[sid][resetDay]; });
-                  }
-                  return newState;
-              });
+          setAttendance(prev => {
+              const newState = { ...prev };
+              if (resetType === 'monthly') {
+                  Object.keys(newState).forEach(sid => { newState[sid] = {}; });
+              } else {
+                  Object.keys(newState).forEach(sid => { if (newState[sid]) delete newState[sid][resetDay]; });
+              }
+              return newState;
+          });
 
-              alert('Data absensi berhasil di-reset.');
-              setIsResetModalOpen(false);
-          } catch (e) {
-              alert('Gagal melakukan reset.');
-          } finally {
-              setLoading(false);
-          }
+          setToast({ message: 'Data absensi berhasil di-reset.', type: 'success' });
+          setIsResetModalOpen(false);
+      } catch (e) {
+          setToast({ message: 'Gagal melakukan reset.', type: 'error' });
+      } finally {
+          setLoading(false);
       }
   };
 
@@ -363,7 +370,7 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
     saveAttendanceRecords(recordsToSave).catch(err => {
         setSaveStatus('error');
         setHasChanges(true);
-        alert("Gagal menyimpan ke database lokal.");
+        setToast({ message: "Gagal menyimpan ke database.", type: 'error' });
     });
 
     setTimeout(() => {
@@ -469,6 +476,16 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
 
   return (
     <div className="space-y-6 pb-20">
+      {/* Toast Notification */}
+      {toast && (
+        <div className={`fixed top-4 right-4 z-[100] p-4 rounded-lg shadow-lg flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300 ${
+          toast.type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'
+        }`}>
+          {toast.type === 'success' ? <CheckCircle size={20} /> : <AlertCircle size={20} />}
+          <span className="font-medium">{toast.message}</span>
+          <button onClick={() => setToast(null)} className="ml-2 hover:opacity-70"><X size={18} /></button>
+        </div>
+      )}
       
       {/* Header & Controls */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col gap-6">
