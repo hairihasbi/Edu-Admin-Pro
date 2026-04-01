@@ -188,6 +188,7 @@ export interface TeachingJournal extends Syncable {
   activities: string;
   reflection?: string;
   followUp?: string;
+  examAgenda?: string; // NEW: Exam Agenda
 }
 
 export interface TeachingSchedule extends Syncable {
