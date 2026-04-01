@@ -56,7 +56,8 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
     meetingNo: '',
     activities: '',
     reflection: '',
-    followUp: ''
+    followUp: '',
+    examAgenda: ''
   });
 
   // Filter List States
@@ -156,12 +157,14 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.classId || !formData.materialId || !formData.date || !formData.activities) {
+    const isExam = !!formData.examAgenda;
+
+    if (!formData.classId || (!isExam && !formData.materialId) || !formData.date || !formData.activities) {
       alert("Mohon lengkapi field wajib (Kelas, LM, Tanggal, Kegiatan).");
       return;
     }
 
-    if (user.subject === 'Matematika' && !formSubject) {
+    if (!isExam && user.subject === 'Matematika' && !formSubject) {
         alert('Mohon pilih mata pelajaran spesifik sebelum menyimpan jurnal.');
         return;
     }
@@ -183,7 +186,8 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
         meetingNo: (parseInt(prev.meetingNo || '0') + 1).toString(), // Auto increment meeting no
         activities: '',
         reflection: '',
-        followUp: ''
+        followUp: '',
+        examAgenda: ''
       }));
       alert('Jurnal berhasil disimpan!');
     } else {
@@ -262,15 +266,15 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
       const cls = classes.find(c => c.id === j.classId);
       const mat = materialMap[j.materialId];
       // FIX: Resolve Material ID to Text (Code + Content)
-      const materialText = mat ? `[${mat.code}] ${mat.content}` : j.materialId;
+      const materialText = j.examAgenda ? `[AGENDA: ${j.examAgenda}]` : (mat ? `[${mat.code}] ${mat.content}` : j.materialId);
 
       return {
         no: idx + 1,
         className: cls?.name || '-',
         date: new Date(j.date).toLocaleDateString('id-ID'),
-        meeting: j.meetingNo,
+        meeting: j.examAgenda ? '-' : j.meetingNo,
         lm: materialText, 
-        tp: j.learningObjective,
+        tp: j.examAgenda ? '-' : j.learningObjective,
         activity: j.activities,
         reflection: j.reflection || '-',
         followUp: j.followUp || '-'
@@ -373,9 +377,9 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
             Tambah Jurnal Baru
          </h2>
          
-         <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Baris 1: Kelas, Mapel, LM, TP */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Baris 1: Kelas, Mapel, Agenda Ujian */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                <div>
                   <label className="block text-sm font-semibold text-blue-700 mb-1">Kelas *</label>
                   <select 
@@ -397,8 +401,9 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
                        <select
                            value={formSubject}
                            onChange={(e) => setFormSubject(e.target.value)}
-                           className="w-full border border-gray-300 rounded-lg p-2.5 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition"
-                           required
+                           className="w-full border border-gray-300 rounded-lg p-2.5 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition disabled:opacity-50 disabled:bg-gray-200"
+                           required={!formData.examAgenda}
+                           disabled={!!formData.examAgenda}
                        >
                            {user.teacherType === 'CLASS' ? (
                                ((user.phase === 'B' || user.phase === 'C') ? SD_SUBJECTS_PHASE_BC : SD_SUBJECTS_PHASE_A).map(s => (
@@ -414,14 +419,31 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
                )}
 
                <div>
+                  <label className="block text-sm font-semibold text-blue-700 mb-1">Agenda Ujian (Opsional)</label>
+                  <select 
+                     name="examAgenda"
+                     value={formData.examAgenda}
+                     onChange={handleInputChange}
+                     className="w-full border border-gray-300 rounded-lg p-2.5 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition"
+                  >
+                     <option value="">Bukan Ujian</option>
+                     <option value="Ujian Praktik">Ujian Praktik</option>
+                     <option value="Ujian Tulis">Ujian Tulis</option>
+                  </select>
+               </div>
+            </div>
+
+            {/* Baris 2: LM, TP */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+               <div>
                   <label className="block text-sm font-semibold text-blue-700 mb-1">Lingkup Materi *</label>
                   <select 
                      name="materialId"
                      value={formData.materialId}
                      onChange={handleInputChange}
-                     className="w-full border border-gray-300 rounded-lg p-2.5 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition"
-                     required
-                     disabled={!formData.classId}
+                     className="w-full border border-gray-300 rounded-lg p-2.5 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition disabled:opacity-50 disabled:bg-gray-200"
+                     required={!formData.examAgenda}
+                     disabled={!formData.classId || !!formData.examAgenda}
                   >
                      <option value="">{formData.classId ? 'Pilih Materi' : 'Pilih Kelas Dulu'}</option>
                      {allMaterials.map(m => <option key={m.id} value={m.id}>{m.code} - {m.content}</option>)}
@@ -435,8 +457,9 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
                      value={formData.learningObjective}
                      onChange={handleInputChange}
                      placeholder="Contoh: Memahami konsep..."
-                     className="w-full border border-gray-300 rounded-lg p-2.5 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition"
-                     required
+                     className="w-full border border-gray-300 rounded-lg p-2.5 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition disabled:opacity-50 disabled:bg-gray-200"
+                     required={!formData.examAgenda}
+                     disabled={!!formData.examAgenda}
                   />
                </div>
             </div>
@@ -465,8 +488,9 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
                      value={formData.meetingNo}
                      onChange={handleInputChange}
                      placeholder="Contoh: 1"
-                     className="w-full border border-gray-300 rounded-lg p-2.5 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition"
-                     required
+                     className="w-full border border-gray-300 rounded-lg p-2.5 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition disabled:opacity-50 disabled:bg-gray-200"
+                     required={!formData.examAgenda}
+                     disabled={!!formData.examAgenda}
                   />
                </div>
             </div>
@@ -485,7 +509,7 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
                />
             </div>
 
-            {/* Baris 4: Refleksi */}
+             {/* Baris 4: Refleksi */}
             <div>
                <label className="block text-sm font-semibold text-blue-700 mb-1">Refleksi</label>
                <textarea 
@@ -493,8 +517,9 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
                   rows={2}
                   value={formData.reflection}
                   onChange={handleInputChange}
-                  placeholder="Refleksi dari kegiatan pembelajaran (opsional)..."
-                  className="w-full border border-gray-300 rounded-lg p-3 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition resize-none"
+                  placeholder={formData.examAgenda ? "Tidak aktif saat agenda ujian" : "Refleksi dari kegiatan pembelajaran (opsional)..."}
+                  className="w-full border border-gray-300 rounded-lg p-3 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition resize-none disabled:opacity-50 disabled:bg-gray-200"
+                  disabled={!!formData.examAgenda}
                />
             </div>
 
@@ -506,8 +531,9 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
                   rows={2}
                   value={formData.followUp}
                   onChange={handleInputChange}
-                  placeholder="Tindak lanjut dari refleksi (opsional)..."
-                  className="w-full border border-gray-300 rounded-lg p-3 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition resize-none"
+                  placeholder={formData.examAgenda ? "Tidak aktif saat agenda ujian" : "Tindak lanjut dari refleksi (opsional)..."}
+                  className="w-full border border-gray-300 rounded-lg p-3 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition resize-none disabled:opacity-50 disabled:bg-gray-200"
+                  disabled={!!formData.examAgenda}
                />
             </div>
 
@@ -651,21 +677,23 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
                                     </div>
                                  </td>
                                  <td className="p-4 align-top text-center">
-                                    <span className="inline-block bg-blue-100 text-blue-700 px-2 py-1 rounded-md text-xs font-bold">
-                                       #{journal.meetingNo}
+                                    <span className={`inline-block px-2 py-1 rounded-md text-xs font-bold ${journal.examAgenda ? 'bg-gray-100 text-gray-500' : 'bg-blue-100 text-blue-700'}`}>
+                                       {journal.examAgenda ? '-' : `#${journal.meetingNo}`}
                                     </span>
                                  </td>
                                  <td className="p-4 align-top">
                                     <div className="font-bold text-gray-800 mb-1">{cls?.name || 'Unknown Class'}</div>
-                                    <div className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded inline-block" title={mat ? mat.content : 'ID: ' + journal.materialId}>
-                                       {mat ? mat.code : journal.materialId.substring(0,8)}
+                                    <div className={`text-xs px-2 py-1 rounded inline-block ${journal.examAgenda ? 'bg-orange-100 text-orange-700 font-bold' : 'bg-gray-100 text-gray-500'}`} title={mat ? mat.content : 'ID: ' + journal.materialId}>
+                                       {journal.examAgenda ? `AGENDA: ${journal.examAgenda}` : (mat ? mat.code : journal.materialId.substring(0,8))}
                                     </div>
                                  </td>
                                  <td className="p-4 align-top">
-                                    <div className="mb-2">
-                                       <span className="text-xs font-semibold text-blue-600 uppercase tracking-wide">Tujuan:</span>
-                                       <p className="text-gray-900 font-medium">{journal.learningObjective}</p>
-                                    </div>
+                                    {!journal.examAgenda && (
+                                       <div className="mb-2">
+                                          <span className="text-xs font-semibold text-blue-600 uppercase tracking-wide">Tujuan:</span>
+                                          <p className="text-gray-900 font-medium">{journal.learningObjective}</p>
+                                       </div>
+                                    )}
                                     <div className="mb-2">
                                        <span className="text-xs font-semibold text-green-600 uppercase tracking-wide">Kegiatan:</span>
                                        <p className="text-gray-600 whitespace-pre-line text-xs">{journal.activities}</p>
@@ -712,8 +740,8 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
                             <div key={journal.id} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm space-y-3 relative">
                                 <div className="flex justify-between items-start">
                                     <div>
-                                        <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded">
-                                            Pertemuan #{journal.meetingNo}
+                                        <span className={`text-xs font-bold px-2 py-1 rounded ${journal.examAgenda ? 'bg-orange-100 text-orange-700' : 'bg-blue-50 text-blue-600'}`}>
+                                            {journal.examAgenda ? journal.examAgenda : `Pertemuan #${journal.meetingNo}`}
                                         </span>
                                         <h3 className="font-bold text-gray-800 mt-2">{cls?.name || 'Unknown Class'}</h3>
                                         <p className="text-xs text-gray-500">{new Date(journal.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
@@ -726,10 +754,12 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
                                     </button>
                                 </div>
                                 
-                                <div className="text-sm text-gray-700 bg-gray-50 p-3 rounded-lg border border-gray-100">
-                                    <p className="font-semibold text-xs text-gray-500 uppercase mb-1">Materi</p>
-                                    <p className="text-xs">{mat ? `${mat.code} - ${mat.content}` : journal.materialId}</p>
-                                </div>
+                                {!journal.examAgenda && (
+                                    <div className="text-sm text-gray-700 bg-gray-50 p-3 rounded-lg border border-gray-100">
+                                        <p className="font-semibold text-xs text-gray-500 uppercase mb-1">Materi</p>
+                                        <p className="text-xs">{mat ? `${mat.code} - ${mat.content}` : journal.materialId}</p>
+                                    </div>
+                                )}
 
                                 <div>
                                     <p className="font-semibold text-xs text-gray-500 uppercase mb-1">Kegiatan</p>
