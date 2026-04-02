@@ -357,7 +357,7 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
             h2, h4 { text-align: center; margin: 0; padding: 2px; }
             .header { margin-bottom: 20px; }
             .signature-container { margin-top: 50px; display: flex; justify-content: space-between; page-break-inside: avoid; }
-            .signature-box { width: 45%; text-align: left; }
+            .signature-box { width: 300px; text-align: center; }
             @page { size: landscape; margin: 1cm; }
           </style>
         </head>
