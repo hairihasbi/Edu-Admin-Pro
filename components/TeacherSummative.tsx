@@ -23,7 +23,7 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
 
   // UI State
   const [selectedClassId, setSelectedClassId] = useState('');
-  const [selectedSemester, setSelectedSemester] = useState('Ganjil');
+  const [selectedSemester, setSelectedSemester] = useState(new Date().getMonth() >= 6 ? 'Ganjil' : 'Genap');
   const [loading, setLoading] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [hasChanges, setHasChanges] = useState(false);

@@ -19,7 +19,7 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
   
   // Selection States
   const [filterClassId, setFilterClassId] = useState<string>(''); // Default Empty = All Classes
-  const [filterSemester, setFilterSemester] = useState<string>('Ganjil');
+  const [filterSemester, setFilterSemester] = useState<string>(new Date().getMonth() >= 6 ? 'Ganjil' : 'Genap');
   
   // Form State
   const [formData, setFormData] = useState({
@@ -66,7 +66,7 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
   
   // Copy Modal State
   const [copySourceClassId, setCopySourceClassId] = useState('');
-  const [copySourceSemester, setCopySourceSemester] = useState('Ganjil');
+  const [copySourceSemester, setCopySourceSemester] = useState(new Date().getMonth() >= 6 ? 'Ganjil' : 'Genap');
 
   // --- INIT ---
   useEffect(() => {
@@ -285,36 +285,6 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
   return (
     <div className="space-y-6 pb-20">
       
-      {/* --- SUBJECT SELECTOR --- */}
-      {(user.isMultiSubject || user.teacherType === 'CLASS' || user.subject === 'Matematika') && (
-        <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl flex items-center gap-4">
-            <div className="flex-1">
-                <label className="block text-sm font-bold text-blue-800 mb-1">Filter Mata Pelajaran</label>
-                <select 
-                    value={selectedSubject}
-                    onChange={(e) => setSelectedSubject(e.target.value)}
-                    className="w-full p-2 border border-blue-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none"
-                >
-                    {(user.isMultiSubject || user.subject === 'Matematika') && <option value="ALL">Semua Mapel</option>}
-                    {user.isMultiSubject ? (
-                        (user.subjects || []).map(s => <option key={s} value={s}>{s}</option>)
-                    ) : user.teacherType === 'CLASS' ? (
-                        ((user.phase === 'B' || user.phase === 'C') ? SD_SUBJECTS_PHASE_BC : SD_SUBJECTS_PHASE_A).map(s => (
-                            <option key={s} value={s}>{s}</option>
-                        ))
-                    ) : (
-                        MATH_SUBJECT_OPTIONS.map(m => (
-                            <option key={m} value={m}>{m}</option>
-                        ))
-                    )}
-                </select>
-            </div>
-            <div className="text-xs text-blue-600 max-w-md hidden sm:block">
-                *Pilih mata pelajaran untuk memfilter daftar Lingkup Materi yang ditampilkan.
-            </div>
-        </div>
-      )}
-
       {/* Header & Controls */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between gap-6">
         <div>
@@ -331,7 +301,7 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
              <select 
                value={filterClassId}
                onChange={(e) => setFilterClassId(e.target.value)}
-               className="w-full sm:w-64 pl-3 pr-10 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none appearance-none bg-white text-sm"
+               className="w-full sm:w-48 pl-3 pr-10 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none appearance-none bg-white text-sm"
              >
                <option value="">Semua Kelas</option>
                {classes.map(c => (
@@ -340,6 +310,31 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
              </select>
              <Filter size={16} className="absolute right-3 top-3 text-gray-400 pointer-events-none" />
           </div>
+
+          {/* Subject Filter (Dynamic) */}
+          {(user.isMultiSubject || user.teacherType === 'CLASS' || user.subject === 'Matematika') && (
+            <div className="relative">
+                <select 
+                    value={selectedSubject}
+                    onChange={(e) => setSelectedSubject(e.target.value)}
+                    className="w-full sm:w-56 pl-3 pr-10 py-2.5 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none appearance-none bg-blue-50 text-sm font-medium"
+                >
+                    {(user.isMultiSubject || user.subject === 'Matematika') && <option value="ALL">Semua Mapel</option>}
+                    {user.isMultiSubject ? (
+                        (user.subjects || []).map(s => <option key={s} value={s}>{s}</option>)
+                    ) : user.teacherType === 'CLASS' ? (
+                        ((user.phase === 'B' || user.phase === 'C') ? SD_SUBJECTS_PHASE_BC : SD_SUBJECTS_PHASE_A).map(s => (
+                            <option key={s} value={s}>{s}</option>
+                        ))
+                    ) : (
+                        MATH_SUBJECT_OPTIONS.map(m => (
+                            <option key={m} value={m}>{m}</option>
+                        ))
+                    )}
+                </select>
+                <Filter size={16} className="absolute right-3 top-3 text-blue-400 pointer-events-none" />
+            </div>
+          )}
 
           {/* Semester Filter */}
           <div className="relative">

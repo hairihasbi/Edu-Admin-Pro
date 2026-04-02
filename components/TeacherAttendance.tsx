@@ -51,7 +51,7 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
   const [calendarEvents, setCalendarEvents] = useState<TeacherCalendarEvent[]>([]);
 
   // Recap Mode State
-  const [recapFilter, setRecapFilter] = useState<'ganjil' | 'genap' | 'full'>('ganjil');
+  const [recapFilter, setRecapFilter] = useState<'ganjil' | 'genap' | 'full'>(new Date().getMonth() >= 6 ? 'ganjil' : 'genap');
   const [recapYear, setRecapYear] = useState(new Date().getFullYear());
   const [recapData, setRecapData] = useState<RecapData[]>([]);
 
