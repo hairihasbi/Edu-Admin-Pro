@@ -23,7 +23,12 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
 
   // Initialize Subject based on Teacher Type
   useEffect(() => {
-    if (user.teacherType === 'CLASS') {
+    if (user.isMultiSubject && user.subjects && user.subjects.length > 0) {
+      // For Multi-Subject, filter defaults to ALL
+      setSelectedSubject('ALL');
+      // Form defaults to first subject in list
+      setFormSubject(user.subjects[0]);
+    } else if (user.teacherType === 'CLASS') {
       const subjects = (user.phase === 'B' || user.phase === 'C') ? SD_SUBJECTS_PHASE_BC : SD_SUBJECTS_PHASE_A;
       // Default to first subject if not set or invalid
       if (!selectedSubject || !subjects.includes(selectedSubject)) {
@@ -45,7 +50,7 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
       setSelectedSubject(user.subject || '');
       setFormSubject(user.subject || '');
     }
-  }, [user, user.teacherType, user.phase]);
+  }, [user, user.teacherType, user.phase, user.isMultiSubject, user.subjects]);
 
   // Form States
   const [formData, setFormData] = useState({
@@ -364,6 +369,7 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
         <body>
           <div class="header">
             <h2>JURNAL KEGIATAN PEMBELAJARAN (JURNAL MENGAJAR)</h2>
+            <h4>Mata Pelajaran: ${selectedSubject === 'ALL' ? 'Semua Mata Pelajaran' : selectedSubject}</h4>
             <h4>Periode: ${monthNames[filterMonth]} ${filterYear}</h4>
             <h4>Guru: ${user.fullName}</h4>
           </div>
@@ -441,7 +447,7 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
                </div>
 
                {/* Subject Selector in Form */}
-               {(user.teacherType === 'CLASS' || user.subject === 'Matematika') && (
+               {(user.teacherType === 'CLASS' || user.subject === 'Matematika' || user.isMultiSubject) && (
                    <div>
                        <label className="block text-sm font-semibold text-blue-700 mb-1">Mata Pelajaran *</label>
                        <select
@@ -451,7 +457,11 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
                            required={!formData.examAgenda}
                            disabled={!!formData.examAgenda}
                        >
-                           {user.teacherType === 'CLASS' ? (
+                           {user.isMultiSubject ? (
+                               (user.subjects || []).map(s => (
+                                   <option key={s} value={s}>{s}</option>
+                               ))
+                           ) : user.teacherType === 'CLASS' ? (
                                ((user.phase === 'B' || user.phase === 'C') ? SD_SUBJECTS_PHASE_BC : SD_SUBJECTS_PHASE_A).map(s => (
                                    <option key={s} value={s}>{s}</option>
                                ))
@@ -604,6 +614,31 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
          {/* Filter Header */}
          <div className="p-6 border-b border-gray-100 flex flex-col xl:flex-row justify-between gap-6 bg-gray-50 rounded-t-xl">
              <div className="flex flex-col sm:flex-row gap-4 w-full xl:w-auto">
+                 {/* Subject Filter (For Multi-Subject) */}
+                 {(user.isMultiSubject || user.teacherType === 'CLASS' || user.subject === 'Matematika') && (
+                    <div className="relative">
+                       <select 
+                          value={selectedSubject}
+                          onChange={(e) => setSelectedSubject(e.target.value)}
+                          className="w-full sm:w-48 pl-3 pr-10 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none appearance-none bg-white text-sm font-medium"
+                       >
+                          {(user.isMultiSubject || user.subject === 'Matematika') && <option value="ALL">Semua Mapel</option>}
+                          {user.isMultiSubject ? (
+                             (user.subjects || []).map(s => <option key={s} value={s}>{s}</option>)
+                          ) : user.teacherType === 'CLASS' ? (
+                             ((user.phase === 'B' || user.phase === 'C') ? SD_SUBJECTS_PHASE_BC : SD_SUBJECTS_PHASE_A).map(s => (
+                                <option key={s} value={s}>{s}</option>
+                             ))
+                          ) : (
+                             MATH_SUBJECT_OPTIONS.map(m => (
+                                <option key={m} value={m}>{m}</option>
+                             ))
+                          )}
+                       </select>
+                       <Filter size={16} className="absolute right-3 top-3 text-gray-400 pointer-events-none" />
+                    </div>
+                 )}
+
                  {/* Class Filter */}
                  <div className="relative">
                     <select 

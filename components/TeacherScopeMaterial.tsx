@@ -45,7 +45,10 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
 
   // Initialize Subject based on Teacher Type
   useEffect(() => {
-    if (user.teacherType === 'CLASS') {
+    if (user.isMultiSubject && user.subjects && user.subjects.length > 0) {
+      // For Multi-Subject, filter defaults to ALL
+      setSelectedSubject('ALL');
+    } else if (user.teacherType === 'CLASS') {
       const subjects = (user.phase === 'B' || user.phase === 'C') ? SD_SUBJECTS_PHASE_BC : SD_SUBJECTS_PHASE_A;
       // Default to first subject if not set or invalid
       if (!selectedSubject || !subjects.includes(selectedSubject)) {
@@ -59,7 +62,7 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
     } else {
       setSelectedSubject(user.subject || '');
     }
-  }, [user, user.teacherType, user.phase]);
+  }, [user, user.teacherType, user.phase, user.isMultiSubject, user.subjects]);
   
   // Copy Modal State
   const [copySourceClassId, setCopySourceClassId] = useState('');
@@ -283,7 +286,34 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
     <div className="space-y-6 pb-20">
       
       {/* --- SUBJECT SELECTOR --- */}
-      {/* Filter removed for Class Teachers as requested */}
+      {(user.isMultiSubject || user.teacherType === 'CLASS' || user.subject === 'Matematika') && (
+        <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl flex items-center gap-4">
+            <div className="flex-1">
+                <label className="block text-sm font-bold text-blue-800 mb-1">Filter Mata Pelajaran</label>
+                <select 
+                    value={selectedSubject}
+                    onChange={(e) => setSelectedSubject(e.target.value)}
+                    className="w-full p-2 border border-blue-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none"
+                >
+                    {(user.isMultiSubject || user.subject === 'Matematika') && <option value="ALL">Semua Mapel</option>}
+                    {user.isMultiSubject ? (
+                        (user.subjects || []).map(s => <option key={s} value={s}>{s}</option>)
+                    ) : user.teacherType === 'CLASS' ? (
+                        ((user.phase === 'B' || user.phase === 'C') ? SD_SUBJECTS_PHASE_BC : SD_SUBJECTS_PHASE_A).map(s => (
+                            <option key={s} value={s}>{s}</option>
+                        ))
+                    ) : (
+                        MATH_SUBJECT_OPTIONS.map(m => (
+                            <option key={m} value={m}>{m}</option>
+                        ))
+                    )}
+                </select>
+            </div>
+            <div className="text-xs text-blue-600 max-w-md hidden sm:block">
+                *Pilih mata pelajaran untuk memfilter daftar Lingkup Materi yang ditampilkan.
+            </div>
+        </div>
+      )}
 
       {/* Header & Controls */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between gap-6">
@@ -385,7 +415,7 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
                 </div>
 
                 {/* Subject Selector in Form */}
-                {(user.teacherType === 'CLASS' || user.subject === 'Matematika') && (
+                {(user.teacherType === 'CLASS' || user.subject === 'Matematika' || user.isMultiSubject) && (
                     <div>
                         <label className="block text-xs font-medium text-gray-500 mb-1 uppercase">Mata Pelajaran</label>
                         <select
@@ -396,7 +426,11 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
                             required
                         >
                             <option value="" disabled>-- Pilih Mata Pelajaran --</option>
-                            {user.teacherType === 'CLASS' ? (
+                            {user.isMultiSubject ? (
+                                (user.subjects || []).map(s => (
+                                    <option key={s} value={s}>{s}</option>
+                                ))
+                            ) : user.teacherType === 'CLASS' ? (
                                 ((user.phase === 'B' || user.phase === 'C') ? SD_SUBJECTS_PHASE_BC : SD_SUBJECTS_PHASE_A).map(s => (
                                     <option key={s} value={s}>{s}</option>
                                 ))

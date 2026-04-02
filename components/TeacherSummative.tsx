@@ -33,7 +33,12 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
 
   // Initialize Subject based on Teacher Type
   useEffect(() => {
-    if (user.teacherType === 'CLASS') {
+    if (user.isMultiSubject && user.subjects && user.subjects.length > 0) {
+      // For Multi-Subject, default to first subject
+      if (!selectedSubject || !user.subjects.includes(selectedSubject)) {
+         setSelectedSubject(user.subjects[0]);
+      }
+    } else if (user.teacherType === 'CLASS') {
       const subjects = (user.phase === 'B' || user.phase === 'C') ? SD_SUBJECTS_PHASE_BC : SD_SUBJECTS_PHASE_A;
       // Default to first subject if not set or invalid
       if (!selectedSubject || !subjects.includes(selectedSubject)) {
@@ -47,7 +52,7 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
     } else {
       setSelectedSubject(user.subject || '');
     }
-  }, [user, user.teacherType, user.phase]);
+  }, [user, user.teacherType, user.phase, user.isMultiSubject, user.subjects]);
 
   // Manage Column Modal State
   const [isManageModalOpen, setIsManageModalOpen] = useState(false);
@@ -475,22 +480,26 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
     <div className="space-y-6 pb-20 relative">
       
       {/* --- SUBJECT SELECTOR --- */}
-      {user.teacherType === 'CLASS' && (
+      {(user.teacherType === 'CLASS' || user.isMultiSubject) && (
         <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl flex items-center gap-4">
             <div className="flex-1">
-                <label className="block text-sm font-bold text-blue-800 mb-1">Mata Pelajaran (Mode Guru Kelas)</label>
+                <label className="block text-sm font-bold text-blue-800 mb-1">Mata Pelajaran {user.isMultiSubject ? '(Mode Multi-Mapel)' : '(Mode Guru Kelas)'}</label>
                 <select 
                     value={selectedSubject}
                     onChange={(e) => setSelectedSubject(e.target.value)}
                     className="w-full p-2 border border-blue-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none"
                 >
-                    {((user.phase === 'B' || user.phase === 'C') ? SD_SUBJECTS_PHASE_BC : SD_SUBJECTS_PHASE_A).map(s => (
-                        <option key={s} value={s}>{s}</option>
-                    ))}
+                    {user.isMultiSubject ? (
+                        (user.subjects || []).map(s => <option key={s} value={s}>{s}</option>)
+                    ) : (
+                        ((user.phase === 'B' || user.phase === 'C') ? SD_SUBJECTS_PHASE_BC : SD_SUBJECTS_PHASE_A).map(s => (
+                            <option key={s} value={s}>{s}</option>
+                        ))
+                    )}
                 </select>
             </div>
             <div className="text-xs text-blue-600 max-w-md hidden sm:block">
-                *Anda sedang dalam mode Guru Kelas. Pilih mata pelajaran untuk memfilter Jurnal, Lingkup Materi, dan Asesmen.
+                *Pilih mata pelajaran untuk memfilter Jurnal, Lingkup Materi, dan Asesmen.
             </div>
         </div>
       )}
@@ -516,7 +525,7 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
               </select>
 
               {/* Math Subject Selector in Control Bar */}
-              {user.subject === 'Matematika' && (
+              {(user.subject === 'Matematika' && !user.isMultiSubject) && (
                   <select 
                     value={selectedSubject}
                     onChange={(e) => setSelectedSubject(e.target.value)}

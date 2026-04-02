@@ -22,7 +22,9 @@ const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onUpdateUser }) =
     subject: user.subject || '',
     schoolName: user.schoolName || '',
     phase: user.phase || '',
-    teacherType: user.teacherType || 'SUBJECT'
+    teacherType: user.teacherType || 'SUBJECT',
+    isMultiSubject: user.isMultiSubject || false,
+    subjects: user.subjects || []
   });
 
   // Master Data State
@@ -228,6 +230,24 @@ const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onUpdateUser }) =
                 {/* Field Khusus Guru */}
                 {!isAdmin && !isTendik && (
                     <>
+                    <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 mb-4">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-bold text-blue-800">Mode Multi-Mapel</p>
+                                <p className="text-[10px] text-blue-600">Aktifkan jika Anda mengampu lebih dari 1 mata pelajaran (SMP/SMA).</p>
+                            </div>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                                <input 
+                                    type="checkbox" 
+                                    className="sr-only peer"
+                                    checked={formData.isMultiSubject}
+                                    onChange={(e) => setFormData({ ...formData, isMultiSubject: e.target.checked })}
+                                />
+                                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
+                        </div>
+                    </div>
+
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Tipe Guru</label>
                         <select
@@ -274,9 +294,9 @@ const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onUpdateUser }) =
                         <div className="relative">
                         <BookOpen className="absolute left-3 top-2.5 text-gray-400" size={16} />
                         <select
-                            disabled={isBkTeacher || isClassTeacher || isTendik}
+                            disabled={isBkTeacher || isClassTeacher || isTendik || formData.isMultiSubject}
                             className={`w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition text-sm appearance-none ${
-                                isBkTeacher || isClassTeacher || isTendik ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'bg-white'
+                                isBkTeacher || isClassTeacher || isTendik || formData.isMultiSubject ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'bg-white'
                             }`}
                             value={isClassTeacher ? 'Guru Kelas (SD)' : isTendik ? 'TENAGA KEPENDIDIKAN' : formData.subject}
                             onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
@@ -287,7 +307,7 @@ const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onUpdateUser }) =
                                 <option value="TENAGA KEPENDIDIKAN">TENAGA KEPENDIDIKAN</option>
                             ) : (
                                 <>
-                                    <option value="">-- Pilih Mata Pelajaran --</option>
+                                    <option value="">-- Pilih Mata Pelajaran Utama --</option>
                                     {availableSubjects.map(sub => (
                                     <option key={sub.id} value={sub.name}>
                                         {sub.name}
@@ -297,12 +317,40 @@ const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onUpdateUser }) =
                             )}
                         </select>
                         </div>
-                        {(isBkTeacher || isClassTeacher || isTendik) && (
+                        {(isBkTeacher || isClassTeacher || isTendik || formData.isMultiSubject) && (
                             <p className="text-xs text-orange-600 mt-1 flex items-center gap-1">
-                                <Lock size={10} /> {isClassTeacher ? 'Mode Guru Kelas (Multi Mapel)' : isTendik ? 'Terkunci sebagai Tenaga Kependidikan' : 'Terkunci sebagai Guru BK.'}
+                                <Lock size={10} /> {isClassTeacher ? 'Mode Guru Kelas (Multi Mapel)' : isTendik ? 'Terkunci sebagai Tenaga Kependidikan' : formData.isMultiSubject ? 'Mode Multi-Mapel Aktif' : 'Terkunci sebagai Guru BK.'}
                             </p>
                         )}
                     </div>
+
+                    {formData.isMultiSubject && (
+                        <div className="space-y-3 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                            <label className="block text-sm font-bold text-gray-700">Pilih Daftar Mata Pelajaran yang Diampu:</label>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto p-2 bg-white rounded border border-gray-200">
+                                {availableSubjects.map(sub => {
+                                    const isSelected = formData.subjects.includes(sub.name);
+                                    return (
+                                        <label key={sub.id} className={`flex items-center gap-2 p-2 rounded cursor-pointer transition ${isSelected ? 'bg-blue-50 text-blue-700' : 'hover:bg-gray-100'}`}>
+                                            <input 
+                                                type="checkbox"
+                                                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                checked={isSelected}
+                                                onChange={(e) => {
+                                                    const newSubjects = e.target.checked 
+                                                        ? [...formData.subjects, sub.name]
+                                                        : formData.subjects.filter(s => s !== sub.name);
+                                                    setFormData({ ...formData, subjects: newSubjects });
+                                                }}
+                                            />
+                                            <span className="text-xs">{sub.name}</span>
+                                        </label>
+                                    );
+                                })}
+                            </div>
+                            <p className="text-[10px] text-gray-500 italic">Mata pelajaran yang dipilih akan muncul di form Jurnal dan Nilai.</p>
+                        </div>
+                    )}
                     </>
                 )}
 
