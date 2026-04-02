@@ -34,6 +34,8 @@ export interface User extends Syncable {
   homeroomClassName?: string; // Helper for UI
   teacherType?: 'SUBJECT' | 'CLASS'; // NEW: Teacher Type
   phase?: 'A' | 'B' | 'C'; // NEW: Phase for Class Teacher
+  isMultiSubject?: boolean; // NEW: Multi-Subject Mode for SMP/SMA
+  subjects?: string[]; // NEW: List of subjects for Multi-Subject Mode
   // RPP Quota Tracking
   rppUsageCount?: number; // Jumlah RPP dibuat bulan ini
   rppLastReset?: string; // Format "YYYY-MM" untuk menandai bulan terakhir reset
