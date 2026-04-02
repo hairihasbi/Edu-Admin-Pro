@@ -73,6 +73,29 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
   // UI States
   const [loading, setLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [showPrintSettings, setShowPrintSettings] = useState(false);
+
+  // NEW: Validation Data for Print
+  const [validationData, setValidationData] = useState({
+    placeName: localStorage.getItem('journal_place_name') || '',
+    principalName: localStorage.getItem('journal_principal_name') || '',
+    principalNip: localStorage.getItem('journal_principal_nip') || '',
+    teacherName: localStorage.getItem('journal_teacher_name') || user.fullName,
+    teacherNip: localStorage.getItem('journal_teacher_nip') || user.nip || ''
+  });
+
+  // Persist validation data
+  useEffect(() => {
+    localStorage.setItem('journal_place_name', validationData.placeName);
+    localStorage.setItem('journal_principal_name', validationData.principalName);
+    localStorage.setItem('journal_principal_nip', validationData.principalNip);
+    localStorage.setItem('journal_teacher_name', validationData.teacherName);
+    localStorage.setItem('journal_teacher_nip', validationData.teacherNip);
+  }, [validationData]);
+
+  const handleValidationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setValidationData({ ...validationData, [e.target.name]: e.target.value });
+  };
 
   // Constants
   const monthNames = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
@@ -318,6 +341,9 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
       </tr>
     `).join('');
 
+    const today = new Date();
+    const formattedDate = today.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+
     printWindow.document.write(`
       <html>
         <head>
@@ -330,6 +356,8 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
             .text-center { text-align: center; }
             h2, h4 { text-align: center; margin: 0; padding: 2px; }
             .header { margin-bottom: 20px; }
+            .signature-container { margin-top: 50px; display: flex; justify-content: space-between; page-break-inside: avoid; }
+            .signature-box { width: 45%; text-align: left; }
             @page { size: landscape; margin: 1cm; }
           </style>
         </head>
@@ -356,6 +384,24 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
               ${rows}
             </tbody>
           </table>
+
+          <div class="signature-container">
+            <div class="signature-box">
+              <p>Mengetahui,</p>
+              <p>Kepala Sekolah ${user.schoolName || '[Nama Sekolah]'}</p>
+              <br><br><br><br>
+              <p><strong>${validationData.principalName || '................................'}</strong></p>
+              <p>NIP. ${validationData.principalNip || '................................'}</p>
+            </div>
+            <div class="signature-box">
+              <p>${validationData.placeName || '................'}, ${formattedDate}</p>
+              <p>Guru Mata Pelajaran</p>
+              <br><br><br><br>
+              <p><strong>${validationData.teacherName || user.fullName}</strong></p>
+              <p>NIP. ${validationData.teacherNip || user.nip || '................................'}</p>
+            </div>
+          </div>
+
           <script>
             window.onload = function() { window.print(); window.close(); }
           </script>
@@ -601,20 +647,107 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
                      <Trash2 size={16} /> Hapus ({selectedIds.size})
                    </button>
                  )}
-                 <button 
-                    onClick={handlePrint}
-                    className="flex items-center gap-2 bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 px-4 py-2.5 rounded-lg text-sm font-medium transition shadow-sm"
-                 >
-                    <Printer size={16} /> Print / PDF
-                 </button>
-                 <button 
-                    onClick={exportToExcel}
-                    className="flex items-center gap-2 bg-green-600 text-white hover:bg-green-700 px-4 py-2.5 rounded-lg text-sm font-medium transition shadow-sm"
-                 >
-                    <FileSpreadsheet size={16} /> Unduh Excel
-                 </button>
+                  <button 
+                     onClick={() => setShowPrintSettings(!showPrintSettings)}
+                     className={`flex items-center gap-2 border px-4 py-2.5 rounded-lg text-sm font-medium transition shadow-sm ${showPrintSettings ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
+                  >
+                     <Printer size={16} /> Print / PDF
+                  </button>
+                  <button 
+                     onClick={exportToExcel}
+                     className="flex items-center gap-2 bg-green-600 text-white hover:bg-green-700 px-4 py-2.5 rounded-lg text-sm font-medium transition shadow-sm"
+                  >
+                     <FileSpreadsheet size={16} /> Unduh Excel
+                  </button>
+              </div>
+          </div>
+
+          {/* Print Settings Panel */}
+          {showPrintSettings && (
+             <div className="p-6 bg-blue-50 border-b border-blue-100 animate-in slide-in-from-top duration-200">
+                <div className="flex items-center justify-between mb-4">
+                   <h3 className="text-sm font-bold text-blue-800 flex items-center gap-2">
+                      <Printer size={16} /> Pengaturan Validasi Cetak
+                   </h3>
+                   <button 
+                      onClick={handlePrint}
+                      className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 transition shadow-md flex items-center gap-2"
+                   >
+                      <Printer size={16} /> Cetak Sekarang
+                   </button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                   <div className="space-y-4">
+                      <p className="text-xs font-bold text-blue-600 uppercase">Kepala Sekolah</p>
+                      <div>
+                         <label className="block text-[10px] text-gray-500 mb-1">Nama Kepala Sekolah</label>
+                         <input 
+                            type="text"
+                            name="principalName"
+                            value={validationData.principalName}
+                            onChange={handleValidationChange}
+                            placeholder="Nama Lengkap & Gelar"
+                            className="w-full text-sm border border-blue-200 rounded p-2 outline-none focus:ring-2 focus:ring-blue-500"
+                         />
+                      </div>
+                      <div>
+                         <label className="block text-[10px] text-gray-500 mb-1">NIP Kepala Sekolah</label>
+                         <input 
+                            type="text"
+                            name="principalNip"
+                            value={validationData.principalNip}
+                            onChange={handleValidationChange}
+                            placeholder="NIP"
+                            className="w-full text-sm border border-blue-200 rounded p-2 outline-none focus:ring-2 focus:ring-blue-500"
+                         />
+                      </div>
+                   </div>
+                   <div className="space-y-4">
+                      <p className="text-xs font-bold text-blue-600 uppercase">Guru Mata Pelajaran</p>
+                      <div>
+                         <label className="block text-[10px] text-gray-500 mb-1">Nama Guru</label>
+                         <input 
+                            type="text"
+                            name="teacherName"
+                            value={validationData.teacherName}
+                            onChange={handleValidationChange}
+                            className="w-full text-sm border border-blue-200 rounded p-2 outline-none focus:ring-2 focus:ring-blue-500"
+                         />
+                      </div>
+                      <div>
+                         <label className="block text-[10px] text-gray-500 mb-1">NIP Guru</label>
+                         <input 
+                            type="text"
+                            name="teacherNip"
+                            value={validationData.teacherNip}
+                            onChange={handleValidationChange}
+                            className="w-full text-sm border border-blue-200 rounded p-2 outline-none focus:ring-2 focus:ring-blue-500"
+                         />
+                      </div>
+                   </div>
+                   <div className="space-y-4">
+                      <p className="text-xs font-bold text-blue-600 uppercase">Lokasi & Tanggal</p>
+                      <div>
+                         <label className="block text-[10px] text-gray-500 mb-1">Nama Tempat (Kota/Kecamatan)</label>
+                         <input 
+                            type="text"
+                            name="placeName"
+                            value={validationData.placeName}
+                            onChange={handleValidationChange}
+                            placeholder="Contoh: Jakarta"
+                            className="w-full text-sm border border-blue-200 rounded p-2 outline-none focus:ring-2 focus:ring-blue-500"
+                         />
+                      </div>
+                      <div className="p-3 bg-white rounded border border-blue-100">
+                         <p className="text-[10px] text-gray-400 mb-1">Tanggal Cetak Otomatis:</p>
+                         <p className="text-sm font-medium text-gray-700">
+                            {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                         </p>
+                      </div>
+                   </div>
+                </div>
              </div>
-         </div>
+          )}
 
          {/* List Items */}
          <div className="overflow-x-auto">
