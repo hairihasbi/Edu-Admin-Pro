@@ -37,23 +37,14 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
       if (!formSubject || !subjects.includes(formSubject)) {
          setFormSubject(subjects[0]);
       }
-    } else if (user.subject === 'Matematika') {
-      // Filter defaults to ALL
+    } else if (user.subject === 'Matematika' || user.secondarySubject) {
+      // Filter defaults to ALL if has multiple subjects
       if (selectedSubject !== 'ALL') {
          setSelectedSubject('ALL');
       }
-      // Form defaults to Matematika Umum
+      // Form defaults to first subject
       if (!formSubject) {
-         setFormSubject(MATH_SUBJECT_OPTIONS[0]);
-      }
-    } else if (user.secondarySubject) {
-      // Filter defaults to ALL
-      if (selectedSubject !== 'ALL') {
-         setSelectedSubject('ALL');
-      }
-      // Form defaults to primary subject
-      if (!formSubject || (formSubject !== user.subject && formSubject !== user.secondarySubject)) {
-         setFormSubject(user.subject || '');
+         setFormSubject(user.subject === 'Matematika' ? MATH_SUBJECT_OPTIONS[0] : (user.subject || ''));
       }
     } else {
       setSelectedSubject(user.subject || '');
@@ -474,15 +465,19 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
                                ((user.phase === 'B' || user.phase === 'C') ? SD_SUBJECTS_PHASE_BC : SD_SUBJECTS_PHASE_A).map(s => (
                                    <option key={s} value={s}>{s}</option>
                                ))
-                           ) : user.secondarySubject ? (
-                               <>
-                                   <option value={user.subject}>{user.subject}</option>
-                                   <option value={user.secondarySubject}>{user.secondarySubject}</option>
-                               </>
                            ) : (
-                               MATH_SUBJECT_OPTIONS.map(m => (
-                                   <option key={m} value={m}>{m}</option>
-                               ))
+                               <>
+                                   {user.subject === 'Matematika' ? (
+                                       MATH_SUBJECT_OPTIONS.map(m => (
+                                           <option key={m} value={m}>{m}</option>
+                                       ))
+                                   ) : (
+                                       <option value={user.subject}>{user.subject}</option>
+                                   )}
+                                   {user.secondarySubject && (
+                                       <option value={user.secondarySubject}>{user.secondarySubject}</option>
+                                   )}
+                               </>
                            )}
                        </select>
                    </div>
@@ -643,15 +638,19 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
                              ((user.phase === 'B' || user.phase === 'C') ? SD_SUBJECTS_PHASE_BC : SD_SUBJECTS_PHASE_A).map(s => (
                                 <option key={s} value={s}>{s}</option>
                              ))
-                          ) : user.secondarySubject ? (
-                             <>
-                                <option value={user.subject}>{user.subject}</option>
-                                <option value={user.secondarySubject}>{user.secondarySubject}</option>
-                             </>
                           ) : (
-                             MATH_SUBJECT_OPTIONS.map(m => (
-                                <option key={m} value={m}>{m}</option>
-                             ))
+                             <>
+                                {user.subject === 'Matematika' ? (
+                                   MATH_SUBJECT_OPTIONS.map(m => (
+                                      <option key={m} value={m}>{m}</option>
+                                   ))
+                                ) : (
+                                   <option value={user.subject}>{user.subject}</option>
+                                )}
+                                {user.secondarySubject && (
+                                   <option value={user.secondarySubject}>{user.secondarySubject}</option>
+                                )}
+                             </>
                           )}
                        </select>
                        <Filter size={16} className="absolute right-3 top-3 text-gray-400 pointer-events-none" />

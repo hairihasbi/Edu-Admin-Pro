@@ -10,7 +10,7 @@ import {
   saveBulkSchedules, deleteTeachingSchedule, clearSchoolSchedules,
   getAvailableClassesForHomeroom, getMasterSubjects
 } from '../services/database';
-import { User as UserType, ClassRoom, TeachingSchedule, MasterSubject } from '../types';
+import { User as UserType, ClassRoom, TeachingSchedule, MasterSubject, MATH_SUBJECT_OPTIONS } from '../types';
 import * as XLSX from 'xlsx';
 
 interface WakasekScheduleManagerProps {
@@ -445,6 +445,19 @@ const WakasekScheduleManager: React.FC<WakasekScheduleManagerProps> = ({ user })
                       <option value={teachers.find(t => t.id === selectedTeacherId)?.subject}>
                         {teachers.find(t => t.id === selectedTeacherId)?.subject} (Utama)
                       </option>
+                    )}
+                    {selectedTeacherId && teachers.find(t => t.id === selectedTeacherId)?.secondarySubject && (
+                      <option value={teachers.find(t => t.id === selectedTeacherId)?.secondarySubject}>
+                        {teachers.find(t => t.id === selectedTeacherId)?.secondarySubject} (Tambahan)
+                      </option>
+                    )}
+                    {/* Math Subject Options for Math Teachers */}
+                    {selectedTeacherId && teachers.find(t => t.id === selectedTeacherId)?.subject === 'Matematika' && (
+                      <optgroup label="Pilihan Matematika">
+                        {MATH_SUBJECT_OPTIONS.map(m => (
+                          <option key={m} value={m}>{m}</option>
+                        ))}
+                      </optgroup>
                     )}
                     {/* Master subjects */}
                     <optgroup label={`Daftar Mata Pelajaran (${schoolLevel})`}>

@@ -44,15 +44,10 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
       if (!selectedSubject || !subjects.includes(selectedSubject)) {
          setSelectedSubject(subjects[0]);
       }
-    } else if (user.subject === 'Matematika') {
-      // Default to first math option if not set or if it is ALL (strict mode)
-      if (!selectedSubject || !MATH_SUBJECT_OPTIONS.includes(selectedSubject)) {
-         setSelectedSubject(MATH_SUBJECT_OPTIONS[0]);
-      }
-    } else if (user.secondarySubject) {
-      // If has secondary subject, default to primary
-      if (!selectedSubject || (selectedSubject !== user.subject && selectedSubject !== user.secondarySubject)) {
-          setSelectedSubject(user.subject || '');
+    } else if (user.subject === 'Matematika' || user.secondarySubject) {
+      // Default to first math option or primary subject
+      if (!selectedSubject || (selectedSubject !== user.subject && selectedSubject !== user.secondarySubject && !MATH_SUBJECT_OPTIONS.includes(selectedSubject))) {
+         setSelectedSubject(user.subject === 'Matematika' ? MATH_SUBJECT_OPTIONS[0] : (user.subject || ''));
       }
     } else {
       setSelectedSubject(user.subject || '');
@@ -496,15 +491,19 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
                 >
                     {user.isMultiSubject ? (
                         (user.subjects || []).map(s => <option key={s} value={s}>{s}</option>)
-                    ) : user.secondarySubject ? (
-                        <>
-                            <option value={user.subject}>{user.subject}</option>
-                            <option value={user.secondarySubject}>{user.secondarySubject}</option>
-                        </>
                     ) : (
-                        ((user.phase === 'B' || user.phase === 'C') ? SD_SUBJECTS_PHASE_BC : SD_SUBJECTS_PHASE_A).map(s => (
-                            <option key={s} value={s}>{s}</option>
-                        ))
+                        <>
+                            {user.subject === 'Matematika' ? (
+                                MATH_SUBJECT_OPTIONS.map(m => (
+                                    <option key={m} value={m}>{m}</option>
+                                ))
+                            ) : (
+                                <option value={user.subject}>{user.subject}</option>
+                            )}
+                            {user.secondarySubject && (
+                                <option value={user.secondarySubject}>{user.secondarySubject}</option>
+                            )}
+                        </>
                     )}
                 </select>
             </div>
@@ -535,15 +534,22 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
               </select>
 
               {/* Math Subject Selector in Control Bar */}
-              {(user.subject === 'Matematika' && !user.isMultiSubject && !user.secondarySubject) && (
+              {(user.subject === 'Matematika' || user.secondarySubject) && !user.isMultiSubject && (
                   <select 
                     value={selectedSubject}
                     onChange={(e) => setSelectedSubject(e.target.value)}
                     className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white text-sm font-medium text-blue-700"
                   >
-                    {MATH_SUBJECT_OPTIONS.map(m => (
-                        <option key={m} value={m}>{m}</option>
-                    ))}
+                    {user.subject === 'Matematika' ? (
+                        MATH_SUBJECT_OPTIONS.map(m => (
+                            <option key={m} value={m}>{m}</option>
+                        ))
+                    ) : (
+                        <option value={user.subject}>{user.subject}</option>
+                    )}
+                    {user.secondarySubject && (
+                        <option value={user.secondarySubject}>{user.secondarySubject}</option>
+                    )}
                   </select>
               )}
 

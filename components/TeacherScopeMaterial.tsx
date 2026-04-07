@@ -54,14 +54,11 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
       if (!selectedSubject || !subjects.includes(selectedSubject)) {
          setSelectedSubject(subjects[0]);
       }
-    } else if (user.subject === 'Matematika') {
-      // Default to ALL for Math teachers (Force ALL to show everything)
+    } else if (user.subject === 'Matematika' || user.secondarySubject) {
+      // Default to ALL for Math teachers or teachers with secondary subject
       if (selectedSubject !== 'ALL') {
          setSelectedSubject('ALL');
       }
-    } else if (user.secondarySubject) {
-      // If has secondary subject, default filter to ALL to show both
-      setSelectedSubject('ALL');
     } else {
       setSelectedSubject(user.subject || '');
     }
@@ -329,15 +326,19 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
                         ((user.phase === 'B' || user.phase === 'C') ? SD_SUBJECTS_PHASE_BC : SD_SUBJECTS_PHASE_A).map(s => (
                             <option key={s} value={s}>{s}</option>
                         ))
-                    ) : user.secondarySubject ? (
-                        <>
-                            <option value={user.subject}>{user.subject}</option>
-                            <option value={user.secondarySubject}>{user.secondarySubject}</option>
-                        </>
                     ) : (
-                        MATH_SUBJECT_OPTIONS.map(m => (
-                            <option key={m} value={m}>{m}</option>
-                        ))
+                        <>
+                            {user.subject === 'Matematika' ? (
+                                MATH_SUBJECT_OPTIONS.map(m => (
+                                    <option key={m} value={m}>{m}</option>
+                                ))
+                            ) : (
+                                <option value={user.subject}>{user.subject}</option>
+                            )}
+                            {user.secondarySubject && (
+                                <option value={user.secondarySubject}>{user.secondarySubject}</option>
+                            )}
+                        </>
                     )}
                 </select>
                 <Filter size={16} className="absolute right-3 top-3 text-blue-400 pointer-events-none" />
@@ -437,15 +438,19 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
                                 ((user.phase === 'B' || user.phase === 'C') ? SD_SUBJECTS_PHASE_BC : SD_SUBJECTS_PHASE_A).map(s => (
                                     <option key={s} value={s}>{s}</option>
                                 ))
-                            ) : user.secondarySubject ? (
-                                <>
-                                    <option value={user.subject}>{user.subject}</option>
-                                    <option value={user.secondarySubject}>{user.secondarySubject}</option>
-                                </>
                             ) : (
-                                MATH_SUBJECT_OPTIONS.map(m => (
-                                    <option key={m} value={m}>{m}</option>
-                                ))
+                                <>
+                                    {user.subject === 'Matematika' ? (
+                                        MATH_SUBJECT_OPTIONS.map(m => (
+                                            <option key={m} value={m}>{m}</option>
+                                        ))
+                                    ) : (
+                                        <option value={user.subject}>{user.subject}</option>
+                                    )}
+                                    {user.secondarySubject && (
+                                        <option value={user.secondarySubject}>{user.secondarySubject}</option>
+                                    )}
+                                </>
                             )}
                         </select>
                     </div>
