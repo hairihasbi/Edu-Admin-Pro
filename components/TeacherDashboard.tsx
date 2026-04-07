@@ -255,6 +255,10 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
   // Schedule Logic
   const handleAddSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (user.additionalRole !== 'WAKASEK_KURIKULUM') {
+      alert("Hanya Wakasek Kurikulum yang dapat mengelola jadwal.");
+      return;
+    }
     if (!newSchedule.className || !newSchedule.subject) return;
 
     const added = await addTeachingSchedule({
@@ -279,6 +283,10 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
   };
 
   const handleDeleteSchedule = async (id: string) => {
+    if (user.additionalRole !== 'WAKASEK_KURIKULUM') {
+      alert("Hanya Wakasek Kurikulum yang dapat mengelola jadwal.");
+      return;
+    }
     if (confirm("Hapus jadwal ini?")) {
       await deleteTeachingSchedule(id);
       setSchedules(prev => prev.filter(s => s.id !== id));
@@ -593,7 +601,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
               </div>
               <button 
                 onClick={() => setIsScheduleModalOpen(true)}
-                className="flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-sm font-medium transition"
+                className={`flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-sm font-medium transition ${user.additionalRole !== 'WAKASEK_KURIKULUM' ? 'hidden' : ''}`}
               >
                 <Settings size={14} /> Atur Jadwal
               </button>
@@ -606,9 +614,11 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
             ) : todaySchedules.length === 0 ? (
               <div className="p-8 text-center text-gray-400">
                 <p>Tidak ada jadwal mengajar pada hari {currentDayName}.</p>
-                <button onClick={() => setIsScheduleModalOpen(true)} className="text-blue-600 text-sm mt-2 hover:underline">
-                  + Tambah Jadwal
-                </button>
+                {user.additionalRole === 'WAKASEK_KURIKULUM' && (
+                  <button onClick={() => setIsScheduleModalOpen(true)} className="text-blue-600 text-sm mt-2 hover:underline">
+                    + Tambah Jadwal
+                  </button>
+                )}
               </div>
             ) : (
               todaySchedules.map((item) => {

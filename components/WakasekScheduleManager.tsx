@@ -39,6 +39,29 @@ const WakasekScheduleManager: React.FC<WakasekScheduleManagerProps> = ({ user })
   const [filterTeacherId, setFilterTeacherId] = useState('ALL');
   const [activeTab, setActiveTab] = useState('Senin');
 
+  const getSchoolLevel = () => {
+    const name = (user.schoolName || '').toUpperCase();
+    if (name.includes('SD')) return 'SD';
+    if (name.includes('SMP')) return 'SMP';
+    if (name.includes('SMA')) return 'SMA';
+    if (name.includes('SMK')) return 'SMK';
+    
+    // Fallback: Check class names (SD: 1-6, SMP: 7-9, SMA/SMK: 10-12)
+    const classNums = classes.map(c => parseInt(c.name.replace(/\D/g, ''))).filter(n => !isNaN(n));
+    if (classNums.length > 0) {
+      if (classNums.some(n => n >= 1 && n <= 6)) return 'SD';
+      if (classNums.some(n => n >= 7 && n <= 9)) return 'SMP';
+      if (classNums.some(n => n >= 10 && n <= 12)) return 'SMA';
+    }
+    return 'SEMUA';
+  };
+
+  const schoolLevel = getSchoolLevel();
+
+  const filteredMasterSubjects = masterSubjects.filter(s => 
+    s.level === 'SEMUA' || s.level === schoolLevel
+  );
+
   useEffect(() => {
     loadData();
   }, [user.schoolNpsn]);
@@ -69,14 +92,16 @@ const WakasekScheduleManager: React.FC<WakasekScheduleManagerProps> = ({ user })
     if (selectedTeacherId) {
       const teacher = teachers.find(t => t.id === selectedTeacherId);
       if (teacher) {
-        if (teacher.subjects && teacher.subjects.length > 0) {
+        if (schoolLevel === 'SD' || teacher.teacherType === 'CLASS') {
+          setSubject('Guru Kelas');
+        } else if (teacher.subjects && teacher.subjects.length > 0) {
           setSubject(teacher.subjects[0]);
         } else if (teacher.subject) {
           setSubject(teacher.subject);
         }
       }
     }
-  }, [selectedTeacherId, teachers]);
+  }, [selectedTeacherId, teachers, schoolLevel]);
 
   const handleAddSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -253,11 +278,19 @@ const WakasekScheduleManager: React.FC<WakasekScheduleManagerProps> = ({ user })
                       </option>
                     )}
                     {/* Master subjects */}
-                    <optgroup label="Daftar Mata Pelajaran">
-                      {masterSubjects.map(s => (
+                    <optgroup label={`Daftar Mata Pelajaran (${schoolLevel})`}>
+                      {filteredMasterSubjects.map(s => (
                         <option key={s.id} value={s.name}>{s.name}</option>
                       ))}
                     </optgroup>
+                    {schoolLevel === 'SD' && (
+                      <optgroup label="Khusus SD / Guru Kelas">
+                        <option value="Guru Kelas">Guru Kelas</option>
+                        <option value="Tematik">Tematik</option>
+                        <option value="PABP">PABP (Agama)</option>
+                        <option value="PJOK">PJOK (Olahraga)</option>
+                      </optgroup>
+                    )}
                   </select>
                 </div>
               </div>
