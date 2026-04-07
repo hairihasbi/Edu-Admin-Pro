@@ -396,7 +396,7 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
                                           return (
                                             <div key={s.id} className={`p-2 rounded border flex items-center justify-between ${isFilled ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-100'}`}>
                                               <div>
-                                                <div className="text-[10px] font-bold text-gray-800">{s.subject}</div>
+                                                <div className="text-[10px] font-bold text-gray-800">Jam {s.meetingNo || '-'}: {s.subject}</div>
                                                 <div className="text-[9px] text-gray-500">{s.className} | {s.timeStart}-{s.timeEnd}</div>
                                               </div>
                                               {isFilled ? <CheckCircle size={14} className="text-green-600" /> : <XCircle size={14} className="text-red-400" />}
@@ -543,7 +543,7 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
                                           return (
                                             <div key={s.id} className={`p-2 rounded border flex items-center justify-between ${isFilled ? 'bg-blue-50 border-blue-100' : 'bg-red-50 border-red-100'}`}>
                                               <div>
-                                                <div className="text-[10px] font-bold text-gray-800">{s.subject}</div>
+                                                <div className="text-[10px] font-bold text-gray-800">Jam {s.meetingNo || '-'}: {s.subject}</div>
                                                 <div className="text-[9px] text-gray-500">{teacherNameMap[s.userId]} | {s.timeStart}-{s.timeEnd}</div>
                                               </div>
                                               {isFilled ? <CheckCircle size={14} className="text-blue-600" /> : <XCircle size={14} className="text-red-400" />}
