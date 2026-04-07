@@ -1,18 +1,21 @@
 
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { User, TeachingJournal, AttendanceRecord } from '../types';
-import { getSchoolTeachers, getSchoolJournals, getSchoolAttendance } from '../services/database';
-import { Activity, CheckCircle, XCircle, Calendar, Users, Search, Filter, Clock, Info, AlertCircle } from './Icons';
+import { getSchoolTeachers, getSchoolJournals, getSchoolAttendance, syncAllData } from '../services/database';
+import { Activity, CheckCircle, XCircle, Calendar, Users, Search, Filter, Clock, Info, AlertCircle, RefreshCcw, Loader2 } from './Icons';
 
 interface WakasekMonitoringProps {
   user: User;
 }
 
 const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
+  const navigate = useNavigate();
   const [teachers, setTeachers] = useState<User[]>([]);
   const [journals, setJournals] = useState<TeachingJournal[]>([]);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -42,6 +45,30 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
     fetchData();
   }, [user.schoolNpsn, selectedDate]);
 
+  const handleSync = async () => {
+    setIsSyncing(true);
+    try {
+      await syncAllData(true);
+      // After sync, re-fetch data
+      if (!user.schoolNpsn) return;
+      const schoolTeachers = await getSchoolTeachers(user.schoolNpsn);
+      const teacherIds = schoolTeachers.map(t => t.id);
+      
+      const [schoolJournals, schoolAttendance] = await Promise.all([
+        getSchoolJournals(teacherIds, selectedDate),
+        getSchoolAttendance(teacherIds, selectedDate)
+      ]);
+
+      setTeachers(schoolTeachers.sort((a, b) => a.fullName.localeCompare(b.fullName)));
+      setJournals(schoolJournals);
+      setAttendance(schoolAttendance);
+    } catch (error) {
+      console.error("Sync failed:", error);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const filteredTeachers = teachers.filter(t => 
     t.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
     (t.subject && t.subject.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -61,6 +88,24 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
     filledAttendance: teachers.filter(t => getAttendanceStatus(t.id)).length
   };
 
+  if (!user.schoolNpsn) {
+    return (
+      <div className="max-w-4xl mx-auto p-12 text-center bg-white rounded-xl shadow-sm border border-gray-100">
+        <AlertCircle size={48} className="text-orange-500 mx-auto mb-4" />
+        <h2 className="text-xl font-bold text-gray-800 mb-2">Data Sekolah Tidak Ditemukan</h2>
+        <p className="text-gray-600 mb-6">
+          NPSN sekolah Anda belum terdaftar di profil. Silakan lengkapi data sekolah di menu Profil terlebih dahulu.
+        </p>
+        <button 
+          onClick={() => navigate('/profile')}
+          className="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition"
+        >
+          Lengkapi Profil
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-6xl mx-auto space-y-6 pb-20">
       {/* Header */}
@@ -77,14 +122,25 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
           </div>
         </div>
         
-        <div className="flex items-center gap-3 bg-gray-50 p-2 rounded-lg border border-gray-200">
-          <Calendar size={18} className="text-gray-400 ml-2" />
-          <input 
-            type="date" 
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className="bg-transparent border-none outline-none text-sm font-medium text-gray-700"
-          />
+        <div className="flex flex-wrap items-center gap-3">
+          <button 
+            onClick={handleSync}
+            disabled={isSyncing}
+            className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium transition shadow-sm disabled:opacity-50"
+          >
+            {isSyncing ? <Loader2 size={18} className="animate-spin" /> : <RefreshCcw size={18} />}
+            {isSyncing ? 'Sinkronisasi...' : 'Sinkronkan Data'}
+          </button>
+
+          <div className="flex items-center gap-3 bg-gray-50 p-2 rounded-lg border border-gray-200">
+            <Calendar size={18} className="text-gray-400 ml-2" />
+            <input 
+              type="date" 
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="bg-transparent border-none outline-none text-sm font-medium text-gray-700"
+            />
+          </div>
         </div>
       </div>
 
@@ -166,7 +222,10 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
                   <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
                     <div className="flex flex-col items-center gap-2">
                       <AlertCircle size={32} className="text-gray-300" />
-                      <p>Tidak ada data guru ditemukan.</p>
+                      <p className="font-medium">Data guru tidak ditemukan.</p>
+                      <p className="text-xs max-w-xs mx-auto">
+                        Silakan klik tombol <strong>Sinkronkan Data</strong> di atas untuk menarik data terbaru dari server.
+                      </p>
                     </div>
                   </td>
                 </tr>
