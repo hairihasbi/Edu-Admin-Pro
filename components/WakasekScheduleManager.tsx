@@ -18,6 +18,9 @@ interface WakasekScheduleManagerProps {
 }
 
 const DAYS = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+const HOURS = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));
+const MINUTES = Array.from({ length: 12 }, (_, i) => (i * 5).toString().padStart(2, '0')); // 5-minute increments for cleaner UI, but can be adjusted if needed
+const ALL_MINUTES = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0'));
 
 const WakasekScheduleManager: React.FC<WakasekScheduleManagerProps> = ({ user }) => {
   const [teachers, setTeachers] = useState<UserType[]>([]);
@@ -479,24 +482,44 @@ const WakasekScheduleManager: React.FC<WakasekScheduleManagerProps> = ({ user })
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Jam Mulai</label>
-                  <input 
-                    type="time"
-                    value={timeStart}
-                    onChange={(e) => setTimeStart(e.target.value)}
-                    className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-sm"
-                    required
-                  />
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Jam Mulai (24 Jam)</label>
+                  <div className="flex items-center gap-1">
+                    <select 
+                      value={timeStart.split(':')[0]}
+                      onChange={(e) => setTimeStart(`${e.target.value}:${timeStart.split(':')[1] || '00'}`)}
+                      className="flex-1 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-sm"
+                    >
+                      {HOURS.map(h => <option key={h} value={h}>{h}</option>)}
+                    </select>
+                    <span className="font-bold">:</span>
+                    <select 
+                      value={timeStart.split(':')[1]}
+                      onChange={(e) => setTimeStart(`${timeStart.split(':')[0] || '07'}:${e.target.value}`)}
+                      className="flex-1 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-sm"
+                    >
+                      {ALL_MINUTES.map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Jam Selesai</label>
-                  <input 
-                    type="time"
-                    value={timeEnd}
-                    onChange={(e) => setTimeEnd(e.target.value)}
-                    className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-sm"
-                    required
-                  />
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Jam Selesai (24 Jam)</label>
+                  <div className="flex items-center gap-1">
+                    <select 
+                      value={timeEnd.split(':')[0]}
+                      onChange={(e) => setTimeEnd(`${e.target.value}:${timeEnd.split(':')[1] || '00'}`)}
+                      className="flex-1 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-sm"
+                    >
+                      {HOURS.map(h => <option key={h} value={h}>{h}</option>)}
+                    </select>
+                    <span className="font-bold">:</span>
+                    <select 
+                      value={timeEnd.split(':')[1]}
+                      onChange={(e) => setTimeEnd(`${timeEnd.split(':')[0] || '08'}:${e.target.value}`)}
+                      className="flex-1 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-sm"
+                    >
+                      {ALL_MINUTES.map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </div>
                 </div>
               </div>
 
