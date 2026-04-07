@@ -546,7 +546,8 @@ export const syncAllData = async (force = false) => {
     if (force) {
         const now = Date.now();
         if (now - lastSyncTime < 10000) {
-            console.warn("Manual sync rate limited. Please wait.");
+            const waitTime = Math.ceil((10000 - (now - lastSyncTime)) / 1000);
+            console.warn(`Sinkronisasi manual dibatasi. Mohon tunggu ${waitTime} detik.`);
             return;
         }
     }
