@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { BookOpen, School, User, IdCard, CalendarDays, Layout, Users, ClipboardList, TrendingUp, Plus, Trash2, X, Settings, Heart, Coffee, Megaphone, AlertCircle, Info, Zap, DatabaseBackup, AlertTriangle, Database, WifiOff, RefreshCcw, Cloud, ArrowRight } from './Icons';
-import { User as UserType, TeachingSchedule, DashboardStatsData, Notification, UserRole } from '../types';
-import { getDashboardStats, getTeachingSchedules, addTeachingSchedule, deleteTeachingSchedule, getActiveAnnouncements, getSyncStats } from '../services/database';
+import { BookOpen, School, User, IdCard, CalendarDays, Layout, Users, ClipboardList, TrendingUp, Plus, Trash2, X, Settings, Heart, Coffee, Megaphone, AlertCircle, Info, Zap, DatabaseBackup, AlertTriangle, Database, WifiOff, RefreshCcw, Cloud, ArrowRight, CheckCircle } from './Icons';
+import { User as UserType, TeachingSchedule, DashboardStatsData, Notification, UserRole, ClassRoom } from '../types';
+import { getDashboardStats, getTeachingSchedules, addTeachingSchedule, deleteTeachingSchedule, getActiveAnnouncements, getSyncStats, getSchoolJournals, getAvailableClassesForHomeroom } from '../services/database';
 import { checkConnection } from '../services/tursoService';
 
 interface TeacherDashboardProps {
@@ -34,6 +34,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
 
   // Schedule State
   const [schedules, setSchedules] = useState<TeachingSchedule[]>([]);
+  const [todayJournals, setTodayJournals] = useState<any[]>([]);
+  const [classes, setClasses] = useState<ClassRoom[]>([]);
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [newSchedule, setNewSchedule] = useState({
     day: 'Senin',
@@ -65,6 +67,15 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
         
         const scheduleData = await getTeachingSchedules(user.id);
         setSchedules(scheduleData);
+
+        const today = new Date().toISOString().split('T')[0];
+        const journalsData = await getSchoolJournals([user.id], today);
+        setTodayJournals(journalsData);
+
+        if (user.schoolNpsn) {
+          const schoolClasses = await getAvailableClassesForHomeroom(user.schoolNpsn);
+          setClasses(schoolClasses);
+        }
         
         // Initial Sync Check
         const syncData = await getSyncStats(user);
@@ -602,25 +613,36 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
             ) : (
               todaySchedules.map((item) => {
                 const status = getScheduleStatus(item.timeStart, item.timeEnd);
+                const isJournalFilled = todayJournals.some(j => {
+                  const journalClass = classes.find(c => c.id === j.classId);
+                  return j.subject === item.subject && 
+                         (j.classId === item.className || (journalClass && journalClass.name === item.className));
+                });
+
                 return (
                   <div key={item.id} className="p-4 flex items-center justify-between hover:bg-gray-50 transition">
                     <div className="flex items-center space-x-4">
-                      <div className="p-3 bg-blue-50 text-blue-600 rounded-lg">
-                        <BookOpen size={20} />
+                      <div className={`p-3 rounded-lg ${isJournalFilled ? 'bg-green-100 text-green-600' : 'bg-blue-50 text-blue-600'}`}>
+                        {isJournalFilled ? <CheckCircle size={20} /> : <BookOpen size={20} />}
                       </div>
                       <div>
-                        <h4 className="font-semibold text-gray-800">{item.className}</h4>
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-semibold text-gray-800">{item.className}</h4>
+                          {isJournalFilled && <span className="text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded border border-green-100 uppercase">Selesai</span>}
+                        </div>
                         <p className="text-sm text-gray-500">{item.subject}</p>
                       </div>
                     </div>
                     <div className="text-right">
                       <div className="font-medium text-gray-900">{item.timeStart} - {item.timeEnd}</div>
-                      <span className={`text-xs px-2 py-1 rounded-full ${
-                        status === 'Selesai' ? 'bg-gray-100 text-gray-600' :
-                        status === 'Sedang Berlangsung' ? 'bg-green-100 text-green-700 animate-pulse' : 'bg-blue-100 text-blue-700'
-                      }`}>
-                        {status}
-                      </span>
+                      <div className="flex items-center justify-end gap-2 mt-1">
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
+                          status === 'Selesai' ? 'bg-gray-100 text-gray-600' :
+                          status === 'Sedang Berlangsung' ? 'bg-green-100 text-green-700 animate-pulse' : 'bg-blue-100 text-blue-700'
+                        }`}>
+                          {status}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 );

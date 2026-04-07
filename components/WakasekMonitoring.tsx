@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, TeachingJournal, AttendanceRecord, ClassRoom } from '../types';
-import { getSchoolTeachers, getSchoolJournals, getSchoolAttendance, syncAllData, getAvailableClassesForHomeroom } from '../services/database';
+import { User, TeachingJournal, AttendanceRecord, ClassRoom, TeachingSchedule } from '../types';
+import { getSchoolTeachers, getSchoolJournals, getSchoolAttendance, syncAllData, getAvailableClassesForHomeroom, getSchoolSchedules } from '../services/database';
 import { Activity, CheckCircle, XCircle, Calendar, Users, Search, Filter, Clock, Info, AlertCircle, RefreshCcw, Loader2, BookOpen, LayoutGrid, List as ListIcon, ChevronDown, ChevronUp } from './Icons';
 
 interface WakasekMonitoringProps {
@@ -15,6 +15,7 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
   const [classes, setClasses] = useState<ClassRoom[]>([]);
   const [journals, setJournals] = useState<TeachingJournal[]>([]);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
+  const [schedules, setSchedules] = useState<TeachingSchedule[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
@@ -28,9 +29,10 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
       if (!user.schoolNpsn) return;
       setLoading(true);
       try {
-        const [schoolTeachers, schoolClasses] = await Promise.all([
+        const [schoolTeachers, schoolClasses, schoolSchedules] = await Promise.all([
           getSchoolTeachers(user.schoolNpsn),
-          getAvailableClassesForHomeroom(user.schoolNpsn)
+          getAvailableClassesForHomeroom(user.schoolNpsn),
+          getSchoolSchedules(user.schoolNpsn)
         ]);
         
         const teacherIds = schoolTeachers.map(t => t.id);
@@ -44,6 +46,7 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
         setClasses(schoolClasses.sort((a, b) => a.name.localeCompare(b.name)));
         setJournals(schoolJournals);
         setAttendance(schoolAttendance);
+        setSchedules(schoolSchedules);
       } catch (error) {
         console.error("Failed to fetch monitoring data:", error);
       } finally {
@@ -60,9 +63,10 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
       await syncAllData(true);
       // After sync, re-fetch data
       if (!user.schoolNpsn) return;
-      const [schoolTeachers, schoolClasses] = await Promise.all([
+      const [schoolTeachers, schoolClasses, schoolSchedules] = await Promise.all([
         getSchoolTeachers(user.schoolNpsn),
-        getAvailableClassesForHomeroom(user.schoolNpsn)
+        getAvailableClassesForHomeroom(user.schoolNpsn),
+        getSchoolSchedules(user.schoolNpsn)
       ]);
       
       const teacherIds = schoolTeachers.map(t => t.id);
@@ -76,6 +80,7 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
       setClasses(schoolClasses.sort((a, b) => a.name.localeCompare(b.name)));
       setJournals(schoolJournals);
       setAttendance(schoolAttendance);
+      setSchedules(schoolSchedules);
     } catch (error) {
       console.error("Sync failed:", error);
     } finally {
@@ -111,6 +116,15 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
     teachers.forEach(t => { map[t.id] = t.fullName; });
     return map;
   }, [teachers]);
+
+  const currentDayName = useMemo(() => {
+    const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+    return days[new Date(selectedDate).getDay()];
+  }, [selectedDate]);
+
+  const todaySchedules = useMemo(() => {
+    return schedules.filter(s => s.day === currentDayName);
+  }, [schedules, currentDayName]);
 
   const getJournalStatus = (teacherId: string) => {
     return journals.some(j => j.userId === teacherId);
@@ -302,9 +316,15 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
                 ) : (
                   filteredTeachers.map(teacher => {
                     const teacherJournals = journals.filter(j => j.userId === teacher.id).sort((a, b) => a.meetingNo.localeCompare(b.meetingNo, undefined, { numeric: true }));
+                    const teacherSchedules = todaySchedules.filter(s => s.userId === teacher.id).sort((a, b) => a.timeStart.localeCompare(b.timeStart));
                     const hasJournal = teacherJournals.length > 0;
                     const hasAttendance = attendance.some(a => a.userId === teacher.id);
                     const isExpanded = expandedTeacherId === teacher.id;
+                    
+                    // Calculate compliance
+                    const plannedCount = teacherSchedules.length;
+                    const actualCount = teacherJournals.length;
+                    const isFullyCompliant = plannedCount > 0 && actualCount >= plannedCount;
                     
                     return (
                       <React.Fragment key={teacher.id}>
@@ -318,13 +338,25 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
                             <div className="text-[10px] text-purple-600 font-medium mt-1">{teacher.subject || (teacher.teacherType === 'CLASS' ? 'Guru Kelas' : '-')}</div>
                           </td>
                           <td className="px-6 py-4 text-center">
-                            {hasJournal ? (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-green-50 text-green-700 text-[10px] font-bold border border-green-100">
-                                <CheckCircle size={12} /> {teacherJournals.length} SESI
+                            {plannedCount > 0 ? (
+                              <div className="flex flex-col items-center gap-1">
+                                <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold border ${
+                                  isFullyCompliant ? 'bg-green-50 text-green-700 border-green-100' : 
+                                  actualCount > 0 ? 'bg-yellow-50 text-yellow-700 border-yellow-100' : 
+                                  'bg-red-50 text-red-700 border-red-100'
+                                }`}>
+                                  {isFullyCompliant ? <CheckCircle size={12} /> : actualCount > 0 ? <Clock size={12} /> : <XCircle size={12} />}
+                                  {actualCount} / {plannedCount} SESI
+                                </span>
+                                <span className="text-[9px] text-gray-400">Target: {plannedCount} Sesi</span>
+                              </div>
+                            ) : hasJournal ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 text-[10px] font-bold border border-blue-100">
+                                <Info size={12} /> {actualCount} SESI (Luar Jadwal)
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-50 text-red-700 text-[10px] font-bold border border-red-100">
-                                <XCircle size={12} /> BELUM
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-gray-50 text-gray-400 text-[10px] font-bold border border-gray-100">
+                                TIDAK ADA JADWAL
                               </span>
                             )}
                           </td>
@@ -349,31 +381,59 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
                           <tr>
                             <td colSpan={4} className="px-6 py-4 bg-gray-50/50 border-t border-gray-100">
                               <div className="animate-in fade-in slide-in-from-top-2 duration-200">
-                                <h4 className="text-xs font-bold text-gray-700 mb-3 flex items-center gap-2">
-                                  <ListIcon size={14} /> Detail Jurnal Mengajar - {teacher.fullName}
-                                </h4>
-                                {hasJournal ? (
-                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                                    {teacherJournals.map(journal => (
-                                      <div key={journal.id} className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
-                                        <div className="flex items-center justify-between mb-2">
-                                          <span className="text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded">Jam ke-{journal.meetingNo}</span>
-                                          <span className="text-[10px] font-bold text-gray-600">{classNameMap[journal.classId] || 'Kelas Tidak Diketahui'}</span>
-                                        </div>
-                                        <div className="text-xs font-bold text-gray-800 mb-1">{journal.learningObjective}</div>
-                                        <div className="text-[10px] text-gray-600 line-clamp-2 mb-2">{journal.activities}</div>
-                                        <div className="pt-2 border-t border-gray-50 flex justify-between items-center">
-                                          <span className="text-[9px] text-gray-400 italic">Input: {journal.lastModified ? new Date(journal.lastModified).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'}</span>
-                                          <span className="text-[9px] font-medium text-green-600">Tersimpan</span>
-                                        </div>
+                                <div className="space-y-4">
+                                  {/* Planned Schedules */}
+                                  {teacherSchedules.length > 0 && (
+                                    <div>
+                                      <h5 className="text-[10px] font-bold text-gray-500 uppercase mb-2">Rencana Jadwal Hari Ini</h5>
+                                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 mb-4">
+                                        {teacherSchedules.map(s => {
+                                          const isFilled = journals.some(j => 
+                                            j.userId === teacher.id && 
+                                            j.classId === classes.find(c => c.name === s.className)?.id &&
+                                            j.subject === s.subject
+                                          );
+                                          return (
+                                            <div key={s.id} className={`p-2 rounded border flex items-center justify-between ${isFilled ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-100'}`}>
+                                              <div>
+                                                <div className="text-[10px] font-bold text-gray-800">{s.subject}</div>
+                                                <div className="text-[9px] text-gray-500">{s.className} | {s.timeStart}-{s.timeEnd}</div>
+                                              </div>
+                                              {isFilled ? <CheckCircle size={14} className="text-green-600" /> : <XCircle size={14} className="text-red-400" />}
+                                            </div>
+                                          );
+                                        })}
                                       </div>
-                                    ))}
+                                    </div>
+                                  )}
+
+                                  {/* Actual Journals */}
+                                  <div>
+                                    <h5 className="text-[10px] font-bold text-gray-500 uppercase mb-2">Realisasi Jurnal Mengajar</h5>
+                                    {hasJournal ? (
+                                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                        {teacherJournals.map(journal => (
+                                          <div key={journal.id} className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
+                                            <div className="flex items-center justify-between mb-2">
+                                              <span className="text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded">Jam ke-{journal.meetingNo}</span>
+                                              <span className="text-[10px] font-bold text-gray-600">{classNameMap[journal.classId] || 'Kelas Tidak Diketahui'}</span>
+                                            </div>
+                                            <div className="text-xs font-bold text-gray-800 mb-1">{journal.learningObjective}</div>
+                                            <div className="text-[10px] text-gray-600 line-clamp-2 mb-2">{journal.activities}</div>
+                                            <div className="pt-2 border-t border-gray-50 flex justify-between items-center">
+                                              <span className="text-[9px] text-gray-400 italic">Input: {journal.lastModified ? new Date(journal.lastModified).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'}</span>
+                                              <span className="text-[9px] font-medium text-green-600">Tersimpan</span>
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <div className="text-center py-6 bg-white rounded-lg border border-dashed border-gray-300">
+                                        <p className="text-xs text-gray-400 italic">Belum ada sesi mengajar yang tercatat hari ini</p>
+                                      </div>
+                                    )}
                                   </div>
-                                ) : (
-                                  <div className="text-center py-6 bg-white rounded-lg border border-dashed border-gray-300">
-                                    <p className="text-xs text-gray-400 italic">Belum ada sesi mengajar yang tercatat hari ini</p>
-                                  </div>
-                                )}
+                                </div>
                               </div>
                             </td>
                           </tr>
@@ -414,9 +474,14 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
                 ) : (
                   filteredClasses.map(cls => {
                     const classJournals = journals.filter(j => j.classId === cls.id).sort((a, b) => a.meetingNo.localeCompare(b.meetingNo, undefined, { numeric: true }));
+                    const classSchedules = todaySchedules.filter(s => s.className === cls.name).sort((a, b) => a.timeStart.localeCompare(b.timeStart));
                     const hasKBM = classJournals.length > 0;
                     const isExpanded = expandedClassId === cls.id;
                     
+                    const plannedCount = classSchedules.length;
+                    const actualCount = classJournals.length;
+                    const isFullyCompliant = plannedCount > 0 && actualCount >= plannedCount;
+
                     return (
                       <React.Fragment key={cls.id}>
                         <tr 
@@ -431,13 +496,25 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
                             )}
                           </td>
                           <td className="px-6 py-4 text-center">
-                            {hasKBM ? (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-green-50 text-green-700 text-[10px] font-bold border border-green-100">
-                                <CheckCircle size={12} /> {classJournals.length} SESI
+                            {plannedCount > 0 ? (
+                              <div className="flex flex-col items-center gap-1">
+                                <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold border ${
+                                  isFullyCompliant ? 'bg-green-50 text-green-700 border-green-100' : 
+                                  actualCount > 0 ? 'bg-yellow-50 text-yellow-700 border-yellow-100' : 
+                                  'bg-red-50 text-red-700 border-red-100'
+                                }`}>
+                                  {isFullyCompliant ? <CheckCircle size={12} /> : actualCount > 0 ? <Clock size={12} /> : <XCircle size={12} />}
+                                  {actualCount} / {plannedCount} SESI
+                                </span>
+                                <span className="text-[9px] text-gray-400">Target: {plannedCount} Sesi</span>
+                              </div>
+                            ) : hasKBM ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 text-[10px] font-bold border border-blue-100">
+                                <Info size={12} /> {actualCount} SESI (Luar Jadwal)
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-50 text-red-700 text-[10px] font-bold border border-red-100">
-                                <XCircle size={12} /> KOSONG
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-gray-50 text-gray-400 text-[10px] font-bold border border-gray-100">
+                                TIDAK ADA JADWAL
                               </span>
                             )}
                           </td>
@@ -451,31 +528,59 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
                           <tr>
                             <td colSpan={3} className="px-6 py-4 bg-gray-50/50 border-t border-gray-100">
                               <div className="animate-in fade-in slide-in-from-top-2 duration-200">
-                                <h4 className="text-xs font-bold text-gray-700 mb-3 flex items-center gap-2">
-                                  <ListIcon size={14} /> Kronologi Pembelajaran - {cls.name}
-                                </h4>
-                                {hasKBM ? (
-                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                                    {classJournals.map(journal => (
-                                      <div key={journal.id} className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
-                                        <div className="flex items-center justify-between mb-2">
-                                          <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded">Jam ke-{journal.meetingNo}</span>
-                                          <span className="text-[10px] font-bold text-gray-600">{teacherNameMap[journal.userId] || 'Guru Tidak Diketahui'}</span>
-                                        </div>
-                                        <div className="text-xs font-bold text-gray-800 mb-1">{journal.subject}</div>
-                                        <div className="text-[10px] text-gray-600 line-clamp-2 mb-2">{journal.learningObjective}</div>
-                                        <div className="pt-2 border-t border-gray-50 flex justify-between items-center">
-                                          <span className="text-[9px] text-gray-400 italic">Input: {journal.lastModified ? new Date(journal.lastModified).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'}</span>
-                                          <span className="text-[9px] font-medium text-blue-600">Terverifikasi</span>
-                                        </div>
+                                <div className="space-y-4">
+                                  {/* Planned Schedules */}
+                                  {classSchedules.length > 0 && (
+                                    <div>
+                                      <h5 className="text-[10px] font-bold text-gray-500 uppercase mb-2">Rencana Jadwal Hari Ini</h5>
+                                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 mb-4">
+                                        {classSchedules.map(s => {
+                                          const isFilled = journals.some(j => 
+                                            j.classId === cls.id && 
+                                            j.userId === s.userId &&
+                                            j.subject === s.subject
+                                          );
+                                          return (
+                                            <div key={s.id} className={`p-2 rounded border flex items-center justify-between ${isFilled ? 'bg-blue-50 border-blue-100' : 'bg-red-50 border-red-100'}`}>
+                                              <div>
+                                                <div className="text-[10px] font-bold text-gray-800">{s.subject}</div>
+                                                <div className="text-[9px] text-gray-500">{teacherNameMap[s.userId]} | {s.timeStart}-{s.timeEnd}</div>
+                                              </div>
+                                              {isFilled ? <CheckCircle size={14} className="text-blue-600" /> : <XCircle size={14} className="text-red-400" />}
+                                            </div>
+                                          );
+                                        })}
                                       </div>
-                                    ))}
+                                    </div>
+                                  )}
+
+                                  {/* Actual Journals */}
+                                  <div>
+                                    <h5 className="text-[10px] font-bold text-gray-500 uppercase mb-2">Kronologi Pembelajaran</h5>
+                                    {hasKBM ? (
+                                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                        {classJournals.map(journal => (
+                                          <div key={journal.id} className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
+                                            <div className="flex items-center justify-between mb-2">
+                                              <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded">Jam ke-{journal.meetingNo}</span>
+                                              <span className="text-[10px] font-bold text-gray-600">{teacherNameMap[journal.userId] || 'Guru Tidak Diketahui'}</span>
+                                            </div>
+                                            <div className="text-xs font-bold text-gray-800 mb-1">{journal.subject}</div>
+                                            <div className="text-[10px] text-gray-600 line-clamp-2 mb-2">{journal.learningObjective}</div>
+                                            <div className="pt-2 border-t border-gray-50 flex justify-between items-center">
+                                              <span className="text-[9px] text-gray-400 italic">Input: {journal.lastModified ? new Date(journal.lastModified).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'}</span>
+                                              <span className="text-[9px] font-medium text-blue-600">Terverifikasi</span>
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <div className="text-center py-6 bg-white rounded-lg border border-dashed border-gray-300">
+                                        <p className="text-xs text-gray-400 italic">Belum ada aktivitas belajar mengajar hari ini</p>
+                                      </div>
+                                    )}
                                   </div>
-                                ) : (
-                                  <div className="text-center py-6 bg-white rounded-lg border border-dashed border-gray-300">
-                                    <p className="text-xs text-gray-400 italic">Belum ada aktivitas belajar mengajar hari ini</p>
-                                  </div>
-                                )}
+                                </div>
                               </div>
                             </td>
                           </tr>
