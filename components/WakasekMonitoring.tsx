@@ -1,9 +1,9 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, TeachingJournal, AttendanceRecord } from '../types';
-import { getSchoolTeachers, getSchoolJournals, getSchoolAttendance, syncAllData } from '../services/database';
-import { Activity, CheckCircle, XCircle, Calendar, Users, Search, Filter, Clock, Info, AlertCircle, RefreshCcw, Loader2 } from './Icons';
+import { User, TeachingJournal, AttendanceRecord, ClassRoom } from '../types';
+import { getSchoolTeachers, getSchoolJournals, getSchoolAttendance, syncAllData, getAvailableClassesForHomeroom } from '../services/database';
+import { Activity, CheckCircle, XCircle, Calendar, Users, Search, Filter, Clock, Info, AlertCircle, RefreshCcw, Loader2, BookOpen, LayoutGrid, List as ListIcon } from './Icons';
 
 interface WakasekMonitoringProps {
   user: User;
@@ -12,19 +12,25 @@ interface WakasekMonitoringProps {
 const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
   const navigate = useNavigate();
   const [teachers, setTeachers] = useState<User[]>([]);
+  const [classes, setClasses] = useState<ClassRoom[]>([]);
   const [journals, setJournals] = useState<TeachingJournal[]>([]);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState<'GURU' | 'KELAS'>('GURU');
 
   useEffect(() => {
     const fetchData = async () => {
       if (!user.schoolNpsn) return;
       setLoading(true);
       try {
-        const schoolTeachers = await getSchoolTeachers(user.schoolNpsn);
+        const [schoolTeachers, schoolClasses] = await Promise.all([
+          getSchoolTeachers(user.schoolNpsn),
+          getAvailableClassesForHomeroom(user.schoolNpsn)
+        ]);
+        
         const teacherIds = schoolTeachers.map(t => t.id);
         
         const [schoolJournals, schoolAttendance] = await Promise.all([
@@ -33,6 +39,7 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
         ]);
 
         setTeachers(schoolTeachers.sort((a, b) => a.fullName.localeCompare(b.fullName)));
+        setClasses(schoolClasses.sort((a, b) => a.name.localeCompare(b.name)));
         setJournals(schoolJournals);
         setAttendance(schoolAttendance);
       } catch (error) {
@@ -51,7 +58,11 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
       await syncAllData(true);
       // After sync, re-fetch data
       if (!user.schoolNpsn) return;
-      const schoolTeachers = await getSchoolTeachers(user.schoolNpsn);
+      const [schoolTeachers, schoolClasses] = await Promise.all([
+        getSchoolTeachers(user.schoolNpsn),
+        getAvailableClassesForHomeroom(user.schoolNpsn)
+      ]);
+      
       const teacherIds = schoolTeachers.map(t => t.id);
       
       const [schoolJournals, schoolAttendance] = await Promise.all([
@@ -60,6 +71,7 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
       ]);
 
       setTeachers(schoolTeachers.sort((a, b) => a.fullName.localeCompare(b.fullName)));
+      setClasses(schoolClasses.sort((a, b) => a.name.localeCompare(b.name)));
       setJournals(schoolJournals);
       setAttendance(schoolAttendance);
     } catch (error) {
@@ -73,6 +85,22 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
     t.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
     (t.subject && t.subject.toLowerCase().includes(searchQuery.toLowerCase()))
   );
+
+  const filteredClasses = classes.filter(c => 
+    c.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const classNameMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    classes.forEach(c => { map[c.id] = c.name; });
+    return map;
+  }, [classes]);
+
+  const teacherNameMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    teachers.forEach(t => { map[t.id] = t.fullName; });
+    return map;
+  }, [teachers]);
 
   const getJournalStatus = (teacherId: string) => {
     return journals.some(j => j.userId === teacherId);
@@ -145,7 +173,7 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
           <div className="p-3 bg-blue-50 text-blue-600 rounded-lg">
             <Users size={20} />
@@ -153,6 +181,16 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
           <div>
             <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">Total Guru</p>
             <p className="text-2xl font-bold text-gray-800">{stats.total}</p>
+          </div>
+        </div>
+
+        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
+          <div className="p-3 bg-purple-50 text-purple-600 rounded-lg">
+            <BookOpen size={20} />
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">Total Kelas</p>
+            <p className="text-2xl font-bold text-gray-800">{classes.length}</p>
           </div>
         </div>
         
@@ -177,6 +215,32 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
         </div>
       </div>
 
+      {/* Tabs */}
+      <div className="flex p-1 bg-gray-100 rounded-xl w-fit">
+        <button
+          onClick={() => setActiveTab('GURU')}
+          className={`flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-medium transition ${
+            activeTab === 'GURU' 
+              ? 'bg-white text-purple-600 shadow-sm' 
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <Users size={18} />
+          Monitoring Per Guru
+        </button>
+        <button
+          onClick={() => setActiveTab('KELAS')}
+          className={`flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-medium transition ${
+            activeTab === 'KELAS' 
+              ? 'bg-white text-purple-600 shadow-sm' 
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <LayoutGrid size={18} />
+          Monitoring Per Kelas
+        </button>
+      </div>
+
       {/* Main Content */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-center gap-4">
@@ -184,7 +248,7 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
             <Search className="absolute left-3 top-2.5 text-gray-400" size={16} />
             <input 
               type="text"
-              placeholder="Cari nama guru atau mapel..."
+              placeholder={activeTab === 'GURU' ? "Cari nama guru atau mapel..." : "Cari nama kelas..."}
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-sm"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -196,96 +260,183 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead className="bg-gray-50 text-gray-600 font-semibold text-xs uppercase tracking-wider">
-              <tr>
-                <th className="px-6 py-4">Nama Guru</th>
-                <th className="px-6 py-4">Mata Pelajaran Utama</th>
-                <th className="px-6 py-4 text-center">Jurnal Mengajar</th>
-                <th className="px-6 py-4 text-center">Absensi Siswa</th>
-                <th className="px-6 py-4">Keterangan</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {loading ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <tr key={i} className="animate-pulse">
-                    <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded w-32"></div></td>
-                    <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded w-24"></div></td>
-                    <td className="px-6 py-4"><div className="h-6 bg-gray-200 rounded-full w-12 mx-auto"></div></td>
-                    <td className="px-6 py-4"><div className="h-6 bg-gray-200 rounded-full w-12 mx-auto"></div></td>
-                    <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded w-20"></div></td>
-                  </tr>
-                ))
-              ) : filteredTeachers.length === 0 ? (
+          {activeTab === 'GURU' ? (
+            <table className="w-full text-left border-collapse">
+              <thead className="bg-gray-50 text-gray-600 font-semibold text-xs uppercase tracking-wider">
                 <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
-                    <div className="flex flex-col items-center gap-2">
-                      <AlertCircle size={32} className="text-gray-300" />
-                      <p className="font-medium">Data guru tidak ditemukan.</p>
-                      <p className="text-xs max-w-xs mx-auto">
-                        Silakan klik tombol <strong>Sinkronkan Data</strong> di atas untuk menarik data terbaru dari server.
-                      </p>
-                    </div>
-                  </td>
+                  <th className="px-6 py-4">Nama Guru</th>
+                  <th className="px-6 py-4">Detail Sesi (Jam Pelajaran)</th>
+                  <th className="px-6 py-4 text-center">Status Jurnal</th>
+                  <th className="px-6 py-4 text-center">Status Absensi</th>
                 </tr>
-              ) : (
-                filteredTeachers.map(teacher => {
-                  const hasJournal = getJournalStatus(teacher.id);
-                  const hasAttendance = getAttendanceStatus(teacher.id);
-                  
-                  return (
-                    <tr key={teacher.id} className="hover:bg-gray-50 transition">
-                      <td className="px-6 py-4">
-                        <div className="font-medium text-gray-800">{teacher.fullName}</div>
-                        <div className="text-[10px] text-gray-400">NIP: {teacher.nip || '-'}</div>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-600">
-                        {teacher.subject || (teacher.teacherType === 'CLASS' ? 'Guru Kelas' : '-')}
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        {hasJournal ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-green-50 text-green-700 text-[10px] font-bold border border-green-100">
-                            <CheckCircle size={12} /> SUDAH
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-50 text-red-700 text-[10px] font-bold border border-red-100">
-                            <XCircle size={12} /> BELUM
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        {hasAttendance ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-green-50 text-green-700 text-[10px] font-bold border border-green-100">
-                            <CheckCircle size={12} /> SUDAH
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-50 text-red-700 text-[10px] font-bold border border-red-100">
-                            <XCircle size={12} /> BELUM
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4">
-                        {!hasJournal && !hasAttendance ? (
-                          <span className="text-[10px] text-red-500 font-medium italic">Belum ada aktivitas</span>
-                        ) : (
-                          <span className="text-[10px] text-green-600 font-medium italic">Aktif mengajar</span>
-                        )}
-                      </td>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {loading ? (
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <tr key={i} className="animate-pulse">
+                      <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded w-32"></div></td>
+                      <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded w-48"></div></td>
+                      <td className="px-6 py-4"><div className="h-6 bg-gray-200 rounded-full w-12 mx-auto"></div></td>
+                      <td className="px-6 py-4"><div className="h-6 bg-gray-200 rounded-full w-12 mx-auto"></div></td>
                     </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+                  ))
+                ) : filteredTeachers.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-6 py-12 text-center text-gray-500">
+                      <div className="flex flex-col items-center gap-2">
+                        <AlertCircle size={32} className="text-gray-300" />
+                        <p className="font-medium">Data guru tidak ditemukan.</p>
+                        <p className="text-xs max-w-xs mx-auto">
+                          Silakan klik tombol <strong>Sinkronkan Data</strong> di atas untuk menarik data terbaru dari server.
+                        </p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  filteredTeachers.map(teacher => {
+                    const teacherJournals = journals.filter(j => j.userId === teacher.id).sort((a, b) => a.meetingNo.localeCompare(b.meetingNo, undefined, { numeric: true }));
+                    const hasJournal = teacherJournals.length > 0;
+                    const hasAttendance = attendance.some(a => a.userId === teacher.id);
+                    
+                    return (
+                      <tr key={teacher.id} className="hover:bg-gray-50 transition align-top">
+                        <td className="px-6 py-4">
+                          <div className="font-medium text-gray-800">{teacher.fullName}</div>
+                          <div className="text-[10px] text-gray-400">NIP: {teacher.nip || '-'}</div>
+                          <div className="text-[10px] text-purple-600 font-medium mt-1">{teacher.subject || (teacher.teacherType === 'CLASS' ? 'Guru Kelas' : '-')}</div>
+                        </td>
+                        <td className="px-6 py-4">
+                          {hasJournal ? (
+                            <div className="space-y-3">
+                              {teacherJournals.map(journal => (
+                                <div key={journal.id} className="bg-gray-50 p-2 rounded border border-gray-100">
+                                  <div className="flex items-center justify-between mb-1">
+                                    <span className="text-[10px] font-bold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded">Jam ke-{journal.meetingNo}</span>
+                                    <span className="text-[10px] font-medium text-gray-500">{classNameMap[journal.classId] || 'Kelas Tidak Diketahui'}</span>
+                                  </div>
+                                  <div className="text-xs text-gray-700 line-clamp-1 font-medium">{journal.learningObjective}</div>
+                                  <div className="text-[10px] text-gray-400 italic mt-0.5">{journal.activities.substring(0, 50)}...</div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-gray-400 italic">Belum ada sesi mengajar yang tercatat hari ini</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          {hasJournal ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-green-50 text-green-700 text-[10px] font-bold border border-green-100">
+                              <CheckCircle size={12} /> {teacherJournals.length} SESI
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-50 text-red-700 text-[10px] font-bold border border-red-100">
+                              <XCircle size={12} /> BELUM
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          {hasAttendance ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-green-50 text-green-700 text-[10px] font-bold border border-green-100">
+                              <CheckCircle size={12} /> SUDAH
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-50 text-red-700 text-[10px] font-bold border border-red-100">
+                              <XCircle size={12} /> BELUM
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          ) : (
+            <table className="w-full text-left border-collapse">
+              <thead className="bg-gray-50 text-gray-600 font-semibold text-xs uppercase tracking-wider">
+                <tr>
+                  <th className="px-6 py-4">Nama Kelas</th>
+                  <th className="px-6 py-4">Detail Sesi (Jam Pelajaran)</th>
+                  <th className="px-6 py-4 text-center">Status KBM</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {loading ? (
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <tr key={i} className="animate-pulse">
+                      <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded w-32"></div></td>
+                      <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded w-48"></div></td>
+                      <td className="px-6 py-4"><div className="h-6 bg-gray-200 rounded-full w-12 mx-auto"></div></td>
+                    </tr>
+                  ))
+                ) : filteredClasses.length === 0 ? (
+                  <tr>
+                    <td colSpan={3} className="px-6 py-12 text-center text-gray-500">
+                      <div className="flex flex-col items-center gap-2">
+                        <AlertCircle size={32} className="text-gray-300" />
+                        <p className="font-medium">Data kelas tidak ditemukan.</p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  filteredClasses.map(cls => {
+                    const classJournals = journals.filter(j => j.classId === cls.id).sort((a, b) => a.meetingNo.localeCompare(b.meetingNo, undefined, { numeric: true }));
+                    const hasKBM = classJournals.length > 0;
+                    
+                    return (
+                      <tr key={cls.id} className="hover:bg-gray-50 transition align-top">
+                        <td className="px-6 py-4">
+                          <div className="font-medium text-gray-800">{cls.name}</div>
+                          <div className="text-[10px] text-gray-400">{cls.studentCount} Siswa</div>
+                          {cls.homeroomTeacherName && (
+                            <div className="text-[10px] text-blue-600 font-medium mt-1">Wali: {cls.homeroomTeacherName}</div>
+                          )}
+                        </td>
+                        <td className="px-6 py-4">
+                          {hasKBM ? (
+                            <div className="space-y-3">
+                              {classJournals.map(journal => (
+                                <div key={journal.id} className="bg-gray-50 p-2 rounded border border-gray-100">
+                                  <div className="flex items-center justify-between mb-1">
+                                    <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded">Jam ke-{journal.meetingNo}</span>
+                                    <span className="text-[10px] font-medium text-gray-500">{teacherNameMap[journal.userId] || 'Guru Tidak Diketahui'}</span>
+                                  </div>
+                                  <div className="text-xs text-gray-700 font-medium">{journal.subject}</div>
+                                  <div className="text-[10px] text-gray-600 line-clamp-1">{journal.learningObjective}</div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-gray-400 italic">Belum ada aktivitas belajar mengajar hari ini</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          {hasKBM ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-green-50 text-green-700 text-[10px] font-bold border border-green-100">
+                              <CheckCircle size={12} /> {classJournals.length} SESI
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-50 text-red-700 text-[10px] font-bold border border-red-100">
+                              <XCircle size={12} /> KOSONG
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          )}
         </div>
         
         <div className="p-4 bg-gray-50 border-t border-gray-100">
           <div className="flex items-start gap-2 text-[10px] text-gray-500">
             <Info size={14} className="mt-0.5 flex-shrink-0" />
             <p>
-              Data ini diambil secara real-time berdasarkan entri Jurnal Mengajar dan Absensi Siswa yang dilakukan oleh masing-masing guru. 
-              Jika guru mengajar di beberapa kelas dalam satu hari, status akan berubah menjadi "SUDAH" jika minimal satu kelas sudah diisi.
+              Data ini diambil secara real-time berdasarkan entri Jurnal Mengajar dan Absensi Siswa. 
+              Tab <strong>Per Guru</strong> menampilkan aktivitas mengajar setiap guru per sesi (jam pelajaran), 
+              sedangkan tab <strong>Per Kelas</strong> menampilkan kronologi pembelajaran di setiap kelas.
             </p>
           </div>
         </div>

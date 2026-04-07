@@ -1,6 +1,7 @@
 
 import { 
   LayoutDashboard, 
+  LayoutGrid,
   Users, 
   GraduationCap, 
   BookOpen, 
@@ -114,6 +115,7 @@ import {
 
 export {
   LayoutDashboard, 
+  LayoutGrid,
   Users, 
   GraduationCap, 
   BookOpen, 
