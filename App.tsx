@@ -27,6 +27,7 @@ import HelpCenter from './components/HelpCenter';
 import BroadcastPage from './components/BroadcastPage';
 import SyncPage from './components/SyncPage'; // Import SyncPage
 import DailyPicket from './components/DailyPicket'; // Import DailyPicket
+import WakasekMonitoring from './components/WakasekMonitoring'; // Import WakasekMonitoring
 import DonationHistory from './components/DonationHistory'; // Import DonationHistory
 import NotificationPanel from './components/NotificationPanel';
 import Breadcrumbs from './components/Breadcrumbs';
@@ -546,6 +547,7 @@ const AppContent: React.FC = () => {
     if (path.includes('guidance')) return 'Bimbingan Konseling';
     if (path.includes('broadcast')) return 'Broadcast WhatsApp';
     if (path.includes('sync')) return 'Sinkronisasi Data'; // NEW
+    if (path.includes('monitoring-kurikulum')) return 'Monitoring Kurikulum'; // NEW
     return appConfig.name || 'EduAdmin';
   };
 
@@ -764,6 +766,10 @@ const AppContent: React.FC = () => {
 
             {currentUser.role === UserRole.GURU && (
               <>
+                <NavLink to="/dashboard" icon={LayoutDashboard} label="Dashboard" />
+                {currentUser.additionalRole === 'WAKASEK_KURIKULUM' && (
+                  <NavLink to="/monitoring-kurikulum" icon={Activity} label="Monitoring Kurikulum" />
+                )}
                 <NavLink to="/classes" icon={BookOpen} label="Manajemen Kelas" />
                 {currentUser.homeroomClassId && (
                    <NavLink to="/homeroom" icon={Users} label="Wali Kelas" />
@@ -920,6 +926,9 @@ const AppContent: React.FC = () => {
                    <Route path="/scope-material" element={<TeacherScopeMaterial user={currentUser} />} />
                    <Route path="/journal" element={<TeacherJournal user={currentUser} />} />
                    <Route path="/summative" element={<TeacherSummative user={currentUser} />} />
+                   {currentUser.additionalRole === 'WAKASEK_KURIKULUM' && (
+                     <Route path="/monitoring-kurikulum" element={<WakasekMonitoring user={currentUser} />} />
+                   )}
                    <Route path="/gen-quiz" element={<TeacherGenQuiz />} />
                    <Route path="/rpp-generator" element={<TeacherRPPGenerator user={currentUser} onUpdateUser={handleQuotaUpdate} />} />
                    <Route path="/broadcast" element={<BroadcastPage user={currentUser} />} />
