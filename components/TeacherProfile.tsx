@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { User, UserRole, MasterSubject, ClassRoom } from '../types';
 import { User as UserIcon, School, IdCard, BookOpen, CheckCircle, AlertCircle, Save, Lock, Shield, Smartphone, DatabaseBackup, Info, Layout } from './Icons';
-import { updateUserProfile, updateUserPassword, getMasterSubjects, getAvailableClassesForHomeroom, claimHomeroomClass, releaseHomeroomClass } from '../services/database';
+import { updateUserProfile, updateUserPassword, getMasterSubjects, getAvailableClassesForHomeroom, claimHomeroomClass, releaseHomeroomClass, checkWakasekExists } from '../services/database';
 import WhatsAppSettings from './WhatsAppSettings';
 
 interface TeacherProfileProps {
@@ -24,7 +24,8 @@ const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onUpdateUser }) =
     phase: user.phase || '',
     teacherType: user.teacherType || 'SUBJECT',
     isMultiSubject: user.isMultiSubject || false,
-    subjects: user.subjects || []
+    subjects: user.subjects || [],
+    additionalRole: user.additionalRole || undefined
   });
 
   // Master Data State
@@ -103,6 +104,16 @@ const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onUpdateUser }) =
     setStatus({ type: null, message: '' });
 
     try {
+      // Validation for Wakasek Kurikulum
+      if (formData.additionalRole === 'WAKASEK_KURIKULUM' && user.additionalRole !== 'WAKASEK_KURIKULUM') {
+          const check = await checkWakasekExists(user.schoolNpsn || '');
+          if (check.exists) {
+              setStatus({ type: 'error', message: `Jabatan Wakasek Kurikulum sudah diambil oleh ${check.name}.` });
+              setIsSaving(false);
+              return;
+          }
+      }
+
       const dataToSave = { ...formData };
       const success = await updateUserProfile(user.id, dataToSave as any);
 
@@ -323,6 +334,33 @@ const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onUpdateUser }) =
                             </p>
                         )}
                     </div>
+
+                    {/* Additional Role Selector */}
+                    {!isAdmin && !isTendik && (
+                        <div className="bg-purple-50 p-4 rounded-lg border border-purple-100">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm font-bold text-purple-800">Tugas Tambahan: Wakasek Kurikulum</p>
+                                    <p className="text-[10px] text-purple-600">Aktifkan untuk memantau jurnal dan absensi seluruh guru di sekolah.</p>
+                                </div>
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                    <input 
+                                        type="checkbox" 
+                                        className="sr-only peer"
+                                        checked={formData.additionalRole === 'WAKASEK_KURIKULUM'}
+                                        onChange={(e) => {
+                                            const isChecked = e.target.checked;
+                                            setFormData({ 
+                                                ...formData, 
+                                                additionalRole: isChecked ? 'WAKASEK_KURIKULUM' : (user.additionalRole === 'WALI_KELAS' ? 'WALI_KELAS' : undefined)
+                                            });
+                                        }}
+                                    />
+                                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+                                </label>
+                            </div>
+                        </div>
+                    )}
 
                     {formData.isMultiSubject && (
                         <div className="space-y-3 p-4 bg-gray-50 rounded-lg border border-gray-200">
