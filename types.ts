@@ -29,7 +29,7 @@ export interface User extends Syncable {
   schoolName?: string;
   schoolNpsn?: string; // NEW: Multi-tenancy Key
   subject?: string;
-  additionalRole?: 'WALI_KELAS'; 
+  additionalRole?: 'WALI_KELAS' | 'WAKASEK_KURIKULUM'; 
   homeroomClassId?: string;
   homeroomClassName?: string; // Helper for UI
   teacherType?: 'SUBJECT' | 'CLASS'; // NEW: Teacher Type
