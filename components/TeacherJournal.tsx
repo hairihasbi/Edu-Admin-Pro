@@ -46,11 +46,20 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
       if (!formSubject) {
          setFormSubject(MATH_SUBJECT_OPTIONS[0]);
       }
+    } else if (user.secondarySubject) {
+      // Filter defaults to ALL
+      if (selectedSubject !== 'ALL') {
+         setSelectedSubject('ALL');
+      }
+      // Form defaults to primary subject
+      if (!formSubject || (formSubject !== user.subject && formSubject !== user.secondarySubject)) {
+         setFormSubject(user.subject || '');
+      }
     } else {
       setSelectedSubject(user.subject || '');
       setFormSubject(user.subject || '');
     }
-  }, [user, user.teacherType, user.phase, user.isMultiSubject, user.subjects]);
+  }, [user, user.teacherType, user.phase, user.isMultiSubject, user.subjects, user.secondarySubject]);
 
   // Form States
   const [formData, setFormData] = useState({
@@ -447,7 +456,7 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
                </div>
 
                {/* Subject Selector in Form */}
-               {(user.teacherType === 'CLASS' || user.subject === 'Matematika' || user.isMultiSubject) && (
+               {(user.teacherType === 'CLASS' || user.subject === 'Matematika' || user.isMultiSubject || user.secondarySubject) && (
                    <div>
                        <label className="block text-sm font-semibold text-blue-700 mb-1">Mata Pelajaran *</label>
                        <select
@@ -465,6 +474,11 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
                                ((user.phase === 'B' || user.phase === 'C') ? SD_SUBJECTS_PHASE_BC : SD_SUBJECTS_PHASE_A).map(s => (
                                    <option key={s} value={s}>{s}</option>
                                ))
+                           ) : user.secondarySubject ? (
+                               <>
+                                   <option value={user.subject}>{user.subject}</option>
+                                   <option value={user.secondarySubject}>{user.secondarySubject}</option>
+                               </>
                            ) : (
                                MATH_SUBJECT_OPTIONS.map(m => (
                                    <option key={m} value={m}>{m}</option>
@@ -615,20 +629,25 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
          <div className="p-6 border-b border-gray-100 flex flex-col xl:flex-row justify-between gap-6 bg-gray-50 rounded-t-xl">
              <div className="flex flex-col sm:flex-row gap-4 w-full xl:w-auto">
                  {/* Subject Filter (For Multi-Subject) */}
-                 {(user.isMultiSubject || user.teacherType === 'CLASS' || user.subject === 'Matematika') && (
+                 {(user.isMultiSubject || user.teacherType === 'CLASS' || user.subject === 'Matematika' || user.secondarySubject) && (
                     <div className="relative">
                        <select 
                           value={selectedSubject}
                           onChange={(e) => setSelectedSubject(e.target.value)}
                           className="w-full sm:w-48 pl-3 pr-10 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none appearance-none bg-white text-sm font-medium"
                        >
-                          {(user.isMultiSubject || user.subject === 'Matematika') && <option value="ALL">Semua Mapel</option>}
+                          {(user.isMultiSubject || user.subject === 'Matematika' || user.secondarySubject) && <option value="ALL">Semua Mapel</option>}
                           {user.isMultiSubject ? (
                              (user.subjects || []).map(s => <option key={s} value={s}>{s}</option>)
                           ) : user.teacherType === 'CLASS' ? (
                              ((user.phase === 'B' || user.phase === 'C') ? SD_SUBJECTS_PHASE_BC : SD_SUBJECTS_PHASE_A).map(s => (
                                 <option key={s} value={s}>{s}</option>
                              ))
+                          ) : user.secondarySubject ? (
+                             <>
+                                <option value={user.subject}>{user.subject}</option>
+                                <option value={user.secondarySubject}>{user.secondarySubject}</option>
+                             </>
                           ) : (
                              MATH_SUBJECT_OPTIONS.map(m => (
                                 <option key={m} value={m}>{m}</option>

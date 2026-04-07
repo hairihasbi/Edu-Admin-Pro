@@ -59,10 +59,13 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
       if (selectedSubject !== 'ALL') {
          setSelectedSubject('ALL');
       }
+    } else if (user.secondarySubject) {
+      // If has secondary subject, default filter to ALL to show both
+      setSelectedSubject('ALL');
     } else {
       setSelectedSubject(user.subject || '');
     }
-  }, [user, user.teacherType, user.phase, user.isMultiSubject, user.subjects]);
+  }, [user, user.teacherType, user.phase, user.isMultiSubject, user.subjects, user.secondarySubject]);
   
   // Copy Modal State
   const [copySourceClassId, setCopySourceClassId] = useState('');
@@ -312,20 +315,25 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
           </div>
 
           {/* Subject Filter (Dynamic) */}
-          {(user.isMultiSubject || user.teacherType === 'CLASS' || user.subject === 'Matematika') && (
+          {(user.isMultiSubject || user.teacherType === 'CLASS' || user.subject === 'Matematika' || user.secondarySubject) && (
             <div className="relative">
                 <select 
                     value={selectedSubject}
                     onChange={(e) => setSelectedSubject(e.target.value)}
                     className="w-full sm:w-56 pl-3 pr-10 py-2.5 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none appearance-none bg-blue-50 text-sm font-medium"
                 >
-                    {(user.isMultiSubject || user.subject === 'Matematika') && <option value="ALL">Semua Mapel</option>}
+                    {(user.isMultiSubject || user.subject === 'Matematika' || user.secondarySubject) && <option value="ALL">Semua Mapel</option>}
                     {user.isMultiSubject ? (
                         (user.subjects || []).map(s => <option key={s} value={s}>{s}</option>)
                     ) : user.teacherType === 'CLASS' ? (
                         ((user.phase === 'B' || user.phase === 'C') ? SD_SUBJECTS_PHASE_BC : SD_SUBJECTS_PHASE_A).map(s => (
                             <option key={s} value={s}>{s}</option>
                         ))
+                    ) : user.secondarySubject ? (
+                        <>
+                            <option value={user.subject}>{user.subject}</option>
+                            <option value={user.secondarySubject}>{user.secondarySubject}</option>
+                        </>
                     ) : (
                         MATH_SUBJECT_OPTIONS.map(m => (
                             <option key={m} value={m}>{m}</option>
@@ -410,7 +418,7 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
                 </div>
 
                 {/* Subject Selector in Form */}
-                {(user.teacherType === 'CLASS' || user.subject === 'Matematika' || user.isMultiSubject) && (
+                {(user.teacherType === 'CLASS' || user.subject === 'Matematika' || user.isMultiSubject || user.secondarySubject) && (
                     <div>
                         <label className="block text-xs font-medium text-gray-500 mb-1 uppercase">Mata Pelajaran</label>
                         <select
@@ -429,6 +437,11 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
                                 ((user.phase === 'B' || user.phase === 'C') ? SD_SUBJECTS_PHASE_BC : SD_SUBJECTS_PHASE_A).map(s => (
                                     <option key={s} value={s}>{s}</option>
                                 ))
+                            ) : user.secondarySubject ? (
+                                <>
+                                    <option value={user.subject}>{user.subject}</option>
+                                    <option value={user.secondarySubject}>{user.secondarySubject}</option>
+                                </>
                             ) : (
                                 MATH_SUBJECT_OPTIONS.map(m => (
                                     <option key={m} value={m}>{m}</option>
