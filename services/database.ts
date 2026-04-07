@@ -150,6 +150,35 @@ export const getPendingTeachers = async () => {
     return await db.users.where('status').equals('PENDING').toArray();
 };
 
+export const checkWakasekExists = async (schoolNpsn: string): Promise<{ exists: boolean; name?: string }> => {
+    const wakasek = await db.users
+        .where('schoolNpsn').equals(schoolNpsn)
+        .and(u => u.additionalRole === 'WAKASEK_KURIKULUM')
+        .first();
+    return { exists: !!wakasek, name: wakasek?.fullName };
+};
+
+export const getSchoolTeachers = async (schoolNpsn: string): Promise<User[]> => {
+    return await db.users
+        .where('schoolNpsn').equals(schoolNpsn)
+        .and(u => u.role === 'GURU' && u.status === 'ACTIVE')
+        .toArray();
+};
+
+export const getSchoolJournals = async (teacherIds: string[], date: string): Promise<TeachingJournal[]> => {
+    return await db.teachingJournals
+        .where('userId').anyOf(teacherIds)
+        .and(j => j.date === date)
+        .toArray();
+};
+
+export const getSchoolAttendance = async (teacherIds: string[], date: string): Promise<AttendanceRecord[]> => {
+    return await db.attendanceRecords
+        .where('userId').anyOf(teacherIds)
+        .and(a => a.date === date)
+        .toArray();
+};
+
 export const approveTeacher = async (id: string) => {
     await db.users.update(id, { status: 'ACTIVE', lastModified: Date.now(), isSynced: false });
     const user = await db.users.get(id);
