@@ -29,6 +29,28 @@ const WakasekScheduleManager: React.FC<WakasekScheduleManagerProps> = ({ user })
   const [isImportMenuOpen, setIsImportMenuOpen] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
+  const formatTime24 = (timeStr: string): string => {
+    if (!timeStr) return '00:00';
+    // Clean string
+    const clean = timeStr.trim();
+    // If already HH:mm
+    if (/^\d{2}:\d{2}$/.test(clean)) return clean;
+    
+    // Try to parse AM/PM or H:mm
+    const match = clean.match(/(\d{1,2})[:.](\d{2})\s*(AM|PM)?/i);
+    if (match) {
+      let hours = parseInt(match[1]);
+      const minutes = match[2];
+      const ampm = match[3]?.toUpperCase();
+      
+      if (ampm === 'PM' && hours < 12) hours += 12;
+      if (ampm === 'AM' && hours === 12) hours = 0;
+      
+      return `${hours.toString().padStart(2, '0')}:${minutes}`;
+    }
+    return clean;
+  };
+
   // Form State
   const [selectedTeacherId, setSelectedTeacherId] = useState('');
   const [selectedClassId, setSelectedClassId] = useState('');
@@ -123,8 +145,8 @@ const WakasekScheduleManager: React.FC<WakasekScheduleManagerProps> = ({ user })
       schoolNpsn: user.schoolNpsn,
       day: selectedDay,
       meetingNo,
-      timeStart,
-      timeEnd,
+      timeStart: formatTime24(timeStart),
+      timeEnd: formatTime24(timeEnd),
       className: cls.name,
       subject
     };
@@ -230,8 +252,8 @@ const WakasekScheduleManager: React.FC<WakasekScheduleManagerProps> = ({ user })
               schoolNpsn: user.schoolNpsn!,
               day,
               meetingNo: mNo || 1,
-              timeStart: tStart || '07:30',
-              timeEnd: tEnd || '08:15',
+              timeStart: formatTime24(tStart?.toString() || '07:30'),
+              timeEnd: formatTime24(tEnd?.toString() || '08:15'),
               className: cls.name,
               subject: subj || 'Mata Pelajaran'
             });
