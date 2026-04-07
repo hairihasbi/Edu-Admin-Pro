@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { BookOpen, School, User, IdCard, CalendarDays, Layout, Users, ClipboardList, TrendingUp, Plus, Trash2, X, Settings, Heart, Coffee, Megaphone, AlertCircle, Info, Zap, DatabaseBackup, AlertTriangle, Database, WifiOff, RefreshCcw, Cloud, ArrowRight, CheckCircle } from './Icons';
+import { BookOpen, School, User, IdCard, CalendarDays, Layout, Users, ClipboardList, TrendingUp, Heart, Coffee, Megaphone, AlertCircle, Info, Zap, DatabaseBackup, AlertTriangle, Database, WifiOff, RefreshCcw, Cloud, ArrowRight, CheckCircle } from './Icons';
 import { User as UserType, TeachingSchedule, DashboardStatsData, Notification, UserRole, ClassRoom } from '../types';
-import { getDashboardStats, getTeachingSchedules, addTeachingSchedule, deleteTeachingSchedule, getActiveAnnouncements, getSyncStats, getSchoolJournals, getAvailableClassesForHomeroom } from '../services/database';
+import { getDashboardStats, getTeachingSchedules, getActiveAnnouncements, getSyncStats, getSchoolJournals, getAvailableClassesForHomeroom } from '../services/database';
 import { checkConnection } from '../services/tursoService';
 
 interface TeacherDashboardProps {
@@ -36,14 +36,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
   const [schedules, setSchedules] = useState<TeachingSchedule[]>([]);
   const [todayJournals, setTodayJournals] = useState<any[]>([]);
   const [classes, setClasses] = useState<ClassRoom[]>([]);
-  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
-  const [newSchedule, setNewSchedule] = useState({
-    day: 'Senin',
-    timeStart: '07:30',
-    timeEnd: '09:00',
-    className: '',
-    subject: user.subject || ''
-  });
 
   // Database Status State
   const [dbStatus, setDbStatus] = useState<'Turso Cloud' | 'Mode Lokal' | 'Sync Error' | 'Checking...'>('Checking...');
@@ -245,52 +237,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
       setShowAnnouncementModal(false);
       // We don't clear announcement state immediately to allow fade out animation if implemented
       setTimeout(() => setAnnouncement(null), 300);
-  };
-
-  // Update schedule subject when user profile changes
-  useEffect(() => {
-    setNewSchedule(prev => ({ ...prev, subject: user.subject || '' }));
-  }, [user.subject]);
-
-  // Schedule Logic
-  const handleAddSchedule = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (user.additionalRole !== 'WAKASEK_KURIKULUM') {
-      alert("Hanya Wakasek Kurikulum yang dapat mengelola jadwal.");
-      return;
-    }
-    if (!newSchedule.className || !newSchedule.subject) return;
-
-    const added = await addTeachingSchedule({
-      userId: user.id,
-      day: newSchedule.day,
-      timeStart: newSchedule.timeStart,
-      timeEnd: newSchedule.timeEnd,
-      className: newSchedule.className,
-      subject: newSchedule.subject
-    });
-
-    if (added) {
-      setSchedules(prev => [...prev, added].sort((a, b) => a.day.localeCompare(b.day) || a.timeStart.localeCompare(b.timeStart)));
-      setNewSchedule({
-        day: 'Senin',
-        timeStart: '07:30',
-        timeEnd: '09:00',
-        className: '',
-        subject: user.subject || ''
-      });
-    }
-  };
-
-  const handleDeleteSchedule = async (id: string) => {
-    if (user.additionalRole !== 'WAKASEK_KURIKULUM') {
-      alert("Hanya Wakasek Kurikulum yang dapat mengelola jadwal.");
-      return;
-    }
-    if (confirm("Hapus jadwal ini?")) {
-      await deleteTeachingSchedule(id);
-      setSchedules(prev => prev.filter(s => s.id !== id));
-    }
   };
 
   // Donation Modal Logic
@@ -599,12 +545,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
               <div className="text-sm bg-blue-50 text-blue-600 px-3 py-1 rounded-full font-medium hidden sm:block">
                  {currentDateFormatted}
               </div>
-              <button 
-                onClick={() => setIsScheduleModalOpen(true)}
-                className={`flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-sm font-medium transition ${user.additionalRole !== 'WAKASEK_KURIKULUM' ? 'hidden' : ''}`}
-              >
-                <Settings size={14} /> Atur Jadwal
-              </button>
             </div>
           </div>
           
@@ -614,11 +554,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
             ) : todaySchedules.length === 0 ? (
               <div className="p-8 text-center text-gray-400">
                 <p>Tidak ada jadwal mengajar pada hari {currentDayName}.</p>
-                {user.additionalRole === 'WAKASEK_KURIKULUM' && (
-                  <button onClick={() => setIsScheduleModalOpen(true)} className="text-blue-600 text-sm mt-2 hover:underline">
-                    + Tambah Jadwal
-                  </button>
-                )}
               </div>
             ) : (
               todaySchedules.map((item) => {
@@ -661,78 +596,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
             )}
           </div>
       </div>
-      )}
-
-      {/* Schedule Management Modal */}
-      {isScheduleModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col animate-in fade-in zoom-in duration-200">
-            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl">
-              <h3 className="text-lg font-bold text-gray-800">Manajemen Jadwal Mengajar</h3>
-              <button onClick={() => setIsScheduleModalOpen(false)} className="text-gray-400 hover:text-gray-600">
-                <X size={20} />
-              </button>
-            </div>
-            
-            <div className="p-6 overflow-y-auto">
-              <form onSubmit={handleAddSchedule} className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8 bg-blue-50/50 p-4 rounded-lg border border-blue-100">
-                <div className="md:col-span-1">
-                  <label className="block text-xs font-semibold text-gray-500 mb-1">Hari</label>
-                  <select 
-                    value={newSchedule.day}
-                    onChange={(e) => setNewSchedule({...newSchedule, day: e.target.value})}
-                    className="w-full border border-gray-300 rounded-lg p-2 text-sm"
-                  >
-                    {DAYS.map(d => <option key={d} value={d}>{d}</option>)}
-                  </select>
-                </div>
-                <div>
-                   <label className="block text-xs font-semibold text-gray-500 mb-1">Mulai</label>
-                   <input type="time" value={newSchedule.timeStart} onChange={e => setNewSchedule({...newSchedule, timeStart: e.target.value})} className="w-full border border-gray-300 rounded-lg p-2 text-sm" required />
-                </div>
-                <div>
-                   <label className="block text-xs font-semibold text-gray-500 mb-1">Selesai</label>
-                   <input type="time" value={newSchedule.timeEnd} onChange={e => setNewSchedule({...newSchedule, timeEnd: e.target.value})} className="w-full border border-gray-300 rounded-lg p-2 text-sm" required />
-                </div>
-                <div>
-                   <label className="block text-xs font-semibold text-gray-500 mb-1">Kelas</label>
-                   <input type="text" placeholder="X-A" value={newSchedule.className} onChange={e => setNewSchedule({...newSchedule, className: e.target.value})} className="w-full border border-gray-300 rounded-lg p-2 text-sm" required />
-                </div>
-                <div className="flex items-end">
-                  <button type="submit" className="w-full bg-blue-600 text-white p-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition flex items-center justify-center gap-1">
-                    <Plus size={16} /> Tambah
-                  </button>
-                </div>
-              </form>
-
-              <div className="space-y-4">
-                 {DAYS.map(day => {
-                    const daySchedules = schedules.filter(s => s.day === day);
-                    if (daySchedules.length === 0) return null;
-                    return (
-                       <div key={day}>
-                          <h4 className="font-bold text-gray-800 mb-2 border-b border-gray-100 pb-1">{day}</h4>
-                          <div className="space-y-2">
-                             {daySchedules.map(sch => (
-                                <div key={sch.id} className="flex items-center justify-between bg-white border border-gray-200 p-3 rounded-lg hover:bg-gray-50">
-                                   <div>
-                                      <p className="font-semibold text-gray-800">{sch.className} <span className="text-gray-400 font-normal">| {sch.subject}</span></p>
-                                      <p className="text-xs text-gray-500">{sch.timeStart} - {sch.timeEnd}</p>
-                                   </div>
-                                   <button onClick={() => handleDeleteSchedule(sch.id)} className="text-red-400 hover:text-red-600 p-2 rounded-full hover:bg-red-50">
-                                      <Trash2 size={16} />
-                                   </button>
-                                </div>
-                             ))}
-                          </div>
-                       </div>
-                    )
-                 })}
-                 {schedules.length === 0 && <p className="text-center text-gray-400 text-sm py-4">Belum ada jadwal tersimpan.</p>}
-              </div>
-            </div>
-          </div>
-        </div>
       )}
 
       {/* DONATION POPUP MODAL */}
