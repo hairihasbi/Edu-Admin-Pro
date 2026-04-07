@@ -1533,6 +1533,10 @@ export const getTeachingSchedules = async (userId: string) => {
     return await db.teachingSchedules.where('userId').equals(userId).toArray();
 };
 
+export const getSchoolSchedules = async (schoolNpsn: string) => {
+    return await db.teachingSchedules.where('schoolNpsn').equals(schoolNpsn).toArray();
+};
+
 export const addTeachingSchedule = async (data: Omit<TeachingSchedule, 'id'|'lastModified'|'isSynced'>) => {
     const item = { ...data, id: uuidv4(), lastModified: Date.now(), isSynced: false };
     await db.teachingSchedules.add(item);
@@ -1540,9 +1544,23 @@ export const addTeachingSchedule = async (data: Omit<TeachingSchedule, 'id'|'las
     return item;
 };
 
+export const saveBulkSchedules = async (schedules: Omit<TeachingSchedule, 'id'|'lastModified'|'isSynced'>[]) => {
+    const items = schedules.map(s => ({ ...s, id: uuidv4(), lastModified: Date.now(), isSynced: false }));
+    await db.teachingSchedules.bulkAdd(items);
+    triggerDebouncedSync();
+    return items;
+};
+
 export const deleteTeachingSchedule = async (id: string) => {
     await db.teachingSchedules.delete(id);
     pushToTurso('eduadmin_schedules', [{id, deleted: true}]);
+};
+
+export const clearSchoolSchedules = async (schoolNpsn: string) => {
+    const schedules = await getSchoolSchedules(schoolNpsn);
+    const ids = schedules.map(s => s.id);
+    await db.teachingSchedules.bulkDelete(ids);
+    pushToTurso('eduadmin_schedules', ids.map(id => ({id, deleted: true})));
 };
 
 // --- LOGS & STATS ---

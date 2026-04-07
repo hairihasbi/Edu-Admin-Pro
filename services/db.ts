@@ -55,7 +55,7 @@ export class EduAdminDatabase extends Dexie {
       scopeMaterials: '&id, classId, semester, userId, isSynced', 
       assessmentScores: '&id, userId, studentId, classId, semester, category, materialId, subject, isSynced',
       teachingJournals: '&id, userId, classId, date, isSynced',
-      teachingSchedules: '&id, userId, day, isSynced',
+      teachingSchedules: '&id, userId, schoolNpsn, day, isSynced',
       logs: '&id, level, actor, action, timestamp, isSynced',
       emailConfig: '&id, isSynced', 
       masterSubjects: '&id, name, isSynced',
