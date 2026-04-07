@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, TeachingJournal, AttendanceRecord, ClassRoom } from '../types';
 import { getSchoolTeachers, getSchoolJournals, getSchoolAttendance, syncAllData, getAvailableClassesForHomeroom } from '../services/database';
-import { Activity, CheckCircle, XCircle, Calendar, Users, Search, Filter, Clock, Info, AlertCircle, RefreshCcw, Loader2, BookOpen, LayoutGrid, List as ListIcon } from './Icons';
+import { Activity, CheckCircle, XCircle, Calendar, Users, Search, Filter, Clock, Info, AlertCircle, RefreshCcw, Loader2, BookOpen, LayoutGrid, List as ListIcon, ChevronDown, ChevronUp } from './Icons';
 
 interface WakasekMonitoringProps {
   user: User;
@@ -20,6 +20,8 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'GURU' | 'KELAS'>('GURU');
+  const [expandedTeacherId, setExpandedTeacherId] = useState<string | null>(null);
+  const [expandedClassId, setExpandedClassId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -89,6 +91,14 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
   const filteredClasses = classes.filter(c => 
     c.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const toggleTeacherExpansion = (id: string) => {
+    setExpandedTeacherId(expandedTeacherId === id ? null : id);
+  };
+
+  const toggleClassExpansion = (id: string) => {
+    setExpandedClassId(expandedClassId === id ? null : id);
+  };
 
   const classNameMap = useMemo(() => {
     const map: Record<string, string> = {};
@@ -265,9 +275,9 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
               <thead className="bg-gray-50 text-gray-600 font-semibold text-xs uppercase tracking-wider">
                 <tr>
                   <th className="px-6 py-4">Nama Guru</th>
-                  <th className="px-6 py-4">Detail Sesi (Jam Pelajaran)</th>
                   <th className="px-6 py-4 text-center">Status Jurnal</th>
                   <th className="px-6 py-4 text-center">Status Absensi</th>
+                  <th className="px-6 py-4 text-center">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -275,9 +285,9 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
                   Array.from({ length: 5 }).map((_, i) => (
                     <tr key={i} className="animate-pulse">
                       <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded w-32"></div></td>
-                      <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded w-48"></div></td>
                       <td className="px-6 py-4"><div className="h-6 bg-gray-200 rounded-full w-12 mx-auto"></div></td>
                       <td className="px-6 py-4"><div className="h-6 bg-gray-200 rounded-full w-12 mx-auto"></div></td>
+                      <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded w-16 mx-auto"></div></td>
                     </tr>
                   ))
                 ) : filteredTeachers.length === 0 ? (
@@ -286,9 +296,6 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
                       <div className="flex flex-col items-center gap-2">
                         <AlertCircle size={32} className="text-gray-300" />
                         <p className="font-medium">Data guru tidak ditemukan.</p>
-                        <p className="text-xs max-w-xs mx-auto">
-                          Silakan klik tombol <strong>Sinkronkan Data</strong> di atas untuk menarik data terbaru dari server.
-                        </p>
                       </div>
                     </td>
                   </tr>
@@ -297,55 +304,81 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
                     const teacherJournals = journals.filter(j => j.userId === teacher.id).sort((a, b) => a.meetingNo.localeCompare(b.meetingNo, undefined, { numeric: true }));
                     const hasJournal = teacherJournals.length > 0;
                     const hasAttendance = attendance.some(a => a.userId === teacher.id);
+                    const isExpanded = expandedTeacherId === teacher.id;
                     
                     return (
-                      <tr key={teacher.id} className="hover:bg-gray-50 transition align-top">
-                        <td className="px-6 py-4">
-                          <div className="font-medium text-gray-800">{teacher.fullName}</div>
-                          <div className="text-[10px] text-gray-400">NIP: {teacher.nip || '-'}</div>
-                          <div className="text-[10px] text-purple-600 font-medium mt-1">{teacher.subject || (teacher.teacherType === 'CLASS' ? 'Guru Kelas' : '-')}</div>
-                        </td>
-                        <td className="px-6 py-4">
-                          {hasJournal ? (
-                            <div className="space-y-3">
-                              {teacherJournals.map(journal => (
-                                <div key={journal.id} className="bg-gray-50 p-2 rounded border border-gray-100">
-                                  <div className="flex items-center justify-between mb-1">
-                                    <span className="text-[10px] font-bold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded">Jam ke-{journal.meetingNo}</span>
-                                    <span className="text-[10px] font-medium text-gray-500">{classNameMap[journal.classId] || 'Kelas Tidak Diketahui'}</span>
+                      <React.Fragment key={teacher.id}>
+                        <tr 
+                          className={`hover:bg-gray-50 transition cursor-pointer ${isExpanded ? 'bg-purple-50/30' : ''}`}
+                          onClick={() => toggleTeacherExpansion(teacher.id)}
+                        >
+                          <td className="px-6 py-4">
+                            <div className="font-medium text-gray-800">{teacher.fullName}</div>
+                            <div className="text-[10px] text-gray-400">NIP: {teacher.nip || '-'}</div>
+                            <div className="text-[10px] text-purple-600 font-medium mt-1">{teacher.subject || (teacher.teacherType === 'CLASS' ? 'Guru Kelas' : '-')}</div>
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            {hasJournal ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-green-50 text-green-700 text-[10px] font-bold border border-green-100">
+                                <CheckCircle size={12} /> {teacherJournals.length} SESI
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-50 text-red-700 text-[10px] font-bold border border-red-100">
+                                <XCircle size={12} /> BELUM
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            {hasAttendance ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-green-50 text-green-700 text-[10px] font-bold border border-green-100">
+                                <CheckCircle size={12} /> SUDAH
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-50 text-red-700 text-[10px] font-bold border border-red-100">
+                                <XCircle size={12} /> BELUM
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            <button className="text-purple-600 hover:text-purple-800 transition">
+                              {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                            </button>
+                          </td>
+                        </tr>
+                        {isExpanded && (
+                          <tr>
+                            <td colSpan={4} className="px-6 py-4 bg-gray-50/50 border-t border-gray-100">
+                              <div className="animate-in fade-in slide-in-from-top-2 duration-200">
+                                <h4 className="text-xs font-bold text-gray-700 mb-3 flex items-center gap-2">
+                                  <ListIcon size={14} /> Detail Jurnal Mengajar - {teacher.fullName}
+                                </h4>
+                                {hasJournal ? (
+                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                    {teacherJournals.map(journal => (
+                                      <div key={journal.id} className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
+                                        <div className="flex items-center justify-between mb-2">
+                                          <span className="text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded">Jam ke-{journal.meetingNo}</span>
+                                          <span className="text-[10px] font-bold text-gray-600">{classNameMap[journal.classId] || 'Kelas Tidak Diketahui'}</span>
+                                        </div>
+                                        <div className="text-xs font-bold text-gray-800 mb-1">{journal.learningObjective}</div>
+                                        <div className="text-[10px] text-gray-600 line-clamp-2 mb-2">{journal.activities}</div>
+                                        <div className="pt-2 border-t border-gray-50 flex justify-between items-center">
+                                          <span className="text-[9px] text-gray-400 italic">Input: {journal.lastModified ? new Date(journal.lastModified).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'}</span>
+                                          <span className="text-[9px] font-medium text-green-600">Tersimpan</span>
+                                        </div>
+                                      </div>
+                                    ))}
                                   </div>
-                                  <div className="text-xs text-gray-700 line-clamp-1 font-medium">{journal.learningObjective}</div>
-                                  <div className="text-[10px] text-gray-400 italic mt-0.5">{journal.activities.substring(0, 50)}...</div>
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <span className="text-xs text-gray-400 italic">Belum ada sesi mengajar yang tercatat hari ini</span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 text-center">
-                          {hasJournal ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-green-50 text-green-700 text-[10px] font-bold border border-green-100">
-                              <CheckCircle size={12} /> {teacherJournals.length} SESI
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-50 text-red-700 text-[10px] font-bold border border-red-100">
-                              <XCircle size={12} /> BELUM
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 text-center">
-                          {hasAttendance ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-green-50 text-green-700 text-[10px] font-bold border border-green-100">
-                              <CheckCircle size={12} /> SUDAH
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-50 text-red-700 text-[10px] font-bold border border-red-100">
-                              <XCircle size={12} /> BELUM
-                            </span>
-                          )}
-                        </td>
-                      </tr>
+                                ) : (
+                                  <div className="text-center py-6 bg-white rounded-lg border border-dashed border-gray-300">
+                                    <p className="text-xs text-gray-400 italic">Belum ada sesi mengajar yang tercatat hari ini</p>
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     );
                   })
                 )}
@@ -356,8 +389,8 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
               <thead className="bg-gray-50 text-gray-600 font-semibold text-xs uppercase tracking-wider">
                 <tr>
                   <th className="px-6 py-4">Nama Kelas</th>
-                  <th className="px-6 py-4">Detail Sesi (Jam Pelajaran)</th>
                   <th className="px-6 py-4 text-center">Status KBM</th>
+                  <th className="px-6 py-4 text-center">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -365,8 +398,8 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
                   Array.from({ length: 5 }).map((_, i) => (
                     <tr key={i} className="animate-pulse">
                       <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded w-32"></div></td>
-                      <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded w-48"></div></td>
                       <td className="px-6 py-4"><div className="h-6 bg-gray-200 rounded-full w-12 mx-auto"></div></td>
+                      <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded w-16 mx-auto"></div></td>
                     </tr>
                   ))
                 ) : filteredClasses.length === 0 ? (
@@ -382,46 +415,72 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
                   filteredClasses.map(cls => {
                     const classJournals = journals.filter(j => j.classId === cls.id).sort((a, b) => a.meetingNo.localeCompare(b.meetingNo, undefined, { numeric: true }));
                     const hasKBM = classJournals.length > 0;
+                    const isExpanded = expandedClassId === cls.id;
                     
                     return (
-                      <tr key={cls.id} className="hover:bg-gray-50 transition align-top">
-                        <td className="px-6 py-4">
-                          <div className="font-medium text-gray-800">{cls.name}</div>
-                          <div className="text-[10px] text-gray-400">{cls.studentCount} Siswa</div>
-                          {cls.homeroomTeacherName && (
-                            <div className="text-[10px] text-blue-600 font-medium mt-1">Wali: {cls.homeroomTeacherName}</div>
-                          )}
-                        </td>
-                        <td className="px-6 py-4">
-                          {hasKBM ? (
-                            <div className="space-y-3">
-                              {classJournals.map(journal => (
-                                <div key={journal.id} className="bg-gray-50 p-2 rounded border border-gray-100">
-                                  <div className="flex items-center justify-between mb-1">
-                                    <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded">Jam ke-{journal.meetingNo}</span>
-                                    <span className="text-[10px] font-medium text-gray-500">{teacherNameMap[journal.userId] || 'Guru Tidak Diketahui'}</span>
+                      <React.Fragment key={cls.id}>
+                        <tr 
+                          className={`hover:bg-gray-50 transition cursor-pointer ${isExpanded ? 'bg-blue-50/30' : ''}`}
+                          onClick={() => toggleClassExpansion(cls.id)}
+                        >
+                          <td className="px-6 py-4">
+                            <div className="font-medium text-gray-800">{cls.name}</div>
+                            <div className="text-[10px] text-gray-400">{cls.studentCount} Siswa</div>
+                            {cls.homeroomTeacherName && (
+                              <div className="text-[10px] text-blue-600 font-medium mt-1">Wali: {cls.homeroomTeacherName}</div>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            {hasKBM ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-green-50 text-green-700 text-[10px] font-bold border border-green-100">
+                                <CheckCircle size={12} /> {classJournals.length} SESI
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-50 text-red-700 text-[10px] font-bold border border-red-100">
+                                <XCircle size={12} /> KOSONG
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            <button className="text-blue-600 hover:text-blue-800 transition">
+                              {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                            </button>
+                          </td>
+                        </tr>
+                        {isExpanded && (
+                          <tr>
+                            <td colSpan={3} className="px-6 py-4 bg-gray-50/50 border-t border-gray-100">
+                              <div className="animate-in fade-in slide-in-from-top-2 duration-200">
+                                <h4 className="text-xs font-bold text-gray-700 mb-3 flex items-center gap-2">
+                                  <ListIcon size={14} /> Kronologi Pembelajaran - {cls.name}
+                                </h4>
+                                {hasKBM ? (
+                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                    {classJournals.map(journal => (
+                                      <div key={journal.id} className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
+                                        <div className="flex items-center justify-between mb-2">
+                                          <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded">Jam ke-{journal.meetingNo}</span>
+                                          <span className="text-[10px] font-bold text-gray-600">{teacherNameMap[journal.userId] || 'Guru Tidak Diketahui'}</span>
+                                        </div>
+                                        <div className="text-xs font-bold text-gray-800 mb-1">{journal.subject}</div>
+                                        <div className="text-[10px] text-gray-600 line-clamp-2 mb-2">{journal.learningObjective}</div>
+                                        <div className="pt-2 border-t border-gray-50 flex justify-between items-center">
+                                          <span className="text-[9px] text-gray-400 italic">Input: {journal.lastModified ? new Date(journal.lastModified).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'}</span>
+                                          <span className="text-[9px] font-medium text-blue-600">Terverifikasi</span>
+                                        </div>
+                                      </div>
+                                    ))}
                                   </div>
-                                  <div className="text-xs text-gray-700 font-medium">{journal.subject}</div>
-                                  <div className="text-[10px] text-gray-600 line-clamp-1">{journal.learningObjective}</div>
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <span className="text-xs text-gray-400 italic">Belum ada aktivitas belajar mengajar hari ini</span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 text-center">
-                          {hasKBM ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-green-50 text-green-700 text-[10px] font-bold border border-green-100">
-                              <CheckCircle size={12} /> {classJournals.length} SESI
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-50 text-red-700 text-[10px] font-bold border border-red-100">
-                              <XCircle size={12} /> KOSONG
-                            </span>
-                          )}
-                        </td>
-                      </tr>
+                                ) : (
+                                  <div className="text-center py-6 bg-white rounded-lg border border-dashed border-gray-300">
+                                    <p className="text-xs text-gray-400 italic">Belum ada aktivitas belajar mengajar hari ini</p>
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     );
                   })
                 )}
@@ -429,7 +488,7 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
             </table>
           )}
         </div>
-        
+
         <div className="p-4 bg-gray-50 border-t border-gray-100">
           <div className="flex items-start gap-2 text-[10px] text-gray-500">
             <Info size={14} className="mt-0.5 flex-shrink-0" />
