@@ -1095,6 +1095,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 const additionalRole = userRes.rows[0]?.additional_role || null;
                 const isWakasek = additionalRole === 'WAKASEK_KURIKULUM';
                 
+                if (!userNpsn && isWakasek) {
+                    // Fallback: if user is Wakasek but NPSN is missing in Turso, 
+                    // they might need to push their profile first.
+                    console.warn(`[API] Wakasek ${userId} has no NPSN in Turso.`);
+                }
+                
                 // Logic Filter for Guru
                 if (tableConfig.table === 'classes') {
                     // Show classes in same school
