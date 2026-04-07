@@ -572,7 +572,9 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100 uppercase">Jam {item.meetingNo || '-'}</span>
+                          <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100 uppercase">
+                            Jam {item.meetingNo || '-'}{item.meetingNoEnd && item.meetingNoEnd !== item.meetingNo ? ` - ${item.meetingNoEnd}` : ''}
+                          </span>
                           <h4 className="font-semibold text-gray-800">{item.className}</h4>
                           {isJournalFilled && <span className="text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded border border-green-100 uppercase">Selesai</span>}
                         </div>

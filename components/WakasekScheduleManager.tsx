@@ -59,6 +59,7 @@ const WakasekScheduleManager: React.FC<WakasekScheduleManagerProps> = ({ user })
   const [selectedClassId, setSelectedClassId] = useState('');
   const [selectedDay, setSelectedDay] = useState('Senin');
   const [meetingNo, setMeetingNo] = useState(1);
+  const [meetingNoEnd, setMeetingNoEnd] = useState(1);
   const [timeStart, setTimeStart] = useState('07:30');
   const [timeEnd, setTimeEnd] = useState('08:15');
   const [subject, setSubject] = useState('');
@@ -148,6 +149,7 @@ const WakasekScheduleManager: React.FC<WakasekScheduleManagerProps> = ({ user })
       schoolNpsn: user.schoolNpsn,
       day: selectedDay,
       meetingNo,
+      meetingNoEnd,
       timeStart: formatTime24(timeStart),
       timeEnd: formatTime24(timeEnd),
       className: cls.name,
@@ -204,7 +206,8 @@ const WakasekScheduleManager: React.FC<WakasekScheduleManagerProps> = ({ user })
         'Nama Guru': 'Contoh Nama Guru',
         'Nama Kelas': 'X-A',
         'Hari': 'Senin',
-        'Jam Ke': 1,
+        'Jam Ke Mulai': 1,
+        'Jam Ke Selesai': 1,
         'Jam Mulai': '07:30',
         'Jam Selesai': '08:15',
         'Mata Pelajaran': 'Matematika'
@@ -238,7 +241,8 @@ const WakasekScheduleManager: React.FC<WakasekScheduleManagerProps> = ({ user })
           const teacherName = row['Nama Guru'];
           const className = row['Nama Kelas'];
           const day = row['Hari'];
-          const mNo = parseInt(row['Jam Ke']);
+          const mNo = parseInt(row['Jam Ke Mulai'] || row['Jam Ke']);
+          const mNoEnd = parseInt(row['Jam Ke Selesai'] || row['Jam Ke Mulai'] || row['Jam Ke']);
           const tStart = row['Jam Mulai'];
           const tEnd = row['Jam Selesai'];
           const subj = row['Mata Pelajaran'];
@@ -255,6 +259,7 @@ const WakasekScheduleManager: React.FC<WakasekScheduleManagerProps> = ({ user })
               schoolNpsn: user.schoolNpsn!,
               day,
               meetingNo: mNo || 1,
+              meetingNoEnd: mNoEnd || mNo || 1,
               timeStart: formatTime24(tStart?.toString() || '07:30'),
               timeEnd: formatTime24(tEnd?.toString() || '08:15'),
               className: cls.name,
@@ -419,14 +424,28 @@ const WakasekScheduleManager: React.FC<WakasekScheduleManagerProps> = ({ user })
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Jam Ke</label>
-                  <select 
-                    value={meetingNo}
-                    onChange={(e) => setMeetingNo(Number(e.target.value))}
-                    className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-sm"
-                  >
-                    {[1,2,3,4,5,6,7,8,9,10].map(n => <option key={n} value={n}>Jam Ke-{n}</option>)}
-                  </select>
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Jam Ke (Range)</label>
+                  <div className="flex items-center gap-2">
+                    <select 
+                      value={meetingNo}
+                      onChange={(e) => {
+                        const val = Number(e.target.value);
+                        setMeetingNo(val);
+                        if (meetingNoEnd < val) setMeetingNoEnd(val);
+                      }}
+                      className="flex-1 p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-sm"
+                    >
+                      {[1,2,3,4,5,6,7,8,9,10,11,12].map(n => <option key={n} value={n}>{n}</option>)}
+                    </select>
+                    <span className="text-gray-400 text-xs font-bold">s/d</span>
+                    <select 
+                      value={meetingNoEnd}
+                      onChange={(e) => setMeetingNoEnd(Number(e.target.value))}
+                      className="flex-1 p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-sm"
+                    >
+                      {[1,2,3,4,5,6,7,8,9,10,11,12].filter(n => n >= meetingNo).map(n => <option key={n} value={n}>{n}</option>)}
+                    </select>
+                  </div>
                 </div>
               </div>
 
@@ -603,8 +622,18 @@ const WakasekScheduleManager: React.FC<WakasekScheduleManagerProps> = ({ user })
                     filteredSchedules.map(s => (
                       <tr key={s.id} className="hover:bg-gray-50 transition">
                         <td className="px-6 py-4">
-                          <div className="w-8 h-8 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-xs">
-                            {s.meetingNo || '-'}
+                          <div className="flex items-center gap-1">
+                            <div className="w-8 h-8 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-xs">
+                              {s.meetingNo || '-'}
+                            </div>
+                            {s.meetingNoEnd && s.meetingNoEnd !== s.meetingNo && (
+                              <>
+                                <span className="text-gray-400 text-[10px]">-</span>
+                                <div className="w-8 h-8 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center font-bold text-xs">
+                                  {s.meetingNoEnd}
+                                </div>
+                              </>
+                            )}
                           </div>
                         </td>
                         <td className="px-6 py-4">
