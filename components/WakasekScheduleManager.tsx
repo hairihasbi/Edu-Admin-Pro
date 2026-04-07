@@ -11,6 +11,7 @@ import {
   getAvailableClassesForHomeroom, getMasterSubjects
 } from '../services/database';
 import { User as UserType, ClassRoom, TeachingSchedule, MasterSubject } from '../types';
+import * as XLSX from 'xlsx';
 
 interface WakasekScheduleManagerProps {
   user: UserType;
@@ -24,6 +25,7 @@ const WakasekScheduleManager: React.FC<WakasekScheduleManagerProps> = ({ user })
   const [masterSubjects, setMasterSubjects] = useState<MasterSubject[]>([]);
   const [schedules, setSchedules] = useState<TeachingSchedule[]>([]);
   const [loading, setLoading] = useState(true);
+  const [importing, setImporting] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   // Form State
@@ -170,6 +172,91 @@ const WakasekScheduleManager: React.FC<WakasekScheduleManagerProps> = ({ user })
 
   const getTeacherName = (id: string) => teachers.find(t => t.id === id)?.fullName || 'Unknown';
 
+  const handleExportTemplate = () => {
+    const template = [
+      {
+        'Nama Guru': 'Contoh Nama Guru',
+        'Nama Kelas': 'X-A',
+        'Hari': 'Senin',
+        'Jam Ke': 1,
+        'Jam Mulai': '07:30',
+        'Jam Selesai': '08:15',
+        'Mata Pelajaran': 'Matematika'
+      }
+    ];
+
+    const ws = XLSX.utils.json_to_sheet(template);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Template Jadwal');
+    XLSX.writeFile(wb, 'Template_Jadwal_Mengajar.xlsx');
+  };
+
+  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImporting(true);
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const bstr = evt.target?.result;
+        const wb = XLSX.read(bstr, { type: 'binary' });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const data = XLSX.utils.sheet_to_json(ws) as any[];
+
+        const newSchedules: Omit<TeachingSchedule, 'id' | 'lastModified' | 'isSynced'>[] = [];
+        const errors: string[] = [];
+
+        data.forEach((row, index) => {
+          const teacherName = row['Nama Guru'];
+          const className = row['Nama Kelas'];
+          const day = row['Hari'];
+          const mNo = parseInt(row['Jam Ke']);
+          const tStart = row['Jam Mulai'];
+          const tEnd = row['Jam Selesai'];
+          const subj = row['Mata Pelajaran'];
+
+          const teacher = teachers.find(t => t.fullName.toLowerCase() === teacherName?.toString().toLowerCase());
+          const cls = classes.find(c => c.name.toLowerCase() === className?.toString().toLowerCase());
+
+          if (!teacher) errors.push(`Baris ${index + 2}: Guru "${teacherName}" tidak ditemukan.`);
+          else if (!cls) errors.push(`Baris ${index + 2}: Kelas "${className}" tidak ditemukan.`);
+          else if (!DAYS.includes(day)) errors.push(`Baris ${index + 2}: Hari "${day}" tidak valid.`);
+          else {
+            newSchedules.push({
+              userId: teacher.id,
+              schoolNpsn: user.schoolNpsn!,
+              day,
+              meetingNo: mNo || 1,
+              timeStart: tStart || '07:30',
+              timeEnd: tEnd || '08:15',
+              className: cls.name,
+              subject: subj || 'Mata Pelajaran'
+            });
+          }
+        });
+
+        if (errors.length > 0) {
+          setMessage({ type: 'error', text: `Gagal import: ${errors.slice(0, 3).join(' ')}${errors.length > 3 ? ' ...' : ''}` });
+        } else if (newSchedules.length > 0) {
+          await saveBulkSchedules(newSchedules);
+          setMessage({ type: 'success', text: `Berhasil mengimport ${newSchedules.length} jadwal.` });
+          loadData();
+        } else {
+          setMessage({ type: 'error', text: 'Tidak ada data valid untuk diimport.' });
+        }
+      } catch (err) {
+        console.error(err);
+        setMessage({ type: 'error', text: 'Gagal membaca file. Pastikan format benar.' });
+      } finally {
+        setImporting(false);
+        e.target.value = '';
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
+
   return (
     <div className="p-6 max-w-6xl mx-auto">
       <div className="flex justify-between items-center mb-6">
@@ -177,12 +264,34 @@ const WakasekScheduleManager: React.FC<WakasekScheduleManagerProps> = ({ user })
           <h1 className="text-2xl font-bold text-gray-800">Manajemen Jadwal Mengajar</h1>
           <p className="text-gray-500 text-sm">Input dan kelola jadwal mengajar seluruh guru secara terpusat</p>
         </div>
-        <button 
-          onClick={handleClearAll}
-          className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition text-sm font-medium"
-        >
-          <Trash2 size={16} /> Kosongkan Semua Jadwal
-        </button>
+        <div className="flex items-center gap-2">
+          <div className="relative group">
+            <button 
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition text-sm font-medium"
+            >
+              <Download size={16} /> Template & Import
+            </button>
+            <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-100 rounded-xl shadow-xl hidden group-hover:block z-50 overflow-hidden">
+              <button 
+                onClick={handleExportTemplate}
+                className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+              >
+                <Download size={14} className="text-blue-500" /> Download Template
+              </button>
+              <label className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 cursor-pointer">
+                <Upload size={14} className="text-green-500" />
+                <span>{importing ? 'Mengimport...' : 'Import Excel/CSV'}</span>
+                <input type="file" accept=".xlsx, .xls, .csv" className="hidden" onChange={handleImportFile} disabled={importing} />
+              </label>
+            </div>
+          </div>
+          <button 
+            onClick={handleClearAll}
+            className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition text-sm font-medium"
+          >
+            <Trash2 size={16} /> Kosongkan Semua
+          </button>
+        </div>
       </div>
 
       {message && (
