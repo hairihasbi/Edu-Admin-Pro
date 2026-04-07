@@ -196,6 +196,7 @@ export interface TeachingJournal extends Syncable {
 export interface TeachingSchedule extends Syncable {
   id: string;
   userId: string;
+  schoolNpsn?: string; // NEW: Multi-tenancy Key
   day: string; 
   timeStart: string; 
   timeEnd: string; 
