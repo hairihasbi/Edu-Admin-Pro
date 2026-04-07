@@ -44,6 +44,7 @@ const DB_SCHEMAS = [
         rpp_last_reset TEXT,
         teacher_type TEXT,
         phase TEXT,
+        secondary_subject TEXT,
         last_modified INTEGER,
         version INTEGER DEFAULT 1,
         deleted INTEGER DEFAULT 0
@@ -430,6 +431,7 @@ const DB_SCHEMAS = [
     // NEW COLUMNS FOR TEACHER TYPE
     `ALTER TABLE users ADD COLUMN teacher_type TEXT`,
     `ALTER TABLE users ADD COLUMN phase TEXT`,
+    `ALTER TABLE users ADD COLUMN secondary_subject TEXT`,
     // ATTENDANCE VISIBILITY
     `ALTER TABLE attendance ADD COLUMN user_id TEXT`,
     `ALTER TABLE attendance ADD COLUMN visibility TEXT DEFAULT 'SHARED'`,
@@ -454,8 +456,8 @@ const getTableConfig = (collection: string) => {
   switch (collection) {
     case 'eduadmin_users': return { 
         table: 'users', 
-        columns: ['id', 'username', 'password', 'full_name', 'role', 'status', 'school_name', 'school_npsn', 'nip', 'email', 'phone', 'subject', 'avatar', 'additional_role', 'homeroom_class_id', 'homeroom_class_name', 'rpp_usage_count', 'rpp_last_reset', 'teacher_type', 'phase', 'last_modified', 'version', 'deleted'], 
-        mapFn: (item: any) => [s(item.id), s(item.username), s(item.password), s(item.fullName), s(item.role), s(item.status), s(item.schoolName), s(item.schoolNpsn), s(item.nip), s(item.email), s(item.phone), s(item.subject), s(item.avatar), s(item.additionalRole), s(item.homeroomClassId), s(item.homeroomClassName), item.rppUsageCount || 0, s(item.rppLastReset), s(item.teacherType), s(item.phase), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] 
+        columns: ['id', 'username', 'password', 'full_name', 'role', 'status', 'school_name', 'school_npsn', 'nip', 'email', 'phone', 'subject', 'secondary_subject', 'avatar', 'additional_role', 'homeroom_class_id', 'homeroom_class_name', 'rpp_usage_count', 'rpp_last_reset', 'teacher_type', 'phase', 'last_modified', 'version', 'deleted'], 
+        mapFn: (item: any) => [s(item.id), s(item.username), s(item.password), s(item.fullName), s(item.role), s(item.status), s(item.schoolName), s(item.schoolNpsn), s(item.nip), s(item.email), s(item.phone), s(item.subject), s(item.secondarySubject), s(item.avatar), s(item.additionalRole), s(item.homeroomClassId), s(item.homeroomClassName), item.rppUsageCount || 0, s(item.rppLastReset), s(item.teacherType), s(item.phase), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] 
     };
     case 'eduadmin_classes': return { table: 'classes', columns: ['id', 'user_id', 'school_npsn', 'name', 'description', 'student_count', 'homeroom_teacher_id', 'homeroom_teacher_name', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.userId), s(item.schoolNpsn || 'DEFAULT'), s(item.name), s(item.description), s(item.studentCount), s(item.homeroomTeacherId), s(item.homeroomTeacherName), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_students': return { table: 'students', columns: ['id', 'class_id', 'school_npsn', 'name', 'nis', 'gender', 'phone', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.classId), s(item.schoolNpsn || 'DEFAULT'), s(item.name), s(item.nis), s(item.gender), s(item.phone || ''), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
@@ -503,6 +505,7 @@ const mapRowToJSON = (collection: string, row: any) => {
         email: row.email,
         phone: row.phone,
         subject: row.subject,
+        secondarySubject: row.secondary_subject,
         avatar: row.avatar,
         additionalRole: row.additional_role,
         homeroomClassId: row.homeroom_class_id,
