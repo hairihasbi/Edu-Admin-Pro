@@ -1090,8 +1090,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             let args: any[] = [];
 
             if (isGuru) {
-                const userRes = await client.execute({ sql: "SELECT school_npsn FROM users WHERE id = ?", args: [userId] });
+                const userRes = await client.execute({ sql: "SELECT school_npsn, additional_role FROM users WHERE id = ?", args: [userId] });
                 const userNpsn = userRes.rows[0]?.school_npsn || null; 
+                const additionalRole = userRes.rows[0]?.additional_role || null;
+                const isWakasek = additionalRole === 'WAKASEK_KURIKULUM';
                 
                 // Logic Filter for Guru
                 if (tableConfig.table === 'classes') {
@@ -1100,15 +1102,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     else { whereClauses.push("user_id = ?"); args = [userId]; }
                 }
                 else if (tableConfig.table === 'users') { 
-                    // Guru sees themselves
-                    whereClauses.push("id = ?"); args = [userId]; 
+                    // Wakasek sees all teachers in school, others see themselves
+                    if (isWakasek && userNpsn) {
+                        whereClauses.push("school_npsn = ?"); args = [userNpsn];
+                    } else {
+                        whereClauses.push("id = ?"); args = [userId]; 
+                    }
                 }
-                // ... (Other tables filtering logic kept same)
-                else if (['scores','journals','schedules','materials'].includes(tableConfig.table)) { whereClauses.push("user_id = ?"); args = [userId]; }
-                else if (tableConfig.table === 'students' && userNpsn) { whereClauses.push("school_npsn = ?"); args = [userNpsn]; }
+                else if (tableConfig.table === 'journals') {
+                    // Wakasek sees all journals in school
+                    if (isWakasek && userNpsn) {
+                        whereClauses.push("user_id IN (SELECT id FROM users WHERE school_npsn = ?)"); args = [userNpsn];
+                    } else {
+                        whereClauses.push("user_id = ?"); args = [userId];
+                    }
+                }
+                else if (['scores','schedules','materials'].includes(tableConfig.table)) { 
+                    whereClauses.push("user_id = ?"); args = [userId]; 
+                }
+                else if (tableConfig.table === 'students' && userNpsn) { 
+                    whereClauses.push("school_npsn = ?"); args = [userNpsn]; 
+                }
                 else if (tableConfig.table === 'attendance' && userNpsn) { 
-                    whereClauses.push("((visibility = 'SHARED' AND class_id IN (SELECT id FROM classes WHERE school_npsn = ?)) OR (user_id = ?))"); 
-                    args = [userNpsn, userId]; 
+                    if (isWakasek) {
+                        whereClauses.push("user_id IN (SELECT id FROM users WHERE school_npsn = ?)"); 
+                        args = [userNpsn];
+                    } else {
+                        whereClauses.push("((visibility = 'SHARED' AND class_id IN (SELECT id FROM classes WHERE school_npsn = ?)) OR (user_id = ?))"); 
+                        args = [userNpsn, userId]; 
+                    }
                 }
             }
 
