@@ -766,7 +766,6 @@ const AppContent: React.FC = () => {
 
             {currentUser.role === UserRole.GURU && (
               <>
-                <NavLink to="/dashboard" icon={LayoutDashboard} label="Dashboard" />
                 {currentUser.additionalRole === 'WAKASEK_KURIKULUM' && (
                   <NavLink to="/monitoring-kurikulum" icon={Activity} label="Monitoring Kurikulum" />
                 )}
