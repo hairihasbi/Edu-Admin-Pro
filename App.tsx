@@ -28,6 +28,7 @@ import BroadcastPage from './components/BroadcastPage';
 import SyncPage from './components/SyncPage'; // Import SyncPage
 import DailyPicket from './components/DailyPicket'; // Import DailyPicket
 import WakasekMonitoring from './components/WakasekMonitoring'; // Import WakasekMonitoring
+import WakasekScheduleManager from './components/WakasekScheduleManager'; // Import WakasekScheduleManager
 import DonationHistory from './components/DonationHistory'; // Import DonationHistory
 import NotificationPanel from './components/NotificationPanel';
 import Breadcrumbs from './components/Breadcrumbs';
@@ -76,6 +77,7 @@ import {
   ArrowLeftRight,
   School,
   CreditCard, // Import CreditCard
+  Calendar, // Import Calendar
   Sun,
   Moon
 } from './components/Icons';
@@ -767,7 +769,10 @@ const AppContent: React.FC = () => {
             {currentUser.role === UserRole.GURU && (
               <>
                 {currentUser.additionalRole === 'WAKASEK_KURIKULUM' && (
-                  <NavLink to="/monitoring-kurikulum" icon={Activity} label="Monitoring Kurikulum" />
+                  <>
+                    <NavLink to="/monitoring-kurikulum" icon={Activity} label="Monitoring Kurikulum" />
+                    <NavLink to="/manage-schedules" icon={Calendar} label="Manajemen Jadwal" />
+                  </>
                 )}
                 <NavLink to="/classes" icon={BookOpen} label="Manajemen Kelas" />
                 {currentUser.homeroomClassId && (
@@ -926,7 +931,10 @@ const AppContent: React.FC = () => {
                    <Route path="/journal" element={<TeacherJournal user={currentUser} />} />
                    <Route path="/summative" element={<TeacherSummative user={currentUser} />} />
                    {currentUser.additionalRole === 'WAKASEK_KURIKULUM' && (
-                     <Route path="/monitoring-kurikulum" element={<WakasekMonitoring user={currentUser} />} />
+                     <>
+                       <Route path="/monitoring-kurikulum" element={<WakasekMonitoring user={currentUser} />} />
+                       <Route path="/manage-schedules" element={<WakasekScheduleManager user={currentUser} />} />
+                     </>
                    )}
                    <Route path="/gen-quiz" element={<TeacherGenQuiz />} />
                    <Route path="/rpp-generator" element={<TeacherRPPGenerator user={currentUser} onUpdateUser={handleQuotaUpdate} />} />
