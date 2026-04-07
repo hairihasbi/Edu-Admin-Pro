@@ -26,6 +26,7 @@ const WakasekScheduleManager: React.FC<WakasekScheduleManagerProps> = ({ user })
   const [schedules, setSchedules] = useState<TeachingSchedule[]>([]);
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
+  const [isImportMenuOpen, setIsImportMenuOpen] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   // Form State
@@ -265,25 +266,62 @@ const WakasekScheduleManager: React.FC<WakasekScheduleManagerProps> = ({ user })
           <p className="text-gray-500 text-sm">Input dan kelola jadwal mengajar seluruh guru secara terpusat</p>
         </div>
         <div className="flex items-center gap-2">
-          <div className="relative group">
+          <div className="relative">
             <button 
-              className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition text-sm font-medium"
+              onClick={() => setIsImportMenuOpen(!isImportMenuOpen)}
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition text-sm font-medium shadow-sm"
             >
               <Download size={16} /> Template & Import
+              <ChevronDown size={14} className={`transition-transform ${isImportMenuOpen ? 'rotate-180' : ''}`} />
             </button>
-            <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-100 rounded-xl shadow-xl hidden group-hover:block z-50 overflow-hidden">
-              <button 
-                onClick={handleExportTemplate}
-                className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-              >
-                <Download size={14} className="text-blue-500" /> Download Template
-              </button>
-              <label className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 cursor-pointer">
-                <Upload size={14} className="text-green-500" />
-                <span>{importing ? 'Mengimport...' : 'Import Excel/CSV'}</span>
-                <input type="file" accept=".xlsx, .xls, .csv" className="hidden" onChange={handleImportFile} disabled={importing} />
-              </label>
-            </div>
+            
+            {isImportMenuOpen && (
+              <>
+                <div 
+                  className="fixed inset-0 z-40" 
+                  onClick={() => setIsImportMenuOpen(false)}
+                ></div>
+                <div className="absolute right-0 mt-2 w-56 bg-white border border-gray-100 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                  <div className="p-2 border-b border-gray-50 bg-gray-50/50">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase px-3 py-1">Opsi Jadwal</p>
+                  </div>
+                  <button 
+                    onClick={() => {
+                      handleExportTemplate();
+                      setIsImportMenuOpen(false);
+                    }}
+                    className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition flex items-center gap-3"
+                  >
+                    <div className="p-1.5 bg-blue-100 rounded-lg text-blue-600">
+                      <Download size={14} />
+                    </div>
+                    <div>
+                      <p className="font-bold">Download Template</p>
+                      <p className="text-[10px] text-gray-500">Unduh format Excel (.xlsx)</p>
+                    </div>
+                  </button>
+                  <label className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-green-50 hover:text-green-700 transition flex items-center gap-3 cursor-pointer">
+                    <div className="p-1.5 bg-green-100 rounded-lg text-green-600">
+                      <Upload size={14} />
+                    </div>
+                    <div>
+                      <p className="font-bold">{importing ? 'Mengimport...' : 'Import Excel/CSV'}</p>
+                      <p className="text-[10px] text-gray-500">Unggah file jadwal Anda</p>
+                    </div>
+                    <input 
+                      type="file" 
+                      accept=".xlsx, .xls, .csv" 
+                      className="hidden" 
+                      onChange={(e) => {
+                        handleImportFile(e);
+                        setIsImportMenuOpen(false);
+                      }} 
+                      disabled={importing} 
+                    />
+                  </label>
+                </div>
+              </>
+            )}
           </div>
           <button 
             onClick={handleClearAll}
