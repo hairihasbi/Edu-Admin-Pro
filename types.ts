@@ -199,7 +199,8 @@ export interface TeachingSchedule extends Syncable {
   userId: string;
   schoolNpsn?: string; // NEW: Multi-tenancy Key
   day: string; 
-  meetingNo?: number; // NEW: Jam Ke (1-10)
+  meetingNo?: number; // NEW: Jam Ke (Mulai)
+  meetingNoEnd?: number; // NEW: Jam Ke (Selesai)
   timeStart: string; 
   timeEnd: string; 
   className: string;
