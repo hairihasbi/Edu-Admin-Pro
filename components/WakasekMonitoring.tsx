@@ -2,8 +2,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, TeachingJournal, AttendanceRecord, ClassRoom, TeachingSchedule } from '../types';
-import { getSchoolTeachers, getSchoolJournals, getSchoolAttendance, syncAllData, getAvailableClassesForHomeroom, getSchoolSchedules } from '../services/database';
-import { Activity, CheckCircle, XCircle, Calendar, Users, Search, Filter, Clock, Info, AlertCircle, RefreshCcw, Loader2, BookOpen, LayoutGrid, List as ListIcon, ChevronDown, ChevronUp } from './Icons';
+import { getSchoolTeachers, getSchoolJournals, getSchoolAttendance, syncAllData, getAvailableClassesForHomeroom, getSchoolSchedules, getSchoolJournalsByRange } from '../services/database';
+import { Activity, CheckCircle, XCircle, Calendar, Users, Search, Filter, Clock, Info, AlertCircle, RefreshCcw, Loader2, BookOpen, LayoutGrid, List as ListIcon, ChevronDown, ChevronUp, TrendingUp, BarChart3, PieChart } from './Icons';
 
 interface WakasekMonitoringProps {
   user: User;
@@ -20,7 +20,8 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<'GURU' | 'KELAS'>('GURU');
+  const [activeTab, setActiveTab] = useState<'GURU' | 'KELAS' | 'PRESENSI'>('GURU');
+  const [allPeriodJournals, setAllPeriodJournals] = useState<TeachingJournal[]>([]);
   const [expandedTeacherId, setExpandedTeacherId] = useState<string | null>(null);
   const [expandedClassId, setExpandedClassId] = useState<string | null>(null);
 
@@ -42,6 +43,17 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
           getSchoolAttendance(teacherIds, selectedDate)
         ]);
 
+        // Fetch all journals for the current academic year if on PRESENSI tab
+        if (activeTab === 'PRESENSI') {
+            const now = new Date();
+            const year = now.getFullYear();
+            const startYear = now.getMonth() >= 6 ? year : year - 1;
+            const startDate = `${startYear}-07-01`;
+            const endDate = `${startYear + 1}-06-30`;
+            const periodJournals = await getSchoolJournalsByRange(teacherIds, startDate, endDate);
+            setAllPeriodJournals(periodJournals);
+        }
+
         setTeachers(schoolTeachers.sort((a, b) => a.fullName.localeCompare(b.fullName)));
         setClasses(schoolClasses.sort((a, b) => a.name.localeCompare(b.name)));
         setJournals(schoolJournals);
@@ -55,7 +67,7 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
     };
 
     fetchData();
-  }, [user.schoolNpsn, selectedDate]);
+  }, [user.schoolNpsn, selectedDate, activeTab]);
 
   const handleSync = async () => {
     setIsSyncing(true);
@@ -263,6 +275,17 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
           <LayoutGrid size={18} />
           Monitoring Per Kelas
         </button>
+        <button
+          onClick={() => setActiveTab('PRESENSI')}
+          className={`flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-medium transition ${
+            activeTab === 'PRESENSI' 
+              ? 'bg-white text-purple-600 shadow-sm' 
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <TrendingUp size={18} />
+          Presensi Kehadiran Guru
+        </button>
       </div>
 
       {/* Main Content */}
@@ -444,7 +467,7 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
                 )}
               </tbody>
             </table>
-          ) : (
+          ) : activeTab === 'KELAS' ? (
             <table className="w-full text-left border-collapse">
               <thead className="bg-gray-50 text-gray-600 font-semibold text-xs uppercase tracking-wider">
                 <tr>
@@ -591,6 +614,144 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
                 )}
               </tbody>
             </table>
+          ) : (
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {loading ? (
+                  Array.from({ length: 6 }).map((_, i) => (
+                    <div key={i} className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm animate-pulse">
+                      <div className="h-4 bg-gray-200 rounded w-3/4 mb-4"></div>
+                      <div className="space-y-3">
+                        <div className="h-8 bg-gray-100 rounded"></div>
+                        <div className="h-8 bg-gray-100 rounded"></div>
+                      </div>
+                    </div>
+                  ))
+                ) : filteredTeachers.length === 0 ? (
+                  <div className="col-span-full py-12 text-center text-gray-500">
+                    <p>Data guru tidak ditemukan.</p>
+                  </div>
+                ) : (
+                  filteredTeachers.map(teacher => {
+                    const stats = (() => {
+                      const teacherSchedules = schedules.filter(s => s.userId === teacher.id);
+                      const totalJPPerWeek = teacherSchedules.reduce((acc, s) => acc + ((s.meetingNoEnd || s.meetingNo || 1) - (s.meetingNo || 1) + 1), 0);
+                      
+                      if (totalJPPerWeek === 0) return { weekly: 0, monthly: 0, semester: 0, yearly: 0, totalJP: 0 };
+
+                      const teacherJournals = allPeriodJournals.filter(j => j.userId === teacher.id);
+                      
+                      const now = new Date();
+                      const startOfWeek = new Date(now);
+                      startOfWeek.setDate(now.getDate() - (now.getDay() === 0 ? 6 : now.getDay() - 1)); // Monday
+                      startOfWeek.setHours(0,0,0,0);
+                      
+                      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+                      
+                      const startYear = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
+                      const startOfSemester = now.getMonth() >= 6 ? new Date(startYear, 6, 1) : new Date(startYear, 0, 1);
+                      const startOfYear = new Date(startYear, 6, 1);
+
+                      const filterByDate = (journals: TeachingJournal[], startDate: Date) => {
+                          return journals.filter(j => new Date(j.date) >= startDate && new Date(j.date) <= now).length;
+                      };
+
+                      const weeklyJournals = filterByDate(teacherJournals, startOfWeek);
+                      const monthlyJournals = filterByDate(teacherJournals, startOfMonth);
+                      const semesterJournals = filterByDate(teacherJournals, startOfSemester);
+                      const yearlyJournals = filterByDate(teacherJournals, startOfYear);
+
+                      const weeksElapsed = (startDate: Date) => {
+                          const diff = now.getTime() - startDate.getTime();
+                          return Math.max(1, Math.ceil(diff / (7 * 24 * 60 * 60 * 1000)));
+                      };
+
+                      const weeklyTarget = totalJPPerWeek;
+                      const monthlyTarget = totalJPPerWeek * weeksElapsed(startOfMonth);
+                      const semesterTarget = totalJPPerWeek * weeksElapsed(startOfSemester);
+                      const yearlyTarget = totalJPPerWeek * weeksElapsed(startOfYear);
+
+                      return {
+                          weekly: Math.min(100, (weeklyJournals / weeklyTarget) * 100),
+                          monthly: Math.min(100, (monthlyJournals / monthlyTarget) * 100),
+                          semester: Math.min(100, (semesterJournals / semesterTarget) * 100),
+                          yearly: Math.min(100, (yearlyJournals / yearlyTarget) * 100),
+                          totalJP: totalJPPerWeek
+                      };
+                    })();
+
+                    const getProgressColor = (val: number) => {
+                      if (val >= 90) return 'bg-green-500';
+                      if (val >= 75) return 'bg-blue-500';
+                      if (val >= 50) return 'bg-yellow-500';
+                      return 'bg-red-500';
+                    };
+
+                    return (
+                      <div key={teacher.id} className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition group">
+                        <div className="flex items-start justify-between mb-4">
+                          <div>
+                            <h4 className="font-bold text-gray-800 group-hover:text-purple-600 transition">{teacher.fullName}</h4>
+                            <p className="text-[10px] text-gray-500 uppercase tracking-wider">{teacher.subject || 'Guru'}</p>
+                          </div>
+                          <div className="bg-purple-50 text-purple-600 px-2 py-1 rounded text-[10px] font-bold">
+                            {stats.totalJP} JP / MINGGU
+                          </div>
+                        </div>
+
+                        <div className="space-y-4">
+                          {/* Weekly */}
+                          <div className="space-y-1.5">
+                            <div className="flex justify-between text-[10px] font-bold">
+                              <span className="text-gray-500 uppercase">Minggu Ini</span>
+                              <span className={stats.weekly >= 90 ? 'text-green-600' : 'text-gray-700'}>{stats.weekly.toFixed(1)}%</span>
+                            </div>
+                            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                              <div 
+                                className={`h-full transition-all duration-500 ${getProgressColor(stats.weekly)}`}
+                                style={{ width: `${stats.weekly}%` }}
+                              ></div>
+                            </div>
+                          </div>
+
+                          {/* Monthly */}
+                          <div className="space-y-1.5">
+                            <div className="flex justify-between text-[10px] font-bold">
+                              <span className="text-gray-500 uppercase">Bulan Ini</span>
+                              <span className={stats.monthly >= 90 ? 'text-green-600' : 'text-gray-700'}>{stats.monthly.toFixed(1)}%</span>
+                            </div>
+                            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                              <div 
+                                className={`h-full transition-all duration-500 ${getProgressColor(stats.monthly)}`}
+                                style={{ width: `${stats.monthly}%` }}
+                              ></div>
+                            </div>
+                          </div>
+
+                          {/* Semester & Yearly Grid */}
+                          <div className="grid grid-cols-2 gap-4 pt-2">
+                            <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
+                              <p className="text-[9px] text-gray-400 font-bold uppercase mb-1">Semester</p>
+                              <p className="text-lg font-black text-gray-800">{stats.semester.toFixed(1)}%</p>
+                              <div className="w-full h-1 bg-gray-200 rounded-full mt-1 overflow-hidden">
+                                <div className={`h-full ${getProgressColor(stats.semester)}`} style={{ width: `${stats.semester}%` }}></div>
+                              </div>
+                            </div>
+                            <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
+                              <p className="text-[9px] text-gray-400 font-bold uppercase mb-1">Tahunan</p>
+                              <p className="text-lg font-black text-gray-800">{stats.yearly.toFixed(1)}%</p>
+                              <div className="w-full h-1 bg-gray-200 rounded-full mt-1 overflow-hidden">
+                                <div className={`h-full ${getProgressColor(stats.yearly)}`} style={{ width: `${stats.yearly}%` }}></div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
           )}
         </div>
 

@@ -108,6 +108,7 @@ import {
   ExternalLink, // Added ExternalLink
   Loader2, // Added Loader2
   XCircle, // Added XCircle
+  BarChart3, // Added BarChart3
   Home, // Added Home
   Moon,
   Sun
@@ -222,6 +223,7 @@ export {
   ExternalLink,
   Loader2,
   XCircle,
+  BarChart3,
   Home,
   Moon,
   Sun
