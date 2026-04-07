@@ -172,6 +172,13 @@ export const getSchoolJournals = async (teacherIds: string[], date: string): Pro
         .toArray();
 };
 
+export const getSchoolJournalsByRange = async (teacherIds: string[], startDate: string, endDate: string): Promise<TeachingJournal[]> => {
+    return await db.teachingJournals
+        .where('userId').anyOf(teacherIds)
+        .filter(j => j.date >= startDate && j.date <= endDate)
+        .toArray();
+};
+
 export const getSchoolAttendance = async (teacherIds: string[], date: string): Promise<AttendanceRecord[]> => {
     return await db.attendanceRecords
         .where('userId').anyOf(teacherIds)
