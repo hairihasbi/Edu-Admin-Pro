@@ -46,8 +46,8 @@ export class EduAdminDatabase extends Dexie {
     // * = Multi-entry index (not used here)
     // [field] = Indexed field for searching
     // Added schoolNpsn indexes for multi-tenancy filtering
-    // Bumped to version 23 to fix indexing errors on attendanceRecords and other tables
-    (this as any).version(23).stores({
+    // Bumped to version 25 to include meetingNo in teachingSchedules index
+    (this as any).version(25).stores({
       users: '&id, username, role, status, schoolNpsn, isSynced',
       classes: '&id, userId, schoolNpsn, name, homeroomTeacherId, isSynced', 
       students: '&id, classId, schoolNpsn, name, nis, gender, isSynced', 
@@ -55,7 +55,7 @@ export class EduAdminDatabase extends Dexie {
       scopeMaterials: '&id, classId, semester, userId, isSynced', 
       assessmentScores: '&id, userId, studentId, classId, semester, category, materialId, subject, isSynced',
       teachingJournals: '&id, userId, classId, date, isSynced',
-      teachingSchedules: '&id, userId, schoolNpsn, day, isSynced',
+      teachingSchedules: '&id, userId, schoolNpsn, day, meetingNo, isSynced',
       logs: '&id, level, actor, action, timestamp, isSynced',
       emailConfig: '&id, isSynced', 
       masterSubjects: '&id, name, isSynced',
