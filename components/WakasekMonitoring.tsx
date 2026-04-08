@@ -3,7 +3,10 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, TeachingJournal, AttendanceRecord, ClassRoom, TeachingSchedule } from '../types';
 import { getSchoolTeachers, getSchoolJournals, getSchoolAttendance, syncAllData, getAvailableClassesForHomeroom, getSchoolSchedules, getSchoolJournalsByRange } from '../services/database';
-import { Activity, CheckCircle, XCircle, Calendar, Users, Search, Filter, Clock, Info, AlertCircle, RefreshCcw, Loader2, BookOpen, LayoutGrid, List as ListIcon, ChevronDown, ChevronUp, TrendingUp, BarChart3, PieChart } from './Icons';
+import { Activity, CheckCircle, XCircle, Calendar, Users, Search, Filter, Clock, Info, AlertCircle, RefreshCcw, Loader2, BookOpen, LayoutGrid, List as ListIcon, ChevronDown, ChevronUp, TrendingUp, BarChart3, PieChart, Download, Printer, FileSpreadsheet, FileText } from './Icons';
+import * as XLSX from 'xlsx';
+import { jsPDF } from 'jspdf';
+import 'jspdf-autotable';
 
 interface WakasekMonitoringProps {
   user: User;
@@ -128,6 +131,155 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
     teachers.forEach(t => { map[t.id] = t.fullName; });
     return map;
   }, [teachers]);
+
+  const teacherStats = useMemo(() => {
+    return teachers.map(teacher => {
+      const teacherSchedules = schedules.filter(s => s.userId === teacher.id);
+      const totalJPPerWeek = teacherSchedules.reduce((acc, s) => acc + ((s.meetingNoEnd || s.meetingNo || 1) - (s.meetingNo || 1) + 1), 0);
+      
+      if (totalJPPerWeek === 0) return { teacher, weekly: 0, monthly: 0, semester: 0, yearly: 0, totalJP: 0 };
+
+      const teacherJournals = allPeriodJournals.filter(j => j.userId === teacher.id);
+      
+      const now = new Date();
+      const startOfWeek = new Date(now);
+      startOfWeek.setDate(now.getDate() - (now.getDay() === 0 ? 6 : now.getDay() - 1)); // Monday
+      startOfWeek.setHours(0,0,0,0);
+      
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      
+      const startYear = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
+      const startOfSemester = now.getMonth() >= 6 ? new Date(startYear, 6, 1) : new Date(startYear, 0, 1);
+      const startOfYear = new Date(startYear, 6, 1);
+
+      const filterByDate = (journals: TeachingJournal[], startDate: Date) => {
+          return journals.filter(j => new Date(j.date) >= startDate && new Date(j.date) <= now).length;
+      };
+
+      const weeklyJournals = filterByDate(teacherJournals, startOfWeek);
+      const monthlyJournals = filterByDate(teacherJournals, startOfMonth);
+      const semesterJournals = filterByDate(teacherJournals, startOfSemester);
+      const yearlyJournals = filterByDate(teacherJournals, startOfYear);
+
+      const weeksElapsed = (startDate: Date) => {
+          const diff = now.getTime() - startDate.getTime();
+          return Math.max(1, Math.ceil(diff / (7 * 24 * 60 * 60 * 1000)));
+      };
+
+      const weeklyTarget = totalJPPerWeek;
+      const monthlyTarget = totalJPPerWeek * weeksElapsed(startOfMonth);
+      const semesterTarget = totalJPPerWeek * weeksElapsed(startOfSemester);
+      const yearlyTarget = totalJPPerWeek * weeksElapsed(startOfYear);
+
+      return {
+          teacher,
+          weekly: Math.min(100, (weeklyJournals / weeklyTarget) * 100),
+          monthly: Math.min(100, (monthlyJournals / monthlyTarget) * 100),
+          semester: Math.min(100, (semesterJournals / semesterTarget) * 100),
+          yearly: Math.min(100, (yearlyJournals / yearlyTarget) * 100),
+          totalJP: totalJPPerWeek
+      };
+    });
+  }, [teachers, schedules, allPeriodJournals]);
+
+  const handleExportExcel = () => {
+    const data = teacherStats.map(s => ({
+      'Nama Guru': s.teacher.fullName,
+      'NIP': s.teacher.nip || '-',
+      'Mata Pelajaran': s.teacher.subject || '-',
+      'JP/Minggu': s.totalJP,
+      'Minggu Ini (%)': s.weekly.toFixed(1),
+      'Bulan Ini (%)': s.monthly.toFixed(1),
+      'Semester (%)': s.semester.toFixed(1),
+      'Tahunan (%)': s.yearly.toFixed(1)
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Presensi Guru");
+    XLSX.writeFile(wb, `Presensi_Guru_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
+  const handleExportPDF = () => {
+    const doc = new jsPDF();
+    doc.text(`Laporan Presensi Kehadiran Guru - ${user.schoolName}`, 14, 15);
+    doc.setFontSize(10);
+    doc.text(`Tanggal Cetak: ${new Date().toLocaleDateString('id-ID')}`, 14, 22);
+
+    const tableData = teacherStats.map(s => [
+      s.teacher.fullName,
+      s.totalJP,
+      `${s.weekly.toFixed(1)}%`,
+      `${s.monthly.toFixed(1)}%`,
+      `${s.semester.toFixed(1)}%`,
+      `${s.yearly.toFixed(1)}%`
+    ]);
+
+    (doc as any).autoTable({
+      head: [['Nama Guru', 'JP/Minggu', 'Minggu', 'Bulan', 'Semester', 'Tahunan']],
+      body: tableData,
+      startY: 30,
+      theme: 'grid',
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [126, 34, 206] } // Purple-700
+    });
+
+    doc.save(`Presensi_Guru_${new Date().toISOString().split('T')[0]}.pdf`);
+  };
+
+  const handleExportDoc = () => {
+    const header = `
+      <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+      <head><meta charset='utf-8'><title>Laporan Presensi Guru</title></head>
+      <body>
+        <h2 style="text-align: center;">Laporan Presensi Kehadiran Guru</h2>
+        <h3 style="text-align: center;">${user.schoolName}</h3>
+        <p>Tanggal Cetak: ${new Date().toLocaleDateString('id-ID')}</p>
+        <table border="1" style="width: 100%; border-collapse: collapse;">
+          <thead>
+            <tr style="background-color: #f3f4f6;">
+              <th>Nama Guru</th>
+              <th>JP/Minggu</th>
+              <th>Minggu (%)</th>
+              <th>Bulan (%)</th>
+              <th>Semester (%)</th>
+              <th>Tahunan (%)</th>
+            </tr>
+          </thead>
+          <tbody>
+    `;
+
+    const rows = teacherStats.map(s => `
+      <tr>
+        <td>${s.teacher.fullName}</td>
+        <td style="text-align: center;">${s.totalJP}</td>
+        <td style="text-align: center;">${s.weekly.toFixed(1)}%</td>
+        <td style="text-align: center;">${s.monthly.toFixed(1)}%</td>
+        <td style="text-align: center;">${s.semester.toFixed(1)}%</td>
+        <td style="text-align: center;">${s.yearly.toFixed(1)}%</td>
+      </tr>
+    `).join('');
+
+    const footer = `
+          </tbody>
+        </table>
+      </body>
+      </html>
+    `;
+
+    const source = header + rows + footer;
+    const blob = new Blob(['\ufeff', source], { type: 'application/msword' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Presensi_Guru_${new Date().toISOString().split('T')[0]}.doc`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handlePrint = () => {
+    window.print();
+  };
 
   const currentDayName = useMemo(() => {
     const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
@@ -616,6 +768,39 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
             </table>
           ) : (
             <div className="p-6">
+              {/* Export Buttons */}
+              <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button 
+                    onClick={handleExportExcel}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-green-50 text-green-700 rounded-lg text-xs font-bold border border-green-100 hover:bg-green-100 transition"
+                  >
+                    <FileSpreadsheet size={14} /> Excel
+                  </button>
+                  <button 
+                    onClick={handleExportPDF}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-red-50 text-red-700 rounded-lg text-xs font-bold border border-red-100 hover:bg-red-100 transition"
+                  >
+                    <Download size={14} /> PDF
+                  </button>
+                  <button 
+                    onClick={handleExportDoc}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-xs font-bold border border-blue-100 hover:bg-blue-100 transition"
+                  >
+                    <FileText size={14} /> Word
+                  </button>
+                  <button 
+                    onClick={handlePrint}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 text-gray-700 rounded-lg text-xs font-bold border border-gray-200 hover:bg-gray-100 transition"
+                  >
+                    <Printer size={14} /> Cetak
+                  </button>
+                </div>
+                <div className="text-[10px] text-gray-400 font-medium italic">
+                  * Data akumulasi dihitung dari awal tahun ajaran (Juli)
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {loading ? (
                   Array.from({ length: 6 }).map((_, i) => (
@@ -627,128 +812,89 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
                       </div>
                     </div>
                   ))
-                ) : filteredTeachers.length === 0 ? (
+                ) : teacherStats.filter(s => 
+                    s.teacher.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                    (s.teacher.subject && s.teacher.subject.toLowerCase().includes(searchQuery.toLowerCase()))
+                  ).length === 0 ? (
                   <div className="col-span-full py-12 text-center text-gray-500">
                     <p>Data guru tidak ditemukan.</p>
                   </div>
                 ) : (
-                  filteredTeachers.map(teacher => {
-                    const stats = (() => {
-                      const teacherSchedules = schedules.filter(s => s.userId === teacher.id);
-                      const totalJPPerWeek = teacherSchedules.reduce((acc, s) => acc + ((s.meetingNoEnd || s.meetingNo || 1) - (s.meetingNo || 1) + 1), 0);
-                      
-                      if (totalJPPerWeek === 0) return { weekly: 0, monthly: 0, semester: 0, yearly: 0, totalJP: 0 };
-
-                      const teacherJournals = allPeriodJournals.filter(j => j.userId === teacher.id);
-                      
-                      const now = new Date();
-                      const startOfWeek = new Date(now);
-                      startOfWeek.setDate(now.getDate() - (now.getDay() === 0 ? 6 : now.getDay() - 1)); // Monday
-                      startOfWeek.setHours(0,0,0,0);
-                      
-                      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-                      
-                      const startYear = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
-                      const startOfSemester = now.getMonth() >= 6 ? new Date(startYear, 6, 1) : new Date(startYear, 0, 1);
-                      const startOfYear = new Date(startYear, 6, 1);
-
-                      const filterByDate = (journals: TeachingJournal[], startDate: Date) => {
-                          return journals.filter(j => new Date(j.date) >= startDate && new Date(j.date) <= now).length;
+                  teacherStats
+                    .filter(s => 
+                      s.teacher.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                      (s.teacher.subject && s.teacher.subject.toLowerCase().includes(searchQuery.toLowerCase()))
+                    )
+                    .map(stats => {
+                      const getProgressColor = (val: number) => {
+                        if (val >= 90) return 'bg-green-500';
+                        if (val >= 75) return 'bg-blue-500';
+                        if (val >= 50) return 'bg-yellow-500';
+                        return 'bg-red-500';
                       };
 
-                      const weeklyJournals = filterByDate(teacherJournals, startOfWeek);
-                      const monthlyJournals = filterByDate(teacherJournals, startOfMonth);
-                      const semesterJournals = filterByDate(teacherJournals, startOfSemester);
-                      const yearlyJournals = filterByDate(teacherJournals, startOfYear);
-
-                      const weeksElapsed = (startDate: Date) => {
-                          const diff = now.getTime() - startDate.getTime();
-                          return Math.max(1, Math.ceil(diff / (7 * 24 * 60 * 60 * 1000)));
-                      };
-
-                      const weeklyTarget = totalJPPerWeek;
-                      const monthlyTarget = totalJPPerWeek * weeksElapsed(startOfMonth);
-                      const semesterTarget = totalJPPerWeek * weeksElapsed(startOfSemester);
-                      const yearlyTarget = totalJPPerWeek * weeksElapsed(startOfYear);
-
-                      return {
-                          weekly: Math.min(100, (weeklyJournals / weeklyTarget) * 100),
-                          monthly: Math.min(100, (monthlyJournals / monthlyTarget) * 100),
-                          semester: Math.min(100, (semesterJournals / semesterTarget) * 100),
-                          yearly: Math.min(100, (yearlyJournals / yearlyTarget) * 100),
-                          totalJP: totalJPPerWeek
-                      };
-                    })();
-
-                    const getProgressColor = (val: number) => {
-                      if (val >= 90) return 'bg-green-500';
-                      if (val >= 75) return 'bg-blue-500';
-                      if (val >= 50) return 'bg-yellow-500';
-                      return 'bg-red-500';
-                    };
-
-                    return (
-                      <div key={teacher.id} className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition group">
-                        <div className="flex items-start justify-between mb-4">
-                          <div>
-                            <h4 className="font-bold text-gray-800 group-hover:text-purple-600 transition">{teacher.fullName}</h4>
-                            <p className="text-[10px] text-gray-500 uppercase tracking-wider">{teacher.subject || 'Guru'}</p>
-                          </div>
-                          <div className="bg-purple-50 text-purple-600 px-2 py-1 rounded text-[10px] font-bold">
-                            {stats.totalJP} JP / MINGGU
-                          </div>
-                        </div>
-
-                        <div className="space-y-4">
-                          {/* Weekly */}
-                          <div className="space-y-1.5">
-                            <div className="flex justify-between text-[10px] font-bold">
-                              <span className="text-gray-500 uppercase">Minggu Ini</span>
-                              <span className={stats.weekly >= 90 ? 'text-green-600' : 'text-gray-700'}>{stats.weekly.toFixed(1)}%</span>
+                      return (
+                        <div key={stats.teacher.id} className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition group">
+                          <div className="flex items-start justify-between mb-4">
+                            <div>
+                              <h4 className="font-bold text-gray-800 group-hover:text-purple-600 transition">{stats.teacher.fullName}</h4>
+                              <p className="text-[10px] text-gray-500 uppercase tracking-wider">{stats.teacher.subject || 'Guru'}</p>
                             </div>
-                            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                              <div 
-                                className={`h-full transition-all duration-500 ${getProgressColor(stats.weekly)}`}
-                                style={{ width: `${stats.weekly}%` }}
-                              ></div>
+                            <div className="bg-purple-50 text-purple-600 px-2 py-1 rounded text-[10px] font-bold">
+                              {stats.totalJP} JP / MINGGU
                             </div>
                           </div>
 
-                          {/* Monthly */}
-                          <div className="space-y-1.5">
-                            <div className="flex justify-between text-[10px] font-bold">
-                              <span className="text-gray-500 uppercase">Bulan Ini</span>
-                              <span className={stats.monthly >= 90 ? 'text-green-600' : 'text-gray-700'}>{stats.monthly.toFixed(1)}%</span>
-                            </div>
-                            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                              <div 
-                                className={`h-full transition-all duration-500 ${getProgressColor(stats.monthly)}`}
-                                style={{ width: `${stats.monthly}%` }}
-                              ></div>
-                            </div>
-                          </div>
-
-                          {/* Semester & Yearly Grid */}
-                          <div className="grid grid-cols-2 gap-4 pt-2">
-                            <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
-                              <p className="text-[9px] text-gray-400 font-bold uppercase mb-1">Semester</p>
-                              <p className="text-lg font-black text-gray-800">{stats.semester.toFixed(1)}%</p>
-                              <div className="w-full h-1 bg-gray-200 rounded-full mt-1 overflow-hidden">
-                                <div className={`h-full ${getProgressColor(stats.semester)}`} style={{ width: `${stats.semester}%` }}></div>
+                          <div className="space-y-4">
+                            {/* Weekly */}
+                            <div className="space-y-1.5">
+                              <div className="flex justify-between text-[10px] font-bold">
+                                <span className="text-gray-500 uppercase">Minggu Ini</span>
+                                <span className={stats.weekly >= 90 ? 'text-green-600' : 'text-gray-700'}>{stats.weekly.toFixed(1)}%</span>
+                              </div>
+                              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                                <div 
+                                  className={`h-full transition-all duration-500 ${getProgressColor(stats.weekly)}`}
+                                  style={{ width: `${stats.weekly}%` }}
+                                ></div>
                               </div>
                             </div>
-                            <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
-                              <p className="text-[9px] text-gray-400 font-bold uppercase mb-1">Tahunan</p>
-                              <p className="text-lg font-black text-gray-800">{stats.yearly.toFixed(1)}%</p>
-                              <div className="w-full h-1 bg-gray-200 rounded-full mt-1 overflow-hidden">
-                                <div className={`h-full ${getProgressColor(stats.yearly)}`} style={{ width: `${stats.yearly}%` }}></div>
+
+                            {/* Monthly */}
+                            <div className="space-y-1.5">
+                              <div className="flex justify-between text-[10px] font-bold">
+                                <span className="text-gray-500 uppercase">Bulan Ini</span>
+                                <span className={stats.monthly >= 90 ? 'text-green-600' : 'text-gray-700'}>{stats.monthly.toFixed(1)}%</span>
+                              </div>
+                              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                                <div 
+                                  className={`h-full transition-all duration-500 ${getProgressColor(stats.monthly)}`}
+                                  style={{ width: `${stats.monthly}%` }}
+                                ></div>
+                              </div>
+                            </div>
+
+                            {/* Semester & Yearly Grid */}
+                            <div className="grid grid-cols-2 gap-4 pt-2">
+                              <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
+                                <p className="text-[9px] text-gray-400 font-bold uppercase mb-1">Semester</p>
+                                <p className="text-lg font-black text-gray-800">{stats.semester.toFixed(1)}%</p>
+                                <div className="w-full h-1 bg-gray-200 rounded-full mt-1 overflow-hidden">
+                                  <div className={`h-full ${getProgressColor(stats.semester)}`} style={{ width: `${stats.semester}%` }}></div>
+                                </div>
+                              </div>
+                              <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
+                                <p className="text-[9px] text-gray-400 font-bold uppercase mb-1">Tahunan</p>
+                                <p className="text-lg font-black text-gray-800">{stats.yearly.toFixed(1)}%</p>
+                                <div className="w-full h-1 bg-gray-200 rounded-full mt-1 overflow-hidden">
+                                  <div className={`h-full ${getProgressColor(stats.yearly)}`} style={{ width: `${stats.yearly}%` }}></div>
+                                </div>
                               </div>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    );
-                  })
+                      );
+                    })
                 )}
               </div>
             </div>
