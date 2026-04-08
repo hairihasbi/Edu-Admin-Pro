@@ -202,6 +202,14 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
   };
 
   const handleExportPDF = async () => {
+    await generateInfographic('save');
+  };
+
+  const handlePrint = async () => {
+    await generateInfographic('print');
+  };
+
+  const generateInfographic = async (action: 'save' | 'print') => {
     if (!infographicRef.current) return;
     
     setIsSyncing(true); // Reuse syncing state as loading indicator
@@ -244,9 +252,22 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
         heightLeft -= pageHeight;
       }
       
-      pdf.save(`Infografis_Presensi_Guru_${new Date().toISOString().split('T')[0]}.pdf`);
+      if (action === 'save') {
+        pdf.save(`Infografis_Presensi_Guru_${new Date().toISOString().split('T')[0]}.pdf`);
+      } else {
+        // For printing, we use the blob URL approach which is more reliable for direct printing
+        const blob = pdf.output('blob');
+        const url = URL.createObjectURL(blob);
+        const printWindow = window.open(url, '_blank');
+        if (printWindow) {
+          // Some browsers need a delay or specific trigger for autoPrint
+          pdf.autoPrint();
+          // Revoke URL after some time to clean up
+          setTimeout(() => URL.revokeObjectURL(url), 60000);
+        }
+      }
     } catch (error) {
-      console.error("Failed to generate PDF infographic:", error);
+      console.error("Failed to generate infographic:", error);
     } finally {
       setIsSyncing(false);
     }
@@ -300,10 +321,6 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
     link.download = `Presensi_Guru_${new Date().toISOString().split('T')[0]}.doc`;
     link.click();
     URL.revokeObjectURL(url);
-  };
-
-  const handlePrint = () => {
-    window.print();
   };
 
   const currentDayName = useMemo(() => {
