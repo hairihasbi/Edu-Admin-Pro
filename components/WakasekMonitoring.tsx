@@ -1,10 +1,12 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, TeachingJournal, AttendanceRecord, ClassRoom, TeachingSchedule } from '../types';
 import { getSchoolTeachers, getSchoolJournals, getSchoolAttendance, syncAllData, getAvailableClassesForHomeroom, getSchoolSchedules, getSchoolJournalsByRange } from '../services/database';
 import { Activity, CheckCircle, XCircle, Calendar, Users, Search, Filter, Clock, Info, AlertCircle, RefreshCcw, Loader2, BookOpen, LayoutGrid, List as ListIcon, ChevronDown, ChevronUp, TrendingUp, BarChart3, PieChart, Download, Printer, FileSpreadsheet, FileText, School } from './Icons';
 import * as XLSX from 'xlsx';
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
 
 interface WakasekMonitoringProps {
   user: User;
@@ -12,6 +14,7 @@ interface WakasekMonitoringProps {
 
 const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
   const navigate = useNavigate();
+  const infographicRef = useRef<HTMLDivElement>(null);
   const [teachers, setTeachers] = useState<User[]>([]);
   const [classes, setClasses] = useState<ClassRoom[]>([]);
   const [journals, setJournals] = useState<TeachingJournal[]>([]);
@@ -198,9 +201,55 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
     XLSX.writeFile(wb, `Presensi_Guru_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
-  const handleExportPDF = () => {
-    // Trigger window print for infographic layout
-    window.print();
+  const handleExportPDF = async () => {
+    if (!infographicRef.current) return;
+    
+    setIsSyncing(true); // Reuse syncing state as loading indicator
+    try {
+      const element = infographicRef.current;
+      
+      // Temporarily remove hidden class to capture
+      element.classList.remove('hidden');
+      element.classList.add('block');
+      
+      const canvas = await html2canvas(element, {
+        scale: 2, // Higher quality
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff'
+      });
+      
+      // Re-hide
+      element.classList.remove('block');
+      element.classList.add('hidden');
+      
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgProps = pdf.getImageProperties(imgData);
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+      
+      // Handle multi-page if content is too long
+      let heightLeft = pdfHeight;
+      let position = 0;
+      const pageHeight = pdf.internal.pageSize.getHeight();
+
+      pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft >= 0) {
+        position = heightLeft - pdfHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
+        heightLeft -= pageHeight;
+      }
+      
+      pdf.save(`Infografis_Presensi_Guru_${new Date().toISOString().split('T')[0]}.pdf`);
+    } catch (error) {
+      console.error("Failed to generate PDF infographic:", error);
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   const handleExportDoc = () => {
@@ -892,7 +941,7 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
     </div>
 
     {/* Printable Infographic Section */}
-      <div className="hidden print:block p-10 bg-white min-h-screen font-sans text-gray-900">
+      <div ref={infographicRef} className="hidden print:block p-10 bg-white font-sans text-gray-900 w-[210mm]">
         {/* Header */}
         <div className="flex items-center justify-between border-b-4 border-purple-600 pb-8 mb-10">
           <div className="flex items-center gap-6">
