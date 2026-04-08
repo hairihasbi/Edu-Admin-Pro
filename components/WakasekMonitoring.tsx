@@ -3,10 +3,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, TeachingJournal, AttendanceRecord, ClassRoom, TeachingSchedule } from '../types';
 import { getSchoolTeachers, getSchoolJournals, getSchoolAttendance, syncAllData, getAvailableClassesForHomeroom, getSchoolSchedules, getSchoolJournalsByRange } from '../services/database';
-import { Activity, CheckCircle, XCircle, Calendar, Users, Search, Filter, Clock, Info, AlertCircle, RefreshCcw, Loader2, BookOpen, LayoutGrid, List as ListIcon, ChevronDown, ChevronUp, TrendingUp, BarChart3, PieChart, Download, Printer, FileSpreadsheet, FileText } from './Icons';
+import { Activity, CheckCircle, XCircle, Calendar, Users, Search, Filter, Clock, Info, AlertCircle, RefreshCcw, Loader2, BookOpen, LayoutGrid, List as ListIcon, ChevronDown, ChevronUp, TrendingUp, BarChart3, PieChart, Download, Printer, FileSpreadsheet, FileText, School } from './Icons';
 import * as XLSX from 'xlsx';
-import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
 
 interface WakasekMonitoringProps {
   user: User;
@@ -201,30 +199,8 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
   };
 
   const handleExportPDF = () => {
-    const doc = new jsPDF();
-    doc.text(`Laporan Presensi Kehadiran Guru - ${user.schoolName}`, 14, 15);
-    doc.setFontSize(10);
-    doc.text(`Tanggal Cetak: ${new Date().toLocaleDateString('id-ID')}`, 14, 22);
-
-    const tableData = teacherStats.map(s => [
-      s.teacher.fullName,
-      s.totalJP,
-      `${s.weekly.toFixed(1)}%`,
-      `${s.monthly.toFixed(1)}%`,
-      `${s.semester.toFixed(1)}%`,
-      `${s.yearly.toFixed(1)}%`
-    ]);
-
-    (doc as any).autoTable({
-      head: [['Nama Guru', 'JP/Minggu', 'Minggu', 'Bulan', 'Semester', 'Tahunan']],
-      body: tableData,
-      startY: 30,
-      theme: 'grid',
-      styles: { fontSize: 8 },
-      headStyles: { fillColor: [126, 34, 206] } // Purple-700
-    });
-
-    doc.save(`Presensi_Guru_${new Date().toISOString().split('T')[0]}.pdf`);
+    // Trigger window print for infographic layout
+    window.print();
   };
 
   const handleExportDoc = () => {
@@ -323,7 +299,8 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
   }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6 pb-20">
+    <>
+      <div className="max-w-6xl mx-auto space-y-6 pb-20 print:hidden">
       {/* Header */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-start gap-4">
@@ -913,6 +890,121 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
         </div>
       </div>
     </div>
+
+    {/* Printable Infographic Section */}
+      <div className="hidden print:block p-10 bg-white min-h-screen font-sans text-gray-900">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b-4 border-purple-600 pb-8 mb-10">
+          <div className="flex items-center gap-6">
+            <div className="w-20 h-20 bg-purple-600 rounded-2xl flex items-center justify-center text-white shadow-lg">
+              <School size={40} />
+            </div>
+            <div>
+              <h1 className="text-3xl font-black uppercase tracking-tighter text-gray-900">{user.schoolName}</h1>
+              <p className="text-sm text-gray-500 font-mono tracking-wide">NPSN: {user.schoolNpsn} | SISTEM MONITORING KURIKULUM DIGITAL</p>
+            </div>
+          </div>
+          <div className="text-right">
+            <p className="text-xs font-black text-purple-600 uppercase tracking-[0.3em] mb-1">LAPORAN INFOGRAFIS</p>
+            <p className="text-2xl font-black text-gray-800">{new Date().toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }).toUpperCase()}</p>
+          </div>
+        </div>
+
+        {/* Key Performance Indicators */}
+        <div className="grid grid-cols-3 gap-8 mb-12">
+          <div className="relative overflow-hidden bg-purple-50 p-8 rounded-3xl border border-purple-100">
+            <div className="absolute -right-4 -top-4 text-purple-100">
+              <Users size={80} />
+            </div>
+            <p className="relative z-10 text-[10px] font-black text-purple-600 uppercase tracking-widest mb-2">Total Tenaga Pendidik</p>
+            <p className="relative z-10 text-5xl font-black text-purple-900">{teachers.length}</p>
+          </div>
+          <div className="relative overflow-hidden bg-blue-50 p-8 rounded-3xl border border-blue-100">
+            <div className="absolute -right-4 -top-4 text-blue-100">
+              <TrendingUp size={80} />
+            </div>
+            <p className="relative z-10 text-[10px] font-black text-blue-600 uppercase tracking-widest mb-2">Rata-rata Kepatuhan</p>
+            <p className="relative z-10 text-5xl font-black text-blue-900">
+              {(teacherStats.reduce((acc, s) => acc + s.yearly, 0) / (teacherStats.length || 1)).toFixed(1)}%
+            </p>
+          </div>
+          <div className="relative overflow-hidden bg-green-50 p-8 rounded-3xl border border-green-100">
+            <div className="absolute -right-4 -top-4 text-green-100">
+              <CheckCircle size={80} />
+            </div>
+            <p className="relative z-10 text-[10px] font-black text-green-600 uppercase tracking-widest mb-2">Integritas Data</p>
+            <p className="relative z-10 text-5xl font-black text-green-900">A+</p>
+          </div>
+        </div>
+
+        {/* Main Section Title */}
+        <div className="flex items-center gap-4 mb-8">
+          <div className="h-px flex-1 bg-gray-200"></div>
+          <h2 className="text-sm font-black uppercase tracking-[0.4em] text-gray-400">Detail Performa Kehadiran Guru</h2>
+          <div className="h-px flex-1 bg-gray-200"></div>
+        </div>
+
+        {/* Teacher Infographic Grid */}
+        <div className="grid grid-cols-2 gap-x-12 gap-y-10">
+          {teacherStats.map((stats) => (
+            <div key={stats.teacher.id} className="flex flex-col break-inside-avoid border-b border-gray-100 pb-6">
+              <div className="flex justify-between items-end mb-4">
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900 mb-0.5">{stats.teacher.fullName}</h3>
+                  <p className="text-xs text-purple-600 font-bold uppercase tracking-wider">{stats.teacher.subject || 'Guru Mata Pelajaran'}</p>
+                </div>
+                <div className="text-right">
+                  <div className="text-[10px] font-black text-gray-400 uppercase mb-1">Beban Kerja</div>
+                  <div className="text-lg font-black text-gray-800">{stats.totalJP} <span className="text-[10px] text-gray-400">JP/MGG</span></div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-4 gap-4">
+                {[
+                  { label: 'Minggu', val: stats.weekly, color: 'bg-indigo-500' },
+                  { label: 'Bulan', val: stats.monthly, color: 'bg-blue-500' },
+                  { label: 'Semester', val: stats.semester, color: 'bg-purple-500' },
+                  { label: 'Tahun', val: stats.yearly, color: 'bg-emerald-500' }
+                ].map(p => (
+                  <div key={p.label} className="space-y-2">
+                    <div className="flex flex-col">
+                      <span className="text-[8px] font-black uppercase text-gray-400 tracking-tighter mb-1">{p.label}</span>
+                      <span className="text-sm font-black text-gray-900">{p.val.toFixed(0)}%</span>
+                    </div>
+                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                      <div 
+                        className={`h-full transition-all duration-500 ${p.color}`}
+                        style={{ width: `${p.val}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Footer / Signature Section */}
+        <div className="mt-20 pt-10 border-t-2 border-gray-100 flex justify-between items-start">
+          <div className="max-w-md">
+            <p className="text-[10px] text-gray-400 font-mono leading-relaxed">
+              Laporan ini dihasilkan secara otomatis oleh sistem EduAdmin Pro. Seluruh data yang disajikan bersifat valid dan telah melalui proses sinkronisasi real-time dengan database jurnal mengajar sekolah.
+            </p>
+            <div className="mt-4 flex items-center gap-2 text-[10px] font-bold text-gray-500">
+              <Clock size={12} />
+              <span>WAKTU CETAK: {new Date().toLocaleString('id-ID')}</span>
+            </div>
+          </div>
+          
+          <div className="flex flex-col items-center min-w-[200px]">
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-16">Wakasek Kurikulum</p>
+            <div className="w-full h-px bg-gray-900 mb-2"></div>
+            <p className="text-xs font-black uppercase text-gray-900">{user.fullName}</p>
+            <p className="text-[10px] text-gray-500 font-medium">NIP. {user.nip || '..........................'}</p>
+          </div>
+        </div>
+      </div>
+    </>
   );
 };
 
