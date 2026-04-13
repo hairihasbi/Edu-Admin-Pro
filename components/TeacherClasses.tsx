@@ -234,18 +234,18 @@ const TeacherClasses: React.FC<TeacherClassesProps> = ({ user }) => {
         </div>
 
         {loading ? (
-           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-              {Array.from({length: 6}).map((_, i) => (
-                 <div key={i} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 animate-pulse">
-                    <div className="flex justify-between items-start mb-4">
-                       <div className="w-10 h-10 bg-gray-200 rounded-lg"></div>
-                       <div className="w-8 h-8 bg-gray-200 rounded-full"></div>
+           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {Array.from({length: 8}).map((_, i) => (
+                 <div key={i} className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 animate-pulse">
+                    <div className="flex justify-between items-start mb-3">
+                       <div className="w-8 h-8 bg-gray-200 rounded-lg"></div>
+                       <div className="w-6 h-6 bg-gray-200 rounded-full"></div>
                     </div>
-                    <div className="h-5 bg-gray-200 rounded w-1/2 mb-2"></div>
-                    <div className="h-3 bg-gray-200 rounded w-3/4"></div>
-                    <div className="mt-6 pt-4 border-t border-gray-100 flex justify-between">
-                       <div className="h-4 bg-gray-200 rounded w-20"></div>
-                       <div className="h-4 bg-gray-200 rounded w-16"></div>
+                    <div className="h-4 bg-gray-200 rounded w-1/2 mb-2"></div>
+                    <div className="h-2.5 bg-gray-200 rounded w-3/4"></div>
+                    <div className="mt-4 pt-3 border-t border-gray-100 flex justify-between">
+                       <div className="h-3 bg-gray-200 rounded w-16"></div>
+                       <div className="h-3 bg-gray-200 rounded w-12"></div>
                     </div>
                  </div>
               ))}
@@ -265,36 +265,36 @@ const TeacherClasses: React.FC<TeacherClassesProps> = ({ user }) => {
              </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {classes.map(cls => (
               <div 
                 key={cls.id} 
                 onClick={() => openClassDetail(cls)}
                 className="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition cursor-pointer group overflow-hidden active:scale-95 duration-100"
               >
-                <div className="h-2 bg-gradient-to-r from-blue-500 to-indigo-600" />
-                <div className="p-5 md:p-6">
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="p-3 bg-blue-50 text-blue-600 rounded-lg group-hover:bg-blue-600 group-hover:text-white transition">
-                      <Users size={24} />
+                <div className="h-1.5 bg-gradient-to-r from-blue-500 to-indigo-600" />
+                <div className="p-4">
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="p-2 bg-blue-50 text-blue-600 rounded-lg group-hover:bg-blue-600 group-hover:text-white transition">
+                      <Users size={20} />
                     </div>
                     <button 
                       onClick={(e) => handleDeleteClass(cls.id, e)}
-                      className="text-gray-400 hover:text-red-500 p-2 rounded-full hover:bg-red-50 transition z-10"
+                      className="text-gray-400 hover:text-red-500 p-1.5 rounded-full hover:bg-red-50 transition z-10"
                       title="Hapus Kelas"
                     >
-                      <Trash2 size={18} />
+                      <Trash2 size={16} />
                     </button>
                   </div>
-                  <h3 className="text-lg font-bold text-gray-800 mb-1">{cls.name}</h3>
-                  <p className="text-sm text-gray-500 line-clamp-1">{cls.description || 'Tidak ada deskripsi'}</p>
+                  <h3 className="text-base font-bold text-gray-800 mb-0.5">{cls.name}</h3>
+                  <p className="text-xs text-gray-500 line-clamp-1">{cls.description || 'Tidak ada deskripsi'}</p>
                   
-                  <div className="mt-6 pt-4 border-t border-gray-100 flex items-center justify-between">
-                    <span className="text-sm font-medium text-gray-600">
+                  <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between">
+                    <span className="text-xs font-medium text-gray-600">
                       {cls.studentCount} Siswa
                     </span>
-                    <span className="text-xs text-blue-600 font-medium flex items-center gap-1 group-hover:translate-x-1 transition-transform">
-                      Kelola <ChevronLeft size={14} className="rotate-180" />
+                    <span className="text-[10px] text-blue-600 font-bold flex items-center gap-1 group-hover:translate-x-1 transition-transform uppercase tracking-wider">
+                      Kelola <ChevronLeft size={12} className="rotate-180" />
                     </span>
                   </div>
                 </div>
