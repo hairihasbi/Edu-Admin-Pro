@@ -4,6 +4,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { User, UserRole, MasterSubject, ClassRoom } from '../types';
 import { User as UserIcon, School, IdCard, BookOpen, CheckCircle, AlertCircle, Save, Lock, Shield, Smartphone, DatabaseBackup, Info, Layout } from './Icons';
 import { updateUserProfile, updateUserPassword, getMasterSubjects, getAvailableClassesForHomeroom, claimHomeroomClass, releaseHomeroomClass, checkWakasekExists } from '../services/database';
+import { db } from '../services/db';
 import WhatsAppSettings from './WhatsAppSettings';
 
 interface TeacherProfileProps {
@@ -31,6 +32,7 @@ const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onUpdateUser }) =
 
   // Master Data State
   const [availableSubjects, setAvailableSubjects] = useState<MasterSubject[]>([]);
+  const [wakasekInfo, setWakasekInfo] = useState<{ exists: boolean; name?: string; userId?: string }>({ exists: false });
   
   // Homeroom Data State
   const [schoolClasses, setSchoolClasses] = useState<ClassRoom[]>([]);
@@ -54,13 +56,24 @@ const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onUpdateUser }) =
     const fetchMasterData = async () => {
       const subData = await getMasterSubjects();
       setAvailableSubjects(subData.sort((a, b) => a.name.localeCompare(b.name)));
+      
+      // Fetch Wakasek Info
+      if (user.schoolNpsn) {
+          const info = await checkWakasekExists(user.schoolNpsn);
+          // We need to know WHO is the wakasek to allow them to keep/release it
+          const wakasek = await db.users
+              .where('schoolNpsn').equals(user.schoolNpsn)
+              .and((u: User) => u.additionalRole === 'WAKASEK_KURIKULUM')
+              .first();
+          setWakasekInfo({ exists: !!wakasek, name: wakasek?.fullName, userId: wakasek?.id });
+      }
     };
     
     if (user.role === UserRole.GURU) {
       fetchMasterData();
       fetchHomeroomClasses();
     }
-  }, [user.role]);
+  }, [user.role, user.schoolNpsn, user.additionalRole]);
 
   const fetchHomeroomClasses = async () => {
       setLoadingClasses(true);
@@ -122,6 +135,13 @@ const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onUpdateUser }) =
       if (success) {
         onUpdateUser({ ...user, ...dataToSave as any });
         setStatus({ type: 'success', message: 'Data identitas berhasil diperbarui!' });
+        
+        // Refresh Wakasek Info locally
+        if (dataToSave.additionalRole === 'WAKASEK_KURIKULUM') {
+            setWakasekInfo({ exists: true, name: dataToSave.fullName, userId: user.id });
+        } else if (user.additionalRole === 'WAKASEK_KURIKULUM') {
+            setWakasekInfo({ exists: false });
+        }
       } else {
         setStatus({ type: 'error', message: 'Gagal menyimpan perubahan profil.' });
       }
@@ -356,16 +376,29 @@ const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onUpdateUser }) =
 
                     {/* Additional Role Selector */}
                     {!isAdmin && !isTendik && (
-                        <div className="bg-purple-50 p-4 rounded-lg border border-purple-100">
+                        <div className={`p-4 rounded-lg border transition ${
+                            wakasekInfo.exists && wakasekInfo.userId !== user.id 
+                            ? 'bg-gray-50 border-gray-200 opacity-80' 
+                            : 'bg-purple-50 border-purple-100'
+                        }`}>
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <p className="text-sm font-bold text-purple-800">Tugas Tambahan: Wakasek Kurikulum</p>
-                                    <p className="text-[10px] text-purple-600">Aktifkan untuk memantau jurnal dan absensi seluruh guru di sekolah.</p>
+                                    <p className={`text-sm font-bold ${wakasekInfo.exists && wakasekInfo.userId !== user.id ? 'text-gray-500' : 'text-purple-800'}`}>
+                                        Tugas Tambahan: Wakasek Kurikulum
+                                    </p>
+                                    {wakasekInfo.exists && wakasekInfo.userId !== user.id ? (
+                                        <p className="text-[10px] text-red-500 font-medium flex items-center gap-1">
+                                            <Lock size={10} /> Sudah diambil oleh: {wakasekInfo.name}
+                                        </p>
+                                    ) : (
+                                        <p className="text-[10px] text-purple-600">Aktifkan untuk memantau jurnal dan absensi seluruh guru di sekolah.</p>
+                                    )}
                                 </div>
-                                <label className="relative inline-flex items-center cursor-pointer">
+                                <label className={`relative inline-flex items-center ${wakasekInfo.exists && wakasekInfo.userId !== user.id ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
                                     <input 
                                         type="checkbox" 
                                         className="sr-only peer"
+                                        disabled={wakasekInfo.exists && wakasekInfo.userId !== user.id}
                                         checked={formData.additionalRole === 'WAKASEK_KURIKULUM'}
                                         onChange={(e) => {
                                             const isChecked = e.target.checked;
@@ -375,7 +408,9 @@ const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onUpdateUser }) =
                                             });
                                         }}
                                     />
-                                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+                                    <div className={`w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all ${
+                                        wakasekInfo.exists && wakasekInfo.userId !== user.id ? 'peer-checked:bg-gray-400' : 'peer-checked:bg-purple-600'
+                                    }`}></div>
                                 </label>
                             </div>
                         </div>
