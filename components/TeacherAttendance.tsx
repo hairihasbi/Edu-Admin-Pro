@@ -18,6 +18,12 @@ interface AttendanceState {
   };
 }
 
+interface NotesState {
+  [studentId: string]: {
+    [day: number]: string;
+  };
+}
+
 interface RecapData {
     id: string;
     name: string;
@@ -46,6 +52,9 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
 
   // Input Mode State
   const [attendance, setAttendance] = useState<AttendanceState>({});
+  const [notes, setNotes] = useState<NotesState>({});
+  const [editingNote, setEditingNote] = useState<{ studentId: string; day: number; studentName: string } | null>(null);
+  const [tempNote, setTempNote] = useState('');
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [calendarEvents, setCalendarEvents] = useState<TeacherCalendarEvent[]>([]);
@@ -134,12 +143,19 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
     setCalendarEvents(eventsData);
     
     const attState: AttendanceState = {};
+    const notesState: NotesState = {};
     attendanceData.forEach(record => {
       const day = new Date(record.date).getDate();
       if (!attState[record.studentId]) attState[record.studentId] = {};
       attState[record.studentId][day] = record.status;
+      
+      if (record.notes) {
+        if (!notesState[record.studentId]) notesState[record.studentId] = {};
+        notesState[record.studentId][day] = record.notes;
+      }
     });
     setAttendance(attState);
+    setNotes(notesState);
     
     setMaleCount(studentData.filter(s => s.gender === 'L').length);
     setFemaleCount(studentData.filter(s => s.gender === 'P').length);
@@ -245,6 +261,24 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
         }
       };
     });
+  };
+
+  const handleOpenNote = (studentId: string, day: number, studentName: string) => {
+    setEditingNote({ studentId, day, studentName });
+    setTempNote(notes[studentId]?.[day] || '');
+  };
+
+  const handleSaveNote = () => {
+    if (!editingNote) return;
+    setHasChanges(true);
+    setNotes(prev => ({
+      ...prev,
+      [editingNote.studentId]: {
+        ...prev[editingNote.studentId],
+        [editingNote.day]: tempNote
+      }
+    }));
+    setEditingNote(null);
   };
 
   // --- SWIPE LOGIC ---
@@ -361,7 +395,8 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
             userId: user.id,
             date: localDate,
             status: status as 'H' | 'S' | 'I' | 'A',
-            visibility: visibility
+            visibility: visibility,
+            notes: notes[studentId]?.[d] || ''
           });
         }
       });
@@ -669,6 +704,23 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
                                 <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-6 text-gray-400"><UserIcon size={48} /></div>
                                 <h3 className="text-2xl font-bold text-gray-800 text-center mb-2">{students[currentStudentIndex].name}</h3>
                                 <p className="text-gray-500 font-medium">{students[currentStudentIndex].nis}</p>
+                                
+                                {notes[students[currentStudentIndex].id]?.[dailyDay] && (
+                                    <div className="mt-4 p-3 bg-yellow-50 border border-yellow-100 rounded-lg text-xs text-yellow-800 italic text-center max-w-[250px]">
+                                        "{notes[students[currentStudentIndex].id][dailyDay]}"
+                                    </div>
+                                )}
+
+                                <button 
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleOpenNote(students[currentStudentIndex].id, dailyDay, students[currentStudentIndex].name);
+                                    }}
+                                    className="mt-4 flex items-center gap-2 text-blue-600 font-bold text-sm bg-blue-50 px-4 py-2 rounded-full hover:bg-blue-100 transition"
+                                >
+                                    <FileText size={16} /> {notes[students[currentStudentIndex].id]?.[dailyDay] ? 'Edit Catatan' : 'Tambah Catatan'}
+                                </button>
+
                                 <div className="mt-6 flex items-center gap-2 text-sm text-gray-400"><span>Siswa ke {currentStudentIndex + 1} dari {students.length}</span></div>
                                 {attendance[students[currentStudentIndex].id]?.[dailyDay] && <span className={`absolute top-4 right-4 px-3 py-1 rounded-full text-xs font-bold ${getStatusColor(attendance[students[currentStudentIndex].id][dailyDay])}`}>{attendance[students[currentStudentIndex].id][dailyDay]}</span>}
                             </div>
@@ -732,8 +784,23 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
                                             }
 
                                             return (
-                                                <td key={d} onClick={() => !isHoliday && handleCellClick(student.id, d)} className={cellClass} title={event?.description}>
-                                                    {cellContent}
+                                                <td key={d} className="relative group">
+                                                    <div 
+                                                        onClick={() => !isHoliday && handleCellClick(student.id, d)} 
+                                                        className={cellClass} 
+                                                        title={event?.description}
+                                                    >
+                                                        {cellContent}
+                                                    </div>
+                                                    {!isHoliday && (
+                                                        <button 
+                                                            onClick={() => handleOpenNote(student.id, d, student.name)}
+                                                            className={`absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center z-20 transition-opacity ${notes[student.id]?.[d] ? 'bg-blue-600 text-white opacity-100' : 'bg-gray-200 text-gray-500 opacity-0 group-hover:opacity-100'}`}
+                                                            title={notes[student.id]?.[d] || 'Tambah Catatan'}
+                                                        >
+                                                            <FileText size={8} />
+                                                        </button>
+                                                    )}
                                                 </td>
                                             );
                                         })}
@@ -750,6 +817,42 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
                 </div>
                 )}
             </div>
+
+            {editingNote && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 z-[110] flex items-center justify-center p-4">
+                    <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 animate-in fade-in zoom-in duration-200">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                                <FileText size={18} className="text-blue-600" /> 
+                                Catatan Absensi
+                            </h3>
+                            <button onClick={() => setEditingNote(null)} className="text-gray-400 hover:text-gray-600">
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <div className="space-y-4">
+                            <div>
+                                <p className="text-xs font-bold text-gray-400 uppercase mb-1">Siswa</p>
+                                <p className="text-sm font-bold text-gray-800">{editingNote.studentName}</p>
+                                <p className="text-[10px] text-gray-500">{editingNote.day} {monthNames[selectedMonth]} {selectedYear}</p>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Keterangan (Bolos, Izin Pulang, dll)</label>
+                                <textarea 
+                                    value={tempNote}
+                                    onChange={(e) => setTempNote(e.target.value)}
+                                    placeholder="Tulis catatan di sini..."
+                                    className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none min-h-[100px]"
+                                />
+                            </div>
+                            <div className="flex gap-2 pt-2">
+                                <button onClick={() => setEditingNote(null)} className="flex-1 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-bold">Batal</button>
+                                <button onClick={handleSaveNote} className="flex-1 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700">Simpan Catatan</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
           </>
       ) : (
           /* --- RECAP VIEW --- */
