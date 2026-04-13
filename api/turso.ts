@@ -1098,21 +1098,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 const additionalRole = userRes.rows[0]?.additional_role || null;
                 const isWakasek = additionalRole === 'WAKASEK_KURIKULUM';
                 
-                if (!userNpsn && isWakasek) {
-                    // Fallback: if user is Wakasek but NPSN is missing in Turso, 
+                if (!userNpsn) {
+                    // Fallback: if user is Guru but NPSN is missing in Turso, 
                     // they might need to push their profile first.
-                    console.warn(`[API] Wakasek ${userId} has no NPSN in Turso.`);
+                    console.warn(`[API] Guru ${userId} has no NPSN in Turso.`);
                 }
                 
                 // Logic Filter for Guru
                 if (tableConfig.table === 'classes') {
-                    // Show classes in same school
-                    if (userNpsn) { whereClauses.push("school_npsn = ?"); args = [userNpsn]; } 
+                    // Show classes in same school OR created by user
+                    if (userNpsn) { 
+                        whereClauses.push("(school_npsn = ? OR user_id = ?)"); 
+                        args = [userNpsn, userId]; 
+                    } 
                     else { whereClauses.push("user_id = ?"); args = [userId]; }
                 }
                 else if (tableConfig.table === 'users') { 
-                    // Wakasek sees all teachers in school, others see themselves
-                    if (isWakasek && userNpsn) {
+                    // All teachers in same school should see each other for picket/shared features
+                    if (userNpsn) {
                         whereClauses.push("school_npsn = ?"); args = [userNpsn];
                     } else {
                         whereClauses.push("id = ?"); args = [userId]; 
@@ -1129,16 +1132,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 else if (['scores','schedules','materials'].includes(tableConfig.table)) { 
                     whereClauses.push("user_id = ?"); args = [userId]; 
                 }
-                else if (tableConfig.table === 'students' && userNpsn) { 
-                    whereClauses.push("school_npsn = ?"); args = [userNpsn]; 
+                else if (tableConfig.table === 'students') { 
+                    if (userNpsn) {
+                        whereClauses.push("school_npsn = ?"); args = [userNpsn]; 
+                    } else {
+                        // If no NPSN, fallback to user's classes
+                        whereClauses.push("class_id IN (SELECT id FROM classes WHERE user_id = ?)");
+                        args = [userId];
+                    }
                 }
-                else if (tableConfig.table === 'attendance' && userNpsn) { 
-                    if (isWakasek) {
+                else if (tableConfig.table === 'attendance') { 
+                    if (isWakasek && userNpsn) {
                         whereClauses.push("user_id IN (SELECT id FROM users WHERE school_npsn = ?)"); 
                         args = [userNpsn];
-                    } else {
+                    } else if (userNpsn) {
                         whereClauses.push("((visibility = 'SHARED' AND class_id IN (SELECT id FROM classes WHERE school_npsn = ?)) OR (user_id = ?))"); 
                         args = [userNpsn, userId]; 
+                    } else {
+                        whereClauses.push("user_id = ?"); args = [userId];
+                    }
+                }
+                else if (tableConfig.table === 'daily_pickets') {
+                    if (userNpsn) {
+                        whereClauses.push("school_npsn = ?"); args = [userNpsn];
+                    }
+                }
+                else if (tableConfig.table === 'student_incidents') {
+                    if (userNpsn) {
+                        whereClauses.push("picket_id IN (SELECT id FROM daily_pickets WHERE school_npsn = ?)");
+                        args = [userNpsn];
                     }
                 }
             }
