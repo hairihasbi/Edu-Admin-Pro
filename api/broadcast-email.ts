@@ -53,7 +53,19 @@ export async function sendBrevo(config: any, to: string, subject: string, html: 
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Brevo Error: ${errorText}`);
+    let errorMessage = errorText;
+    try {
+        const errorJson = JSON.parse(errorText);
+        if (errorJson.message) {
+            errorMessage = errorJson.message;
+            if (errorMessage.includes('unrecognised IP address')) {
+                errorMessage = `IP Address server (${errorMessage.match(/\d+\.\d+\.\d+\.\d+/)?.[0] || 'ini'}) belum diizinkan di Brevo. Silakan nonaktifkan 'Authorized IPs' atau tambahkan IP tersebut di dashboard Brevo (Security > Authorized IPs).`;
+            }
+        }
+    } catch (e) {
+        // Keep original text if not JSON
+    }
+    throw new Error(`Brevo Error: ${errorMessage}`);
   }
   return true;
 }
