@@ -67,10 +67,13 @@ export const registerUser = async (fullName: string, username: string, password:
     } catch (e: any) { return { success: false, message: e.message || 'Gagal menghubungi server.' }; }
 };
 
-export const updateUserProfile = async (id: string, data: Partial<User>) => {
+export const updateUserProfile = async (id: string, data: Partial<User>, forceSync = false) => {
     await db.users.update(id, { ...data, lastModified: Date.now(), isSynced: false });
-    const updated = await db.users.get(id);
-    if(updated) triggerDebouncedSync();
+    if (forceSync) {
+        await runManualSync('PUSH', () => {}, ['eduadmin_users']);
+    } else {
+        triggerDebouncedSync();
+    }
     return true;
 };
 
@@ -150,7 +153,11 @@ export const getPendingTeachers = async () => {
     return await db.users.where('status').equals('PENDING').toArray();
 };
 
-export const checkWakasekExists = async (schoolNpsn: string): Promise<{ exists: boolean; name?: string }> => {
+export const checkWakasekExists = async (schoolNpsn: string, forceSync = false): Promise<{ exists: boolean; name?: string }> => {
+    if (forceSync) {
+        // Trigger a pull for users table to ensure we have the latest data from colleagues
+        await runManualSync('PULL', () => {}, ['eduadmin_users']);
+    }
     const wakasek = await db.users
         .where('schoolNpsn').equals(schoolNpsn)
         .and(u => u.additionalRole === 'WAKASEK_KURIKULUM')
@@ -290,6 +297,9 @@ export const getAvailableClassesForHomeroom = async (schoolNpsn: string) => {
 
 export const claimHomeroomClass = async (classId: string, teacher: User) => {
     try {
+        // Force pull classes to ensure we have the latest homeroom info from colleagues
+        await runManualSync('PULL', () => {}, ['eduadmin_classes']);
+
         const targetClass = await db.classes.get(classId);
         if (!targetClass) throw new Error("Kelas tidak ditemukan");
         
@@ -320,9 +330,10 @@ export const claimHomeroomClass = async (classId: string, teacher: User) => {
             isSynced: false
         };
         await db.users.put(updatedUser);
-
-        triggerDebouncedSync();
-
+        
+        // Force push to ensure server-side validation blocks duplicates
+        await runManualSync('PUSH', () => {}, ['eduadmin_classes', 'eduadmin_users']);
+        
         return { success: true, user: updatedUser };
     } catch (e: any) {
         return { success: false, message: e.message };
@@ -454,7 +465,7 @@ export const triggerDebouncedSync = () => {
     }, 3000);
 };
 
-export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', logCallback: (msg: string) => void) => {
+export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', logCallback: (msg: string) => void, targetCollections?: string[]) => {
     // Auto-timeout check: If sync has been running for more than 60 seconds, force reset
     if (isSyncRunning && (Date.now() - syncStartTime > 60000)) {
         logCallback("Previous sync stuck. Force resetting lock...");
@@ -474,7 +485,7 @@ export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', logCall
     }
 
     try {
-        const collections = [
+        const allCollections = [
             'eduadmin_users', 'eduadmin_classes', 'eduadmin_students', 'eduadmin_attendance', 
             'eduadmin_materials', 'eduadmin_scores', 'eduadmin_journals', 'eduadmin_schedules', 
             'eduadmin_logs', 'eduadmin_email_config', 'eduadmin_master_subjects', 'eduadmin_tickets', 
@@ -483,6 +494,8 @@ export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', logCall
             'eduadmin_pickets', 'eduadmin_incidents', 'eduadmin_donations', 'eduadmin_teacher_calendar',
             'eduadmin_password_resets'
         ];
+
+        const collections = targetCollections || allCollections;
 
         const tableMap: Record<string, any> = {
             'eduadmin_users': db.users,
