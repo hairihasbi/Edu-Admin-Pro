@@ -152,6 +152,7 @@ export interface AttendanceRecord extends Syncable {
   date: string; 
   status: 'H' | 'S' | 'I' | 'A';
   visibility: 'PRIVATE' | 'SHARED'; // NEW: Visibility control
+  notes?: string; // NEW: Additional notes
 }
 
 export interface ScopeMaterial extends Syncable {
