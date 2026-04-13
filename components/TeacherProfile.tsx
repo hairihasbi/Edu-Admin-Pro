@@ -107,7 +107,7 @@ const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onUpdateUser }) =
     try {
       // Validation for Wakasek Kurikulum
       if (formData.additionalRole === 'WAKASEK_KURIKULUM' && user.additionalRole !== 'WAKASEK_KURIKULUM') {
-          const check = await checkWakasekExists(user.schoolNpsn || '');
+          const check = await checkWakasekExists(user.schoolNpsn || '', true);
           if (check.exists) {
               setStatus({ type: 'error', message: `Jabatan Wakasek Kurikulum sudah diambil oleh ${check.name}.` });
               setIsSaving(false);
@@ -116,7 +116,8 @@ const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onUpdateUser }) =
       }
 
       const dataToSave = { ...formData };
-      const success = await updateUserProfile(user.id, dataToSave as any);
+      const isRoleChanging = formData.additionalRole === 'WAKASEK_KURIKULUM' && user.additionalRole !== 'WAKASEK_KURIKULUM';
+      const success = await updateUserProfile(user.id, dataToSave as any, isRoleChanging);
 
       if (success) {
         onUpdateUser({ ...user, ...dataToSave as any });
@@ -124,8 +125,8 @@ const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onUpdateUser }) =
       } else {
         setStatus({ type: 'error', message: 'Gagal menyimpan perubahan profil.' });
       }
-    } catch (error) {
-      setStatus({ type: 'error', message: 'Terjadi kesalahan sistem.' });
+    } catch (error: any) {
+      setStatus({ type: 'error', message: error.message || 'Terjadi kesalahan sistem.' });
     } finally {
       setIsSaving(false);
     }
