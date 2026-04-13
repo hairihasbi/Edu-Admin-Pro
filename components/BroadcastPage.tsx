@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { User, UserRole, ClassRoom } from '../types';
 import { 
   getWhatsAppConfig, sendWhatsAppBroadcast, 
-  getAllClasses, getStudents, getTeachers, 
+  getClasses, getStudents, getTeachers, 
   getEmailConfig, sendEmailBroadcast 
 } from '../services/database';
 import { 
@@ -34,7 +34,9 @@ interface LogItem {
 const BroadcastPage: React.FC<BroadcastPageProps> = ({ user }) => {
   const [recipients, setRecipients] = useState<Recipient[]>([]);
   const [channel, setChannel] = useState<'WHATSAPP' | 'EMAIL'>('WHATSAPP');
-  const [targetType, setTargetType] = useState<'TEACHERS' | 'STUDENTS_CLASS' | 'MANUAL'>('TEACHERS');
+  const [targetType, setTargetType] = useState<'TEACHERS' | 'STUDENTS_CLASS' | 'MANUAL'>(
+    user.role === UserRole.ADMIN ? 'TEACHERS' : 'STUDENTS_CLASS'
+  );
   const [manualName, setManualName] = useState('');
   const [manualContact, setManualContact] = useState('');
   const [selectedClassId, setSelectedClassId] = useState('');
@@ -59,12 +61,12 @@ const BroadcastPage: React.FC<BroadcastPageProps> = ({ user }) => {
         const em = await getEmailConfig();
         setEmailConfigReady(!!em && em.isActive);
 
-        const cls = await getAllClasses();
+        const cls = await getClasses(user.id, user.schoolNpsn);
         setClasses(cls);
         if (cls.length > 0) setSelectedClassId(cls[0].id);
     };
     init();
-  }, [user.id]);
+  }, [user.id, user.schoolNpsn]);
 
   // Load Recipients
   useEffect(() => {
@@ -74,7 +76,7 @@ const BroadcastPage: React.FC<BroadcastPageProps> = ({ user }) => {
         try {
             let data: Recipient[] = [];
             if (targetType === 'TEACHERS') {
-                const teachers = await getTeachers();
+                const teachers = await getTeachers(user.schoolNpsn);
                 data = teachers.map(t => ({
                     id: t.id,
                     name: t.fullName,
@@ -310,14 +312,12 @@ const BroadcastPage: React.FC<BroadcastPageProps> = ({ user }) => {
               </button>
             )}
             
-            {user.role !== UserRole.ADMIN && (
-              <button 
-                onClick={() => setTargetType('STUDENTS_CLASS')}
-                className={`px-3 py-1.5 text-xs font-bold rounded-md whitespace-nowrap transition ${targetType === 'STUDENTS_CLASS' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}
-              >
-                Per Kelas
-              </button>
-            )}
+            <button 
+              onClick={() => setTargetType('STUDENTS_CLASS')}
+              className={`px-3 py-1.5 text-xs font-bold rounded-md whitespace-nowrap transition ${targetType === 'STUDENTS_CLASS' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}
+            >
+              Per Kelas
+            </button>
 
             <button 
               onClick={() => { setTargetType('MANUAL'); setRecipients([]); }}

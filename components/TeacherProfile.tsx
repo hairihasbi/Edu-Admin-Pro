@@ -57,15 +57,10 @@ const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onUpdateUser }) =
       const subData = await getMasterSubjects();
       setAvailableSubjects(subData.sort((a, b) => a.name.localeCompare(b.name)));
       
-      // Fetch Wakasek Info
+      // Fetch Wakasek Info with force sync to ensure accuracy
       if (user.schoolNpsn) {
-          const info = await checkWakasekExists(user.schoolNpsn);
-          // We need to know WHO is the wakasek to allow them to keep/release it
-          const wakasek = await db.users
-              .where('schoolNpsn').equals(user.schoolNpsn)
-              .and((u: User) => u.additionalRole === 'WAKASEK_KURIKULUM')
-              .first();
-          setWakasekInfo({ exists: !!wakasek, name: wakasek?.fullName, userId: wakasek?.id });
+          const info = await checkWakasekExists(user.schoolNpsn, true);
+          setWakasekInfo(info);
       }
     };
     
