@@ -90,7 +90,7 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
   useEffect(() => {
     const init = async () => {
       setLoading(true);
-      const cls = await getClasses(user.id);
+      const cls = await getClasses(user.id, user.schoolNpsn);
       setClasses(cls);
       if (cls.length > 0) {
         setSelectedClassId(cls[0].id);
