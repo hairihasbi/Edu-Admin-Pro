@@ -113,7 +113,7 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
   useEffect(() => {
     const init = async () => {
       setLoading(true);
-      const cls = await getClasses(user.id);
+      const cls = await getClasses(user.id, user.schoolNpsn);
       setClasses(cls);
       if (cls.length > 0) {
         // Default form class to first available, BUT FILTER defaults to All ('')

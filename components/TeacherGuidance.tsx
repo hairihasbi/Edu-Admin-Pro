@@ -46,7 +46,7 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
   useEffect(() => {
     const init = async () => {
       // 1. Load Classes SPECIFIC to this User (Guru BK yang bersangkutan)
-      const cls = await getClasses(user.id); 
+      const cls = await getClasses(user.id, user.schoolNpsn); 
       setClasses(cls);
       if (cls.length > 0) setSelectedClassId(cls[0].id);
 

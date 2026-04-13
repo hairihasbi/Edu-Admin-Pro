@@ -72,7 +72,7 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
   useEffect(() => {
     const init = async () => {
       setLoading(true);
-      const cls = await getClasses(user.id);
+      const cls = await getClasses(user.id, user.schoolNpsn);
       setClasses(cls);
       
       // Default Form Class to First Available

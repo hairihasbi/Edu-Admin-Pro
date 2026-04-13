@@ -52,7 +52,7 @@ const TeacherClasses: React.FC<TeacherClassesProps> = ({ user }) => {
 
   const fetchClasses = async () => {
     setLoading(true);
-    const data = await getClasses(user.id);
+    const data = await getClasses(user.id, user.schoolNpsn);
     setClasses(data);
     setLoading(false);
   };
