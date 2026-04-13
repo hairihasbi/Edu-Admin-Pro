@@ -137,7 +137,13 @@ export const completePasswordReset = async (token: string, newPass: string) => {
     }
 };
 
-export const getTeachers = async () => {
+export const getTeachers = async (schoolNpsn?: string) => {
+    if (schoolNpsn && schoolNpsn !== 'DEFAULT') {
+        return await db.users
+            .where('schoolNpsn').equals(schoolNpsn)
+            .and(u => u.role === 'GURU' && u.status === 'ACTIVE')
+            .toArray();
+    }
     return await db.users.where('role').equals('GURU').and(u => u.status === 'ACTIVE').toArray();
 };
 
@@ -153,7 +159,7 @@ export const getPendingTeachers = async () => {
     return await db.users.where('status').equals('PENDING').toArray();
 };
 
-export const checkWakasekExists = async (schoolNpsn: string, forceSync = false): Promise<{ exists: boolean; name?: string }> => {
+export const checkWakasekExists = async (schoolNpsn: string, forceSync = false): Promise<{ exists: boolean; name?: string; userId?: string }> => {
     if (forceSync) {
         // Trigger a pull for users table to ensure we have the latest data from colleagues
         await runManualSync('PULL', () => {}, ['eduadmin_users']);
@@ -162,7 +168,7 @@ export const checkWakasekExists = async (schoolNpsn: string, forceSync = false):
         .where('schoolNpsn').equals(schoolNpsn)
         .and(u => u.additionalRole === 'WAKASEK_KURIKULUM')
         .first();
-    return { exists: !!wakasek, name: wakasek?.fullName };
+    return { exists: !!wakasek, name: wakasek?.fullName, userId: wakasek?.id };
 };
 
 export const getSchoolTeachers = async (schoolNpsn: string): Promise<User[]> => {
