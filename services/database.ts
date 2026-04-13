@@ -348,10 +348,14 @@ export const releaseHomeroomClass = async (classId: string, teacher: User) => {
 
 export const addClass = async (userId: string, name: string, description: string) => {
     const user = await db.users.get(userId);
+    // Fallback to localStorage if not in Dexie yet (unlikely but safe)
+    const savedUser = localStorage.getItem('eduadmin_user');
+    const parsedUser = savedUser ? JSON.parse(savedUser) : null;
+    
     const newItem: ClassRoom = {
         id: uuidv4(),
         userId,
-        schoolNpsn: user?.schoolNpsn || 'DEFAULT',
+        schoolNpsn: user?.schoolNpsn || parsedUser?.schoolNpsn || 'DEFAULT',
         name,
         description,
         studentCount: 0,
@@ -1167,19 +1171,37 @@ export const getIncidentsByDateRange = async (startDate: string, endDate: string
 // --- STUDENT OPS ---
 export const addStudent = async (classId: string, name: string, nis: string, gender: 'L'|'P', phone?: string) => {
     const cls = await db.classes.get(classId);
+    
+    // Fallback for NPSN
+    let schoolNpsn = cls?.schoolNpsn;
+    if (!schoolNpsn || schoolNpsn === 'DEFAULT') {
+        const savedUser = localStorage.getItem('eduadmin_user');
+        const parsedUser = savedUser ? JSON.parse(savedUser) : null;
+        schoolNpsn = parsedUser?.schoolNpsn || 'DEFAULT';
+    }
+
     const item: Student = {
         id: uuidv4(),
         classId,
-        schoolNpsn: cls?.schoolNpsn,
-        name, nis, gender, phone,
+        schoolNpsn,
+        name,
+        nis,
+        gender,
+        phone,
         lastModified: Date.now(),
         isSynced: false
     };
     await db.students.add(item);
-    // Update count
+    
+    // Update student count in class
     if (cls) {
-        await db.classes.update(classId, { studentCount: (cls.studentCount || 0) + 1 });
+        await db.classes.update(classId, { 
+            studentCount: (cls.studentCount || 0) + 1,
+            lastModified: Date.now(),
+            isSynced: false
+        });
     }
+    
     triggerDebouncedSync();
     return item;
 };
