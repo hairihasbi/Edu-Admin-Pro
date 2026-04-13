@@ -1081,7 +1081,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // --- PULL LOGIC ---
     if (action === 'pull') {
-        const isGuru = currentUser?.role === 'GURU';
+        const isStaff = currentUser?.role === 'GURU' || currentUser?.role === 'TENDIK';
         const userId = currentUser?.userId || null; 
         
         const tableConfig = getTableConfig(collection);
@@ -1092,7 +1092,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             let whereClauses: string[] = [];
             let args: any[] = [];
 
-            if (isGuru) {
+            if (isStaff) {
                 const userRes = await client.execute({ sql: "SELECT school_npsn, additional_role FROM users WHERE id = ?", args: [userId] });
                 const userNpsn = userRes.rows[0]?.school_npsn || null; 
                 const additionalRole = userRes.rows[0]?.additional_role || null;
@@ -1104,18 +1104,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     console.warn(`[API] Guru ${userId} has no NPSN in Turso.`);
                 }
                 
-                // Logic Filter for Guru
+                // Logic Filter for Staff (GURU/TENDIK)
                 if (tableConfig.table === 'classes') {
                     // Show classes in same school OR created by user
-                    if (userNpsn) { 
-                        whereClauses.push("(school_npsn = ? OR user_id = ?)"); 
-                        args = [userNpsn, userId]; 
+                    if (userNpsn && userNpsn !== 'DEFAULT') { 
+                        whereClauses.push("(school_npsn = ? OR user_id = ? OR user_id IN (SELECT id FROM users WHERE school_npsn = ?))"); 
+                        args = [userNpsn, userId, userNpsn]; 
                     } 
                     else { whereClauses.push("user_id = ?"); args = [userId]; }
                 }
                 else if (tableConfig.table === 'users') { 
                     // All teachers in same school should see each other for picket/shared features
-                    if (userNpsn) {
+                    if (userNpsn && userNpsn !== 'DEFAULT') {
                         whereClauses.push("school_npsn = ?"); args = [userNpsn];
                     } else {
                         whereClauses.push("id = ?"); args = [userId]; 
@@ -1123,23 +1123,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 }
                 else if (tableConfig.table === 'journals') {
                     // Wakasek sees all journals in school
-                    if (isWakasek && userNpsn) {
+                    if (isWakasek && userNpsn && userNpsn !== 'DEFAULT') {
                         whereClauses.push("user_id IN (SELECT id FROM users WHERE school_npsn = ?)"); args = [userNpsn];
                     } else {
                         whereClauses.push("user_id = ?"); args = [userId];
                     }
                 }
                 else if (['scores','schedules','materials'].includes(tableConfig.table)) { 
-                    if (userNpsn) {
-                        whereClauses.push("user_id IN (SELECT id FROM users WHERE school_npsn = ?)"); 
-                        args = [userNpsn];
+                    if (userNpsn && userNpsn !== 'DEFAULT') {
+                        whereClauses.push("(user_id = ? OR user_id IN (SELECT id FROM users WHERE school_npsn = ?))"); 
+                        args = [userId, userNpsn];
                     } else {
                         whereClauses.push("user_id = ?"); args = [userId]; 
                     }
                 }
                 else if (tableConfig.table === 'students') { 
-                    if (userNpsn) {
-                        whereClauses.push("school_npsn = ?"); args = [userNpsn]; 
+                    if (userNpsn && userNpsn !== 'DEFAULT') {
+                        whereClauses.push("(school_npsn = ? OR class_id IN (SELECT id FROM classes WHERE school_npsn = ? OR user_id IN (SELECT id FROM users WHERE school_npsn = ?)))"); 
+                        args = [userNpsn, userNpsn, userNpsn]; 
                     } else {
                         // If no NPSN, fallback to user's classes
                         whereClauses.push("class_id IN (SELECT id FROM classes WHERE user_id = ?)");
@@ -1147,10 +1148,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     }
                 }
                 else if (tableConfig.table === 'attendance') { 
-                    if (isWakasek && userNpsn) {
+                    if (isWakasek && userNpsn && userNpsn !== 'DEFAULT') {
                         whereClauses.push("user_id IN (SELECT id FROM users WHERE school_npsn = ?)"); 
                         args = [userNpsn];
-                    } else if (userNpsn) {
+                    } else if (userNpsn && userNpsn !== 'DEFAULT') {
                         whereClauses.push("((visibility = 'SHARED' AND class_id IN (SELECT id FROM classes WHERE school_npsn = ?)) OR (user_id = ?))"); 
                         args = [userNpsn, userId]; 
                     } else {
