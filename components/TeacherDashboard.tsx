@@ -57,7 +57,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
         const statsData = await getDashboardStats(user);
         setStats(statsData);
         
-        const scheduleData = await getTeachingSchedules(user.id);
+        const scheduleData = await getTeachingSchedules(user.id, user.schoolNpsn);
         setSchedules(scheduleData);
 
         const today = new Date().toISOString().split('T')[0];
