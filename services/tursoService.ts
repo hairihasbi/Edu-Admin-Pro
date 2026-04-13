@@ -318,9 +318,13 @@ export const pullFromTurso = async (collection: string, localItems: any[]): Prom
 
     const remoteMap = new Map();
     rows.forEach((row: any) => {
+      // FIX: Handle both generic sync_store (which has a .data property) 
+      // and specific tables (where the row itself is the data)
+      const itemData = row.data ? row.data : { ...row };
+      
       remoteMap.set(row.id, {
-        data: row.data,
-        updated_at: row.updated_at,
+        data: itemData,
+        updated_at: row.updatedAt || row.lastModified || Date.now(),
         version: row.version || 1
       });
     });

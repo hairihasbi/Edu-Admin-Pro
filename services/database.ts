@@ -248,7 +248,12 @@ export const deleteTeacher = async (id: string) => {
 
 // --- CLASS & HOMEROOM ---
 
-export const getClasses = async (userId: string) => {
+export const getClasses = async (userId: string, schoolNpsn?: string) => {
+    if (schoolNpsn && schoolNpsn !== 'DEFAULT') {
+        // Return classes that match the school NPSN OR were created by the user
+        // This is more robust than just filtering by NPSN
+        return await db.classes.filter(c => c.schoolNpsn === schoolNpsn || c.userId === userId).toArray();
+    }
     return await db.classes.where('userId').equals(userId).toArray();
 };
 
