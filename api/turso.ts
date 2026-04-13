@@ -1050,6 +1050,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 }
                 // --- END SELF HEALING ---
 
+                // --- START WAKASEK VALIDATION ---
+                if (tableName === 'users' && item.additionalRole === 'WAKASEK_KURIKULUM') {
+                    const existingWakasek = await client.execute({
+                        sql: "SELECT id, full_name FROM users WHERE school_npsn = ? AND additional_role = 'WAKASEK_KURIKULUM' AND id != ?",
+                        args: [item.schoolNpsn, item.id]
+                    });
+                    if (existingWakasek.rows.length > 0) {
+                        return res.status(400).json({ 
+                            error: `Jabatan Wakasek Kurikulum sudah diambil oleh ${existingWakasek.rows[0].full_name}.`,
+                            code: 'WAKASEK_ALREADY_EXISTS'
+                        });
+                    }
+                }
+                // --- END WAKASEK VALIDATION ---
+
+                // --- START HOMEROOM VALIDATION ---
+                if (tableName === 'classes' && item.homeroomTeacherId) {
+                    const existingHomeroom = await client.execute({
+                        sql: "SELECT id, name, homeroom_teacher_name FROM classes WHERE id = ? AND homeroom_teacher_id IS NOT NULL AND homeroom_teacher_id != ?",
+                        args: [item.id, item.homeroomTeacherId]
+                    });
+                    if (existingHomeroom.rows.length > 0) {
+                        return res.status(400).json({ 
+                            error: `Kelas ${existingHomeroom.rows[0].name} sudah memiliki Wali Kelas: ${existingHomeroom.rows[0].homeroom_teacher_name}.`,
+                            code: 'HOMEROOM_ALREADY_EXISTS'
+                        });
+                    }
+                }
+                // --- END HOMEROOM VALIDATION ---
+
                 const placeholders = tableConfig.columns.map(() => '?').join(', ');
                 const sql = `INSERT OR REPLACE INTO ${tableName} (${tableConfig.columns.join(', ')}) VALUES (${placeholders})`;
                 statements.push({ sql, args: tableConfig.mapFn(item) });
