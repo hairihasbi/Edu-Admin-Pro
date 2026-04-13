@@ -249,10 +249,25 @@ export const deleteTeacher = async (id: string) => {
 // --- CLASS & HOMEROOM ---
 
 export const getClasses = async (userId: string, schoolNpsn?: string) => {
-    if (schoolNpsn && schoolNpsn !== 'DEFAULT') {
-        // Return classes that match the school NPSN OR were created by the user
-        // This is more robust than just filtering by NPSN
-        return await db.classes.filter(c => c.schoolNpsn === schoolNpsn || c.userId === userId).toArray();
+    let npsn = schoolNpsn;
+    // Fallback: If NPSN not provided or DEFAULT, try to get it from the local user record
+    if (!npsn || npsn === 'DEFAULT') {
+        const localUser = await db.users.get(userId);
+        if (localUser && localUser.schoolNpsn && localUser.schoolNpsn !== 'DEFAULT') {
+            npsn = localUser.schoolNpsn;
+        }
+    }
+
+    if (npsn && npsn !== 'DEFAULT') {
+        // Get all teacher IDs in this school to ensure we see classes created by colleagues
+        const schoolUserIds = (await db.users.where('schoolNpsn').equals(npsn).toArray()).map(u => u.id);
+        
+        // Return classes that match the school NPSN OR were created by a user in this school
+        return await db.classes.filter(c => 
+            c.schoolNpsn === npsn || 
+            schoolUserIds.includes(c.userId) ||
+            c.userId === userId
+        ).toArray();
     }
     return await db.classes.where('userId').equals(userId).toArray();
 };
@@ -262,8 +277,15 @@ export const getAllClasses = async () => {
 };
 
 export const getAvailableClassesForHomeroom = async (schoolNpsn: string) => {
-    if (!schoolNpsn) return [];
-    return await db.classes.where('schoolNpsn').equals(schoolNpsn).toArray();
+    if (!schoolNpsn || schoolNpsn === 'DEFAULT') return [];
+    
+    // Get all teacher IDs in this school
+    const schoolUserIds = (await db.users.where('schoolNpsn').equals(schoolNpsn).toArray()).map(u => u.id);
+    
+    return await db.classes.filter(c => 
+        c.schoolNpsn === schoolNpsn || 
+        schoolUserIds.includes(c.userId)
+    ).toArray();
 };
 
 export const claimHomeroomClass = async (classId: string, teacher: User) => {
@@ -1058,8 +1080,14 @@ export const deleteStudentIncident = async (id: string) => {
 };
 
 export const getSchoolAttendanceSummary = async (date: string, schoolNpsn: string) => {
-    // 1. Get all classes in this school
-    const classes = await db.classes.where('schoolNpsn').equals(schoolNpsn).toArray();
+    if (!schoolNpsn || schoolNpsn === 'DEFAULT') return [];
+
+    // 1. Get all classes in this school (robust check)
+    const schoolUserIds = (await db.users.where('schoolNpsn').equals(schoolNpsn).toArray()).map(u => u.id);
+    const classes = await db.classes.filter(c => 
+        c.schoolNpsn === schoolNpsn || 
+        schoolUserIds.includes(c.userId)
+    ).toArray();
     
     // 2. Get all attendance records for this date and these classes
     const classIds = classes.map(c => c.id);
