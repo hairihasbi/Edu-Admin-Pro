@@ -1409,8 +1409,16 @@ export const updateScopeMaterial = async (id: string, data: Partial<ScopeMateria
 };
 
 export const getScopeMaterials = async (classId: string, semester: string, userId: string, subject?: string) => {
-    let collection = db.scopeMaterials.where('userId').equals(userId);
-    if (classId) collection = collection.filter(m => m.classId === classId);
+    let collection;
+    if (classId) {
+        // If classId is provided, we can see all materials for that class 
+        // (since classes are already NPSN-scoped)
+        collection = db.scopeMaterials.where('classId').equals(classId);
+    } else {
+        // Fallback to user's own materials if no class specified
+        collection = db.scopeMaterials.where('userId').equals(userId);
+    }
+    
     if (semester) collection = collection.filter(m => m.semester === semester);
     
     // FIX: Robust filtering (Case-insensitive + Allow legacy/empty + Math Loose Matching)

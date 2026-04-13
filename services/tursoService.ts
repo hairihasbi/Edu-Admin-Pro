@@ -309,7 +309,7 @@ export const pullFromTurso = async (collection: string, localItems: any[]): Prom
              console.log('[Turso Debug] Materials Pulled:', rows);
         }
     } else if (collection === 'eduadmin_materials') {
-        console.warn('[Turso Debug] No materials found in remote for this user.');
+        console.log('[Turso Debug] No materials found in remote for this school/user.');
     }
 
     if (!rows || !Array.isArray(rows)) {
