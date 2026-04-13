@@ -1600,7 +1600,16 @@ export const bulkDeleteTeachingJournals = async (ids: string[]) => {
 };
 
 // --- SCHEDULES ---
-export const getTeachingSchedules = async (userId: string) => {
+export const getTeachingSchedules = async (userId: string, schoolNpsn?: string) => {
+    if (schoolNpsn && schoolNpsn !== 'DEFAULT') {
+        // Get all teacher IDs in this school
+        const schoolUserIds = (await db.users.where('schoolNpsn').equals(schoolNpsn).toArray()).map(u => u.id);
+        return await db.teachingSchedules.filter(s => 
+            s.schoolNpsn === schoolNpsn || 
+            schoolUserIds.includes(s.userId) ||
+            s.userId === userId
+        ).toArray();
+    }
     return await db.teachingSchedules.where('userId').equals(userId).toArray();
 };
 
@@ -1662,7 +1671,8 @@ export const clearSystemLogs = async () => {
 };
 
 export const getDashboardStats = async (user: User): Promise<DashboardStatsData> => {
-    const classes = await db.classes.where('userId').equals(user.id).toArray();
+    // Use the robust getClasses logic to ensure we see school-wide classes
+    const classes = await getClasses(user.id, user.schoolNpsn);
     const classIds = classes.map(c => c.id);
     const students = await db.students.where('classId').anyOf(classIds).toArray();
     const journals = await db.teachingJournals.where('userId').equals(user.id).count();
