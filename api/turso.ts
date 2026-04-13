@@ -113,6 +113,7 @@ const DB_SCHEMAS = [
         status TEXT, -- H, S, I, A
         user_id TEXT,
         visibility TEXT DEFAULT 'SHARED',
+        notes TEXT,
         last_modified INTEGER,
         version INTEGER DEFAULT 1,
         deleted INTEGER DEFAULT 0
@@ -462,7 +463,7 @@ const getTableConfig = (collection: string) => {
     case 'eduadmin_classes': return { table: 'classes', columns: ['id', 'user_id', 'school_npsn', 'name', 'description', 'student_count', 'homeroom_teacher_id', 'homeroom_teacher_name', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.userId), s(item.schoolNpsn || 'DEFAULT'), s(item.name), s(item.description), s(item.studentCount), s(item.homeroomTeacherId), s(item.homeroomTeacherName), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_students': return { table: 'students', columns: ['id', 'class_id', 'school_npsn', 'name', 'nis', 'gender', 'phone', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.classId), s(item.schoolNpsn || 'DEFAULT'), s(item.name), s(item.nis), s(item.gender), s(item.phone || ''), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_scores': return { table: 'scores', columns: ['id', 'user_id', 'student_id', 'class_id', 'semester', 'subject', 'category', 'material_id', 'score', 'score_details', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.userId || 'UNKNOWN'), s(item.studentId), s(item.classId), s(item.semester), s(item.subject), s(item.category), s(item.materialId), s(item.score), JSON.stringify(item.scoreDetails || {}), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
-    case 'eduadmin_attendance': return { table: 'attendance', columns: ['id', 'student_id', 'class_id', 'date', 'status', 'user_id', 'visibility', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.studentId), s(item.classId), s(item.date), s(item.status), s(item.userId), s(item.visibility || 'SHARED'), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
+    case 'eduadmin_attendance': return { table: 'attendance', columns: ['id', 'student_id', 'class_id', 'date', 'status', 'user_id', 'visibility', 'notes', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.studentId), s(item.classId), s(item.date), s(item.status), s(item.userId), s(item.visibility || 'SHARED'), s(item.notes), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_journals': return { table: 'journals', columns: ['id', 'user_id', 'class_id', 'date', 'material_id', 'learning_objective', 'meeting_no', 'activities', 'reflection', 'follow_up', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.userId), s(item.classId), s(item.date), s(item.materialId), s(item.learningObjective), s(item.meetingNo), s(item.activities), s(item.reflection), s(item.followUp), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_materials': return { table: 'materials', columns: ['id', 'class_id', 'user_id', 'subject', 'semester', 'code', 'phase', 'content', 'sub_scopes', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.classId), s(item.userId), s(item.subject), s(item.semester), s(item.code), s(item.phase), s(item.content), JSON.stringify(item.subScopes || []), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_schedules': return { table: 'schedules', columns: ['id', 'user_id', 'day', 'time_start', 'time_end', 'class_name', 'subject', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.userId), s(item.day), s(item.timeStart), s(item.timeEnd), s(item.className), s(item.subject), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
@@ -537,7 +538,7 @@ const mapRowToJSON = (collection: string, row: any) => {
     };
     case 'eduadmin_attendance': return {
         id: row.id, studentId: row.student_id, classId: row.class_id, date: row.date,
-        status: row.status, userId: row.user_id, visibility: row.visibility,
+        status: row.status, userId: row.user_id, visibility: row.visibility, notes: row.notes,
         lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
     };
     case 'eduadmin_journals': return {
