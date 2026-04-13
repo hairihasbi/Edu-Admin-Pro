@@ -1130,7 +1130,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     }
                 }
                 else if (['scores','schedules','materials'].includes(tableConfig.table)) { 
-                    whereClauses.push("user_id = ?"); args = [userId]; 
+                    if (userNpsn) {
+                        whereClauses.push("user_id IN (SELECT id FROM users WHERE school_npsn = ?)"); 
+                        args = [userNpsn];
+                    } else {
+                        whereClauses.push("user_id = ?"); args = [userId]; 
+                    }
                 }
                 else if (tableConfig.table === 'students') { 
                     if (userNpsn) {
