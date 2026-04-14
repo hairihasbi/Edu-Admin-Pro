@@ -431,6 +431,45 @@ const DB_SCHEMAS = [
     )`,
     `CREATE INDEX IF NOT EXISTS idx_inventory_class ON inventory(class_id)`,
 
+    // 28. HOME VISITS
+    `CREATE TABLE IF NOT EXISTS home_visits (
+        id TEXT PRIMARY KEY,
+        student_id TEXT,
+        class_id TEXT,
+        school_npsn TEXT,
+        date TEXT,
+        address TEXT,
+        reason TEXT,
+        result TEXT,
+        follow_up TEXT,
+        notes TEXT,
+        user_id TEXT,
+        last_modified INTEGER,
+        version INTEGER DEFAULT 1,
+        deleted INTEGER DEFAULT 0
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_home_visits_npsn ON home_visits(school_npsn)`,
+
+    // 29. PARENT CALLS
+    `CREATE TABLE IF NOT EXISTS parent_calls (
+        id TEXT PRIMARY KEY,
+        student_id TEXT,
+        class_id TEXT,
+        school_npsn TEXT,
+        date TEXT,
+        parent_name TEXT,
+        parent_phone TEXT,
+        problem TEXT,
+        solution TEXT,
+        follow_up TEXT,
+        notes TEXT,
+        user_id TEXT,
+        last_modified INTEGER,
+        version INTEGER DEFAULT 1,
+        deleted INTEGER DEFAULT 0
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_parent_calls_npsn ON parent_calls(school_npsn)`,
+
     // --- MIGRATIONS ---
     `ALTER TABLE system_settings ADD COLUMN ai_provider TEXT`,
     `ALTER TABLE system_settings ADD COLUMN ai_base_url TEXT`,
@@ -458,6 +497,41 @@ const DB_SCHEMAS = [
     `ALTER TABLE system_settings ADD COLUMN headmaster_name TEXT`,
     `ALTER TABLE system_settings ADD COLUMN headmaster_nip TEXT`,
     `ALTER TABLE system_settings ADD COLUMN school_city TEXT`,
+    `CREATE TABLE IF NOT EXISTS home_visits (
+        id TEXT PRIMARY KEY,
+        student_id TEXT,
+        class_id TEXT,
+        school_npsn TEXT,
+        date TEXT,
+        address TEXT,
+        reason TEXT,
+        result TEXT,
+        follow_up TEXT,
+        notes TEXT,
+        user_id TEXT,
+        last_modified INTEGER,
+        version INTEGER DEFAULT 1,
+        deleted INTEGER DEFAULT 0
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_home_visits_npsn ON home_visits(school_npsn)`,
+    `CREATE TABLE IF NOT EXISTS parent_calls (
+        id TEXT PRIMARY KEY,
+        student_id TEXT,
+        class_id TEXT,
+        school_npsn TEXT,
+        date TEXT,
+        parent_name TEXT,
+        parent_phone TEXT,
+        problem TEXT,
+        solution TEXT,
+        follow_up TEXT,
+        notes TEXT,
+        user_id TEXT,
+        last_modified INTEGER,
+        version INTEGER DEFAULT 1,
+        deleted INTEGER DEFAULT 0
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_parent_calls_npsn ON parent_calls(school_npsn)`,
 ];
 
 // Helper to convert undefined to null for SQL
@@ -510,6 +584,16 @@ const getTableConfig = (collection: string) => {
         table: 'inventory', 
         columns: ['id', 'class_id', 'user_id', 'school_npsn', 'item_name', 'volume', 'condition', 'notes', 'last_modified', 'version', 'deleted'], 
         mapFn: (item: any) => [s(item.id), s(item.classId), s(item.userId), s(item.schoolNpsn), s(item.itemName), s(item.volume), s(item.condition), s(item.notes), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] 
+    };
+    case 'eduadmin_home_visits': return { 
+        table: 'home_visits', 
+        columns: ['id', 'student_id', 'class_id', 'school_npsn', 'date', 'address', 'reason', 'result', 'follow_up', 'notes', 'user_id', 'last_modified', 'version', 'deleted'], 
+        mapFn: (item: any) => [s(item.id), s(item.studentId), s(item.classId), s(item.schoolNpsn), s(item.date), s(item.address), s(item.reason), s(item.result), s(item.followUp), s(item.notes), s(item.userId), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] 
+    };
+    case 'eduadmin_parent_calls': return { 
+        table: 'parent_calls', 
+        columns: ['id', 'student_id', 'class_id', 'school_npsn', 'date', 'parent_name', 'parent_phone', 'problem', 'solution', 'follow_up', 'notes', 'user_id', 'last_modified', 'version', 'deleted'], 
+        mapFn: (item: any) => [s(item.id), s(item.studentId), s(item.classId), s(item.schoolNpsn), s(item.date), s(item.parentName), s(item.parentPhone), s(item.problem), s(item.solution), s(item.followUp), s(item.notes), s(item.userId), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] 
     };
     default:
       return null;
@@ -677,6 +761,19 @@ const mapRowToJSON = (collection: string, row: any) => {
     case 'eduadmin_inventory': return {
         id: row.id, classId: row.class_id, userId: row.user_id, schoolNpsn: row.school_npsn,
         itemName: row.item_name, volume: row.volume, condition: row.condition, notes: row.notes,
+        lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
+    };
+    case 'eduadmin_home_visits': return {
+        id: row.id, studentId: row.student_id, classId: row.class_id, schoolNpsn: row.school_npsn,
+        date: row.date, address: row.address, reason: row.reason, result: row.result,
+        followUp: row.follow_up, notes: row.notes, userId: row.user_id,
+        lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
+    };
+    case 'eduadmin_parent_calls': return {
+        id: row.id, studentId: row.student_id, classId: row.class_id, schoolNpsn: row.school_npsn,
+        date: row.date, parentName: row.parent_name, parentPhone: row.parent_phone,
+        problem: row.problem, solution: row.solution, followUp: row.follow_up,
+        notes: row.notes, userId: row.user_id,
         lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
     };
     default:
