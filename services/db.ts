@@ -6,7 +6,7 @@ import {
   TeachingSchedule, LogEntry, MasterSubject, Ticket, 
   StudentViolation, StudentPointReduction, StudentAchievement, CounselingSession, EmailConfig,
   WhatsAppConfig, Notification, ApiKey, SystemSettings, Donation, DailyPicket, StudentIncident,
-  TeacherCalendarEvent, PasswordReset
+  TeacherCalendarEvent, PasswordReset, ClassInventory
 } from '../types';
 
 export class EduAdminDatabase extends Dexie {
@@ -37,6 +37,7 @@ export class EduAdminDatabase extends Dexie {
   studentIncidents!: Table<StudentIncident>;
   teacherCalendar!: Table<TeacherCalendarEvent>;
   passwordResets!: Table<PasswordReset>;
+  classInventory!: Table<ClassInventory>;
 
   constructor() {
     super('EduAdminDB');
@@ -46,8 +47,8 @@ export class EduAdminDatabase extends Dexie {
     // * = Multi-entry index (not used here)
     // [field] = Indexed field for searching
     // Added schoolNpsn indexes for multi-tenancy filtering
-    // Bumped to version 25 to include meetingNo in teachingSchedules index
-    (this as any).version(25).stores({
+    // Bumped to version 26 to include classInventory
+    (this as any).version(26).stores({
       users: '&id, username, role, status, schoolNpsn, isSynced',
       classes: '&id, userId, schoolNpsn, name, homeroomTeacherId, isSynced', 
       students: '&id, classId, schoolNpsn, name, nis, gender, isSynced', 
@@ -72,7 +73,8 @@ export class EduAdminDatabase extends Dexie {
       dailyPickets: '&id, date, schoolNpsn, isSynced',
       studentIncidents: '&id, picketId, type, isSynced',
       teacherCalendar: '&id, userId, date, type, isSynced',
-      passwordResets: '&id, token, userId, isSynced'
+      passwordResets: '&id, token, userId, isSynced',
+      classInventory: '&id, classId, userId, schoolNpsn, isSynced'
     });
   }
 }

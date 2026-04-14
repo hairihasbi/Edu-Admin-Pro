@@ -6,7 +6,7 @@ import {
   TeachingSchedule, LogEntry, MasterSubject, Ticket, 
   StudentViolation, StudentPointReduction, StudentAchievement, CounselingSession, 
   EmailConfig, WhatsAppConfig, Notification, ApiKey, SystemSettings,
-  BackupData, StudentWithDetails, LessonPlanRequest, DashboardStatsData, TeacherCalendarEvent, PasswordReset
+  BackupData, StudentWithDetails, LessonPlanRequest, DashboardStatsData, TeacherCalendarEvent, PasswordReset, ClassInventory
 } from '../types';
 import { initTurso, pushToTurso, pullFromTurso, deleteFromTurso, clearRemoteTable, requestPasswordResetApi, verifyResetTokenApi, completePasswordResetApi } from './tursoService';
 import bcrypt from 'bcryptjs';
@@ -498,7 +498,7 @@ export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', logCall
             'eduadmin_bk_violations', 'eduadmin_bk_reductions', 'eduadmin_bk_achievements', 'eduadmin_bk_counseling',
             'eduadmin_wa_configs', 'eduadmin_notifications', 'eduadmin_api_keys', 'eduadmin_system_settings',
             'eduadmin_pickets', 'eduadmin_incidents', 'eduadmin_donations', 'eduadmin_teacher_calendar',
-            'eduadmin_password_resets'
+            'eduadmin_password_resets', 'eduadmin_inventory'
         ];
 
         const collections = targetCollections || allCollections;
@@ -528,7 +528,8 @@ export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', logCall
             'eduadmin_incidents': db.studentIncidents,
             'eduadmin_donations': db.donations,
             'eduadmin_teacher_calendar': db.teacherCalendar,
-            'eduadmin_password_resets': db.passwordResets
+            'eduadmin_password_resets': db.passwordResets,
+            'eduadmin_inventory': db.classInventory
         };
 
         if (direction === 'PUSH' || direction === 'FULL') {
@@ -1742,6 +1743,28 @@ export const getDashboardStats = async (user: User): Promise<DashboardStatsData>
         ],
         weeklyAttendance: [] 
     };
+};
+
+// --- CLASS INVENTORY ---
+export const getClassInventory = async (classId: string) => {
+    return await db.classInventory.where('classId').equals(classId).toArray();
+};
+
+export const saveClassInventory = async (items: (Omit<ClassInventory, 'id'|'lastModified'|'isSynced'> & { id?: string })[]) => {
+    const itemsToPut = items.map(item => ({
+        ...item,
+        id: item.id || uuidv4(),
+        lastModified: Date.now(),
+        isSynced: false
+    }));
+    await db.classInventory.bulkPut(itemsToPut as ClassInventory[]);
+    triggerDebouncedSync();
+    return itemsToPut;
+};
+
+export const deleteClassInventory = async (id: string) => {
+    await db.classInventory.delete(id);
+    pushToTurso('eduadmin_inventory', [{id, deleted: true}]);
 };
 
 // --- TEACHER CALENDAR ---
