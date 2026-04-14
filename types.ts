@@ -66,6 +66,9 @@ export interface SystemSettings extends Syncable {
   dokuClientId?: string;
   dokuSecretKey?: string;
   dokuIsProduction?: boolean;
+  headmasterName?: string;
+  headmasterNip?: string;
+  schoolCity?: string;
 }
 
 export interface Donation extends Syncable {
@@ -274,6 +277,17 @@ export interface Ticket extends Syncable {
 }
 
 // --- BK / GUIDANCE TYPES ---
+export interface ClassInventory extends Syncable {
+  id: string;
+  classId: string;
+  userId: string;
+  schoolNpsn: string;
+  itemName: string;
+  volume: number;
+  condition: 'BAIK' | 'RUSAK_RINGAN' | 'RUSAK_SEDANG' | 'RUSAK_BERAT';
+  notes?: string;
+}
+
 export interface StudentViolation extends Syncable {
   id: string;
   studentId: string;
@@ -371,6 +385,7 @@ export interface BackupData {
     scopeMaterials: ScopeMaterial[];
     assessmentScores: AssessmentScore[];
     teachingJournals: TeachingJournal[];
+    classInventory?: ClassInventory[];
     teachingSchedules?: TeachingSchedule[];
     attendanceRecords?: AttendanceRecord[];
     masterSubjects?: MasterSubject[]; 
