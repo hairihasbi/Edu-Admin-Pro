@@ -326,6 +326,35 @@ export interface CounselingSession extends Syncable {
   status: 'OPEN' | 'CLOSED';
 }
 
+export interface HomeVisit extends Syncable {
+  id: string;
+  studentId: string;
+  classId: string;
+  schoolNpsn: string;
+  date: string;
+  address: string;
+  reason: string;
+  result: string;
+  followUp: string;
+  notes?: string;
+  userId: string;
+}
+
+export interface ParentCall extends Syncable {
+  id: string;
+  studentId: string;
+  classId: string;
+  schoolNpsn: string;
+  date: string;
+  parentName: string;
+  parentPhone: string;
+  problem: string;
+  solution: string;
+  followUp: string;
+  notes?: string;
+  userId: string;
+}
+
 // Backup API Key
 export interface PasswordReset extends Syncable {
   id: string;
