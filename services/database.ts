@@ -271,22 +271,26 @@ export const getClasses = async (userId: string, schoolNpsn?: string) => {
         }
     }
 
+    let results = [];
     if (npsn && npsn !== 'DEFAULT') {
         // Get all teacher IDs in this school to ensure we see classes created by colleagues
         const schoolUserIds = (await db.users.where('schoolNpsn').equals(npsn).toArray()).map(u => u.id);
         
         // Return classes that match the school NPSN OR were created by a user in this school
-        return await db.classes.filter(c => 
+        results = await db.classes.filter(c => 
             c.schoolNpsn === npsn || 
             schoolUserIds.includes(c.userId) ||
             c.userId === userId
         ).toArray();
+    } else {
+        results = await db.classes.where('userId').equals(userId).toArray();
     }
-    return await db.classes.where('userId').equals(userId).toArray();
+    return results.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
 };
 
 export const getAllClasses = async () => {
-    return await db.classes.toArray();
+    const results = await db.classes.toArray();
+    return results.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
 };
 
 export const getAvailableClassesForHomeroom = async (schoolNpsn: string) => {
@@ -295,10 +299,11 @@ export const getAvailableClassesForHomeroom = async (schoolNpsn: string) => {
     // Get all teacher IDs in this school
     const schoolUserIds = (await db.users.where('schoolNpsn').equals(schoolNpsn).toArray()).map(u => u.id);
     
-    return await db.classes.filter(c => 
+    const results = await db.classes.filter(c => 
         c.schoolNpsn === schoolNpsn || 
         schoolUserIds.includes(c.userId)
     ).toArray();
+    return results.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
 };
 
 export const claimHomeroomClass = async (classId: string, teacher: User) => {
@@ -1106,10 +1111,10 @@ export const getSchoolAttendanceSummary = async (date: string, schoolNpsn: strin
 
     // 1. Get all classes in this school (robust check)
     const schoolUserIds = (await db.users.where('schoolNpsn').equals(schoolNpsn).toArray()).map(u => u.id);
-    const classes = await db.classes.filter(c => 
+    const classes = (await db.classes.filter(c => 
         c.schoolNpsn === schoolNpsn || 
         schoolUserIds.includes(c.userId)
-    ).toArray();
+    ).toArray()).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
     
     // 2. Get all attendance records for this date and these classes
     const classIds = classes.map(c => c.id);
@@ -1157,7 +1162,7 @@ export const getSchoolAttendanceSummary = async (date: string, schoolNpsn: strin
 
 export const getAttendanceSummaryByRange = async (startDate: string, endDate: string, schoolNpsn: string) => {
     // 1. Get all classes in this school
-    const classes = await db.classes.where('schoolNpsn').equals(schoolNpsn).toArray();
+    const classes = (await db.classes.where('schoolNpsn').equals(schoolNpsn).toArray()).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
     const classIds = classes.map(c => c.id);
 
     // 2. Get all attendance records in range
