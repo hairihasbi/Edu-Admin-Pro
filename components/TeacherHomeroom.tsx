@@ -1,15 +1,16 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, Student, MasterSubject, AssessmentScore, ClassRoom, StudentViolation, StudentAchievement, CounselingSession, ClassInventory } from '../types';
+import { User, Student, MasterSubject, AssessmentScore, ClassRoom, StudentViolation, StudentAchievement, CounselingSession, ClassInventory, HomeVisit, ParentCall } from '../types';
 import { 
   getStudents, getMasterSubjects, getAssessmentScores, getAllClasses, 
   getStudentViolations, getStudentAchievements, getCounselingSessions,
-  getClassInventory, saveClassInventory, deleteClassInventory, getSystemSettings
+  getClassInventory, saveClassInventory, deleteClassInventory, getSystemSettings,
+  getHomeVisits, getParentCalls
 } from '../services/database';
 import { 
   UserCheck, Users, GraduationCap, AlertTriangle, FileSpreadsheet, 
   Search, Filter, Printer, ShieldAlert, Trophy, MessageSquareHeart, 
-  ChevronDown, ChevronUp, AlertCircle, MessageCircle, Package, Plus, Save, Trash2, X
+  ChevronDown, ChevronUp, AlertCircle, MessageCircle, Package, Plus, Save, Trash2, X, FileText
 } from './Icons';
 import * as XLSX from 'xlsx';
 
@@ -33,6 +34,8 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
   const [violations, setViolations] = useState<StudentViolation[]>([]);
   const [achievements, setAchievements] = useState<StudentAchievement[]>([]);
   const [sessions, setSessions] = useState<CounselingSession[]>([]);
+  const [homeVisits, setHomeVisits] = useState<HomeVisit[]>([]);
+  const [parentCalls, setParentCalls] = useState<ParentCall[]>([]);
 
   // Inventory State
   const [inventoryItems, setInventoryItems] = useState<ClassInventory[]>([]);
@@ -72,7 +75,7 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
       if (!user.homeroomClassId) return;
       setIsLoading(true);
 
-      const [allClasses, studentData, scoreData, violationData, achievementData, sessionData, inventoryData, settings] = await Promise.all([
+      const [allClasses, studentData, scoreData, violationData, achievementData, sessionData, inventoryData, settings, homeVisitData, parentCallData] = await Promise.all([
         getAllClasses(),
         getStudents(user.homeroomClassId),
         getAssessmentScores(user.homeroomClassId, selectedSemester),
@@ -80,7 +83,9 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
         getStudentAchievements(),
         getCounselingSessions(),
         getClassInventory(user.homeroomClassId),
-        getSystemSettings()
+        getSystemSettings(),
+        getHomeVisits(user.schoolNpsn || 'DEFAULT'),
+        getParentCalls(user.schoolNpsn || 'DEFAULT')
       ]);
 
       const cls = allClasses.find(c => c.id === user.homeroomClassId);
@@ -97,6 +102,8 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
       setViolations(violationData.filter(v => studentIds.has(v.studentId)));
       setAchievements(achievementData.filter(a => studentIds.has(a.studentId)));
       setSessions(sessionData.filter(s => studentIds.has(s.studentId)));
+      setHomeVisits(homeVisitData.filter(hv => studentIds.has(hv.studentId)));
+      setParentCalls(parentCallData.filter(pc => studentIds.has(pc.studentId)));
 
       // Initialize Inventory if empty with defaults
       if (inventoryData.length === 0) {
@@ -206,7 +213,9 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
         details: {
             violations: violations.filter(v => v.studentId === s.id),
             achievements: achievements.filter(a => a.studentId === s.id),
-            sessions: sessions.filter(sess => sess.studentId === s.id)
+            sessions: sessions.filter(sess => sess.studentId === s.id),
+            homeVisits: homeVisits.filter(hv => hv.studentId === s.id),
+            parentCalls: parentCalls.filter(pc => pc.studentId === s.id)
         }
     }))
     .filter(s => s.stats.totalPoints > 0)
@@ -232,6 +241,176 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Leger Bayangan");
     XLSX.writeFile(wb, `Leger_Bayangan_${className}.xlsx`);
+  };
+
+  const handlePrintBKReport = (student: any) => {
+    const printWindow = window.open('', '', 'height=800,width=800');
+    if (!printWindow) return;
+
+    const html = `
+      <html>
+        <head>
+          <title>Laporan BK - ${student.name}</title>
+          <style>
+            body { font-family: 'Inter', sans-serif; padding: 40px; color: #333; line-height: 1.6; }
+            .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 10px; }
+            .header h1 { margin: 0; font-size: 22px; text-transform: uppercase; }
+            .student-info { margin-bottom: 20px; display: grid; grid-template-columns: 120px 10px 1fr; gap: 5px; font-size: 14px; }
+            .section { margin-top: 25px; }
+            .section-title { font-weight: bold; background: #f3f4f6; padding: 5px 10px; border-left: 4px solid #333; margin-bottom: 10px; font-size: 14px; }
+            table { width: 100%; border-collapse: collapse; font-size: 12px; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+            th { background: #f9fafb; font-weight: bold; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>LAPORAN BIMBINGAN KONSELING & KEDISIPLINAN</h1>
+            <p>${user.schoolName || 'EduAdmin Pro'}</p>
+          </div>
+
+          <div class="student-info">
+            <div>Nama Siswa</div><div>:</div><div style="font-weight: bold;">${student.name}</div>
+            <div>NIS</div><div>:</div><div>${student.nis}</div>
+            <div>Kelas</div><div>:</div><div>${className}</div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">A. PELANGGARAN KEDISIPLINAN</div>
+            <table>
+              <thead>
+                <tr>
+                  <th width="5%">No</th>
+                  <th width="15%">Tanggal</th>
+                  <th width="25%">Jenis Pelanggaran</th>
+                  <th width="45%">Keterangan</th>
+                  <th width="10%">Poin</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${student.details.violations.map((v: any, i: number) => `
+                  <tr>
+                    <td>${i + 1}</td>
+                    <td>${v.date}</td>
+                    <td>${v.violationName}</td>
+                    <td>${v.description || '-'}</td>
+                    <td>${v.points}</td>
+                  </tr>
+                `).join('') || '<tr><td colspan="5" style="text-align:center">Tidak ada data</td></tr>'}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="section">
+            <div class="section-title">B. DAFTAR HOME VISIT</div>
+            <table>
+              <thead>
+                <tr>
+                  <th width="5%">No</th>
+                  <th width="12%">Tanggal</th>
+                  <th width="18%">Alamat</th>
+                  <th width="20%">Alasan</th>
+                  <th width="25%">Hasil</th>
+                  <th width="20%">Tindak Lanjut</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${student.details.homeVisits.map((hv: any, i: number) => `
+                  <tr>
+                    <td>${i + 1}</td>
+                    <td>${hv.date}</td>
+                    <td>${hv.address}</td>
+                    <td>${hv.reason}</td>
+                    <td>${hv.result}</td>
+                    <td>${hv.followUp}</td>
+                  </tr>
+                `).join('') || '<tr><td colspan="6" style="text-align:center">Tidak ada data</td></tr>'}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="section">
+            <div class="section-title">C. PANGGILAN ORANG TUA</div>
+            <table>
+              <thead>
+                <tr>
+                  <th width="5%">No</th>
+                  <th width="12%">Tanggal</th>
+                  <th width="18%">Orang Tua</th>
+                  <th width="20%">Masalah</th>
+                  <th width="25%">Solusi</th>
+                  <th width="20%">Tindak Lanjut</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${student.details.parentCalls.map((pc: any, i: number) => `
+                  <tr>
+                    <td>${i + 1}</td>
+                    <td>${pc.date}</td>
+                    <td>${pc.parentName}</td>
+                    <td>${pc.problem}</td>
+                    <td>${pc.solution}</td>
+                    <td>${pc.followUp}</td>
+                  </tr>
+                `).join('') || '<tr><td colspan="6" style="text-align:center">Tidak ada data</td></tr>'}
+              </tbody>
+            </table>
+          </div>
+
+          <div style="margin-top: 40px; float: right; text-align: center; width: 250px; font-size: 14px;">
+             <p>${printSettings.place}, ${printSettings.date}</p>
+             <p>Wali Kelas,</p>
+             <br/><br/><br/>
+             <p style="font-weight: bold; text-decoration: underline;">${user.fullName}</p>
+          </div>
+          <script>window.onload = function() { window.print(); }</script>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+  };
+
+  const handleExcelBKReport = (student: any) => {
+    const wb = XLSX.utils.book_new();
+
+    // Violations
+    const vRows = student.details.violations.map((v: any, i: number) => ({
+      No: i + 1,
+      Tanggal: v.date,
+      Pelanggaran: v.violationName,
+      Poin: v.points,
+      Keterangan: v.description || '-'
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(vRows.length ? vRows : [{Info: "Tidak ada data"}]), "Pelanggaran");
+
+    // Home Visits
+    const hvRows = student.details.homeVisits.map((hv: any, i: number) => ({
+      No: i + 1,
+      Tanggal: hv.date,
+      Alamat: hv.address,
+      Alasan: hv.reason,
+      Hasil: hv.result,
+      TindakLanjut: hv.followUp,
+      Keterangan: hv.notes || '-'
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(hvRows.length ? hvRows : [{Info: "Tidak ada data"}]), "Home Visit");
+
+    // Parent Calls
+    const pcRows = student.details.parentCalls.map((pc: any, i: number) => ({
+      No: i + 1,
+      Tanggal: pc.date,
+      OrangTua: pc.parentName,
+      NoHP: pc.parentPhone,
+      Masalah: pc.problem,
+      Solusi: pc.solution,
+      TindakLanjut: pc.followUp,
+      Keterangan: pc.notes || '-'
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(pcRows.length ? pcRows : [{Info: "Tidak ada data"}]), "Panggilan Ortu");
+
+    XLSX.writeFile(wb, `Laporan_BK_${student.name.replace(/\s+/g, '_')}.xlsx`);
   };
 
   // --- INVENTORY LOGIC ---
@@ -665,6 +844,51 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                                                                     </li>
                                                                 ))}
                                                             </ul>
+                                                        </div>
+
+                                                        {s.details.homeVisits.length > 0 && (
+                                                            <div>
+                                                                <h4 className="font-bold text-gray-800 flex items-center gap-2 mb-2 text-sm">
+                                                                    <Package size={16} className="text-blue-600" /> Daftar Home Visit
+                                                                </h4>
+                                                                <ul className="list-disc pl-5 text-xs text-gray-600 space-y-1">
+                                                                    {s.details.homeVisits.map(hv => (
+                                                                        <li key={hv.id}>
+                                                                            <span className="font-bold">{hv.date}:</span> {hv.address} - {hv.reason} (Hasil: {hv.result})
+                                                                        </li>
+                                                                    ))}
+                                                                </ul>
+                                                            </div>
+                                                        )}
+
+                                                        {s.details.parentCalls.length > 0 && (
+                                                            <div>
+                                                                <h4 className="font-bold text-gray-800 flex items-center gap-2 mb-2 text-sm">
+                                                                    <MessageCircle size={16} className="text-purple-600" /> Panggilan Orang Tua
+                                                                </h4>
+                                                                <ul className="list-disc pl-5 text-xs text-gray-600 space-y-1">
+                                                                    {s.details.parentCalls.map(pc => (
+                                                                        <li key={pc.id}>
+                                                                            <span className="font-bold">{pc.date}:</span> {pc.parentName} ({pc.parentPhone}) - Masalah: {pc.problem} (Solusi: {pc.solution})
+                                                                        </li>
+                                                                    ))}
+                                                                </ul>
+                                                            </div>
+                                                        )}
+
+                                                        <div className="flex gap-2 pt-4 border-t border-gray-200">
+                                                            <button 
+                                                                onClick={() => handlePrintBKReport(s)}
+                                                                className="flex items-center gap-2 bg-blue-600 text-white px-3 py-1.5 rounded text-xs font-medium hover:bg-blue-700 transition"
+                                                            >
+                                                                <Printer size={14} /> Cetak Laporan BK
+                                                            </button>
+                                                            <button 
+                                                                onClick={() => handleExcelBKReport(s)}
+                                                                className="flex items-center gap-2 bg-green-600 text-white px-3 py-1.5 rounded text-xs font-medium hover:bg-green-700 transition"
+                                                            >
+                                                                <FileSpreadsheet size={14} /> Export Excel
+                                                            </button>
                                                         </div>
                                                     </div>
                                                 </td>

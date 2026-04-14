@@ -1,17 +1,19 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, Student, ClassRoom, StudentViolation, StudentAchievement, CounselingSession, StudentPointReduction } from '../types';
+import { User, Student, ClassRoom, StudentViolation, StudentAchievement, CounselingSession, StudentPointReduction, HomeVisit, ParentCall } from '../types';
 import { 
   getClasses, getStudents, 
   getStudentViolations, addStudentViolation, deleteStudentViolation,
   getStudentAchievements, addStudentAchievement, deleteStudentAchievement,
   getCounselingSessions, addCounselingSession, deleteCounselingSession,
-  getStudentPointReductions, addStudentPointReduction, deleteStudentPointReduction
+  getStudentPointReductions, addStudentPointReduction, deleteStudentPointReduction,
+  getHomeVisits, saveHomeVisit, deleteHomeVisit,
+  getParentCalls, saveParentCall, deleteParentCall
 } from '../services/database';
 import { 
   ShieldAlert, Trophy, MessageSquareHeart, Search, Plus, Trash2, 
   CalendarDays, FileWarning, User as UserIcon, AlertTriangle, Printer, FileSpreadsheet, FileText,
-  Heart, RefreshCcw 
+  Heart, RefreshCcw, Home, Smartphone
 } from './Icons';
 import * as XLSX from 'xlsx';
 
@@ -20,10 +22,11 @@ interface TeacherGuidanceProps {
 }
 
 const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
-  const [activeTab, setActiveTab] = useState<'violations' | 'reductions' | 'achievements' | 'counseling' | 'print'>('violations');
+  const [activeTab, setActiveTab] = useState<'violations' | 'reductions' | 'achievements' | 'counseling' | 'homeVisits' | 'parentCalls' | 'print'>('violations');
   
   // Data State
   const [classes, setClasses] = useState<ClassRoom[]>([]);
+  const [allSchoolClasses, setAllSchoolClasses] = useState<ClassRoom[]>([]);
   const [students, setStudents] = useState<Student[]>([]); // For Dropdown (Filtered)
   const [studentMap, setStudentMap] = useState<Record<string, {name: string, className: string}>>({}); // For Display (All Owned Students)
   
@@ -35,12 +38,16 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
   const [reductions, setReductions] = useState<StudentPointReduction[]>([]);
   const [achievements, setAchievements] = useState<StudentAchievement[]>([]);
   const [sessions, setSessions] = useState<CounselingSession[]>([]);
+  const [homeVisits, setHomeVisits] = useState<HomeVisit[]>([]);
+  const [parentCalls, setParentCalls] = useState<ParentCall[]>([]);
 
   // Forms
   const [violationForm, setViolationForm] = useState({ name: '', points: 5, description: '', date: new Date().toISOString().split('T')[0] });
   const [reductionForm, setReductionForm] = useState({ activityName: '', pointsRemoved: 5, description: '', date: new Date().toISOString().split('T')[0] });
   const [achievementForm, setAchievementForm] = useState({ title: '', level: 'Sekolah', description: '', date: new Date().toISOString().split('T')[0] });
   const [counselingForm, setCounselingForm] = useState({ issue: '', notes: '', followUp: '', date: new Date().toISOString().split('T')[0] });
+  const [homeVisitForm, setHomeVisitForm] = useState({ address: '', reason: '', result: '', followUp: '', notes: '', date: new Date().toISOString().split('T')[0] });
+  const [parentCallForm, setParentCallForm] = useState({ parentName: '', parentPhone: '', problem: '', solution: '', followUp: '', notes: '', date: new Date().toISOString().split('T')[0] });
 
   // Init
   useEffect(() => {
@@ -48,18 +55,22 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
       // 1. Load Classes SPECIFIC to this User (Guru BK yang bersangkutan)
       const cls = await getClasses(user.id, user.schoolNpsn); 
       setClasses(cls);
+      
+      // Load all school classes for Home Visit & Parent Call
+      const allCls = await getClasses('', user.schoolNpsn); // Passing empty string for userId to get all school classes
+      setAllSchoolClasses(allCls);
+
       if (cls.length > 0) setSelectedClassId(cls[0].id);
 
       // 2. Load Students ONLY from these classes to populate the display map
       const map: Record<string, {name: string, className: string}> = {};
       
-      // Fetch students for each class owned by the teacher
-      const studentPromises = cls.map(c => getStudents(c.id));
+      // Fetch students for each class in the school to be safe for display
+      const studentPromises = allCls.map(c => getStudents(c.id));
       const studentsPerClass = await Promise.all(studentPromises);
 
       studentsPerClass.flat().forEach(s => {
-        // Cari nama kelas dari state cls yang sudah diambil
-        const className = cls.find(c => c.id === s.classId)?.name || 'Unknown';
+        const className = allCls.find(c => c.id === s.classId)?.name || 'Unknown';
         map[s.id] = { name: s.name, className: className };
       });
       
@@ -87,16 +98,20 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
 
   const loadFeatureData = async () => {
     if (activeTab === 'print') {
-       const [v, r, a, s] = await Promise.all([
+       const [v, r, a, s, hv, pc] = await Promise.all([
           getStudentViolations(),
           getStudentPointReductions(),
           getStudentAchievements(),
-          getCounselingSessions()
+          getCounselingSessions(),
+          getHomeVisits(user.schoolNpsn || 'DEFAULT'),
+          getParentCalls(user.schoolNpsn || 'DEFAULT')
        ]);
        setViolations(v);
        setReductions(r);
        setAchievements(a);
        setSessions(s);
+       setHomeVisits(hv);
+       setParentCalls(pc);
     } else if (activeTab === 'violations') {
       const data = await getStudentViolations();
       setViolations(data.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
@@ -106,6 +121,12 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
     } else if (activeTab === 'achievements') {
       const data = await getStudentAchievements();
       setAchievements(data.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+    } else if (activeTab === 'homeVisits') {
+      const data = await getHomeVisits(user.schoolNpsn || 'DEFAULT');
+      setHomeVisits(data.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+    } else if (activeTab === 'parentCalls') {
+      const data = await getParentCalls(user.schoolNpsn || 'DEFAULT');
+      setParentCalls(data.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
     } else {
       const data = await getCounselingSessions();
       setSessions(data.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
@@ -182,12 +203,55 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
     alert('Sesi konseling dicatat.');
   };
 
+  const handleAddHomeVisit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedStudentId || !selectedClassId) return;
+    await saveHomeVisit({
+      studentId: selectedStudentId,
+      classId: selectedClassId,
+      schoolNpsn: user.schoolNpsn || 'DEFAULT',
+      date: homeVisitForm.date,
+      address: homeVisitForm.address,
+      reason: homeVisitForm.reason,
+      result: homeVisitForm.result,
+      followUp: homeVisitForm.followUp,
+      notes: homeVisitForm.notes,
+      userId: user.id
+    });
+    setHomeVisitForm({ address: '', reason: '', result: '', followUp: '', notes: '', date: new Date().toISOString().split('T')[0] });
+    loadFeatureData();
+    alert('Kunjungan rumah dicatat.');
+  };
+
+  const handleAddParentCall = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedStudentId || !selectedClassId) return;
+    await saveParentCall({
+      studentId: selectedStudentId,
+      classId: selectedClassId,
+      schoolNpsn: user.schoolNpsn || 'DEFAULT',
+      date: parentCallForm.date,
+      parentName: parentCallForm.parentName,
+      parentPhone: parentCallForm.parentPhone,
+      problem: parentCallForm.problem,
+      solution: parentCallForm.solution,
+      followUp: parentCallForm.followUp,
+      notes: parentCallForm.notes,
+      userId: user.id
+    });
+    setParentCallForm({ parentName: '', parentPhone: '', problem: '', solution: '', followUp: '', notes: '', date: new Date().toISOString().split('T')[0] });
+    loadFeatureData();
+    alert('Panggilan orang tua dicatat.');
+  };
+
   const handleDelete = async (id: string) => {
     if(!confirm("Hapus data ini?")) return;
     
     if (activeTab === 'violations') await deleteStudentViolation(id);
     else if (activeTab === 'reductions') await deleteStudentPointReduction(id);
     else if (activeTab === 'achievements') await deleteStudentAchievement(id);
+    else if (activeTab === 'homeVisits') await deleteHomeVisit(id);
+    else if (activeTab === 'parentCalls') await deleteParentCall(id);
     else await deleteCounselingSession(id);
     
     loadFeatureData();
@@ -213,6 +277,8 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
       reductions: rList,
       achievements: achievements.filter(a => a.studentId === selectedStudentId),
       sessions: sessions.filter(s => s.studentId === selectedStudentId),
+      homeVisits: homeVisits.filter(hv => hv.studentId === selectedStudentId),
+      parentCalls: parentCalls.filter(pc => pc.studentId === selectedStudentId),
       summary: { totalV, totalR, netPoints }
     };
   };
@@ -261,6 +327,30 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
           <td>${s.followUp || '-'}</td>
         </tr>`).join('')
       : '<tr><td colspan="5" style="text-align:center; font-style: italic;">Tidak ada catatan konseling</td></tr>';
+
+    const homeVisitRows = data.homeVisits.length > 0
+      ? data.homeVisits.map((hv: any, i: number) => `
+        <tr>
+          <td style="text-align:center">${i+1}</td>
+          <td>${hv.date}</td>
+          <td>${hv.address}</td>
+          <td>${hv.reason}</td>
+          <td>${hv.result}</td>
+          <td>${hv.followUp}</td>
+        </tr>`).join('')
+      : '<tr><td colspan="6" style="text-align:center; font-style: italic;">Tidak ada data home visit</td></tr>';
+
+    const parentCallRows = data.parentCalls.length > 0
+      ? data.parentCalls.map((pc: any, i: number) => `
+        <tr>
+          <td style="text-align:center">${i+1}</td>
+          <td>${pc.date}</td>
+          <td>${pc.parentName} (${pc.parentPhone})</td>
+          <td>${pc.problem}</td>
+          <td>${pc.solution}</td>
+          <td>${pc.followUp}</td>
+        </tr>`).join('')
+      : '<tr><td colspan="6" style="text-align:center; font-style: italic;">Tidak ada data panggilan orang tua</td></tr>';
 
     return `
       <html>
@@ -367,6 +457,40 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
             </table>
           </div>
 
+          <div class="section">
+            <div class="section-title">E. DAFTAR HOME VISIT</div>
+            <table>
+              <thead>
+                <tr>
+                  <th width="5%">No</th>
+                  <th width="12%">Tanggal</th>
+                  <th width="18%">Alamat</th>
+                  <th width="20%">Alasan</th>
+                  <th width="25%">Hasil</th>
+                  <th width="20%">Tindak Lanjut</th>
+                </tr>
+              </thead>
+              <tbody>${homeVisitRows}</tbody>
+            </table>
+          </div>
+
+          <div class="section">
+            <div class="section-title">F. PANGGILAN ORANG TUA</div>
+            <table>
+              <thead>
+                <tr>
+                  <th width="5%">No</th>
+                  <th width="12%">Tanggal</th>
+                  <th width="18%">Orang Tua</th>
+                  <th width="20%">Masalah</th>
+                  <th width="25%">Solusi</th>
+                  <th width="20%">Tindak Lanjut</th>
+                </tr>
+              </thead>
+              <tbody>${parentCallRows}</tbody>
+            </table>
+          </div>
+
           <div style="margin-top: 40px; float: right; text-align: center; width: 250px;">
              <p>Banjarbaru, ${new Date().toLocaleDateString('id-ID', {day: 'numeric', month: 'long', year: 'numeric'})}</p>
              <p>Guru Bimbingan Konseling,</p>
@@ -464,6 +588,33 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
     const ws4 = XLSX.utils.json_to_sheet(sRows.length ? sRows : [{Info: "Tidak ada data konseling"}]);
     XLSX.utils.book_append_sheet(wb, ws4, "Konseling");
 
+    // Sheet 5: Home Visit
+    const hvRows = data.homeVisits.map((hv, i) => ({
+      No: i + 1,
+      Tanggal: hv.date,
+      Alamat: hv.address,
+      Alasan: hv.reason,
+      Hasil: hv.result,
+      TindakLanjut: hv.followUp,
+      Keterangan: hv.notes || '-'
+    }));
+    const ws5 = XLSX.utils.json_to_sheet(hvRows.length ? hvRows : [{Info: "Tidak ada data home visit"}]);
+    XLSX.utils.book_append_sheet(wb, ws5, "Home Visit");
+
+    // Sheet 6: Panggilan Ortu
+    const pcRows = data.parentCalls.map((pc, i) => ({
+      No: i + 1,
+      Tanggal: pc.date,
+      OrangTua: pc.parentName,
+      NoHP: pc.parentPhone,
+      Masalah: pc.problem,
+      Solusi: pc.solution,
+      TindakLanjut: pc.followUp,
+      Keterangan: pc.notes || '-'
+    }));
+    const ws6 = XLSX.utils.json_to_sheet(pcRows.length ? pcRows : [{Info: "Tidak ada data panggilan ortu"}]);
+    XLSX.utils.book_append_sheet(wb, ws6, "Panggilan Ortu");
+
     XLSX.writeFile(wb, `Laporan_BK_${data.info.name.replace(/\s+/g, '_')}.xlsx`);
   };
 
@@ -509,6 +660,22 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
             <MessageSquareHeart size={16} /> Konseling
           </button>
           <button
+            onClick={() => setActiveTab('homeVisits')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition whitespace-nowrap ${
+              activeTab === 'homeVisits' ? 'bg-orange-50 text-orange-600 ring-1 ring-orange-200' : 'text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            <Home size={16} /> Home Visit
+          </button>
+          <button
+            onClick={() => setActiveTab('parentCalls')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition whitespace-nowrap ${
+              activeTab === 'parentCalls' ? 'bg-pink-50 text-pink-600 ring-1 ring-pink-200' : 'text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            <Smartphone size={16} /> Panggilan Ortu
+          </button>
+          <button
             onClick={() => setActiveTab('print')}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition whitespace-nowrap ${
               activeTab === 'print' ? 'bg-indigo-50 text-indigo-600 ring-1 ring-indigo-200' : 'text-gray-600 hover:bg-gray-50'
@@ -529,20 +696,22 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
                   activeTab === 'reductions' ? 'Input Pengurangan Poin' :
                   activeTab === 'achievements' ? 'Input Prestasi' : 
                   activeTab === 'counseling' ? 'Log Konseling' : 
+                  activeTab === 'homeVisits' ? 'Input Home Visit' :
+                  activeTab === 'parentCalls' ? 'Input Panggilan Ortu' :
                   'Filter Data Laporan'}
               </h3>
               
               {/* Student Selector */}
               <div className="mb-4 space-y-3">
                  <div>
-                    <label className="block text-xs font-semibold text-gray-500 mb-1">Pilih Kelas Saya</label>
+                    <label className="block text-xs font-semibold text-gray-500 mb-1">Pilih Kelas</label>
                     <select 
                       className="w-full border border-gray-300 rounded-lg p-2 text-sm"
                       value={selectedClassId}
                       onChange={(e) => setSelectedClassId(e.target.value)}
                     >
-                       {classes.length === 0 && <option value="">Belum ada kelas yang Anda buat</option>}
-                       {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                       <option value="">-- Pilih Kelas --</option>
+                       {(activeTab === 'homeVisits' || activeTab === 'parentCalls' ? allSchoolClasses : classes).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                  </div>
                  <div>
@@ -603,6 +772,31 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
                     <textarea placeholder="Catatan Proses Konseling" required className="w-full border rounded-lg p-2 text-sm h-24" value={counselingForm.notes} onChange={e => setCounselingForm({...counselingForm, notes: e.target.value})} />
                     <textarea placeholder="Rencana Tindak Lanjut" className="w-full border rounded-lg p-2 text-sm h-16" value={counselingForm.followUp} onChange={e => setCounselingForm({...counselingForm, followUp: e.target.value})} />
                     <button type="submit" disabled={!selectedStudentId} className="w-full bg-blue-600 text-white py-2 rounded-lg text-sm font-bold hover:bg-blue-700 disabled:opacity-50">Simpan Log Konseling</button>
+                 </form>
+              )}
+
+              {activeTab === 'homeVisits' && (
+                 <form onSubmit={handleAddHomeVisit} className="space-y-3">
+                    <input type="date" required className="w-full border rounded-lg p-2 text-sm" value={homeVisitForm.date} onChange={e => setHomeVisitForm({...homeVisitForm, date: e.target.value})} />
+                    <input type="text" placeholder="Alamat Tujuan" required className="w-full border rounded-lg p-2 text-sm" value={homeVisitForm.address} onChange={e => setHomeVisitForm({...homeVisitForm, address: e.target.value})} />
+                    <textarea placeholder="Alasan Kunjungan" required className="w-full border rounded-lg p-2 text-sm h-16" value={homeVisitForm.reason} onChange={e => setHomeVisitForm({...homeVisitForm, reason: e.target.value})} />
+                    <textarea placeholder="Hasil Kunjungan" required className="w-full border rounded-lg p-2 text-sm h-20" value={homeVisitForm.result} onChange={e => setHomeVisitForm({...homeVisitForm, result: e.target.value})} />
+                    <textarea placeholder="Rencana Tindak Lanjut" required className="w-full border rounded-lg p-2 text-sm h-16" value={homeVisitForm.followUp} onChange={e => setHomeVisitForm({...homeVisitForm, followUp: e.target.value})} />
+                    <textarea placeholder="Keterangan" className="w-full border rounded-lg p-2 text-sm h-16" value={homeVisitForm.notes} onChange={e => setHomeVisitForm({...homeVisitForm, notes: e.target.value})} />
+                    <button type="submit" disabled={!selectedStudentId} className="w-full bg-orange-600 text-white py-2 rounded-lg text-sm font-bold hover:bg-orange-700 disabled:opacity-50">Simpan Home Visit</button>
+                 </form>
+              )}
+
+              {activeTab === 'parentCalls' && (
+                 <form onSubmit={handleAddParentCall} className="space-y-3">
+                    <input type="date" required className="w-full border rounded-lg p-2 text-sm" value={parentCallForm.date} onChange={e => setParentCallForm({...parentCallForm, date: e.target.value})} />
+                    <input type="text" placeholder="Nama Orang Tua/Wali" required className="w-full border rounded-lg p-2 text-sm" value={parentCallForm.parentName} onChange={e => setParentCallForm({...parentCallForm, parentName: e.target.value})} />
+                    <input type="text" placeholder="No HP Orang Tua/Wali" required className="w-full border rounded-lg p-2 text-sm" value={parentCallForm.parentPhone} onChange={e => setParentCallForm({...parentCallForm, parentPhone: e.target.value})} />
+                    <textarea placeholder="Masalah Siswa" required className="w-full border rounded-lg p-2 text-sm h-16" value={parentCallForm.problem} onChange={e => setParentCallForm({...parentCallForm, problem: e.target.value})} />
+                    <textarea placeholder="Solusi" required className="w-full border rounded-lg p-2 text-sm h-16" value={parentCallForm.solution} onChange={e => setParentCallForm({...parentCallForm, solution: e.target.value})} />
+                    <textarea placeholder="Rencana Tindak Lanjut" required className="w-full border rounded-lg p-2 text-sm h-16" value={parentCallForm.followUp} onChange={e => setParentCallForm({...parentCallForm, followUp: e.target.value})} />
+                    <textarea placeholder="Keterangan" className="w-full border rounded-lg p-2 text-sm h-16" value={parentCallForm.notes} onChange={e => setParentCallForm({...parentCallForm, notes: e.target.value})} />
+                    <button type="submit" disabled={!selectedStudentId} className="w-full bg-pink-600 text-white py-2 rounded-lg text-sm font-bold hover:bg-pink-700 disabled:opacity-50">Simpan Panggilan Ortu</button>
                  </form>
               )}
 
@@ -724,6 +918,28 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
                                    ))}
                                 </ul>
                              ) : <p className="text-sm text-gray-400 italic">Tidak ada catatan konseling.</p>}
+                          </div>
+
+                          <div>
+                             <h4 className="font-bold text-gray-800 mb-2 border-l-4 border-orange-500 pl-2">E. Home Visit</h4>
+                             {homeVisits.filter(hv => hv.studentId === selectedStudentId).length > 0 ? (
+                                <ul className="list-disc pl-5 space-y-1 text-sm text-gray-600">
+                                   {homeVisits.filter(hv => hv.studentId === selectedStudentId).map(hv => (
+                                      <li key={hv.id}>{hv.date} - {hv.reason} ({hv.address})</li>
+                                   ))}
+                                </ul>
+                             ) : <p className="text-sm text-gray-400 italic">Tidak ada catatan home visit.</p>}
+                          </div>
+
+                          <div>
+                             <h4 className="font-bold text-gray-800 mb-2 border-l-4 border-pink-500 pl-2">F. Panggilan Ortu</h4>
+                             {parentCalls.filter(pc => pc.studentId === selectedStudentId).length > 0 ? (
+                                <ul className="list-disc pl-5 space-y-1 text-sm text-gray-600">
+                                   {parentCalls.filter(pc => pc.studentId === selectedStudentId).map(pc => (
+                                      <li key={pc.id}>{pc.date} - {pc.parentName} ({pc.problem})</li>
+                                   ))}
+                                </ul>
+                             ) : <p className="text-sm text-gray-400 italic">Tidak ada catatan panggilan orang tua.</p>}
                           </div>
                        </div>
                     ) : (
