@@ -6,7 +6,7 @@ import {
   TeachingSchedule, LogEntry, MasterSubject, Ticket, 
   StudentViolation, StudentPointReduction, StudentAchievement, CounselingSession, 
   EmailConfig, WhatsAppConfig, Notification, ApiKey, SystemSettings,
-  BackupData, StudentWithDetails, LessonPlanRequest, DashboardStatsData, TeacherCalendarEvent, PasswordReset, ClassInventory
+  BackupData, StudentWithDetails, LessonPlanRequest, DashboardStatsData, TeacherCalendarEvent, PasswordReset, ClassInventory, HomeVisit, ParentCall
 } from '../types';
 import { initTurso, pushToTurso, pullFromTurso, deleteFromTurso, clearRemoteTable, requestPasswordResetApi, verifyResetTokenApi, completePasswordResetApi } from './tursoService';
 import bcrypt from 'bcryptjs';
@@ -498,7 +498,7 @@ export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', logCall
             'eduadmin_bk_violations', 'eduadmin_bk_reductions', 'eduadmin_bk_achievements', 'eduadmin_bk_counseling',
             'eduadmin_wa_configs', 'eduadmin_notifications', 'eduadmin_api_keys', 'eduadmin_system_settings',
             'eduadmin_pickets', 'eduadmin_incidents', 'eduadmin_donations', 'eduadmin_teacher_calendar',
-            'eduadmin_password_resets', 'eduadmin_inventory'
+            'eduadmin_password_resets', 'eduadmin_inventory', 'eduadmin_home_visits', 'eduadmin_parent_calls'
         ];
 
         const collections = targetCollections || allCollections;
@@ -529,7 +529,9 @@ export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', logCall
             'eduadmin_donations': db.donations,
             'eduadmin_teacher_calendar': db.teacherCalendar,
             'eduadmin_password_resets': db.passwordResets,
-            'eduadmin_inventory': db.classInventory
+            'eduadmin_inventory': db.classInventory,
+            'eduadmin_home_visits': db.homeVisits,
+            'eduadmin_parent_calls': db.parentCalls
         };
 
         if (direction === 'PUSH' || direction === 'FULL') {
@@ -1794,4 +1796,48 @@ export const addCalendarEvent = async (userId: string, date: string, type: 'HOLI
 export const deleteCalendarEvent = async (id: string) => {
     await db.teacherCalendar.delete(id);
     pushToTurso('eduadmin_teacher_calendar', [{id, deleted: true}]);
+};
+
+// --- HOME VISITS ---
+export const getHomeVisits = async (schoolNpsn: string) => {
+    return await db.homeVisits.where('schoolNpsn').equals(schoolNpsn).toArray();
+};
+
+export const saveHomeVisit = async (visit: Omit<HomeVisit, 'id'|'lastModified'|'isSynced'> & { id?: string }) => {
+    const item: HomeVisit = {
+        ...visit,
+        id: visit.id || uuidv4(),
+        lastModified: Date.now(),
+        isSynced: false
+    };
+    await db.homeVisits.put(item);
+    triggerDebouncedSync();
+    return item;
+};
+
+export const deleteHomeVisit = async (id: string) => {
+    await db.homeVisits.delete(id);
+    pushToTurso('eduadmin_home_visits', [{id, deleted: true}]);
+};
+
+// --- PARENT CALLS ---
+export const getParentCalls = async (schoolNpsn: string) => {
+    return await db.parentCalls.where('schoolNpsn').equals(schoolNpsn).toArray();
+};
+
+export const saveParentCall = async (call: Omit<ParentCall, 'id'|'lastModified'|'isSynced'> & { id?: string }) => {
+    const item: ParentCall = {
+        ...call,
+        id: call.id || uuidv4(),
+        lastModified: Date.now(),
+        isSynced: false
+    };
+    await db.parentCalls.put(item);
+    triggerDebouncedSync();
+    return item;
+};
+
+export const deleteParentCall = async (id: string) => {
+    await db.parentCalls.delete(id);
+    pushToTurso('eduadmin_parent_calls', [{id, deleted: true}]);
 };
