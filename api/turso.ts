@@ -853,8 +853,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     let currentUser;
-    // Allow public access for password reset flow
-    const publicActions = ['init', 'check', 'request_password_reset', 'verify_reset_token', 'complete_password_reset'];
+    // Allow public access for password reset flow and student assessments
+    const publicActions = ['init', 'check', 'request_password_reset', 'verify_reset_token', 'complete_password_reset', 'get_public_assessment_data', 'submit_public_assessment'];
     
     if (!publicActions.includes(action)) {
         try {
@@ -886,6 +886,75 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             error: "Failed to initialize database client.", 
             details: err.message || String(err)
         });
+    }
+
+    // --- PUBLIC ASSESSMENT DATA ---
+    if (action === 'get_public_assessment_data') {
+        const { classId } = body;
+        if (!classId) return res.status(400).json({ error: 'Class ID is required' });
+
+        try {
+            // 1. Get Class Info
+            const classResult = await client.execute({
+                sql: "SELECT name, school_npsn, homeroom_teacher_id FROM classes WHERE id = ? AND deleted = 0",
+                args: [classId]
+            });
+
+            if (classResult.rows.length === 0) {
+                return res.status(404).json({ error: 'Kelas tidak ditemukan.' });
+            }
+
+            const classInfo = classResult.rows[0];
+
+            // 2. Get Students
+            const studentsResult = await client.execute({
+                sql: "SELECT id, name, nis FROM students WHERE class_id = ? AND deleted = 0",
+                args: [classId]
+            });
+
+            return res.status(200).json({
+                class: {
+                    name: classInfo.name,
+                    schoolNpsn: classInfo.school_npsn,
+                    homeroomTeacherId: classInfo.homeroom_teacher_id
+                },
+                students: studentsResult.rows
+            });
+
+        } catch (e: any) {
+            console.error("Public Assessment Data Error:", e);
+            return res.status(500).json({ error: "Gagal memuat data asesmen." });
+        }
+    }
+
+    // --- PUBLIC ASSESSMENT SUBMISSION ---
+    if (action === 'submit_public_assessment') {
+        const { assessment } = body;
+        if (!assessment) return res.status(400).json({ error: 'Assessment data is required' });
+
+        try {
+            const tableConfig = getTableConfig('eduadmin_learning_style_assessments');
+            if (!tableConfig) return res.status(400).json({ error: 'Invalid collection' });
+
+            const placeholders = tableConfig.columns.map(() => '?').join(', ');
+            const sql = `INSERT OR REPLACE INTO learning_style_assessments (${tableConfig.columns.join(', ')}) VALUES (${placeholders})`;
+            
+            await client.execute({
+                sql,
+                args: tableConfig.mapFn({
+                    ...assessment,
+                    lastModified: Date.now(),
+                    version: 1,
+                    deleted: 0
+                })
+            });
+
+            return res.status(200).json({ success: true });
+
+        } catch (e: any) {
+            console.error("Public Assessment Submission Error:", e);
+            return res.status(500).json({ error: "Gagal mengirim hasil asesmen." });
+        }
     }
 
     // --- HANDLE CHECK CONNECTION ---
