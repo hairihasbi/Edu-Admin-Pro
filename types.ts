@@ -355,6 +355,20 @@ export interface ParentCall extends Syncable {
   userId: string;
 }
 
+export interface LearningStyleAssessment extends Syncable {
+  id: string;
+  studentId: string;
+  classId: string;
+  schoolNpsn: string;
+  userId: string; // Homeroom Teacher ID
+  visualScore: number;
+  auditoryScore: number;
+  kinestheticScore: number;
+  dominantStyle: 'VISUAL' | 'AUDITORI' | 'KINESTETIK';
+  date: string;
+  method: 'MANUAL' | 'DIGITAL';
+}
+
 // Backup API Key
 export interface PasswordReset extends Syncable {
   id: string;
