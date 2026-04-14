@@ -1346,27 +1346,55 @@ export const importStudentsFromCSV = async (classId: string, csvText: string) =>
     const errors: string[] = [];
     let count = 0;
     
+    if (lines.length === 0) return { success: false, count: 0, errors: ['File kosong'] };
+
     const startIdx = lines[0].toLowerCase().includes('nama') ? 1 : 0;
 
     for (let i = startIdx; i < lines.length; i++) {
-        const parts = lines[i].match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || [];
-        const cleanParts = parts.map(p => p.replace(/^"|"$/g, '').trim()); 
+        const line = lines[i];
+        const row: string[] = [];
+        let current = '';
+        let inQuotes = false;
+
+        for (let j = 0; j < line.length; j++) {
+            const char = line[j];
+            if (char === '"') {
+                inQuotes = !inQuotes;
+            } else if (char === ',' && !inQuotes) {
+                row.push(current);
+                current = '';
+            } else {
+                current += char;
+            }
+        }
+        row.push(current);
+
+        // Clean up: remove surrounding quotes and leading single quotes (Excel text prefix)
+        const cleanParts = row.map(p => {
+            let s = p.trim();
+            // Remove surrounding double quotes
+            if (s.startsWith('"') && s.endsWith('"')) s = s.substring(1, s.length - 1);
+            // Remove leading single quote (often used in Excel to force text format)
+            if (s.startsWith("'")) s = s.substring(1);
+            return s.trim();
+        });
         
-        if (cleanParts.length < 2) {
-            errors.push(`Baris ${i+1}: Format salah`);
+        if (cleanParts.length < 2 || !cleanParts[0]) {
+            errors.push(`Baris ${i+1}: Format salah atau Nama kosong`);
             continue;
         }
 
         const name = cleanParts[0];
         const nis = cleanParts[1];
-        const gender = (cleanParts[2] || 'L').toUpperCase() === 'P' ? 'P' : 'L';
+        const genderRaw = (cleanParts[2] || 'L').toUpperCase();
+        const gender = genderRaw.startsWith('P') || genderRaw === 'PEREMPUAN' ? 'P' : 'L';
         const phone = cleanParts[3] || '';
 
         try {
             await addStudent(classId, name, nis, gender, phone);
             count++;
-        } catch(e) {
-            errors.push(`Baris ${i+1}: Gagal simpan (${name})`);
+        } catch(e: any) {
+            errors.push(`Baris ${i+1}: Gagal simpan (${name}) - ${e.message}`);
         }
     }
     return { success: true, count, errors };
