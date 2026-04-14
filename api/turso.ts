@@ -266,6 +266,9 @@ const DB_SCHEMAS = [
         ai_api_key TEXT,
         ai_model TEXT,
         rpp_monthly_limit INTEGER DEFAULT 0,
+        headmaster_name TEXT,
+        headmaster_nip TEXT,
+        school_city TEXT,
         last_modified INTEGER,
         version INTEGER DEFAULT 1,
         deleted INTEGER DEFAULT 0
@@ -412,6 +415,22 @@ const DB_SCHEMAS = [
     )`,
     `CREATE INDEX IF NOT EXISTS idx_resets_token ON password_resets(token)`,
 
+    // 27. CLASS INVENTORY
+    `CREATE TABLE IF NOT EXISTS inventory (
+        id TEXT PRIMARY KEY,
+        class_id TEXT,
+        user_id TEXT,
+        school_npsn TEXT,
+        item_name TEXT,
+        volume INTEGER,
+        condition TEXT,
+        notes TEXT,
+        last_modified INTEGER,
+        version INTEGER DEFAULT 1,
+        deleted INTEGER DEFAULT 0
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_inventory_class ON inventory(class_id)`,
+
     // --- MIGRATIONS ---
     `ALTER TABLE system_settings ADD COLUMN ai_provider TEXT`,
     `ALTER TABLE system_settings ADD COLUMN ai_base_url TEXT`,
@@ -436,6 +455,9 @@ const DB_SCHEMAS = [
     // ATTENDANCE VISIBILITY
     `ALTER TABLE attendance ADD COLUMN user_id TEXT`,
     `ALTER TABLE attendance ADD COLUMN visibility TEXT DEFAULT 'SHARED'`,
+    `ALTER TABLE system_settings ADD COLUMN headmaster_name TEXT`,
+    `ALTER TABLE system_settings ADD COLUMN headmaster_nip TEXT`,
+    `ALTER TABLE system_settings ADD COLUMN school_city TEXT`,
 ];
 
 // Helper to convert undefined to null for SQL
@@ -473,7 +495,7 @@ const getTableConfig = (collection: string) => {
     case 'eduadmin_bk_counseling': return { table: 'bk_counseling', columns: ['id', 'student_id', 'date', 'issue', 'notes', 'follow_up', 'status', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.studentId), s(item.date), s(item.issue), s(item.notes), s(item.follow_up), s(item.status), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_tickets': return { table: 'tickets', columns: ['id', 'user_id', 'teacher_name', 'subject', 'status', 'last_updated', 'messages', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.userId), s(item.teacherName), s(item.subject), s(item.status), s(item.lastUpdated), JSON.stringify(item.messages || []), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_api_keys': return { table: 'api_keys', columns: ['id', 'key_value', 'provider', 'status', 'added_at', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.key), s(item.provider), s(item.status), s(item.addedAt), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
-    case 'eduadmin_system_settings': return { table: 'system_settings', columns: ['id', 'feature_rpp_enabled', 'maintenance_message', 'app_name', 'school_name', 'app_description', 'app_keywords', 'logo_url', 'favicon_url', 'timezone', 'footer_text', 'ai_provider', 'ai_base_url', 'ai_api_key', 'ai_model', 'rpp_monthly_limit', 'doku_client_id', 'doku_secret_key', 'doku_is_production', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), item.featureRppEnabled ? 1 : 0, s(item.maintenanceMessage), s(item.appName), s(item.schoolName), s(item.appDescription), s(item.appKeywords), s(item.logoUrl), s(item.faviconUrl), s(item.timezone), s(item.footerText), s(item.aiProvider), s(item.aiBaseUrl), s(item.aiApiKey), s(item.aiModel), item.rppMonthlyLimit || 0, s(item.dokuClientId), s(item.dokuSecretKey), item.dokuIsProduction ? 1 : 0, s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
+    case 'eduadmin_system_settings': return { table: 'system_settings', columns: ['id', 'feature_rpp_enabled', 'maintenance_message', 'app_name', 'school_name', 'app_description', 'app_keywords', 'logo_url', 'favicon_url', 'timezone', 'footer_text', 'ai_provider', 'ai_base_url', 'ai_api_key', 'ai_model', 'rpp_monthly_limit', 'doku_client_id', 'doku_secret_key', 'doku_is_production', 'headmaster_name', 'headmaster_nip', 'school_city', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), item.featureRppEnabled ? 1 : 0, s(item.maintenanceMessage), s(item.appName), s(item.schoolName), s(item.appDescription), s(item.appKeywords), s(item.logoUrl), s(item.faviconUrl), s(item.timezone), s(item.footerText), s(item.aiProvider), s(item.aiBaseUrl), s(item.aiApiKey), s(item.aiModel), item.rppMonthlyLimit || 0, s(item.dokuClientId), s(item.dokuSecretKey), item.dokuIsProduction ? 1 : 0, s(item.headmasterName), s(item.headmasterNip), s(item.schoolCity), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_wa_configs': return { table: 'wa_configs', columns: ['user_id', 'provider', 'base_url', 'api_key', 'device_id', 'is_active', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.userId), s(item.provider), s(item.baseUrl), s(item.apiKey), s(item.deviceId), item.isActive ? 1 : 0, s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_notifications': return { table: 'notifications', columns: ['id', 'title', 'message', 'type', 'target_role', 'is_read', 'is_popup', 'created_at', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.title), s(item.message), s(item.type), s(item.targetRole), item.isRead ? 1 : 0, item.isPopup ? 1 : 0, s(item.createdAt), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_logs': return { table: 'logs', columns: ['id', 'timestamp', 'level', 'actor', 'role', 'action', 'details', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.timestamp), s(item.level), s(item.actor), s(item.role), s(item.action), s(item.details), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
@@ -484,6 +506,11 @@ const getTableConfig = (collection: string) => {
     case 'eduadmin_incidents': return { table: 'student_incidents', columns: ['id', 'picket_id', 'student_name', 'class_name', 'time', 'type', 'reason', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.picketId), s(item.studentName), s(item.className), s(item.time), s(item.type), s(item.reason), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_teacher_calendar': return { table: 'teacher_calendar', columns: ['id', 'user_id', 'date', 'type', 'description', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.userId), s(item.date), s(item.type), s(item.description), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_password_resets': return { table: 'password_resets', columns: ['id', 'user_id', 'token', 'expiry', 'used', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.userId), s(item.token), s(item.expiry), item.used ? 1 : 0, s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
+    case 'eduadmin_inventory': return { 
+        table: 'inventory', 
+        columns: ['id', 'class_id', 'user_id', 'school_npsn', 'item_name', 'volume', 'condition', 'notes', 'last_modified', 'version', 'deleted'], 
+        mapFn: (item: any) => [s(item.id), s(item.classId), s(item.userId), s(item.schoolNpsn), s(item.itemName), s(item.volume), s(item.condition), s(item.notes), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] 
+    };
     default:
       return null;
   }
@@ -595,6 +622,7 @@ const mapRowToJSON = (collection: string, row: any) => {
         aiProvider: row.ai_provider, aiBaseUrl: row.ai_base_url, aiApiKey: row.ai_api_key, aiModel: row.ai_model,
         rppMonthlyLimit: row.rpp_monthly_limit,
         dokuClientId: row.doku_client_id, dokuSecretKey: row.doku_secret_key, dokuIsProduction: Boolean(row.doku_is_production),
+        headmasterName: row.headmaster_name, headmasterNip: row.headmaster_nip, schoolCity: row.school_city,
         lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
     };
     case 'eduadmin_wa_configs': return {
@@ -644,6 +672,11 @@ const mapRowToJSON = (collection: string, row: any) => {
     };
     case 'eduadmin_password_resets': return {
         id: row.id, userId: row.user_id, token: row.token, expiry: row.expiry, used: Boolean(row.used),
+        lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
+    };
+    case 'eduadmin_inventory': return {
+        id: row.id, classId: row.class_id, userId: row.user_id, schoolNpsn: row.school_npsn,
+        itemName: row.item_name, volume: row.volume, condition: row.condition, notes: row.notes,
         lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
     };
     default:
