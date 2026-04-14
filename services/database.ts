@@ -6,7 +6,7 @@ import {
   TeachingSchedule, LogEntry, MasterSubject, Ticket, 
   StudentViolation, StudentPointReduction, StudentAchievement, CounselingSession, 
   EmailConfig, WhatsAppConfig, Notification, ApiKey, SystemSettings,
-  BackupData, StudentWithDetails, LessonPlanRequest, DashboardStatsData, TeacherCalendarEvent, PasswordReset, ClassInventory, HomeVisit, ParentCall
+  BackupData, StudentWithDetails, LessonPlanRequest, DashboardStatsData, TeacherCalendarEvent, PasswordReset, ClassInventory, HomeVisit, ParentCall, LearningStyleAssessment
 } from '../types';
 import { initTurso, pushToTurso, pullFromTurso, deleteFromTurso, clearRemoteTable, requestPasswordResetApi, verifyResetTokenApi, completePasswordResetApi } from './tursoService';
 import bcrypt from 'bcryptjs';
@@ -503,7 +503,7 @@ export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', logCall
             'eduadmin_bk_violations', 'eduadmin_bk_reductions', 'eduadmin_bk_achievements', 'eduadmin_bk_counseling',
             'eduadmin_wa_configs', 'eduadmin_notifications', 'eduadmin_api_keys', 'eduadmin_system_settings',
             'eduadmin_pickets', 'eduadmin_incidents', 'eduadmin_donations', 'eduadmin_teacher_calendar',
-            'eduadmin_password_resets', 'eduadmin_inventory', 'eduadmin_home_visits', 'eduadmin_parent_calls'
+            'eduadmin_password_resets', 'eduadmin_inventory', 'eduadmin_home_visits', 'eduadmin_parent_calls', 'eduadmin_learning_style_assessments'
         ];
 
         const collections = targetCollections || allCollections;
@@ -536,7 +536,8 @@ export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', logCall
             'eduadmin_password_resets': db.passwordResets,
             'eduadmin_inventory': db.classInventory,
             'eduadmin_home_visits': db.homeVisits,
-            'eduadmin_parent_calls': db.parentCalls
+            'eduadmin_parent_calls': db.parentCalls,
+            'eduadmin_learning_style_assessments': db.learningStyleAssessments
         };
 
         if (direction === 'PUSH' || direction === 'FULL') {
@@ -1845,4 +1846,26 @@ export const saveParentCall = async (call: Omit<ParentCall, 'id'|'lastModified'|
 export const deleteParentCall = async (id: string) => {
     await db.parentCalls.delete(id);
     pushToTurso('eduadmin_parent_calls', [{id, deleted: true}]);
+};
+
+// --- LEARNING STYLE ASSESSMENTS ---
+export const getLearningStyleAssessments = async (classId: string) => {
+    return await db.learningStyleAssessments.where('classId').equals(classId).toArray();
+};
+
+export const saveLearningStyleAssessment = async (assessment: Omit<LearningStyleAssessment, 'id'|'lastModified'|'isSynced'> & { id?: string }) => {
+    const item: LearningStyleAssessment = {
+        ...assessment,
+        id: assessment.id || uuidv4(),
+        lastModified: Date.now(),
+        isSynced: false
+    };
+    await db.learningStyleAssessments.put(item);
+    triggerDebouncedSync();
+    return item;
+};
+
+export const deleteLearningStyleAssessment = async (id: string) => {
+    await db.learningStyleAssessments.delete(id);
+    pushToTurso('eduadmin_learning_style_assessments', [{id, deleted: true}]);
 };
