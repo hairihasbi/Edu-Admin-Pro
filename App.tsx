@@ -31,6 +31,8 @@ import WakasekMonitoring from './components/WakasekMonitoring'; // Import Wakase
 import WakasekScheduleManager from './components/WakasekScheduleManager'; // Import WakasekScheduleManager
 import DonationHistory from './components/DonationHistory'; // Import DonationHistory
 import NotificationPanel from './components/NotificationPanel';
+import LearningStyleManager from './components/LearningStyleManager';
+import StudentAssessment from './components/StudentAssessment';
 import Breadcrumbs from './components/Breadcrumbs';
 import OnboardingTour from './components/OnboardingTour';
 import ForgotPassword from './components/ForgotPassword';
@@ -550,6 +552,7 @@ const AppContent: React.FC = () => {
     if (path.includes('broadcast')) return 'Broadcast WhatsApp';
     if (path.includes('sync')) return 'Sinkronisasi Data'; // NEW
     if (path.includes('monitoring-kurikulum')) return 'Monitoring Kurikulum'; // NEW
+    if (path.includes('learning-style')) return 'Asesmen Gaya Belajar';
     return appConfig.name || 'EduAdmin';
   };
 
@@ -600,6 +603,7 @@ const AppContent: React.FC = () => {
     return (
       <Routes>
         <Route path="/" element={<HomePage />} />
+        <Route path="/asesmen/:classId" element={<StudentAssessment />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/login" element={
@@ -776,7 +780,10 @@ const AppContent: React.FC = () => {
                 )}
                 <NavLink to="/classes" icon={BookOpen} label="Manajemen Kelas" />
                 {currentUser.homeroomClassId && (
-                   <NavLink to="/homeroom" icon={Users} label="Wali Kelas" />
+                   <>
+                    <NavLink to="/homeroom" icon={Users} label="Wali Kelas" />
+                    <NavLink to="/learning-style" icon={Activity} label="Gaya Belajar" />
+                   </>
                 )}
                 <NavLink to="/picket" icon={CalendarCheck} label="Piket Harian" /> {/* NEW LINK */}
                 {currentUser.subject === 'Bimbingan Konseling' && (
@@ -923,6 +930,7 @@ const AppContent: React.FC = () => {
                  <>
                    <Route path="/dashboard" element={<TeacherDashboard user={currentUser} />} />
                    <Route path="/homeroom" element={<TeacherHomeroom user={currentUser} />} />
+                   <Route path="/learning-style" element={<LearningStyleManager user={currentUser} />} />
                    <Route path="/classes" element={<TeacherClasses user={currentUser} />} />
                    <Route path="/picket" element={<DailyPicket currentUser={currentUser} />} /> {/* NEW ROUTE */}
                    {currentUser.subject === 'Bimbingan Konseling' && <Route path="/guidance" element={<TeacherGuidance user={currentUser} />} />}
