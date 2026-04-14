@@ -532,6 +532,24 @@ const DB_SCHEMAS = [
         deleted INTEGER DEFAULT 0
     )`,
     `CREATE INDEX IF NOT EXISTS idx_parent_calls_npsn ON parent_calls(school_npsn)`,
+    // 30. LEARNING STYLE ASSESSMENTS
+    `CREATE TABLE IF NOT EXISTS learning_style_assessments (
+        id TEXT PRIMARY KEY,
+        student_id TEXT,
+        student_name TEXT,
+        teacher_id TEXT,
+        class_id TEXT,
+        visual_score INTEGER,
+        auditory_score INTEGER,
+        kinesthetic_score INTEGER,
+        dominant_style TEXT,
+        assessment_date TEXT,
+        method TEXT,
+        last_modified INTEGER,
+        version INTEGER DEFAULT 1,
+        deleted INTEGER DEFAULT 0
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_lsa_class ON learning_style_assessments(class_id)`,
 ];
 
 // Helper to convert undefined to null for SQL
@@ -594,6 +612,11 @@ const getTableConfig = (collection: string) => {
         table: 'parent_calls', 
         columns: ['id', 'student_id', 'class_id', 'school_npsn', 'date', 'parent_name', 'parent_phone', 'problem', 'solution', 'follow_up', 'notes', 'user_id', 'last_modified', 'version', 'deleted'], 
         mapFn: (item: any) => [s(item.id), s(item.studentId), s(item.classId), s(item.schoolNpsn), s(item.date), s(item.parentName), s(item.parentPhone), s(item.problem), s(item.solution), s(item.followUp), s(item.notes), s(item.userId), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] 
+    };
+    case 'eduadmin_learning_style_assessments': return { 
+        table: 'learning_style_assessments', 
+        columns: ['id', 'student_id', 'student_name', 'teacher_id', 'class_id', 'visual_score', 'auditory_score', 'kinesthetic_score', 'dominant_style', 'assessment_date', 'method', 'last_modified', 'version', 'deleted'], 
+        mapFn: (item: any) => [s(item.id), s(item.studentId), s(item.studentName), s(item.teacherId), s(item.classId), s(item.visualScore), s(item.auditoryScore), s(item.kinestheticScore), s(item.dominantStyle), s(item.assessmentDate), s(item.method), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] 
     };
     default:
       return null;
@@ -774,6 +797,14 @@ const mapRowToJSON = (collection: string, row: any) => {
         date: row.date, parentName: row.parent_name, parentPhone: row.parent_phone,
         problem: row.problem, solution: row.solution, followUp: row.follow_up,
         notes: row.notes, userId: row.user_id,
+        lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
+    };
+    case 'eduadmin_learning_style_assessments': return {
+        id: row.id, studentId: row.student_id, studentName: row.student_name,
+        teacherId: row.teacher_id, classId: row.class_id,
+        visualScore: row.visual_score, auditoryScore: row.auditory_score,
+        kinestheticScore: row.kinesthetic_score, dominantStyle: row.dominant_style,
+        assessmentDate: row.assessment_date, method: row.method,
         lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
     };
     default:
@@ -1290,7 +1321,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                         whereClauses.push("user_id = ?"); args = [userId];
                     }
                 }
-                else if (['scores','schedules','materials'].includes(tableConfig.table)) { 
+                else if (['scores','schedules','materials','learning_style_assessments'].includes(tableConfig.table)) { 
                     if (userNpsn && userNpsn !== 'DEFAULT') {
                         whereClauses.push("(user_id = ? OR user_id IN (SELECT id FROM users WHERE school_npsn = ?))"); 
                         args = [userId, userNpsn];
