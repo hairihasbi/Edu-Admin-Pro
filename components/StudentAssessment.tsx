@@ -3,10 +3,10 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { VAK_QUESTIONS, calculateDominantStyle, getStyleDescription } from '../services/assessmentService';
 import { db } from '../services/db';
-import { saveLearningStyleAssessment } from '../services/database';
+import { saveLearningStyleAssessment, getPublicAssessmentData, submitPublicAssessment } from '../services/database';
 import { Student, ClassRoom } from '../types';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CheckCircle2, Eye, Ear, Activity, ArrowRight, ArrowLeft, User } from 'lucide-react';
+import { CheckCircle2, Eye, Ear, Activity, ArrowRight, ArrowLeft, User, RefreshCw } from 'lucide-react';
 
 const StudentAssessment: React.FC = () => {
   const { classId } = useParams<{ classId: string }>();
@@ -17,18 +17,35 @@ const StudentAssessment: React.FC = () => {
   const [answers, setAnswers] = useState<Record<number, 'A' | 'B' | 'C'>>({});
   const [loading, setLoading] = useState(true);
   const [classInfo, setClassInfo] = useState<ClassRoom | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
       if (!classId) return;
       try {
-        const cls = await db.classes.get(classId);
-        if (cls) setClassInfo(cls);
-        
-        const stds = await db.students.where('classId').equals(classId).toArray();
-        setStudents(stds.sort((a, b) => a.name.localeCompare(b.name)));
+        setLoading(true);
+        setError(null);
+
+        // 1. Try Local First (if teacher is using their own device to test)
+        const localCls = await db.classes.get(classId);
+        const localStds = await db.students.where('classId').equals(classId).toArray();
+
+        if (localCls && localStds.length > 0) {
+          setClassInfo(localCls);
+          setStudents(localStds.sort((a, b) => a.name.localeCompare(b.name)));
+        } else {
+          // 2. Fallback to Server (for students on their own devices)
+          const publicData = await getPublicAssessmentData(classId);
+          if (publicData) {
+            setClassInfo(publicData.class);
+            setStudents(publicData.students.sort((a: any, b: any) => a.name.localeCompare(b.name)));
+          } else {
+            setError("Gagal memuat data kelas. Pastikan link benar atau hubungi gurumu.");
+          }
+        }
       } catch (err) {
         console.error("Failed to load students:", err);
+        setError("Terjadi kesalahan saat memuat data.");
       } finally {
         setLoading(false);
       }
@@ -77,6 +94,26 @@ const StudentAssessment: React.FC = () => {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+        <div className="max-w-md w-full bg-white p-8 rounded-2xl shadow-sm border border-gray-100 text-center">
+          <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+            <RefreshCw className="w-8 h-8" />
+          </div>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Ups! Terjadi Masalah</h2>
+          <p className="text-gray-500 mb-6">{error}</p>
+          <button 
+            onClick={() => window.location.reload()}
+            className="w-full bg-indigo-600 text-white py-3 rounded-xl font-semibold"
+          >
+            Coba Lagi
+          </button>
+        </div>
       </div>
     );
   }

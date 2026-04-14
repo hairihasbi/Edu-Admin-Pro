@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { db } from '../services/db';
-import { getLearningStyleAssessments, saveLearningStyleAssessment, deleteLearningStyleAssessment } from '../services/database';
+import { getLearningStyleAssessments, saveLearningStyleAssessment, deleteLearningStyleAssessment, runManualSync } from '../services/database';
 import { Student, ClassRoom, LearningStyleAssessment, User } from '../types';
-import { VAK_QUESTIONS, getStyleDescription, calculateDominantStyle } from '../services/assessmentService';
+import { VAK_QUESTIONS, getStyleDescription, calculateDominantStyle, generateAssessmentPDF } from '../services/assessmentService';
 import QRCodeDisplay from './QRCodeDisplay';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -31,29 +31,44 @@ const LearningStyleManager: React.FC<LearningStyleManagerProps> = ({ user }) => 
   const [manualScores, setManualScores] = useState({ visual: 0, auditory: 0, kinesthetic: 0 });
   const [searchQuery, setSearchQuery] = useState('');
 
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const loadData = async () => {
+    if (!user.homeroomClassId) {
+      setLoading(false);
+      return;
+    }
+    try {
+      const cls = await db.classes.get(user.homeroomClassId);
+      if (cls) setSelectedClass(cls);
+
+      const stds = await db.students.where('classId').equals(user.homeroomClassId).toArray();
+      setStudents(stds.sort((a, b) => a.name.localeCompare(b.name)));
+
+      const asms = await getLearningStyleAssessments(user.homeroomClassId);
+      setAssessments(asms);
+    } catch (err) {
+      console.error("Failed to load homeroom data:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const loadData = async () => {
-      if (!user.homeroomClassId) {
-        setLoading(false);
-        return;
-      }
-      try {
-        const cls = await db.classes.get(user.homeroomClassId);
-        if (cls) setSelectedClass(cls);
-
-        const stds = await db.students.where('classId').equals(user.homeroomClassId).toArray();
-        setStudents(stds.sort((a, b) => a.name.localeCompare(b.name)));
-
-        const asms = await getLearningStyleAssessments(user.homeroomClassId);
-        setAssessments(asms);
-      } catch (err) {
-        console.error("Failed to load homeroom data:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
     loadData();
   }, [user.homeroomClassId]);
+
+  const handleRefresh = async () => {
+    try {
+      setIsRefreshing(true);
+      await runManualSync('PULL', () => {}, ['eduadmin_learning_style_assessments']);
+      await loadData();
+    } catch (err) {
+      console.error("Refresh failed:", err);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   const handleSaveManual = async () => {
     if (!selectedStudentForManual || !selectedClass) return;
@@ -89,14 +104,18 @@ const LearningStyleManager: React.FC<LearningStyleManagerProps> = ({ user }) => 
   };
 
   const getChartData = () => {
-    const counts = { VISUAL: 0, AUDITORI: 0, KINESTETIK: 0 };
+    const counts: Record<string, number> = { VISUAL: 0, AUDITORI: 0, KINESTETIK: 0, CAMPURAN: 0 };
     assessments.forEach(a => {
-      counts[a.dominantStyle]++;
+      if (a.dominantStyle === 'VISUAL') counts.VISUAL++;
+      else if (a.dominantStyle === 'AUDITORI') counts.AUDITORI++;
+      else if (a.dominantStyle === 'KINESTETIK') counts.KINESTETIK++;
+      else counts.CAMPURAN++;
     });
     return [
       { name: 'Visual', value: counts.VISUAL, color: '#6366f1' },
       { name: 'Auditori', value: counts.AUDITORI, color: '#f59e0b' },
-      { name: 'Kinestetik', value: counts.KINESTETIK, color: '#10b981' }
+      { name: 'Kinestetik', value: counts.KINESTETIK, color: '#10b981' },
+      { name: 'Campuran', value: counts.CAMPURAN, color: '#ec4899' }
     ];
   };
 
@@ -130,6 +149,21 @@ const LearningStyleManager: React.FC<LearningStyleManagerProps> = ({ user }) => 
           <p className="text-gray-500">Pemetaan karakteristik belajar kelas {selectedClass?.name}</p>
         </div>
         <div className="flex gap-2">
+          <button 
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+          <button 
+            onClick={() => generateAssessmentPDF(selectedClass?.name || 'Kelas', user.schoolName || 'Sekolah')}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl font-medium hover:bg-gray-50 transition-colors"
+          >
+            <Download className="w-4 h-4" />
+            Download Instrumen (PDF)
+          </button>
           <button 
             onClick={() => setActiveTab('QR')}
             className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-700 rounded-xl font-medium hover:bg-indigo-100 transition-colors"
