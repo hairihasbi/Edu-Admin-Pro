@@ -91,6 +91,7 @@ import {
   ArrowLeftRight, // Added
   Pencil, // Added Pencil
   RotateCcw, // Added RotateCcw
+  Package, // Added Package
   Bold, // Added
   Italic, // Added
   Heading, // Added
@@ -206,6 +207,7 @@ export {
   ArrowLeftRight,
   Pencil,
   RotateCcw,
+  Package,
   Bold,
   Italic,
   Heading,
