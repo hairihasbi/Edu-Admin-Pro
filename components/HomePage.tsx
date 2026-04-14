@@ -1,6 +1,7 @@
 
-import React, { useState } from 'react';
+import * as React from 'react';
 import { Link } from 'react-router-dom';
+
 import { 
   GraduationCap, ArrowRight, CheckCircle, BrainCircuit, 
   CalendarCheck, NotebookPen, Calculator, ShieldCheck, 
@@ -8,52 +9,52 @@ import {
   IdCard, School, BookOpen, CalendarDays, Layout, ClipboardList, TrendingUp
 } from './Icons';
 
-const HomePage: React.FC = () => {
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+// Konfigurasi Link Kontak Real
+const phoneNumber = "6285248481527";
+const whatsappLink = `https://wa.me/${phoneNumber}?text=Halo%20Admin%20EduAdmin%20Pro,%20saya%20tertarik%20menggunakan%20aplikasi%20ini%20atau%20butuh%20bantuan.`;
+const emailLink = "mailto:admin@genquiz.my.id";
 
-  // Konfigurasi Link Kontak Real
-  const phoneNumber = "6285248481527";
-  const whatsappLink = `https://wa.me/${phoneNumber}?text=Halo%20Admin%20EduAdmin%20Pro,%20saya%20tertarik%20menggunakan%20aplikasi%20ini%20atau%20butuh%20bantuan.`;
-  const emailLink = "mailto:admin@genquiz.my.id";
+const features = [
+  {
+    icon: <BrainCircuit size={28} className="text-white" />,
+    title: "AI Lesson Planner",
+    desc: "Buat Rencana Pelaksanaan Pembelajaran (RPP) dalam hitungan detik dengan bantuan kecerdasan buatan Gemini AI.",
+    color: "bg-purple-600"
+  },
+  {
+    icon: <CalendarCheck size={28} className="text-white" />,
+    title: "Absensi Digital",
+    desc: "Pencatatan kehadiran siswa yang mudah, rekap otomatis, dan dapat diunduh ke format Excel/PDF.",
+    color: "bg-blue-600"
+  },
+  {
+    icon: <NotebookPen size={28} className="text-white" />,
+    title: "Jurnal Mengajar",
+    desc: "Catat kegiatan pembelajaran, tujuan, dan refleksi harian dengan antarmuka yang intuitif dan terstruktur.",
+    color: "bg-teal-600"
+  },
+  {
+    icon: <Calculator size={28} className="text-white" />,
+    title: "Asesmen Sumatif",
+    desc: "Kelola nilai Lingkup Materi (LM), STS, dan SAS dengan kalkulasi nilai rapor otomatis.",
+    color: "bg-orange-600"
+  },
+  {
+    icon: <Users size={28} className="text-white" />,
+    title: "Manajemen Data",
+    desc: "Database siswa yang terpusat, aman, dan mudah dikelola guru sendiri.",
+    color: "bg-indigo-600"
+  },
+  {
+    icon: <FileSpreadsheet size={28} className="text-white" />, 
+    title: "Ekspor Laporan",
+    desc: "Semua data administrasi dapat diekspor ke Excel dan dicetak PDF untuk kebutuhan arsip fisik.",
+    color: "bg-green-600"
+  }
+];
 
-  const features = [
-    {
-      icon: <BrainCircuit size={28} className="text-white" />,
-      title: "AI Lesson Planner",
-      desc: "Buat Rencana Pelaksanaan Pembelajaran (RPP) dalam hitungan detik dengan bantuan kecerdasan buatan Gemini AI.",
-      color: "bg-purple-600"
-    },
-    {
-      icon: <CalendarCheck size={28} className="text-white" />,
-      title: "Absensi Digital",
-      desc: "Pencatatan kehadiran siswa yang mudah, rekap otomatis, dan dapat diunduh ke format Excel/PDF.",
-      color: "bg-blue-600"
-    },
-    {
-      icon: <NotebookPen size={28} className="text-white" />,
-      title: "Jurnal Mengajar",
-      desc: "Catat kegiatan pembelajaran, tujuan, dan refleksi harian dengan antarmuka yang intuitif dan terstruktur.",
-      color: "bg-teal-600"
-    },
-    {
-      icon: <Calculator size={28} className="text-white" />,
-      title: "Asesmen Sumatif",
-      desc: "Kelola nilai Lingkup Materi (LM), STS, dan SAS dengan kalkulasi nilai rapor otomatis.",
-      color: "bg-orange-600"
-    },
-    {
-      icon: <Users size={28} className="text-white" />,
-      title: "Manajemen Data",
-      desc: "Database siswa yang terpusat, aman, dan mudah dikelola guru sendiri.",
-      color: "bg-indigo-600"
-    },
-    {
-      icon: <FileSpreadsheet size={28} className="text-white" />, 
-      title: "Ekspor Laporan",
-      desc: "Semua data administrasi dapat diekspor ke Excel dan dicetak PDF untuk kebutuhan arsip fisik.",
-      color: "bg-green-600"
-    }
-  ];
+const HomePage = () => {
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
 
   return (
     <div className="min-h-screen bg-white font-sans text-gray-900">
