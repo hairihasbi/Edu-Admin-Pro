@@ -1,6 +1,6 @@
 
 import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 
 export interface Question {
   id: number;
@@ -139,62 +139,88 @@ export const getStyleDescription = (style: string) => {
 };
 
 export const generateAssessmentPDF = (className: string, schoolName: string) => {
-  const doc = new jsPDF();
-  const pageWidth = doc.internal.pageSize.getWidth();
-
-  // Header
-  doc.setFontSize(16);
-  doc.setFont('helvetica', 'bold');
-  doc.text('INSTRUMEN PEMETAAN GAYA BELAJAR (VAK)', pageWidth / 2, 20, { align: 'center' });
+  console.log("Memulai pembuatan PDF untuk:", className, schoolName);
   
-  doc.setFontSize(12);
-  doc.text(schoolName, pageWidth / 2, 28, { align: 'center' });
-  
-  doc.setLineWidth(0.5);
-  doc.line(20, 32, pageWidth - 20, 32);
+  try {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
 
-  // Student Info
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`Nama Siswa : ...........................................................`, 20, 42);
-  doc.text(`Kelas             : ${className}`, 20, 48);
-  doc.text(`Tanggal         : ...........................`, 20, 54);
+    // Header
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text('INSTRUMEN PEMETAAN GAYA BELAJAR (VAK)', pageWidth / 2, 20, { align: 'center' });
+    
+    doc.setFontSize(12);
+    doc.text(schoolName, pageWidth / 2, 28, { align: 'center' });
+    
+    doc.setLineWidth(0.5);
+    doc.line(20, 32, pageWidth - 20, 32);
 
-  // Instructions
-  doc.setFont('helvetica', 'bold');
-  doc.text('Petunjuk Pengisian:', 20, 65);
-  doc.setFont('helvetica', 'normal');
-  doc.text('Pilihlah satu jawaban (A, B, atau C) yang paling sesuai dengan kebiasaanmu.', 20, 70);
+    // Student Info
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Nama Siswa : ...........................................................`, 20, 42);
+    doc.text(`Kelas             : ${className}`, 20, 48);
+    doc.text(`Tanggal         : ...........................`, 20, 54);
 
-  // Questions Table
-  const tableData = VAK_QUESTIONS.map(q => [
-    q.id.toString(),
-    q.text,
-    `[  ] A. ${q.options[0].text}\n[  ] B. ${q.options[1].text}\n[  ] C. ${q.options[2].text}`
-  ]);
+    // Instructions
+    doc.setFont('helvetica', 'bold');
+    doc.text('Petunjuk Pengisian:', 20, 65);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Pilihlah satu jawaban (A, B, atau C) yang paling sesuai dengan kebiasaanmu.', 20, 70);
 
-  (doc as any).autoTable({
-    startY: 75,
-    head: [['No', 'Pertanyaan', 'Pilihan Jawaban']],
-    body: tableData,
-    theme: 'grid',
-    headStyles: { fillStyle: 'DF', fillColor: [79, 70, 229], textColor: [255, 255, 255] },
-    columnStyles: {
-      0: { cellWidth: 10 },
-      1: { cellWidth: 80 },
-      2: { cellWidth: 80 }
-    },
-    styles: { fontSize: 9, cellPadding: 4 }
-  });
+    // Questions Table
+    const tableData = VAK_QUESTIONS.map(q => [
+      q.id.toString(),
+      q.text,
+      `[  ] A. ${q.options[0].text}\n[  ] B. ${q.options[1].text}\n[  ] C. ${q.options[2].text}`
+    ]);
 
-  // Footer / Scoring
-  const finalY = (doc as any).lastAutoTable.finalY + 10;
-  doc.setFont('helvetica', 'bold');
-  doc.text('Hasil Perhitungan (Diisi oleh Guru):', 20, finalY);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`Jumlah Jawaban A (Visual)     : ..........`, 20, finalY + 7);
-  doc.text(`Jumlah Jawaban B (Auditori)   : ..........`, 20, finalY + 14);
-  doc.text(`Jumlah Jawaban C (Kinestetik) : ..........`, 20, finalY + 21);
-  
-  doc.save(`Instrumen_VAK_${className.replace(/\s+/g, '_')}.pdf`);
+    if (typeof autoTable !== 'function') {
+      console.error("autoTable is not a function. Check jspdf-autotable import.");
+      doc.text("Kesalahan sistem: autoTable tidak terdeteksi.", 20, 80);
+    } else {
+      autoTable(doc, {
+        startY: 75,
+        head: [['No', 'Pertanyaan', 'Pilihan Jawaban']],
+        body: tableData,
+        theme: 'grid',
+        headStyles: { fillColor: [79, 70, 229], textColor: [255, 255, 255] },
+        columnStyles: {
+          0: { cellWidth: 10 },
+          1: { cellWidth: 80 },
+          2: { cellWidth: 80 }
+        },
+        styles: { fontSize: 9, cellPadding: 4, overflow: 'linebreak' },
+        margin: { top: 20, bottom: 20 }
+      });
+    }
+
+    // Footer / Scoring
+    const finalY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 10 : 200;
+    
+    // Check if we need a new page for the footer
+    if (finalY > 260) {
+      doc.addPage();
+      doc.setFont('helvetica', 'bold');
+      doc.text('Hasil Perhitungan (Diisi oleh Guru):', 20, 20);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Jumlah Jawaban A (Visual)     : ..........`, 20, 27);
+      doc.text(`Jumlah Jawaban B (Auditori)   : ..........`, 20, 34);
+      doc.text(`Jumlah Jawaban C (Kinestetik) : ..........`, 20, 41);
+    } else {
+      doc.setFont('helvetica', 'bold');
+      doc.text('Hasil Perhitungan (Diisi oleh Guru):', 20, finalY);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Jumlah Jawaban A (Visual)     : ..........`, 20, finalY + 7);
+      doc.text(`Jumlah Jawaban B (Auditori)   : ..........`, 20, finalY + 14);
+      doc.text(`Jumlah Jawaban C (Kinestetik) : ..........`, 20, finalY + 21);
+    }
+    
+    const fileName = `Instrumen_VAK_${className.replace(/[^a-z0-9]/gi, '_')}.pdf`;
+    doc.save(fileName);
+    console.log("PDF berhasil disimpan:", fileName);
+  } catch (error) {
+    console.error("Gagal membuat PDF:", error);
+  }
 };
