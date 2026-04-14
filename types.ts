@@ -364,7 +364,7 @@ export interface LearningStyleAssessment extends Syncable {
   visualScore: number;
   auditoryScore: number;
   kinestheticScore: number;
-  dominantStyle: 'VISUAL' | 'AUDITORI' | 'KINESTETIK';
+  dominantStyle: string;
   date: string;
   method: 'MANUAL' | 'DIGITAL';
 }
