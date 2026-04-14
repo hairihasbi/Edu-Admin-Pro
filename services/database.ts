@@ -1869,3 +1869,33 @@ export const deleteLearningStyleAssessment = async (id: string) => {
     await db.learningStyleAssessments.delete(id);
     pushToTurso('eduadmin_learning_style_assessments', [{id, deleted: true}]);
 };
+
+export const getPublicAssessmentData = async (classId: string) => {
+    try {
+        const res = await fetch('/api/turso', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'get_public_assessment_data', classId })
+        });
+        if (!res.ok) throw new Error('Gagal memuat data dari server.');
+        return await res.json();
+    } catch (e) {
+        console.error("getPublicAssessmentData Error:", e);
+        return null;
+    }
+};
+
+export const submitPublicAssessment = async (assessment: any) => {
+    try {
+        const res = await fetch('/api/turso', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'submit_public_assessment', assessment })
+        });
+        if (!res.ok) throw new Error('Gagal mengirim data ke server.');
+        return await res.json();
+    } catch (e) {
+        console.error("submitPublicAssessment Error:", e);
+        return null;
+    }
+};

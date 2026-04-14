@@ -1,4 +1,7 @@
 
+import { jsPDF } from 'jspdf';
+import 'jspdf-autotable';
+
 export interface Question {
   id: number;
   text: string;
@@ -12,112 +15,186 @@ export interface Question {
 export const VAK_QUESTIONS: Question[] = [
   {
     id: 1,
-    text: "Ketika kamu menghafal sesuatu, kamu biasanya...",
+    text: "Ketika saya mengoperasikan peralatan baru, saya biasanya:",
     options: [
-      { id: 'A', text: "Membayangkan tulisan atau gambar di dalam pikiran.", style: 'VISUAL' },
-      { id: 'B', text: "Mengucapkan kata-katanya dengan keras atau berbisik.", style: 'AUDITORI' },
-      { id: 'C', text: "Menulisnya berulang kali atau mempraktikkannya dengan gerakan.", style: 'KINESTETIK' }
+      { id: 'A', text: "Membaca petunjuknya terlebih dahulu", style: 'VISUAL' },
+      { id: 'B', text: "Mendengarkan penjelasan dari orang lain", style: 'AUDITORI' },
+      { id: 'C', text: "Langsung mencobanya sendiri", style: 'KINESTETIK' }
     ]
   },
   {
     id: 2,
-    text: "Saat guru sedang menjelaskan materi di depan kelas, kamu lebih suka...",
+    text: "Ketika saya perlu petunjuk arah untuk pergi ke suatu tempat, saya lebih suka:",
     options: [
-      { id: 'A', text: "Melihat papan tulis, slide presentasi, atau memperhatikan wajah guru.", style: 'VISUAL' },
-      { id: 'B', text: "Mendengarkan suara guru dengan saksama tanpa harus melihatnya.", style: 'AUDITORI' },
-      { id: 'C', text: "Mencoret-coret kertas atau memainkan alat tulis sambil mendengarkan.", style: 'KINESTETIK' }
+      { id: 'A', text: "Melihat peta", style: 'VISUAL' },
+      { id: 'B', text: "Meminta petunjuk lisan", style: 'AUDITORI' },
+      { id: 'C', text: "Mengikuti insting atau berjalan dulu", style: 'KINESTETIK' }
     ]
   },
   {
     id: 3,
-    text: "Apa yang paling mengganggumu saat sedang konsentrasi belajar?",
+    text: "Ketika saya sedang belajar hal baru, saya paling suka:",
     options: [
-      { id: 'A', text: "Suasana ruangan yang berantakan atau banyak orang berlalu-lalang.", style: 'VISUAL' },
-      { id: 'B', text: "Suara bising, obrolan orang lain, atau musik yang terlalu keras.", style: 'AUDITORI' },
-      { id: 'C', text: "Kursi yang tidak nyaman atau suhu ruangan yang terlalu panas/dingin.", style: 'KINESTETIK' }
+      { id: 'A', text: "Melihat diagram atau ilustrasi", style: 'VISUAL' },
+      { id: 'B', text: "Mendengarkan ceramah atau penjelasan", style: 'AUDITORI' },
+      { id: 'C', text: "Mempraktikkannya secara langsung", style: 'KINESTETIK' }
     ]
   },
   {
     id: 4,
-    text: "Ketika kamu sedang santai atau memiliki waktu luang, kamu lebih suka...",
+    text: "Jika saya ingin membeli pakaian baru, saya biasanya:",
     options: [
-      { id: 'A', text: "Membaca buku, komik, atau menonton video/film.", style: 'VISUAL' },
-      { id: 'B', text: "Mendengarkan musik, podcast, atau mengobrol dengan teman.", style: 'AUDITORI' },
-      { id: 'C', text: "Berolahraga, membuat kerajinan tangan, atau jalan-jalan.", style: 'KINESTETIK' }
+      { id: 'A', text: "Melihat-lihat modelnya di katalog atau toko", style: 'VISUAL' },
+      { id: 'B', text: "Meminta pendapat teman atau penjual", style: 'AUDITORI' },
+      { id: 'C', text: "Mencobanya langsung untuk merasakan kenyamanannya", style: 'KINESTETIK' }
     ]
   },
   {
     id: 5,
-    text: "Jika kamu ingin merakit mainan atau benda baru, kamu biasanya...",
+    text: "Ketika saya sedang menunggu antrean, saya cenderung:",
     options: [
-      { id: 'A', text: "Membaca petunjuk gambar yang ada di buku panduan.", style: 'VISUAL' },
-      { id: 'B', text: "Meminta seseorang menjelaskan cara merakitnya kepadamu.", style: 'AUDITORI' },
-      { id: 'C', text: "Langsung mencoba merakitnya sendiri tanpa membaca petunjuk.", style: 'KINESTETIK' }
+      { id: 'A', text: "Melihat-lihat sekeliling (membaca brosur/poster)", style: 'VISUAL' },
+      { id: 'B', text: "Berbicara dengan orang di sebelah saya", style: 'AUDITORI' },
+      { id: 'C', text: "Menggerak-gerakkan kaki atau tangan (tidak bisa diam)", style: 'KINESTETIK' }
     ]
   },
   {
     id: 6,
-    text: "Saat kamu bercerita tentang suatu kejadian, kamu cenderung...",
+    text: "Ketika saya berbicara dengan seseorang, saya biasanya:",
     options: [
-      { id: 'A', text: "Menggunakan banyak kata sifat untuk menggambarkan suasana/pemandangan.", style: 'VISUAL' },
-      { id: 'B', text: "Menirukan suara atau ucapan orang yang ada dalam cerita tersebut.", style: 'AUDITORI' },
-      { id: 'C', text: "Banyak menggunakan gerakan tangan atau bahasa tubuh.", style: 'KINESTETIK' }
+      { id: 'A', text: "Menatap wajahnya dan memperhatikan ekspresinya", style: 'VISUAL' },
+      { id: 'B', text: "Mendengarkan dengan seksama nada suaranya", style: 'AUDITORI' },
+      { id: 'C', text: "Banyak menggunakan gerakan tangan atau menyentuh", style: 'KINESTETIK' }
     ]
   },
   {
     id: 7,
-    text: "Ketika kamu sedang menunggu antrean yang lama, kamu biasanya...",
+    text: "Saya paling mudah mengingat sesuatu jika saya:",
     options: [
-      { id: 'A', text: "Melihat-lihat sekeliling atau membaca tulisan yang ada di sekitar.", style: 'VISUAL' },
-      { id: 'B', text: "Mengajak orang di sebelah mengobrol atau bersenandung kecil.", style: 'AUDITORI' },
-      { id: 'C', text: "Tidak bisa diam, menggerakkan kaki, atau berjalan mondar-mandir.", style: 'KINESTETIK' }
+      { id: 'A', text: "Menulisnya atau menggambarnya", style: 'VISUAL' },
+      { id: 'B', text: "Mengucapkannya berulang kali", style: 'AUDITORI' },
+      { id: 'C', text: "Melakukannya secara berulang-ulang", style: 'KINESTETIK' }
     ]
   },
   {
     id: 8,
-    text: "Cara terbaik bagimu untuk mengingat nama seseorang adalah...",
+    text: "Ketika saya sedang santai, saya lebih suka:",
     options: [
-      { id: 'A', text: "Mengingat wajahnya atau bagaimana namanya tertulis.", style: 'VISUAL' },
-      { id: 'B', text: "Mengingat suara atau cara dia memperkenalkan diri.", style: 'AUDITORI' },
-      { id: 'C', text: "Mengingat jabat tangan atau aktivitas yang dilakukan bersamanya.", style: 'KINESTETIK' }
+      { id: 'A', text: "Membaca buku atau menonton film", style: 'VISUAL' },
+      { id: 'B', text: "Mendengarkan musik atau radio", style: 'AUDITORI' },
+      { id: 'C', text: "Berolahraga atau melakukan kerajinan tangan", style: 'KINESTETIK' }
     ]
   },
   {
     id: 9,
-    text: "Saat kamu merasa senang, kamu biasanya menunjukkannya dengan...",
+    text: "Ketika saya sedang marah, saya biasanya:",
     options: [
-      { id: 'A', text: "Tersenyum lebar atau wajah yang terlihat berseri-seri.", style: 'VISUAL' },
-      { id: 'B', text: "Berteriak kegirangan atau menceritakannya kepada semua orang.", style: 'AUDITORI' },
-      { id: 'C', text: "Melompat-lompat, bertepuk tangan, atau memeluk orang terdekat.", style: 'KINESTETIK' }
+      { id: 'A', text: "Menjadi diam dan cemberut", style: 'VISUAL' },
+      { id: 'B', text: "Berteriak atau mengomel", style: 'AUDITORI' },
+      { id: 'C', text: "Membanting barang atau berjalan mondar-mandir", style: 'KINESTETIK' }
     ]
   },
   {
     id: 10,
-    text: "Ketika kamu belajar hal baru, kamu merasa paling cepat paham jika...",
+    text: "Saya merasa paling terganggu jika:",
     options: [
-      { id: 'A', text: "Melihat demonstrasi atau contoh nyata di depan mata.", style: 'VISUAL' },
-      { id: 'B', text: "Mendiskusikan materi tersebut dalam kelompok atau tanya jawab.", style: 'AUDITORI' },
-      { id: 'C', text: "Langsung mempraktikkannya sendiri (trial and error).", style: 'KINESTETIK' }
+      { id: 'A', text: "Ruangan berantakan atau kotor", style: 'VISUAL' },
+      { id: 'B', text: "Suasana bising atau terlalu gaduh", style: 'AUDITORI' },
+      { id: 'C', text: "Harus duduk diam dalam waktu lama", style: 'KINESTETIK' }
     ]
   }
 ];
 
-export const calculateDominantStyle = (scores: { visual: number; auditory: number; kinesthetic: number }): 'VISUAL' | 'AUDITORI' | 'KINESTETIK' => {
+export const calculateDominantStyle = (scores: { visual: number; auditory: number; kinesthetic: number }) => {
   const { visual, auditory, kinesthetic } = scores;
-  if (visual >= auditory && visual >= kinesthetic) return 'VISUAL';
-  if (auditory >= visual && auditory >= kinesthetic) return 'AUDITORI';
-  return 'KINESTETIK';
+  const max = Math.max(visual, auditory, kinesthetic);
+  
+  if (visual === max && visual > auditory && visual > kinesthetic) return 'VISUAL';
+  if (auditory === max && auditory > visual && auditory > kinesthetic) return 'AUDITORI';
+  if (kinesthetic === max && kinesthetic > visual && kinesthetic > auditory) return 'KINESTETIK';
+  
+  // Handle ties
+  const styles = [];
+  if (visual === max) styles.push('VISUAL');
+  if (auditory === max) styles.push('AUDITORI');
+  if (kinesthetic === max) styles.push('KINESTETIK');
+  
+  return styles.join(' & ');
 };
 
-export const getStyleDescription = (style: 'VISUAL' | 'AUDITORI' | 'KINESTETIK') => {
+export const getStyleDescription = (style: string) => {
   switch (style) {
     case 'VISUAL':
-      return "Belajar lebih baik melalui penglihatan. Butuh media gambar, warna, dan peta konsep.";
+      return "Anda belajar paling baik melalui penglihatan. Anda suka melihat diagram, gambar, dan demonstrasi.";
     case 'AUDITORI':
-      return "Belajar lebih baik melalui pendengaran. Butuh diskusi, penjelasan lisan, dan rekaman suara.";
+      return "Anda belajar paling baik melalui pendengaran. Anda suka mendengarkan penjelasan, diskusi, dan musik.";
     case 'KINESTETIK':
-      return "Belajar lebih baik melalui aktivitas fisik. Butuh praktik langsung, simulasi, dan jeda untuk bergerak.";
+      return "Anda belajar paling baik melalui gerakan dan sentuhan. Anda suka mempraktikkan hal-hal secara langsung.";
     default:
-      return "";
+      if (style.includes('&')) {
+        return "Anda memiliki gaya belajar campuran. Anda dapat menyesuaikan cara belajar tergantung pada situasinya.";
+      }
+      return "Gaya belajar Anda sedang dianalisis.";
   }
+};
+
+export const generateAssessmentPDF = (className: string, schoolName: string) => {
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+
+  // Header
+  doc.setFontSize(16);
+  doc.setFont('helvetica', 'bold');
+  doc.text('INSTRUMEN PEMETAAN GAYA BELAJAR (VAK)', pageWidth / 2, 20, { align: 'center' });
+  
+  doc.setFontSize(12);
+  doc.text(schoolName, pageWidth / 2, 28, { align: 'center' });
+  
+  doc.setLineWidth(0.5);
+  doc.line(20, 32, pageWidth - 20, 32);
+
+  // Student Info
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Nama Siswa : ...........................................................`, 20, 42);
+  doc.text(`Kelas             : ${className}`, 20, 48);
+  doc.text(`Tanggal         : ...........................`, 20, 54);
+
+  // Instructions
+  doc.setFont('helvetica', 'bold');
+  doc.text('Petunjuk Pengisian:', 20, 65);
+  doc.setFont('helvetica', 'normal');
+  doc.text('Pilihlah satu jawaban (A, B, atau C) yang paling sesuai dengan kebiasaanmu.', 20, 70);
+
+  // Questions Table
+  const tableData = VAK_QUESTIONS.map(q => [
+    q.id.toString(),
+    q.text,
+    `[  ] A. ${q.options[0].text}\n[  ] B. ${q.options[1].text}\n[  ] C. ${q.options[2].text}`
+  ]);
+
+  (doc as any).autoTable({
+    startY: 75,
+    head: [['No', 'Pertanyaan', 'Pilihan Jawaban']],
+    body: tableData,
+    theme: 'grid',
+    headStyles: { fillStyle: 'DF', fillColor: [79, 70, 229], textColor: [255, 255, 255] },
+    columnStyles: {
+      0: { cellWidth: 10 },
+      1: { cellWidth: 80 },
+      2: { cellWidth: 80 }
+    },
+    styles: { fontSize: 9, cellPadding: 4 }
+  });
+
+  // Footer / Scoring
+  const finalY = (doc as any).lastAutoTable.finalY + 10;
+  doc.setFont('helvetica', 'bold');
+  doc.text('Hasil Perhitungan (Diisi oleh Guru):', 20, finalY);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Jumlah Jawaban A (Visual)     : ..........`, 20, finalY + 7);
+  doc.text(`Jumlah Jawaban B (Auditori)   : ..........`, 20, finalY + 14);
+  doc.text(`Jumlah Jawaban C (Kinestetik) : ..........`, 20, finalY + 21);
+  
+  doc.save(`Instrumen_VAK_${className.replace(/\s+/g, '_')}.pdf`);
 };
