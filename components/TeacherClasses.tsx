@@ -73,7 +73,7 @@ const TeacherClasses: React.FC<TeacherClassesProps> = ({ user }) => {
     
     const newClass = await addClass(user.id, newClassName, newClassDesc);
     if (newClass) {
-      setClasses([...classes, newClass]);
+      fetchClasses();
       setIsAddClassModalOpen(false);
       setNewClassName('');
       setNewClassDesc('');
