@@ -1410,55 +1410,113 @@ export const importStudentsFromCSV = async (classId: string, csvText: string) =>
     // @ts-ignore
     triggerDebouncedSync = () => {};
 
-    for (let i = startIdx; i < lines.length; i++) {
-        const line = lines[i];
-        const row: string[] = [];
-        let current = '';
-        let inQuotes = false;
+    try {
+        const cls = await db.classes.get(classId);
+        let schoolNpsn = cls?.schoolNpsn;
+        if (!schoolNpsn || schoolNpsn === 'DEFAULT') {
+            const savedUser = localStorage.getItem('eduadmin_user');
+            const parsedUser = savedUser ? JSON.parse(savedUser) : null;
+            schoolNpsn = parsedUser?.schoolNpsn || 'DEFAULT';
+        }
 
-        for (let j = 0; j < line.length; j++) {
-            const char = line[j];
-            if (char === '"') {
-                inQuotes = !inQuotes;
-            } else if (char === ',' && !inQuotes) {
-                row.push(current);
-                current = '';
-            } else {
-                current += char;
+        // Fetch all existing students in this class once to check for duplicates in memory
+        const existingStudents = await db.students.where('classId').equals(classId).toArray();
+        const existingNisMap = new Map(existingStudents.map(s => [s.nis, s]));
+
+        const studentsToPut: Student[] = [];
+        const pushPayload: any[] = [];
+
+        for (let i = startIdx; i < lines.length; i++) {
+            const line = lines[i];
+            const row: string[] = [];
+            let current = '';
+            let inQuotes = false;
+
+            for (let j = 0; j < line.length; j++) {
+                const char = line[j];
+                if (char === '"') {
+                    inQuotes = !inQuotes;
+                } else if (char === ',' && !inQuotes) {
+                    row.push(current);
+                    current = '';
+                } else {
+                    current += char;
+                }
             }
-        }
-        row.push(current);
+            row.push(current);
 
-        const cleanParts = row.map(p => {
-            let s = p.trim();
-            if (s.startsWith('"') && s.endsWith('"')) s = s.substring(1, s.length - 1);
-            if (s.startsWith("'")) s = s.substring(1);
-            return s.trim();
-        });
-        
-        if (cleanParts.length < 2 || !cleanParts[0]) {
-            errors.push(`Baris ${i+1}: Format salah atau Nama kosong`);
-            continue;
-        }
+            const cleanParts = row.map(p => {
+                let s = p.trim();
+                if (s.startsWith('"') && s.endsWith('"')) s = s.substring(1, s.length - 1);
+                if (s.startsWith("'")) s = s.substring(1);
+                return s.trim();
+            });
+            
+            if (cleanParts.length < 2 || !cleanParts[0]) {
+                errors.push(`Baris ${i+1}: Format salah atau Nama kosong`);
+                continue;
+            }
 
-        const name = cleanParts[0];
-        const nis = cleanParts[1];
-        const genderRaw = (cleanParts[2] || 'L').toUpperCase();
-        const gender = genderRaw.startsWith('P') || genderRaw === 'PEREMPUAN' ? 'P' : 'L';
-        const phone = cleanParts[3] || '';
+            const name = cleanParts[0];
+            const nis = cleanParts[1];
+            const genderRaw = (cleanParts[2] || 'L').toUpperCase();
+            const gender: 'L' | 'P' = genderRaw.startsWith('P') || genderRaw === 'PEREMPUAN' ? 'P' : 'L';
+            const phone = cleanParts[3] || '';
 
-        try {
-            await addStudent(classId, name, nis, gender, phone);
+            const existing = existingNisMap.get(nis);
+            const now = Date.now();
+
+            if (existing) {
+                const updatedStudent = {
+                    ...existing,
+                    name,
+                    gender,
+                    phone,
+                    lastModified: now,
+                    isSynced: false
+                };
+                studentsToPut.push(updatedStudent);
+                pushPayload.push(updatedStudent);
+            } else {
+                const newStudent: Student = {
+                    id: uuidv4(),
+                    classId,
+                    schoolNpsn: schoolNpsn || 'DEFAULT',
+                    name,
+                    nis,
+                    gender,
+                    phone,
+                    lastModified: now,
+                    isSynced: false
+                };
+                studentsToPut.push(newStudent);
+                pushPayload.push(newStudent);
+            }
             count++;
-        } catch(e: any) {
-            errors.push(`Baris ${i+1}: Gagal simpan (${name}) - ${e.message}`);
         }
-    }
 
-    // Restore auto-sync and trigger once
-    // @ts-ignore
-    triggerDebouncedSync = originalTrigger;
-    triggerDebouncedSync();
+        if (studentsToPut.length > 0) {
+            // Bulk save to local DB
+            await db.students.bulkPut(studentsToPut);
+            
+            // Update class count accurately once
+            if (cls) {
+                const actualCount = await db.students.where('classId').equals(classId).count();
+                await db.classes.update(classId, { studentCount: actualCount });
+            }
+
+            // Push to Turso in one go
+            await pushToTurso('eduadmin_students', pushPayload);
+        }
+
+    } catch (e: any) {
+        errors.push(`Kesalahan sistem: ${e.message}`);
+    } finally {
+        // Restore auto-sync and trigger once
+        // @ts-ignore
+        triggerDebouncedSync = originalTrigger;
+        triggerDebouncedSync();
+    }
 
     return { success: true, count, errors };
 };
