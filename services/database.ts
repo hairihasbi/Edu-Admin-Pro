@@ -1419,8 +1419,8 @@ export const importStudentsFromCSV = async (classId: string, csvText: string) =>
             schoolNpsn = parsedUser?.schoolNpsn || 'DEFAULT';
         }
 
-        // Fetch all existing students in this class once to check for duplicates in memory
-        const existingStudents = await db.students.where('classId').equals(classId).toArray();
+        // Fetch all existing students to check for duplicates in memory (across all classes)
+        const existingStudents = await db.students.toArray();
         const existingNisMap = new Map(existingStudents.map(s => [s.nis, s]));
 
         const studentsToPut: Student[] = [];
@@ -1469,6 +1469,7 @@ export const importStudentsFromCSV = async (classId: string, csvText: string) =>
             if (existing) {
                 const updatedStudent = {
                     ...existing,
+                    classId, // Update classId if it changed during import
                     name,
                     gender,
                     phone,

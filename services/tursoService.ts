@@ -322,6 +322,22 @@ export const pullFromTurso = async (collection: string, localItems: any[]): Prom
       // and specific tables (where the row itself is the data)
       const itemData = row.data ? row.data : { ...row };
       
+      // DEDUPLICATION LOGIC FOR STUDENTS (by NIS)
+      if (collection === 'eduadmin_students' && itemData.nis) {
+          const existingRemote = Array.from(remoteMap.values()).find(r => r.data.nis === itemData.nis);
+          if (existingRemote) {
+              // Keep the one with the latest lastModified
+              const currentLastModified = itemData.lastModified || 0;
+              const existingLastModified = existingRemote.data.lastModified || 0;
+              if (currentLastModified > existingLastModified) {
+                  remoteMap.delete(existingRemote.data.id);
+                  // Continue to add the newer one
+              } else {
+                  return; // Skip this older one
+              }
+          }
+      }
+
       remoteMap.set(row.id, {
         data: itemData,
         updated_at: row.updatedAt || row.lastModified || Date.now(),
@@ -336,7 +352,22 @@ export const pullFromTurso = async (collection: string, localItems: any[]): Prom
       // FIX: Ensure ID is strictly a string to prevent type mismatch during findIndex
       const safeId = String(id);
       
-      const localIndex = mergedItems.findIndex(i => String(i.id) === safeId);
+      let localIndex = mergedItems.findIndex(i => String(i.id) === safeId);
+
+      // DEDUPLICATION LOGIC FOR STUDENTS (by NIS)
+      if (localIndex === -1 && collection === 'eduadmin_students' && remote.data.nis) {
+          const nisIndex = mergedItems.findIndex(i => i.nis === remote.data.nis);
+          if (nisIndex !== -1) {
+              // Found by NIS but different ID. 
+              // We should update the local record to match the remote ID to stay in sync.
+              // Note: This might leave orphaned records in other tables if not careful,
+              // but it's better than having duplicates.
+              console.log(`[Sync] Merging student ${remote.data.nis} (ID mismatch: local ${mergedItems[nisIndex].id} vs remote ${id})`);
+              mergedItems[nisIndex].id = id;
+              localIndex = nisIndex;
+              hasChanges = true;
+          }
+      }
       
       // FIX 1: Handle Deletion
       // If remote has deleted flag, remove it locally
