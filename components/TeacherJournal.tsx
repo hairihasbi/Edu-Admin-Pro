@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, ClassRoom, ScopeMaterial, TeachingJournal, SD_SUBJECTS_PHASE_A, SD_SUBJECTS_PHASE_BC, MATH_SUBJECT_OPTIONS } from '../types';
-import { getClasses, getScopeMaterials, getTeachingJournals, addTeachingJournal, deleteTeachingJournal, bulkDeleteTeachingJournals } from '../services/database';
-import { Plus, Save, Trash2, Filter, Printer, FileSpreadsheet, NotebookPen, CalendarDays, ChevronLeft, ChevronRight } from './Icons';
+import { User, ClassRoom, ScopeMaterial, TeachingJournal, SD_SUBJECTS_PHASE_A, SD_SUBJECTS_PHASE_BC, MATH_SUBJECT_OPTIONS, AbsentStudent, TeachingSchedule, Student } from '../types';
+import { getClasses, getScopeMaterials, getTeachingJournals, addTeachingJournal, deleteTeachingJournal, bulkDeleteTeachingJournals, getStudents, getTeachingSchedules } from '../services/database';
+import { Plus, Save, Trash2, Filter, Printer, FileSpreadsheet, NotebookPen, CalendarDays, ChevronLeft, ChevronRight, UserMinus } from './Icons';
 import Skeleton from './Skeleton';
 import * as XLSX from 'xlsx';
 
@@ -11,16 +11,119 @@ interface TeacherJournalProps {
 }
 
 const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
-  // Data States
-  const [classes, setClasses] = useState<ClassRoom[]>([]);
-  const [allMaterials, setAllMaterials] = useState<ScopeMaterial[]>([]); // For Dropdown (filtered by selected class)
-  const [materialMap, setMaterialMap] = useState<Record<string, ScopeMaterial>>({}); // For Display/Export (All materials)
-  const [journals, setJournals] = useState<TeachingJournal[]>([]);
-  
-  // NEW: Subject State Logic
+  // 1. Form & Data States (Declare these first)
+  const [formData, setFormData] = useState({
+    classId: '',
+    materialId: '',
+    learningObjective: '',
+    date: new Date().toISOString().split('T')[0],
+    meetingNo: '',
+    activities: '',
+    reflection: '',
+    followUp: '',
+    examAgenda: ''
+  });
   const [selectedSubject, setSelectedSubject] = useState<string>(user.subject || '');
   const [formSubject, setFormSubject] = useState<string>(user.subject || '');
+  
+  const [classes, setClasses] = useState<ClassRoom[]>([]);
+  const [allMaterials, setAllMaterials] = useState<ScopeMaterial[]>([]);
+  const [materialMap, setMaterialMap] = useState<Record<string, ScopeMaterial>>({});
+  const [journals, setJournals] = useState<TeachingJournal[]>([]);
+  const [classStudents, setClassStudents] = useState<Student[]>([]);
+  const [schedules, setSchedules] = useState<TeachingSchedule[]>([]);
+  const [absentStudents, setAbsentStudents] = useState<AbsentStudent[]>([]);
+  const [selectedAbsentStudentId, setSelectedAbsentStudentId] = useState('');
 
+  // 2. Filter & UI States
+  const [filterClassId, setFilterClassId] = useState('');
+  const [filterMonth, setFilterMonth] = useState(new Date().getMonth());
+  const [filterYear, setFilterYear] = useState(new Date().getFullYear());
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
+  const [loading, setLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [showPrintSettings, setShowPrintSettings] = useState(false);
+
+  const [validationData, setValidationData] = useState({
+    placeName: localStorage.getItem('journal_place_name') || '',
+    principalName: localStorage.getItem('journal_principal_name') || '',
+    principalNip: localStorage.getItem('journal_principal_nip') || '',
+    teacherName: localStorage.getItem('journal_teacher_name') || user.fullName,
+    teacherNip: localStorage.getItem('journal_teacher_nip') || user.nip || ''
+  });
+
+  const getDayName = (dateStr: string) => {
+    const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+    return days[new Date(dateStr).getDay()];
+  };
+
+  // 3. Effects
+
+  // Fetch Students for Absentee List
+  useEffect(() => {
+    if (formData.classId) {
+      getStudents(formData.classId).then(setClassStudents);
+      setAbsentStudents([]); // Reset absent list when class changes
+    } else {
+      setClassStudents([]);
+      setAbsentStudents([]);
+    }
+  }, [formData.classId]);
+
+  // Fetch Schedules for Jam Ke (Range)
+  useEffect(() => {
+    const fetchSchedules = async () => {
+      if (user.id && user.schoolNpsn) {
+        const allSchedules = await getTeachingSchedules(user.id, user.schoolNpsn);
+        setSchedules(allSchedules);
+      }
+    };
+    fetchSchedules();
+  }, [user.id, user.schoolNpsn]);
+
+  // Auto-populate Jam Ke (Range) based on Class, Date, and Subject
+  useEffect(() => {
+    if (formData.classId && formData.date && formSubject && schedules.length > 0) {
+      const dayName = getDayName(formData.date);
+      const cls = classes.find(c => c.id === formData.classId);
+      
+      const now = new Date();
+      const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      const isToday = formData.date === now.toISOString().split('T')[0];
+
+      let matchingSchedule;
+      
+      if (isToday) {
+        // Try to find schedule matching current time
+        matchingSchedule = schedules.find(s => 
+          s.className === cls?.name &&
+          s.day === dayName &&
+          s.subject === formSubject &&
+          currentTime >= (s.timeStart || '00:00') &&
+          currentTime <= (s.timeEnd || '23:59')
+        );
+      }
+
+      // Fallback to first match for the day if no time match or not today
+      if (!matchingSchedule) {
+        matchingSchedule = schedules.find(s => 
+          s.className === cls?.name &&
+          s.day === dayName &&
+          s.subject === formSubject
+        );
+      }
+
+      if (matchingSchedule) {
+        const range = matchingSchedule.meetingNoEnd 
+          ? `${matchingSchedule.meetingNo}-${matchingSchedule.meetingNoEnd}`
+          : `${matchingSchedule.meetingNo}`;
+        setFormData(prev => ({ ...prev, meetingNo: range }));
+      }
+    }
+  }, [formData.classId, formData.date, formSubject, schedules, classes]);
+  
   // Initialize Subject based on Teacher Type
   useEffect(() => {
     if (user.isMultiSubject && user.subjects && user.subjects.length > 0) {
@@ -51,43 +154,6 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
       setFormSubject(user.subject || '');
     }
   }, [user, user.teacherType, user.phase, user.isMultiSubject, user.subjects, user.secondarySubject]);
-
-  // Form States
-  const [formData, setFormData] = useState({
-    classId: '',
-    materialId: '',
-    learningObjective: '',
-    date: new Date().toISOString().split('T')[0],
-    meetingNo: '',
-    activities: '',
-    reflection: '',
-    followUp: '',
-    examAgenda: ''
-  });
-
-  // Filter List States
-  const [filterClassId, setFilterClassId] = useState('');
-  const [filterMonth, setFilterMonth] = useState(new Date().getMonth());
-  const [filterYear, setFilterYear] = useState(new Date().getFullYear());
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-
-  // Pagination State
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 5;
-
-  // UI States
-  const [loading, setLoading] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [showPrintSettings, setShowPrintSettings] = useState(false);
-
-  // NEW: Validation Data for Print
-  const [validationData, setValidationData] = useState({
-    placeName: localStorage.getItem('journal_place_name') || '',
-    principalName: localStorage.getItem('journal_principal_name') || '',
-    principalNip: localStorage.getItem('journal_principal_nip') || '',
-    teacherName: localStorage.getItem('journal_teacher_name') || user.fullName,
-    teacherNip: localStorage.getItem('journal_teacher_nip') || user.nip || ''
-  });
 
   // Persist validation data
   useEffect(() => {
@@ -201,7 +267,8 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
     const newJournal = await addTeachingJournal({
       ...formData,
       userId: user.id,
-      subject: formSubject
+      subject: formSubject,
+      absentStudents: JSON.stringify(absentStudents)
     });
 
     if (newJournal) {
@@ -211,12 +278,12 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
         ...prev,
         materialId: '',
         learningObjective: '',
-        meetingNo: (parseInt(prev.meetingNo || '0') + 1).toString(), // Auto increment meeting no
         activities: '',
         reflection: '',
         followUp: '',
         examAgenda: ''
       }));
+      setAbsentStudents([]);
       alert('Jurnal berhasil disimpan!');
     } else {
       alert('Gagal menyimpan jurnal.');
@@ -296,6 +363,10 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
       // FIX: Resolve Material ID to Text (Code + Content)
       const materialText = j.examAgenda ? `[AGENDA: ${j.examAgenda}]` : (mat ? `[${mat.code}] ${mat.content}` : j.materialId);
 
+      const absents: AbsentStudent[] = j.absentStudents ? JSON.parse(j.absentStudents) : [];
+      const statusMap = { S: 'Sakit', I: 'Ijin', A: 'Alfa' };
+      const absentText = absents.map(a => `${a.name} (${statusMap[a.status] || a.status})`).join(', ') || '-';
+
       return {
         no: idx + 1,
         className: cls?.name || '-',
@@ -304,6 +375,7 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
         lm: materialText, 
         tp: j.examAgenda ? '-' : j.learningObjective,
         activity: j.activities,
+        absent: absentText,
         reflection: j.reflection || '-',
         followUp: j.followUp || '-'
       };
@@ -312,7 +384,7 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
 
   const exportToExcel = () => {
     const data = getExportData();
-    const headers = ['No', 'Kelas', 'Tanggal', 'Pertemuan Ke', 'Lingkup Materi', 'Tujuan Pembelajaran', 'Kegiatan', 'Refleksi', 'Tindak Lanjut'];
+    const headers = ['No', 'Kelas', 'Tanggal', 'Jam Ke', 'Lingkup Materi', 'Tujuan Pembelajaran', 'Kegiatan', 'Ketidakhadiran', 'Refleksi', 'Tindak Lanjut'];
     const rows = data.map(d => Object.values(d));
     
     const ws = XLSX.utils.aoa_to_sheet([
@@ -341,6 +413,7 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
         <td>${d.lm}</td>
         <td>${d.tp}</td>
         <td>${d.activity}</td>
+        <td>${d.absent}</td>
         <td>${d.reflection}</td>
         <td>${d.followUp}</td>
       </tr>
@@ -378,10 +451,11 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
               <tr>
                 <th width="30">No</th>
                 <th width="80">Tanggal</th>
-                <th width="40">Ke-</th>
+                <th width="40">Jam Ke</th>
                 <th width="150">Lingkup Materi</th>
                 <th>Tujuan Pembelajaran</th>
                 <th>Kegiatan Pembelajaran</th>
+                <th>Ketidakhadiran</th>
                 <th>Refleksi</th>
                 <th>Tindak Lanjut</th>
               </tr>
@@ -546,13 +620,13 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
                   </div>
                </div>
                <div>
-                  <label className="block text-sm font-semibold text-blue-700 mb-1">Pertemuan Ke- *</label>
+                  <label className="block text-sm font-semibold text-blue-700 mb-1">Jam Ke (Range) *</label>
                   <input 
-                     type="number"
+                     type="text"
                      name="meetingNo"
                      value={formData.meetingNo}
                      onChange={handleInputChange}
-                     placeholder="Contoh: 1"
+                     placeholder="Contoh: 1-2 atau 3"
                      className="w-full border border-gray-300 rounded-lg p-2.5 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition disabled:opacity-50 disabled:bg-gray-200"
                      required={!formData.examAgenda}
                      disabled={!!formData.examAgenda}
@@ -600,6 +674,96 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
                   className="w-full border border-gray-300 rounded-lg p-3 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition resize-none disabled:opacity-50 disabled:bg-gray-200"
                   disabled={!!formData.examAgenda}
                />
+            </div>
+
+            {/* Section: Siswa Tidak Hadir */}
+            <div className="border-t border-gray-100 pt-6">
+               <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2 mb-4">
+                  <UserMinus className="text-red-500" />
+                  Siswa Tidak Hadir
+               </h3>
+               
+               <div className="flex flex-col md:flex-row gap-4 mb-4">
+                  <div className="flex-1">
+                     <label className="block text-sm font-semibold text-blue-700 mb-1">Pilih Siswa</label>
+                     <select 
+                        value={selectedAbsentStudentId}
+                        onChange={(e) => setSelectedAbsentStudentId(e.target.value)}
+                        className="w-full border border-gray-300 rounded-lg p-2.5 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition"
+                        disabled={!formData.classId}
+                     >
+                        <option value="">-- Pilih Nama Siswa --</option>
+                        {classStudents
+                           .filter(s => !absentStudents.find(as => as.studentId === s.id))
+                           .map(s => <option key={s.id} value={s.id}>{s.name}</option>)
+                        }
+                     </select>
+                  </div>
+                  <div className="flex items-end">
+                     <button 
+                        type="button"
+                        onClick={() => {
+                           if (!selectedAbsentStudentId) return;
+                           const student = classStudents.find(s => s.id === selectedAbsentStudentId);
+                           if (student) {
+                              setAbsentStudents([...absentStudents, { studentId: student.id, name: student.name, status: 'A' }]);
+                              setSelectedAbsentStudentId('');
+                           }
+                        }}
+                        className="px-6 py-2.5 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition flex items-center gap-2"
+                        disabled={!selectedAbsentStudentId}
+                     >
+                        <Plus size={18} />
+                        Tambah
+                     </button>
+                  </div>
+               </div>
+
+               {absentStudents.length > 0 && (
+                  <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                     <table className="w-full text-sm text-left">
+                        <thead className="bg-gray-50 text-gray-700 uppercase text-xs">
+                           <tr>
+                              <th className="px-4 py-3 w-16">No</th>
+                              <th className="px-4 py-3">Nama Siswa</th>
+                              <th className="px-4 py-3 w-40">Keterangan</th>
+                              <th className="px-4 py-3 w-16">Aksi</th>
+                           </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                           {absentStudents.map((s, idx) => (
+                              <tr key={s.studentId}>
+                                 <td className="px-4 py-3 text-center">{idx + 1}</td>
+                                 <td className="px-4 py-3 font-medium text-gray-900">{s.name}</td>
+                                 <td className="px-4 py-3">
+                                    <select 
+                                       value={s.status}
+                                       onChange={(e) => {
+                                          const newStatus = e.target.value as 'S' | 'I' | 'A';
+                                          setAbsentStudents(absentStudents.map(as => as.studentId === s.studentId ? { ...as, status: newStatus } : as));
+                                       }}
+                                       className="w-full border border-gray-300 rounded-md p-1.5 focus:ring-2 focus:ring-blue-500 outline-none"
+                                    >
+                                       <option value="S">Sakit</option>
+                                       <option value="I">Ijin</option>
+                                       <option value="A">Alfa</option>
+                                    </select>
+                                 </td>
+                                 <td className="px-4 py-3 text-center">
+                                    <button 
+                                       type="button"
+                                       onClick={() => setAbsentStudents(absentStudents.filter(as => as.studentId !== s.studentId))}
+                                       className="text-red-500 hover:text-red-700 transition"
+                                    >
+                                       <Trash2 size={18} />
+                                    </button>
+                                 </td>
+                              </tr>
+                           ))}
+                        </tbody>
+                     </table>
+                  </div>
+               )}
             </div>
 
             <div className="flex justify-end pt-4 border-t border-gray-100">
@@ -837,7 +1001,7 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
                               />
                            </th>
                            <th className="p-4 w-32">Tanggal</th>
-                           <th className="p-4 w-20 text-center">Ke-</th>
+                           <th className="p-4 w-20 text-center">Jam Ke</th>
                            <th className="p-4 w-48">Kelas / Materi</th>
                            <th className="p-4 min-w-[300px]">Kegiatan Pembelajaran</th>
                            <th className="p-4 w-20 text-center">Aksi</th>
@@ -864,7 +1028,7 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
                                  </td>
                                  <td className="p-4 align-top text-center">
                                     <span className={`inline-block px-2 py-1 rounded-md text-xs font-bold ${journal.examAgenda ? 'bg-gray-100 text-gray-500' : 'bg-blue-100 text-blue-700'}`}>
-                                       {journal.examAgenda ? '-' : `#${journal.meetingNo}`}
+                                       {journal.examAgenda ? '-' : journal.meetingNo}
                                     </span>
                                  </td>
                                  <td className="p-4 align-top">
@@ -884,6 +1048,14 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
                                        <span className="text-xs font-semibold text-green-600 uppercase tracking-wide">Kegiatan:</span>
                                        <p className="text-gray-600 whitespace-pre-line text-xs">{journal.activities}</p>
                                     </div>
+                                    {journal.absentStudents && (
+                                       <div className="mt-2 bg-red-50 p-2 rounded border border-red-100">
+                                          <span className="text-[10px] font-bold text-red-700 uppercase">Siswa Tidak Hadir</span>
+                                          <p className="text-[10px] text-red-800">
+                                             {JSON.parse(journal.absentStudents).map((as: any) => `${as.name} (${as.status})`).join(', ')}
+                                          </p>
+                                       </div>
+                                    )}
                                     {(journal.reflection || journal.followUp) && (
                                        <div className="grid grid-cols-2 gap-4 mt-2">
                                           {journal.reflection && (
@@ -927,7 +1099,7 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
                                 <div className="flex justify-between items-start">
                                     <div>
                                         <span className={`text-xs font-bold px-2 py-1 rounded ${journal.examAgenda ? 'bg-orange-100 text-orange-700' : 'bg-blue-50 text-blue-600'}`}>
-                                            {journal.examAgenda ? journal.examAgenda : `Pertemuan #${journal.meetingNo}`}
+                                            {journal.examAgenda ? journal.examAgenda : `Jam #${journal.meetingNo}`}
                                         </span>
                                         <h3 className="font-bold text-gray-800 mt-2">{cls?.name || 'Unknown Class'}</h3>
                                         <p className="text-xs text-gray-500">{new Date(journal.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
@@ -951,6 +1123,14 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
                                     <p className="font-semibold text-xs text-gray-500 uppercase mb-1">Kegiatan</p>
                                     <p className="text-sm text-gray-600 line-clamp-3">{journal.activities}</p>
                                 </div>
+                                {journal.absentStudents && (
+                                    <div className="mt-2 bg-red-50 p-2 rounded border border-red-100">
+                                        <p className="font-semibold text-[10px] text-red-700 uppercase mb-1">Tidak Hadir</p>
+                                        <p className="text-[10px] text-red-800">
+                                            {JSON.parse(journal.absentStudents).map((as: any) => `${as.name} (${as.status})`).join(', ')}
+                                        </p>
+                                    </div>
+                                )}
                             </div>
                         );
                     })}
