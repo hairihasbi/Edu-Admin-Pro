@@ -16,6 +16,20 @@ const getCurrentUserId = (): string | null => {
     return null;
 };
 
+// Helper to get current User NPSN from LocalStorage
+const getCurrentUserNpsn = (): string | null => {
+    try {
+        const userStr = localStorage.getItem('eduadmin_user');
+        if (userStr) {
+            const user = JSON.parse(userStr);
+            return user.schoolNpsn || null;
+        }
+    } catch {
+        // Ignore JSON errors
+    }
+    return null;
+};
+
 // Helper to get Authorization Header
 const getAuthHeader = () => {
     const userId = getCurrentUserId();
@@ -292,7 +306,8 @@ export const pullFromTurso = async (collection: string, localItems: any[]): Prom
           body: JSON.stringify({ 
               action: 'pull', 
               collection,
-              userId: getCurrentUserId()
+              userId: getCurrentUserId(),
+              schoolNpsn: getCurrentUserNpsn()
           })
         });
         // 401 handled inside handleApiResponse
