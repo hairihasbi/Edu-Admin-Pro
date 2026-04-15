@@ -1356,10 +1356,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
             if (isStaff) {
                 const userRes = await client.execute({ sql: "SELECT school_npsn, additional_role FROM users WHERE id = ?", args: [userId] });
-                const userNpsn = userRes.rows[0]?.school_npsn || null; 
+                let userNpsn = userRes.rows[0]?.school_npsn || null; 
                 const additionalRole = userRes.rows[0]?.additional_role || null;
                 const isWakasek = additionalRole === 'WAKASEK_KURIKULUM';
                 
+                // Fallback to NPSN from request if DB record is missing it
+                if ((!userNpsn || userNpsn === 'DEFAULT') && req.body.schoolNpsn && req.body.schoolNpsn !== 'DEFAULT') {
+                    userNpsn = req.body.schoolNpsn;
+                    console.log(`[API] Using fallback NPSN ${userNpsn} from request for user ${userId}`);
+                    
+                    // Optional: Update the user record in DB to fix it for future requests
+                    client.execute({ 
+                        sql: "UPDATE users SET school_npsn = ?, last_modified = ? WHERE id = ?", 
+                        args: [userNpsn, Date.now(), userId] 
+                    }).catch(err => console.error("Failed to auto-fix user NPSN:", err));
+                }
+
                 if (!userNpsn) {
                     // Fallback: if user is Guru but NPSN is missing in Turso, 
                     // they might need to push their profile first.
