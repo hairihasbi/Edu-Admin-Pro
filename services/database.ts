@@ -472,6 +472,7 @@ let isSyncRunning = false;
 let syncStartTime = 0;
 let lastSyncTime = 0;
 let syncDebounceTimer: any = null;
+let isSyncDisabled = false;
 
 export const resetSyncLock = () => {
     isSyncRunning = false;
@@ -479,6 +480,7 @@ export const resetSyncLock = () => {
 };
 
 export const triggerDebouncedSync = () => {
+    if (isSyncDisabled) return;
     if (syncDebounceTimer) clearTimeout(syncDebounceTimer);
     syncDebounceTimer = setTimeout(() => {
         console.log("[Debounce] Triggering auto-sync...");
@@ -1406,9 +1408,7 @@ export const importStudentsFromCSV = async (classId: string, csvText: string) =>
     const startIdx = lines[0].toLowerCase().includes('nama') ? 1 : 0;
 
     // Disable auto-sync during bulk import
-    const originalTrigger = triggerDebouncedSync;
-    // @ts-ignore
-    triggerDebouncedSync = () => {};
+    isSyncDisabled = true;
 
     try {
         const cls = await db.classes.get(classId);
@@ -1513,8 +1513,7 @@ export const importStudentsFromCSV = async (classId: string, csvText: string) =>
         errors.push(`Kesalahan sistem: ${e.message}`);
     } finally {
         // Restore auto-sync and trigger once
-        // @ts-ignore
-        triggerDebouncedSync = originalTrigger;
+        isSyncDisabled = false;
         triggerDebouncedSync();
     }
 
