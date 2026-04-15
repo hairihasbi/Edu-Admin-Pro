@@ -84,6 +84,7 @@ const DB_SCHEMAS = [
     )`,
     `CREATE INDEX IF NOT EXISTS idx_students_class ON students(class_id)`,
     `CREATE INDEX IF NOT EXISTS idx_students_npsn ON students(school_npsn)`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_students_nis_npsn ON students(school_npsn, nis)`,
 
     // 5. ACADEMIC: SCORES (NILAI)
     `CREATE TABLE IF NOT EXISTS scores (
