@@ -141,11 +141,40 @@ const TeacherClasses: React.FC<TeacherClassesProps> = ({ user }) => {
   const handleBulkDelete = async () => {
     if (selectedStudentIds.size === 0) return;
     if (window.confirm(`Yakin ingin menghapus ${selectedStudentIds.size} siswa terpilih?`)) {
-      await bulkDeleteStudents(Array.from(selectedStudentIds));
-      setStudents(students.filter(s => !selectedStudentIds.has(s.id)));
-      // Update count roughly
-      setClasses(classes.map(c => c.id === selectedClass?.id ? { ...c, studentCount: Math.max(0, c.studentCount - selectedStudentIds.size) } : c));
-      setSelectedStudentIds(new Set());
+      try {
+        await bulkDeleteStudents(Array.from(selectedStudentIds));
+        const updatedStudents = students.filter(s => !selectedStudentIds.has(s.id));
+        setStudents(updatedStudents);
+        
+        // Update class count locally
+        if (selectedClass) {
+          setClasses(classes.map(c => c.id === selectedClass.id ? { ...c, studentCount: updatedStudents.length } : c));
+        }
+        
+        setSelectedStudentIds(new Set());
+      } catch (e: any) {
+        console.error("Gagal menghapus siswa:", e);
+      }
+    }
+  };
+
+  const handleDeleteAll = async () => {
+    if (students.length === 0) return;
+    if (window.confirm(`PERINGATAN: Hapus SEMUA (${students.length}) siswa di kelas ini? Tindakan ini tidak dapat dibatalkan.`)) {
+      try {
+        const allIds = students.map(s => s.id);
+        await bulkDeleteStudents(allIds);
+        setStudents([]);
+        
+        // Update class count locally
+        if (selectedClass) {
+          setClasses(classes.map(c => c.id === selectedClass.id ? { ...c, studentCount: 0 } : c));
+        }
+        
+        setSelectedStudentIds(new Set());
+      } catch (e: any) {
+        console.error("Gagal menghapus semua siswa:", e);
+      }
     }
   };
 
@@ -365,13 +394,22 @@ const TeacherClasses: React.FC<TeacherClassesProps> = ({ user }) => {
         </div>
         
         <div className="flex items-center gap-2 overflow-x-auto pb-2 md:pb-0 scrollbar-hide">
-           {selectedStudentIds.size > 0 && (
+           {selectedStudentIds.size > 0 ? (
              <button 
                onClick={handleBulkDelete}
                className="flex-shrink-0 flex items-center gap-2 bg-red-50 text-red-600 px-4 py-2 rounded-lg font-medium text-sm hover:bg-red-100 transition mr-2"
              >
                <Trash2 size={16} /> Hapus ({selectedStudentIds.size})
              </button>
+           ) : (
+             students.length > 0 && (
+               <button 
+                 onClick={handleDeleteAll}
+                 className="flex-shrink-0 flex items-center gap-2 bg-red-50 text-red-600 px-4 py-2 rounded-lg font-medium text-sm hover:bg-red-100 transition mr-2"
+               >
+                 <Trash2 size={16} /> Hapus Semua
+               </button>
+             )
            )}
            
            <div className="flex-shrink-0 flex gap-2">
