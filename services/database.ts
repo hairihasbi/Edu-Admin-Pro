@@ -285,6 +285,16 @@ export const getClasses = async (userId: string, schoolNpsn?: string) => {
     } else {
         results = await db.classes.where('userId').equals(userId).toArray();
     }
+
+    // FIX: Self-healing studentCount to prevent "68 vs 34" inconsistency
+    for (const cls of results) {
+        const actualCount = await db.students.where('classId').equals(cls.id).count();
+        if (cls.studentCount !== actualCount) {
+            await db.classes.update(cls.id, { studentCount: actualCount });
+            cls.studentCount = actualCount;
+        }
+    }
+
     return results.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
 };
 
@@ -1233,12 +1243,28 @@ export const getIncidentsByDateRange = async (startDate: string, endDate: string
 export const addStudent = async (classId: string, name: string, nis: string, gender: 'L'|'P', phone?: string) => {
     const cls = await db.classes.get(classId);
     
+    // Check for existing student with same NIS in this class
+    const existing = await db.students.where({ classId, nis }).first();
+    
     // Fallback for NPSN
     let schoolNpsn = cls?.schoolNpsn;
     if (!schoolNpsn || schoolNpsn === 'DEFAULT') {
         const savedUser = localStorage.getItem('eduadmin_user');
         const parsedUser = savedUser ? JSON.parse(savedUser) : null;
         schoolNpsn = parsedUser?.schoolNpsn || 'DEFAULT';
+    }
+
+    if (existing) {
+        // Update existing student
+        await db.students.update(existing.id, {
+            name,
+            gender,
+            phone,
+            lastModified: Date.now(),
+            isSynced: false
+        });
+        triggerDebouncedSync();
+        return existing;
     }
 
     const item: Student = {
@@ -1254,13 +1280,10 @@ export const addStudent = async (classId: string, name: string, nis: string, gen
     };
     await db.students.add(item);
     
-    // Update student count in class
+    // Update student count in class accurately
     if (cls) {
-        await db.classes.update(classId, { 
-            studentCount: (cls.studentCount || 0) + 1,
-            lastModified: Date.now(),
-            isSynced: false
-        });
+        const actualCount = await db.students.where('classId').equals(classId).count();
+        await db.classes.update(classId, { studentCount: actualCount });
     }
     
     triggerDebouncedSync();
@@ -1272,13 +1295,36 @@ export const deleteStudent = async (id: string) => {
     if (s) {
         await db.students.delete(id);
         const cls = await db.classes.get(s.classId);
-        if (cls) await db.classes.update(s.classId, { studentCount: Math.max(0, (cls.studentCount || 0) - 1) });
+        if (cls) {
+            const actualCount = await db.students.where('classId').equals(s.classId).count();
+            await db.classes.update(s.classId, { studentCount: actualCount });
+        }
+        // Push deletion to Turso
         pushToTurso('eduadmin_students', [{id, deleted: true}]);
     }
 };
 
 export const bulkDeleteStudents = async (ids: string[]) => {
-    for (const id of ids) await deleteStudent(id);
+    if (ids.length === 0) return;
+    
+    // Get class IDs involved to update counts later
+    const studentsToDelete = await db.students.where('id').anyOf(ids).toArray();
+    const classIds = new Set(studentsToDelete.map(s => s.classId));
+
+    // Delete locally
+    await db.students.bulkDelete(ids);
+    
+    // Update class counts
+    for (const classId of classIds) {
+        const actualCount = await db.students.where('classId').equals(classId).count();
+        await db.classes.update(classId, { studentCount: actualCount });
+    }
+
+    // Push all deletions to Turso in one batch
+    const deletePayload = ids.map(id => ({ id, deleted: true }));
+    await pushToTurso('eduadmin_students', deletePayload);
+    
+    triggerDebouncedSync();
 };
 
 export const getAllStudentsWithDetails = async () => {
@@ -1359,6 +1405,11 @@ export const importStudentsFromCSV = async (classId: string, csvText: string) =>
 
     const startIdx = lines[0].toLowerCase().includes('nama') ? 1 : 0;
 
+    // Disable auto-sync during bulk import
+    const originalTrigger = triggerDebouncedSync;
+    // @ts-ignore
+    triggerDebouncedSync = () => {};
+
     for (let i = startIdx; i < lines.length; i++) {
         const line = lines[i];
         const row: string[] = [];
@@ -1378,12 +1429,9 @@ export const importStudentsFromCSV = async (classId: string, csvText: string) =>
         }
         row.push(current);
 
-        // Clean up: remove surrounding quotes and leading single quotes (Excel text prefix)
         const cleanParts = row.map(p => {
             let s = p.trim();
-            // Remove surrounding double quotes
             if (s.startsWith('"') && s.endsWith('"')) s = s.substring(1, s.length - 1);
-            // Remove leading single quote (often used in Excel to force text format)
             if (s.startsWith("'")) s = s.substring(1);
             return s.trim();
         });
@@ -1406,6 +1454,12 @@ export const importStudentsFromCSV = async (classId: string, csvText: string) =>
             errors.push(`Baris ${i+1}: Gagal simpan (${name}) - ${e.message}`);
         }
     }
+
+    // Restore auto-sync and trigger once
+    // @ts-ignore
+    triggerDebouncedSync = originalTrigger;
+    triggerDebouncedSync();
+
     return { success: true, count, errors };
 };
 
