@@ -103,6 +103,23 @@ const SyncPage: React.FC<SyncPageProps> = ({ user }) => {
         </button>
       </div>
 
+      {/* School Info Verification */}
+      <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+            <div className="p-2 bg-white rounded-lg text-blue-600 shadow-sm">
+                <Database size={18} />
+            </div>
+            <div>
+                <p className="text-[10px] font-bold text-blue-400 uppercase tracking-wider">Afiliasi Sekolah</p>
+                <h3 className="text-sm font-bold text-blue-800">{user.schoolName || 'Belum Diatur'}</h3>
+                <p className="text-xs text-blue-600">NPSN: <span className="font-mono font-bold">{user.schoolNpsn || 'DEFAULT'}</span></p>
+            </div>
+        </div>
+        <div className="text-right">
+            <p className="text-[10px] text-blue-400 italic">Pastikan NPSN sama antar guru<br/>agar data tersinkronisasi.</p>
+        </div>
+      </div>
+
       {/* Status Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
          {/* Connection Status */}
