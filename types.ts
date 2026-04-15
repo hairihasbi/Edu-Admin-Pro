@@ -7,7 +7,7 @@ export enum UserRole {
 
 export type UserStatus = 'ACTIVE' | 'PENDING' | 'REJECTED';
 
-// Base interface for syncable items
+// Base interface for syncable items 
 export interface Syncable {
   lastModified?: number; // Timestamp
   isSynced?: boolean;
@@ -183,6 +183,12 @@ export interface AssessmentScore extends Syncable {
   scoreDetails?: Record<string, number>; // NEW: Store sub-scores e.g. {"Tugas": 80, "Praktik": 90}
 }
 
+export interface AbsentStudent {
+  studentId: string;
+  name: string;
+  status: 'S' | 'I' | 'A'; // Sakit, Ijin, Alfa
+}
+
 export interface TeachingJournal extends Syncable {
   id: string;
   userId: string;
@@ -196,6 +202,7 @@ export interface TeachingJournal extends Syncable {
   reflection?: string;
   followUp?: string;
   examAgenda?: string; // NEW: Exam Agenda
+  absentStudents?: string; // JSON string of AbsentStudent[]
 }
 
 export interface TeachingSchedule extends Syncable {
