@@ -1390,13 +1390,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                         whereClauses.push("user_id = ?"); args = [userId];
                     }
                 }
-                else if (['scores','schedules','materials','learning_style_assessments'].includes(tableConfig.table)) { 
+                else if (['scores','schedules','materials','inventory','home_visits','parent_calls','teacher_calendar'].includes(tableConfig.table)) { 
                     if (userNpsn && userNpsn !== 'DEFAULT') {
                         whereClauses.push("(user_id = ? OR user_id IN (SELECT id FROM users WHERE school_npsn = ?))"); 
                         args = [userId, userNpsn];
                     } else {
                         whereClauses.push("user_id = ?"); args = [userId]; 
                     }
+                }
+                else if (['tickets','donations','password_resets','wa_configs'].includes(tableConfig.table)) {
+                    whereClauses.push("user_id = ?"); args = [userId];
+                }
+                else if (tableConfig.table === 'learning_style_assessments') {
+                    if (userNpsn && userNpsn !== 'DEFAULT') {
+                        whereClauses.push("(teacher_id = ? OR teacher_id IN (SELECT id FROM users WHERE school_npsn = ?))"); 
+                        args = [userId, userNpsn];
+                    } else {
+                        whereClauses.push("teacher_id = ?"); args = [userId]; 
+                    }
+                }
+                else if (['bk_violations', 'bk_reductions', 'bk_achievements', 'bk_counseling'].includes(tableConfig.table)) {
+                    if (userNpsn && userNpsn !== 'DEFAULT') {
+                        whereClauses.push("student_id IN (SELECT id FROM students WHERE school_npsn = ?)");
+                        args = [userNpsn];
+                    }
+                }
+                else if (tableConfig.table === 'notifications') {
+                    whereClauses.push("(target_role = ? OR target_role = 'ALL')");
+                    args = [currentUser?.role || 'GURU'];
                 }
                 else if (tableConfig.table === 'students') { 
                     if (userNpsn && userNpsn !== 'DEFAULT') {
