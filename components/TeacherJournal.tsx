@@ -6,6 +6,8 @@ import { Plus, Save, Trash2, Filter, Printer, FileSpreadsheet, NotebookPen, Cale
 import Skeleton from './Skeleton';
 import * as XLSX from 'xlsx';
 
+const ABSENT_STATUS_MAP: Record<string, string> = { S: 'Sakit', I: 'Ijin', A: 'Alfa' };
+
 interface TeacherJournalProps {
   user: User;
 }
@@ -364,8 +366,7 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
       const materialText = j.examAgenda ? `[AGENDA: ${j.examAgenda}]` : (mat ? `[${mat.code}] ${mat.content}` : j.materialId);
 
       const absents: AbsentStudent[] = j.absentStudents ? JSON.parse(j.absentStudents) : [];
-      const statusMap = { S: 'Sakit', I: 'Ijin', A: 'Alfa' };
-      const absentText = absents.map(a => `${a.name} (${statusMap[a.status] || a.status})`).join(', ') || '-';
+      const absentText = absents.map(a => `${a.name} (${ABSENT_STATUS_MAP[a.status] || a.status})`).join(', ') || '-';
 
       return {
         no: idx + 1,
@@ -1052,7 +1053,7 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
                                        <div className="mt-2 bg-red-50 p-2 rounded border border-red-100">
                                           <span className="text-[10px] font-bold text-red-700 uppercase">Siswa Tidak Hadir</span>
                                           <p className="text-[10px] text-red-800">
-                                             {JSON.parse(journal.absentStudents).map((as: any) => `${as.name} (${as.status})`).join(', ')}
+                                             {JSON.parse(journal.absentStudents).map((as: any) => `${as.name} (${ABSENT_STATUS_MAP[as.status] || as.status})`).join(', ')}
                                           </p>
                                        </div>
                                     )}
@@ -1127,7 +1128,7 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
                                     <div className="mt-2 bg-red-50 p-2 rounded border border-red-100">
                                         <p className="font-semibold text-[10px] text-red-700 uppercase mb-1">Tidak Hadir</p>
                                         <p className="text-[10px] text-red-800">
-                                            {JSON.parse(journal.absentStudents).map((as: any) => `${as.name} (${as.status})`).join(', ')}
+                                            {JSON.parse(journal.absentStudents).map((as: any) => `${as.name} (${ABSENT_STATUS_MAP[as.status] || as.status})`).join(', ')}
                                         </p>
                                     </div>
                                 )}
