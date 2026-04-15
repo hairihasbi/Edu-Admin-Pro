@@ -1422,8 +1422,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 }
                 else if (tableConfig.table === 'students') { 
                     if (userNpsn && userNpsn !== 'DEFAULT') {
-                        whereClauses.push("(school_npsn = ? OR class_id IN (SELECT id FROM classes WHERE school_npsn = ? OR user_id IN (SELECT id FROM users WHERE school_npsn = ?)))"); 
-                        args = [userNpsn, userNpsn, userNpsn]; 
+                        // Pull students where NPSN matches OR class belongs to school/teacher in school
+                        whereClauses.push("(school_npsn = ? OR class_id IN (SELECT id FROM classes WHERE school_npsn = ? OR user_id = ? OR user_id IN (SELECT id FROM users WHERE school_npsn = ?)))"); 
+                        args = [userNpsn, userNpsn, userId, userNpsn]; 
                     } else {
                         // If no NPSN, fallback to user's classes
                         whereClauses.push("class_id IN (SELECT id FROM classes WHERE user_id = ?)");
@@ -1431,12 +1432,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     }
                 }
                 else if (tableConfig.table === 'attendance') { 
-                    if (isWakasek && userNpsn && userNpsn !== 'DEFAULT') {
-                        whereClauses.push("user_id IN (SELECT id FROM users WHERE school_npsn = ?)"); 
-                        args = [userNpsn];
-                    } else if (userNpsn && userNpsn !== 'DEFAULT') {
-                        whereClauses.push("((visibility = 'SHARED' AND class_id IN (SELECT id FROM classes WHERE school_npsn = ?)) OR (user_id = ?))"); 
-                        args = [userNpsn, userId]; 
+                    // All teachers in same school should see attendance for picket/shared features
+                    if (userNpsn && userNpsn !== 'DEFAULT') {
+                        whereClauses.push("(user_id IN (SELECT id FROM users WHERE school_npsn = ?) OR class_id IN (SELECT id FROM classes WHERE school_npsn = ?))"); 
+                        args = [userNpsn, userNpsn];
                     } else {
                         whereClauses.push("user_id = ?"); args = [userId];
                     }
