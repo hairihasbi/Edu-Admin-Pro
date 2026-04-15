@@ -1711,16 +1711,15 @@ export const bulkDeleteTeachingJournals = async (ids: string[]) => {
 
 // --- SCHEDULES ---
 export const getTeachingSchedules = async (userId: string, schoolNpsn?: string) => {
+    // FIX: Only show schedule for the specific teacher as requested
+    // even if schoolNpsn is provided, we filter by userId to ensure privacy on dashboard
+    let collection = db.teachingSchedules.where('userId').equals(userId);
+    
     if (schoolNpsn && schoolNpsn !== 'DEFAULT') {
-        // Get all teacher IDs in this school
-        const schoolUserIds = (await db.users.where('schoolNpsn').equals(schoolNpsn).toArray()).map(u => u.id);
-        return await db.teachingSchedules.filter(s => 
-            s.schoolNpsn === schoolNpsn || 
-            schoolUserIds.includes(s.userId) ||
-            s.userId === userId
-        ).toArray();
+        collection = collection.filter(s => s.schoolNpsn === schoolNpsn);
     }
-    return await db.teachingSchedules.where('userId').equals(userId).toArray();
+    
+    return await collection.toArray();
 };
 
 export const getSchoolSchedules = async (schoolNpsn: string) => {
