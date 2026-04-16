@@ -2070,6 +2070,13 @@ export const saveSupervisionAssignment = async (assignment: Omit<SupervisionAssi
 };
 
 export const deleteSupervisionAssignment = async (id: string) => {
+    // Cascade delete results associated with this assignment
+    const results = await db.supervisionResults.where('assignmentId').equals(id).toArray();
+    for (const res of results) {
+        await db.supervisionResults.delete(res.id);
+        pushToTurso('eduadmin_supervision_results', [{id: res.id, deleted: true}]);
+    }
+
     await db.supervisionAssignments.delete(id);
     pushToTurso('eduadmin_supervision_assignments', [{id, deleted: true}]);
 };
@@ -2081,7 +2088,7 @@ export const getSupervisionResults = async (teacherId?: string, supervisorId?: s
     if (supervisorId) {
         return await db.supervisionResults.where('supervisorId').equals(supervisorId).toArray();
     }
-    return await db.supervisionResults.toArray();
+    return []; // Return empty instead of all to prevent accidental data leaks
 };
 
 export const getSupervisionResultsForSchool = async (schoolNpsn: string) => {
