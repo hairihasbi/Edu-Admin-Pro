@@ -1136,14 +1136,23 @@ export const getSchoolAttendanceSummary = async (date: string, schoolNpsn: strin
         .filter(r => classIds.includes(r.classId))
         .toArray();
 
+    // 2.5 Get all students in this school for accurate counts (don't rely on cached studentCount)
+    const allStudents = await db.students.where('schoolNpsn').equals(schoolNpsn).toArray();
+    const studentCountMap = new Map<string, number>();
+    allStudents.forEach(s => {
+        const count = studentCountMap.get(s.classId) || 0;
+        studentCountMap.set(s.classId, count + 1);
+    });
+
     // 3. Aggregate data per class
     const summary = classes.map(cls => {
         const classAttendance = attendance.filter(a => a.classId === cls.id);
+        const studentCount = studentCountMap.get(cls.id) || 0;
         
         const sakit = classAttendance.filter(a => a.status === 'S').length;
         const izin = classAttendance.filter(a => a.status === 'I').length;
         const alfa = classAttendance.filter(a => a.status === 'A').length;
-        const hadir = cls.studentCount - (sakit + izin + alfa);
+        const hadir = studentCount - (sakit + izin + alfa);
 
         // Get names of absent students
         const absentStudents = classAttendance
@@ -1155,7 +1164,7 @@ export const getSchoolAttendanceSummary = async (date: string, schoolNpsn: strin
 
         return {
             className: cls.name,
-            studentCount: cls.studentCount,
+            studentCount: studentCount,
             hadir: Math.max(0, hadir), // Prevent negative
             sakit,
             izin,
@@ -1174,8 +1183,15 @@ export const getSchoolAttendanceSummary = async (date: string, schoolNpsn: strin
 };
 
 export const getAttendanceSummaryByRange = async (startDate: string, endDate: string, schoolNpsn: string) => {
-    // 1. Get all classes in this school
-    const classes = (await db.classes.where('schoolNpsn').equals(schoolNpsn).toArray()).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+    if (!schoolNpsn || schoolNpsn === 'DEFAULT') return [];
+
+    // 1. Get all classes in this school (robust check)
+    const schoolUserIds = (await db.users.where('schoolNpsn').equals(schoolNpsn).toArray()).map(u => u.id);
+    const classes = (await db.classes.filter(c => 
+        c.schoolNpsn === schoolNpsn || 
+        schoolUserIds.includes(c.userId)
+    ).toArray()).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+    
     const classIds = classes.map(c => c.id);
 
     // 2. Get all attendance records in range
@@ -1185,9 +1201,18 @@ export const getAttendanceSummaryByRange = async (startDate: string, endDate: st
         .filter(r => classIds.includes(r.classId))
         .toArray();
 
+    // 2.5 Get all students in this school for accurate counts
+    const allStudents = await db.students.where('schoolNpsn').equals(schoolNpsn).toArray();
+    const studentCountMap = new Map<string, number>();
+    allStudents.forEach(s => {
+        const count = studentCountMap.get(s.classId) || 0;
+        studentCountMap.set(s.classId, count + 1);
+    });
+
     // 3. Aggregate data per class
     const summary = classes.map(cls => {
         const classAttendance = attendance.filter(a => a.classId === cls.id);
+        const studentCount = studentCountMap.get(cls.id) || 0;
         
         const sakit = classAttendance.filter(a => a.status === 'S').length;
         const izin = classAttendance.filter(a => a.status === 'I').length;
@@ -1202,7 +1227,7 @@ export const getAttendanceSummaryByRange = async (startDate: string, endDate: st
 
         return {
             className: cls.name,
-            studentCount: cls.studentCount,
+            studentCount: studentCount,
             hadir,
             sakit,
             izin,
