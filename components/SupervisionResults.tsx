@@ -188,11 +188,103 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
                           </div>
                         </div>
 
+                        {result.lessonPlan && (
+                          <div className="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm">
+                            <div className="bg-blue-50 p-3 border-b border-gray-100 flex justify-between items-center">
+                              <h5 className="text-xs font-black text-blue-600 uppercase tracking-widest">Rencana Pelaksanaan Pembelajaran (RPP) Guru</h5>
+                              <span className={`px-3 py-1 rounded-full text-[10px] font-black text-white ${
+                                result.lessonPlan.predicate === 'BAIK SEKALI' ? 'bg-green-500' :
+                                result.lessonPlan.predicate === 'BAIK' ? 'bg-blue-500' :
+                                result.lessonPlan.predicate === 'CUKUP' ? 'bg-yellow-500' : 'bg-red-500'
+                              }`}>
+                                {result.lessonPlan.predicate} ({result.lessonPlan.finalScore.toFixed(2)})
+                              </span>
+                            </div>
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-[10px] border-collapse">
+                                <thead>
+                                  <tr className="bg-gray-50/50">
+                                    <th className="border-b border-r p-2 text-left w-8">No</th>
+                                    <th className="border-b border-r p-2 text-left">Komponen</th>
+                                    <th className="border-b border-r p-2 text-center w-16">Nilai</th>
+                                    <th className="border-b p-2 text-left">Catatan</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {Object.entries(result.lessonPlan.scores).map(([comp, score], idx) => (
+                                    <tr key={idx} className="hover:bg-gray-50/50">
+                                      <td className="border-b border-r p-2 text-center">{idx + 1}</td>
+                                      <td className="border-b border-r p-2 font-medium">{comp}</td>
+                                      <td className="border-b border-r p-2 text-center font-bold text-blue-600">{score}</td>
+                                      <td className="border-b p-2 text-gray-500 italic">{result.lessonPlan?.comments[comp] || '-'}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+
+                        {result.implementation && (
+                          <div className="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm">
+                            <div className="bg-green-50 p-3 border-b border-gray-100 flex justify-between items-center">
+                              <h5 className="text-xs font-black text-green-600 uppercase tracking-widest">Pelaksanaan Pembelajaran</h5>
+                              <span className={`px-3 py-1 rounded-full text-[10px] font-black text-white ${
+                                result.implementation.predicate === 'BAIK SEKALI' ? 'bg-green-500' :
+                                result.implementation.predicate === 'BAIK' ? 'bg-blue-500' :
+                                result.implementation.predicate === 'CUKUP' ? 'bg-yellow-500' : 'bg-red-500'
+                              }`}>
+                                {result.implementation.predicate} ({result.implementation.finalScore.toFixed(2)})
+                              </span>
+                            </div>
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-[10px] border-collapse">
+                                <thead>
+                                  <tr className="bg-gray-50/50">
+                                    <th className="border-b border-r p-2 text-left w-8">No</th>
+                                    <th className="border-b border-r p-2 text-left">Komponen</th>
+                                    <th className="border-b border-r p-2 text-center w-16">Nilai</th>
+                                    <th className="border-b p-2 text-left">Catatan</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {Object.entries(result.implementation.scores).map(([comp, score], idx) => (
+                                    <tr key={idx} className="hover:bg-gray-50/50">
+                                      <td className="border-b border-r p-2 text-center">{idx + 1}</td>
+                                      <td className="border-b border-r p-2 font-medium">{comp}</td>
+                                      <td className="border-b border-r p-2 text-center font-bold text-green-600">{score}</td>
+                                      <td className="border-b p-2 text-gray-500 italic">{result.implementation?.comments[comp] || '-'}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+
                         {result.planningAdmin.coachingSuggestion && (
                           <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
-                            <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Saran Pembinaan</h5>
+                            <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Saran Pembinaan (Administrasi)</h5>
                             <p className="text-xs text-gray-700 leading-relaxed italic">
                               "{result.planningAdmin.coachingSuggestion}"
+                            </p>
+                          </div>
+                        )}
+
+                        {result.lessonPlan?.coachingSuggestion && (
+                          <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                            <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Saran Pembinaan (RPP)</h5>
+                            <p className="text-xs text-gray-700 leading-relaxed italic">
+                              "{result.lessonPlan.coachingSuggestion}"
+                            </p>
+                          </div>
+                        )}
+
+                        {result.implementation?.coachingSuggestion && (
+                          <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                            <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Saran Pembinaan (Pelaksanaan)</h5>
+                            <p className="text-xs text-gray-700 leading-relaxed italic">
+                              "{result.implementation.coachingSuggestion}"
                             </p>
                           </div>
                         )}

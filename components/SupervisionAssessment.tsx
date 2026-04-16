@@ -24,6 +24,48 @@ const PLANNING_ADMIN_COMPONENTS = [
   "Buku Pedoman Guru"
 ];
 
+const LESSON_PLAN_COMPONENTS = [
+  "Identitas Sekolah",
+  "Identitas Mata Pelajaran",
+  "Kelas/Semester",
+  "Materi Pokok/Kompetensi Dasar",
+  "Alokasi Waktu",
+  "Tujuan Pembelajaran",
+  "Metode & Model Pembelajaran",
+  "Media Pembelajaran (LMS)",
+  "Media Pembelajaran (Visual)",
+  "Sumber Belajar",
+  "Kegiatan Pembelajaran (Sistematis)",
+  "Kegiatan Inti (HOTS)",
+  "Langkah Integrasi (4C, PPK, Literasi)",
+  "Penilaian Proses (Otentik)",
+  "Penilaian Hasil (Mencerminkan Proses)",
+  "Teknik Penilaian (Alat Tes/Instrumen)",
+  "Kunci Jawaban/Rubrik"
+];
+
+const IMPLEMENTATION_COMPONENTS = [
+  "Memberikan motivasi & menyiapkan peserta didik",
+  "Mengajukan pertanyaan & mengaitkan pengetahuan sebelumnya",
+  "Menjelaskan tujuan pembelajaran/KD",
+  "Penanaman/Pembudayaan karakter dan literasi",
+  "Menyampaikan tugas & arahan mekanisme penyelesaian",
+  "Menggunakan Learning Manajemen Sistem (LMS)",
+  "Memanfaatkan fasilitas akun belajar.id",
+  "Memanfaatkan penggunaan video, power point, dll",
+  "Metode/Pendekatan mewujudkan suasana menyenangkan (integrasi 21st Century)",
+  "Menggunakan media pembelajaran sebagai alat bantu",
+  "Memanfaatkan berbagai fasilitas Sumber belajar",
+  "Kesimpulan bersama & manfaat pembelajaran",
+  "Memberikan umpan balik proses & hasil",
+  "Kegiatan tindak lanjut (tugas individu/kelompok)",
+  "Rencana kegiatan pertemuan berikutnya",
+  "Penilaian proses sesuai perencanaan",
+  "Penilaian hasil (tes, portofolio, penugasan)",
+  "Teknik Penilaian (instrumen sesuai KD)",
+  "Penerapan TIK terintegrasi & efektif"
+];
+
 const SUPERVISION_ASPECTS = [
   "Penguasaan materi pembelajaran",
   "Kesesuaian metode dengan karakteristik siswa",
@@ -48,7 +90,17 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
   const [planningComments, setPlanningComments] = useState<Record<string, string>>({});
   const [coachingSuggestion, setCoachingSuggestion] = useState('');
 
-  // Tab 2 & 3: Legacy/Placeholder state
+  // Tab 2: RPP Guru
+  const [lessonPlanScores, setLessonPlanScores] = useState<Record<string, number>>({});
+  const [lessonPlanComments, setLessonPlanComments] = useState<Record<string, string>>({});
+  const [lessonPlanCoaching, setLessonPlanCoaching] = useState('');
+
+  // Tab 3: Pelaksanaan Pembelajaran
+  const [implScores, setImplScores] = useState<Record<string, number>>({});
+  const [implComments, setImplComments] = useState<Record<string, string>>({});
+  const [implCoaching, setImplCoaching] = useState('');
+
+  // Tab 3: Legacy/Placeholder state
   const [scores, setScores] = useState<Record<string, number>>({});
   const [comments, setComments] = useState<Record<string, string>>({});
   const [generalNotes, setGeneralNotes] = useState('');
@@ -89,7 +141,21 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
     setPlanningComments({});
     setCoachingSuggestion('');
 
-    // Reset Tab 2/3
+    // Reset Tab 2
+    const initialLessonPlanScores: Record<string, number> = {};
+    LESSON_PLAN_COMPONENTS.forEach(c => { initialLessonPlanScores[c] = 0; });
+    setLessonPlanScores(initialLessonPlanScores);
+    setLessonPlanComments({});
+    setLessonPlanCoaching('');
+
+    // Reset Tab 3
+    const initialImplScores: Record<string, number> = {};
+    IMPLEMENTATION_COMPONENTS.forEach(c => { initialImplScores[c] = 1; }); // Min score is 1 for this one
+    setImplScores(initialImplScores);
+    setImplComments({});
+    setImplCoaching('');
+
+    // Reset Legacy
     const initialScores: Record<string, number> = {};
     SUPERVISION_ASPECTS.forEach(aspect => { initialScores[aspect] = 0; });
     setScores(initialScores);
@@ -112,12 +178,38 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
     return { totalRealScore, finalScore, predicate };
   };
 
+  const calculateLessonPlanResults = () => {
+    const totalRealScore = Object.values(lessonPlanScores).reduce((a, b) => a + b, 0);
+    const finalScore = (totalRealScore / 34) * 100;
+    
+    let predicate = 'KURANG';
+    if (finalScore > 90) predicate = 'BAIK SEKALI';
+    else if (finalScore > 75) predicate = 'BAIK';
+    else if (finalScore > 60) predicate = 'CUKUP';
+
+    return { totalRealScore, finalScore, predicate };
+  };
+
+  const calculateImplementationResults = () => {
+    const totalRealScore = Object.values(implScores).reduce((a, b) => a + b, 0);
+    const finalScore = (totalRealScore / 76) * 100; // 19 components * 4
+    
+    let predicate = 'KURANG';
+    if (finalScore > 90) predicate = 'BAIK SEKALI';
+    else if (finalScore > 75) predicate = 'BAIK';
+    else if (finalScore > 60) predicate = 'CUKUP';
+
+    return { totalRealScore, finalScore, predicate };
+  };
+
   const handleSubmit = async () => {
     if (!selectedAssignment) return;
 
     setIsSaving(true);
     try {
-      const { totalRealScore, finalScore, predicate } = calculatePlanningResults();
+      const planningData = calculatePlanningResults();
+      const lessonPlanData = calculateLessonPlanResults();
+      const implData = calculateImplementationResults();
 
       const legacyAspects = SUPERVISION_ASPECTS.map(aspect => ({
         aspect,
@@ -131,15 +223,31 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
         teacherId: selectedAssignment.teacherId,
         schoolNpsn: user.schoolNpsn!,
         date: new Date().toISOString().split('T')[0],
-        score: finalScore, // Using finalScore from planning for now as main score
+        score: (planningData.finalScore + lessonPlanData.finalScore + implData.finalScore) / 3, // Combined average
         notes: generalNotes,
         planningAdmin: {
           scores: planningScores,
           comments: planningComments,
-          totalRealScore,
-          finalScore,
-          predicate,
+          totalRealScore: planningData.totalRealScore,
+          finalScore: planningData.finalScore,
+          predicate: planningData.predicate,
           coachingSuggestion
+        },
+        lessonPlan: {
+          scores: lessonPlanScores,
+          comments: lessonPlanComments,
+          totalRealScore: lessonPlanData.totalRealScore,
+          finalScore: lessonPlanData.finalScore,
+          predicate: lessonPlanData.predicate,
+          coachingSuggestion: lessonPlanCoaching
+        },
+        implementation: {
+          scores: implScores,
+          comments: implComments,
+          totalRealScore: implData.totalRealScore,
+          finalScore: implData.finalScore,
+          predicate: implData.predicate,
+          coachingSuggestion: implCoaching
         },
         aspects: legacyAspects // Keep for backward compatibility
       };
@@ -390,15 +498,193 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
                   </div>
                 )}
 
-                {(activeTab === 'RPP' || activeTab === 'IMPLEMENTATION') && (
-                  <div className="py-20 text-center space-y-4">
-                    <div className="p-4 bg-gray-50 rounded-full w-16 h-16 mx-auto flex items-center justify-center">
-                      <AlertCircle className="text-gray-300" size={32} />
+                {activeTab === 'RPP' && (
+                  <div className="space-y-6">
+                    <div className="overflow-x-auto">
+                      <table className="w-full border-collapse text-sm">
+                        <thead>
+                          <tr className="bg-gray-100 text-gray-700">
+                            <th className="border p-3 text-center w-12">No</th>
+                            <th className="border p-3 text-left">Komponen</th>
+                            <th className="border p-3 text-center w-48">Kriteria Nilai (0-2)</th>
+                            <th className="border p-3 text-left">Catatan Perbaikan</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {LESSON_PLAN_COMPONENTS.map((comp, idx) => (
+                            <tr key={idx} className="hover:bg-gray-50">
+                              <td className="border p-3 text-center font-medium">{idx + 1}</td>
+                              <td className="border p-3 font-bold text-gray-800">{comp}</td>
+                              <td className="border p-3">
+                                <div className="flex justify-center gap-2">
+                                  {[0, 1, 2].map(val => (
+                                    <button
+                                      key={val}
+                                      onClick={() => setLessonPlanScores(prev => ({ ...prev, [comp]: val }))}
+                                      className={`w-8 h-8 rounded-full font-bold transition ${
+                                        lessonPlanScores[comp] === val 
+                                          ? 'bg-blue-600 text-white shadow-md' 
+                                          : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+                                      }`}
+                                    >
+                                      {val}
+                                    </button>
+                                  ))}
+                                </div>
+                              </td>
+                              <td className="border p-3">
+                                <input
+                                  type="text"
+                                  placeholder="..."
+                                  className="w-full bg-transparent outline-none border-b border-transparent focus:border-blue-300"
+                                  value={lessonPlanComments[comp] || ''}
+                                  onChange={(e) => setLessonPlanComments(prev => ({ ...prev, [comp]: e.target.value }))}
+                                />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot className="bg-gray-50 font-bold">
+                          <tr>
+                            <td colSpan={2} className="border p-3 text-right text-gray-500">JUMLAH SKOR RIIL</td>
+                            <td className="border p-3 text-center text-blue-600 text-lg">
+                              {Object.values(lessonPlanScores).reduce((a, b) => a + b, 0)}
+                            </td>
+                            <td className="border p-3"></td>
+                          </tr>
+                          <tr>
+                            <td colSpan={2} className="border p-3 text-right text-gray-500">JUMLAH SKOR IDEAL</td>
+                            <td className="border p-3 text-center">34</td>
+                            <td className="border p-3"></td>
+                          </tr>
+                          <tr>
+                            <td colSpan={2} className="border p-3 text-right">NILAI AKHIR</td>
+                            <td className="border p-3 text-center text-purple-600 text-lg">
+                              {calculateLessonPlanResults().finalScore.toFixed(2)}
+                            </td>
+                            <td className="border p-3 bg-black text-white text-center uppercase tracking-widest">
+                              {calculateLessonPlanResults().predicate}
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
                     </div>
-                    <h4 className="font-bold text-gray-700">Instrumen Belum Tersedia</h4>
-                    <p className="text-sm text-gray-500 max-w-xs mx-auto">
-                      Detail instrumen untuk bagian ini sedang dalam tahap pengembangan.
-                    </p>
+
+                    <div className="pt-6 border-t border-gray-100">
+                      <label className="block text-sm font-bold text-gray-800 mb-2">Saran Pembinaan</label>
+                      <textarea
+                        placeholder="Berikan saran pembinaan RPP untuk guru..."
+                        className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                        rows={4}
+                        value={lessonPlanCoaching}
+                        onChange={(e) => setLessonPlanCoaching(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
+                      <h5 className="text-xs font-black text-blue-600 uppercase mb-2 tracking-widest text-center">Instrumen Rencana Pelaksanaan Pembelajaran (RPP)</h5>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-2">
+                        <div className="text-[10px]"><span className="font-bold">A (Baik Sekali):</span> 90.01 - 100.00</div>
+                        <div className="text-[10px]"><span className="font-bold">B (Baik):</span> 75.01 - 90.00</div>
+                        <div className="text-[10px]"><span className="font-bold">C (Cukup):</span> 60.01 - 75.00</div>
+                        <div className="text-[10px]"><span className="font-bold">D (Kurang):</span> 0.00 - 60.00</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === 'IMPLEMENTATION' && (
+                  <div className="space-y-6">
+                    <div className="overflow-x-auto">
+                      <table className="w-full border-collapse text-xs">
+                        <thead>
+                          <tr className="bg-gray-100 text-gray-700">
+                            <th className="border p-3 text-center w-12">No</th>
+                            <th className="border p-3 text-left">Komponen</th>
+                            <th className="border p-3 text-center w-56">Skor (1-4)</th>
+                            <th className="border p-3 text-left">Catatan / Penguatan</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {IMPLEMENTATION_COMPONENTS.map((comp, idx) => (
+                            <tr key={idx} className="hover:bg-gray-50">
+                              <td className="border p-3 text-center font-medium">{idx + 1}</td>
+                              <td className="border p-3 font-bold text-gray-800">{comp}</td>
+                              <td className="border p-3">
+                                <div className="flex justify-center gap-2">
+                                  {[1, 2, 3, 4].map(val => (
+                                    <button
+                                      key={val}
+                                      onClick={() => setImplScores(prev => ({ ...prev, [comp]: val }))}
+                                      className={`w-8 h-8 rounded-full font-bold transition ${
+                                        implScores[comp] === val 
+                                          ? 'bg-green-600 text-white shadow-md' 
+                                          : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+                                      }`}
+                                    >
+                                      {val}
+                                    </button>
+                                  ))}
+                                </div>
+                              </td>
+                              <td className="border p-3">
+                                <input
+                                  type="text"
+                                  placeholder="..."
+                                  className="w-full bg-transparent outline-none border-b border-transparent focus:border-green-300"
+                                  value={implComments[comp] || ''}
+                                  onChange={(e) => setImplComments(prev => ({ ...prev, [comp]: e.target.value }))}
+                                />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot className="bg-gray-50 font-bold">
+                          <tr>
+                            <td colSpan={2} className="border p-3 text-right text-gray-500">JUMLAH SKOR RIIL</td>
+                            <td className="border p-3 text-center text-green-600 text-lg">
+                              {Object.values(implScores).reduce((a, b) => a + b, 0)}
+                            </td>
+                            <td className="border p-3"></td>
+                          </tr>
+                          <tr>
+                            <td colSpan={2} className="border p-3 text-right text-gray-500">JUMLAH SKOR IDEAL</td>
+                            <td className="border p-3 text-center">76</td>
+                            <td className="border p-3"></td>
+                          </tr>
+                          <tr>
+                            <td colSpan={2} className="border p-3 text-right">NILAI AKHIR</td>
+                            <td className="border p-3 text-center text-blue-600 text-lg">
+                              {calculateImplementationResults().finalScore.toFixed(2)}
+                            </td>
+                            <td className="border p-3 bg-black text-white text-center uppercase tracking-widest">
+                              {calculateImplementationResults().predicate}
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+
+                    <div className="pt-6 border-t border-gray-100">
+                      <label className="block text-sm font-bold text-gray-800 mb-2">Saran Pembinaan</label>
+                      <textarea
+                        placeholder="Berikan saran pembinaan pelaksanaan pembelajaran untuk guru..."
+                        className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-green-500"
+                        rows={4}
+                        value={implCoaching}
+                        onChange={(e) => setImplCoaching(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="bg-green-50 p-4 rounded-xl border border-green-100">
+                      <h5 className="text-xs font-black text-green-600 uppercase mb-2 tracking-widest text-center">Instrumen Supervisi Pelaksanaan Pembelajaran</h5>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-2">
+                        <div className="text-[10px]"><span className="font-bold">A (Baik Sekali):</span> 90.01 - 100.00</div>
+                        <div className="text-[10px]"><span className="font-bold">B (Baik):</span> 75.01 - 90.00</div>
+                        <div className="text-[10px]"><span className="font-bold">C (Cukup):</span> 60.01 - 75.00</div>
+                        <div className="text-[10px]"><span className="font-bold">D (Kurang):</span> 0.00 - 60.00</div>
+                      </div>
+                    </div>
                   </div>
                 )}
 
