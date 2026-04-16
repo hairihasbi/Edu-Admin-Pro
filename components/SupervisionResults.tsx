@@ -70,7 +70,7 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
     setIsPrintModalOpen(true);
   };
 
-  const generatePrint = () => {
+    const generatePrint = () => {
     if (!printResult) return;
     const teacher = teachers.find(t => t.id === printResult.teacherId);
     const supervisor = teachers.find(t => t.id === printResult.supervisorId);
@@ -86,6 +86,56 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
     const formatDate = (dateStr: string) => {
         return new Date(dateStr).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
     };
+
+    const identityHeaderHtml = `
+      <table class="header-info">
+        <tr>
+          <td width="150">Satuan Pendidikan</td><td width="10">:</td><td>${user.schoolName || '-'}</td>
+          <td width="150">Kelas / Semester</td><td width="10">:</td><td>${printConfig.className} / ${printConfig.semester}</td>
+        </tr>
+        <tr>
+          <td>Nama Guru</td><td>:</td><td>${teacher?.fullName || '-'}</td>
+          <td>Kompetensi Dasar</td><td>:</td><td>${printConfig.competence}</td>
+        </tr>
+        <tr>
+          <td>Mata Pelajaran</td><td>:</td><td>${teacher?.subject || '-'}</td>
+          <td>Alokasi Waktu</td><td>:</td><td>${printConfig.timeAllocation}</td>
+        </tr>
+      </table>
+    `;
+
+    const summaryAndSignaturesHtml = `
+      <div class="summary-box">
+        <strong>Catatan Umum Supervisor:</strong><br>
+        ${printResult.notes || '-'}
+      </div>
+
+      <table class="signature-section">
+        <tr>
+          <td>
+            <p>Mengetahui,</p>
+            <p>Kepala Sekolah</p>
+            <div class="signature-space"></div>
+            <p><strong>${printConfig.principalName || '................................'}</strong></p>
+            <p>NIP. ${printConfig.principalNip || '................................'}</p>
+          </td>
+          <td>
+            <p>&nbsp;</p>
+            <p>Supervisor / Penilai</p>
+            <div class="signature-space"></div>
+            <p><strong>${supervisor?.fullName || '................................'}</strong></p>
+            <p>NIP. ${supervisor?.nip || '................................'}</p>
+          </td>
+          <td>
+            <p>${printConfig.location}, ${formatDate(printConfig.date)}</p>
+            <p>Guru Mata Pelajaran</p>
+            <div class="signature-space"></div>
+            <p><strong>${teacher?.fullName || '................................'}</strong></p>
+            <p>NIP. ${teacher?.nip || '................................'}</p>
+          </td>
+        </tr>
+      </table>
+    `;
 
     const generateTableRows = (scores: Record<string, number>, comments: Record<string, string>, components: string[]) => {
         return components.map((comp, idx) => `
@@ -130,7 +180,6 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
     };
 
     // Components from SupervisionAssessment.tsx constants
-    // I will redefine them here or import them if exported. They are not exported so I redefine.
     const PLANNING_ADMIN_COMPONENTS = ["Kalender Pendidikan", "Program Tahunan", "Program Semester", "Silabus", "RPP", "Jadwal Pelajaran", "Agenda Harian", "Daftar Nilai", "KKM", "Daftar Hadir Peserta Didik", "Ketersediaan Bahan Ajar", "Buku Pedoman Guru"];
     const LESSON_PLAN_COMPONENTS = ["Identitas Sekolah", "Identitas Mata Pelajaran", "Kelas/Semester", "Materi Pokok/Kompetensi Dasar", "Alokasi Waktu", "Tujuan Pembelajaran", "Metode & Model Pembelajaran", "Media Pembelajaran (LMS)", "Media Pembelajaran (Visual)", "Sumber Belajar", "Kegiatan Pembelajaran (Sistematis)", "Kegiatan Inti (HOTS)", "Langkah Integrasi (4C, PPK, Literasi)", "Penilaian Proses (Otentik)", "Penilaian Hasil (Mencerminkan Proses)", "Teknik Penilaian (Alat Tes/Instrumen)", "Kunci Jawaban/Rubrik"];
     const IMPLEMENTATION_COMPONENTS = ["Memberikan motivasi & menyiapkan peserta didik", "Mengajukan pertanyaan & mengaitkan pengetahuan sebelumnya", "Menjelaskan tujuan pembelajaran/KD", "Penanaman/Pembudayaan karakter dan literasi", "Menyampaikan tugas & arahan mekanisme penyelesaian", "Menggunakan Learning Manajemen Sistem (LMS)", "Memanfaatkan fasilitas akun belajar.id", "Memanfaatkan penggunaan video, power point, dll", "Metode/Pendekatan mewujudkan suasana menyenangkan (integrasi 21st Century)", "Menggunakan media pembelajaran sebagai alat bantu", "Memanfaatkan berbagai fasilitas Sumber belajar", "Kesimpulan bersama & manfaat pembelajaran", "Memberikan umpan balik proses & hasil", "Kegiatan tindak lanjut (tugas individu/kelompok)", "Rencana kegiatan pertemuan berikutnya", "Penilaian proses sesuai perencanaan", "Penilaian hasil (tes, portofolio, penugasan)", "Teknik Penilaian (instrumen sesuai KD)", "Penerapan TIK terintegrasi & efektif"];
@@ -147,37 +196,23 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
             table.data-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
             table.data-table th, table.data-table td { border: 1px solid #000; padding: 6px; }
             table.data-table th { background-color: #f2f2f2; text-align: center; font-weight: bold; }
-            .section-title { font-weight: bold; margin-top: 25px; margin-bottom: 5px; background: #eee; padding: 5px; border: 1px solid #000; border-bottom: none; }
+            .section-title { font-weight: bold; margin-top: 5px; margin-bottom: 5px; background: #eee; padding: 5px; border: 1px solid #000; border-bottom: none; }
             .summary-box { margin-top: 10px; border: 1px solid #000; padding: 10px; }
             .signature-section { margin-top: 30px; width: 100%; border-collapse: collapse; page-break-inside: avoid; }
             .signature-section td { width: 33.33%; text-align: center; vertical-align: top; padding-top: 10px; }
             .signature-space { height: 80px; }
             @media print {
-              @page { size: portrait; margin: 1.5cm; }
+              @page { size: portrait; margin: 1cm; }
               button { display: none; }
               .no-print { display: none; }
-              .page-break { page-break-before: always; }
+              .page-break { page-break-before: always; border-top: 1px dashed #ccc; padding-top: 20px; }
             }
           </style>
         </head>
         <body>
+          <!-- SECTION I: ADMINISTRASI -->
           <h2>INSTRUMEN SUPERVISI AKADEMIK</h2>
-          
-          <table class="header-info">
-            <tr>
-              <td width="150">Satuan Pendidikan</td><td width="10">:</td><td>${user.schoolName || '-'}</td>
-              <td width="150">Kelas / Semester</td><td width="10">:</td><td>${printConfig.className} / ${printConfig.semester}</td>
-            </tr>
-            <tr>
-              <td>Nama Guru</td><td>:</td><td>${teacher?.fullName || '-'}</td>
-              <td>Kompetensi Dasar</td><td>:</td><td>${printConfig.competence}</td>
-            </tr>
-            <tr>
-              <td>Mata Pelajaran</td><td>:</td><td>${teacher?.subject || '-'}</td>
-              <td>Alokasi Waktu</td><td>:</td><td>${printConfig.timeAllocation}</td>
-            </tr>
-          </table>
-
+          ${identityHeaderHtml}
           <div class="section-title">I. ADMINISTRASI PERENCANAAN PEMBELAJARAN</div>
           <table class="data-table">
             <thead>
@@ -197,9 +232,13 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
               </tr>
             </tbody>
           </table>
+          ${printResult.planningAdmin?.coachingSuggestion ? `<div style="margin-top: 5px; font-size: 10pt;"><strong>Saran Pembinaan:</strong> ${printResult.planningAdmin.coachingSuggestion}</div>` : ''}
+          ${summaryAndSignaturesHtml}
 
+          <!-- SECTION II: RPP -->
           <div class="page-break"></div>
           <h2>INSTRUMEN RENCANA PELAKSANAAN PEMBELAJARAN (RPP)</h2>
+          ${identityHeaderHtml}
           <div class="section-title">II. RENCANA PELAKSANAAN PEMBELAJARAN (RPP) GURU</div>
           <table class="data-table">
             <thead>
@@ -219,9 +258,13 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
               </tr>
             </tbody>
           </table>
+          ${printResult.lessonPlan?.coachingSuggestion ? `<div style="margin-top: 5px; font-size: 10pt;"><strong>Saran Pembinaan:</strong> ${printResult.lessonPlan.coachingSuggestion}</div>` : ''}
+          ${summaryAndSignaturesHtml}
 
+          <!-- SECTION III: PELAKSANAAN -->
           <div class="page-break"></div>
           <h2>INSTRUMEN SUPERVISI PELAKSANAAN PEMBELAJARAN</h2>
+          ${identityHeaderHtml}
           <div class="section-title">III. PELAKSANAAN PEMBELAJARAN</div>
           <table class="data-table">
             <thead>
@@ -241,37 +284,8 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
               </tr>
             </tbody>
           </table>
-
-          <div class="summary-box">
-            <strong>Catatan Umum Supervisor:</strong><br>
-            ${printResult.notes || '-'}
-          </div>
-
-          <table class="signature-section">
-            <tr>
-              <td>
-                <p>Mengetahui,</p>
-                <p>Kepala Sekolah</p>
-                <div class="signature-space"></div>
-                <p><strong>${printConfig.principalName || '................................'}</strong></p>
-                <p>NIP. ${printConfig.principalNip || '................................'}</p>
-              </td>
-              <td>
-                <p>&nbsp;</p>
-                <p>Supervisor / Penilai</p>
-                <div class="signature-space"></div>
-                <p><strong>${supervisor?.fullName || '................................'}</strong></p>
-                <p>NIP. ${supervisor?.nip || '................................'}</p>
-              </td>
-              <td>
-                <p>${printConfig.location}, ${formatDate(printConfig.date)}</p>
-                <p>Guru Mata Pelajaran</p>
-                <div class="signature-space"></div>
-                <p><strong>${teacher?.fullName || '................................'}</strong></p>
-                <p>NIP. ${teacher?.nip || '................................'}</p>
-              </td>
-            </tr>
-          </table>
+          ${printResult.implementation?.coachingSuggestion ? `<div style="margin-top: 5px; font-size: 10pt;"><strong>Saran Pembinaan:</strong> ${printResult.implementation.coachingSuggestion}</div>` : ''}
+          ${summaryAndSignaturesHtml}
 
           <script>
             window.onload = function() { window.print(); window.close(); }
