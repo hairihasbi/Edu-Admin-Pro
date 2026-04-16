@@ -809,11 +809,13 @@ const AppContent: React.FC = () => {
                 {currentUser.isSupervisor && (
                   <NavLink to="/supervision-assessment" icon={ClipboardCheck} label="Instrumen Supervisi" />
                 )}
+                {(currentUser.isSupervisor || currentUser.additionalRole === 'WAKASEK_KURIKULUM') && (
+                  <NavLink to="/supervision-results" icon={ClipboardCheck} label="Monitoring Hasil Supervisi" />
+                )}
                 {currentUser.subject === 'Bimbingan Konseling' && (
                    <NavLink to="/guidance" icon={ShieldAlert} label="Bimbingan Konseling" />
                 )}
                 <NavLink to="/attendance" icon={CalendarCheck} label="Daftar Hadir" />
-                <NavLink to="/supervision-results" icon={ClipboardCheck} label="Hasil Supervisi Akademik" />
                 <NavLink to="/scope-material" icon={List} label="Lingkup Materi" />
                 <NavLink to="/journal" icon={NotebookPen} label="Jurnal Mengajar" />
                 <NavLink to="/summative" icon={Calculator} label="Asesmen Sumatif" />
