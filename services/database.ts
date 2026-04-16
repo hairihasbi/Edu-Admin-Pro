@@ -1794,15 +1794,16 @@ export const bulkDeleteTeachingJournals = async (ids: string[]) => {
 
 // --- SCHEDULES ---
 export const getTeachingSchedules = async (userId: string, schoolNpsn?: string) => {
-    // FIX: Only show schedule for the specific teacher as requested
-    // even if schoolNpsn is provided, we filter by userId to ensure privacy on dashboard
-    let collection = db.teachingSchedules.where('userId').equals(userId);
-    
+    // If schoolNpsn is provided, we want to see schedules for that school
+    // This allows teachers to see schedules entered by Wakasek
     if (schoolNpsn && schoolNpsn !== 'DEFAULT') {
-        collection = collection.filter(s => s.schoolNpsn === schoolNpsn);
+        return await db.teachingSchedules
+            .where('schoolNpsn').equals(schoolNpsn)
+            .and(s => s.userId === userId)
+            .toArray();
     }
     
-    return await collection.toArray();
+    return await db.teachingSchedules.where('userId').equals(userId).toArray();
 };
 
 export const getSchoolSchedules = async (schoolNpsn: string) => {
@@ -1818,7 +1819,8 @@ export const addTeachingSchedule = async (data: Omit<TeachingSchedule, 'id'|'las
 
 export const saveBulkSchedules = async (schedules: Omit<TeachingSchedule, 'id'|'lastModified'|'isSynced'>[]) => {
     const items = schedules.map(s => ({ ...s, id: uuidv4(), lastModified: Date.now(), isSynced: false }));
-    await db.teachingSchedules.bulkAdd(items);
+    // Use bulkPut to avoid ConstraintError if IDs somehow collide or for safer updates
+    await db.teachingSchedules.bulkPut(items);
     triggerDebouncedSync();
     return items;
 };
