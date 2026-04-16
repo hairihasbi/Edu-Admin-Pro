@@ -249,12 +249,38 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
                                 </thead>
                                 <tbody>
                                   {Object.entries(result.implementation.scores).map(([comp, score], idx) => (
-                                    <tr key={idx} className="hover:bg-gray-50/50">
-                                      <td className="border-b border-r p-2 text-center">{idx + 1}</td>
-                                      <td className="border-b border-r p-2 font-medium">{comp}</td>
-                                      <td className="border-b border-r p-2 text-center font-bold text-green-600">{score}</td>
-                                      <td className="border-b p-2 text-gray-500 italic">{result.implementation?.comments[comp] || '-'}</td>
-                                    </tr>
+                                    <React.Fragment key={idx}>
+                                      {idx === 0 && (
+                                        <tr className="bg-gray-50/50 font-bold text-blue-700">
+                                          <td className="border-b border-r p-2 text-center">A</td>
+                                          <td colSpan={3} className="border-b p-2">KEGIATAN PENDAHULUAN</td>
+                                        </tr>
+                                      )}
+                                      {idx === 5 && (
+                                        <tr className="bg-gray-50/50 font-bold text-blue-700">
+                                          <td className="border-b border-r p-2 text-center">B</td>
+                                          <td colSpan={3} className="border-b p-2">KEGIATAN INTI</td>
+                                        </tr>
+                                      )}
+                                      {idx === 11 && (
+                                        <tr className="bg-gray-50/50 font-bold text-blue-700">
+                                          <td className="border-b border-r p-2 text-center">C</td>
+                                          <td colSpan={3} className="border-b p-2">KEGIATAN PENUTUP</td>
+                                        </tr>
+                                      )}
+                                      {idx === 15 && (
+                                        <tr className="bg-gray-50/50 font-bold text-blue-700">
+                                          <td className="border-b border-r p-2 text-center">D</td>
+                                          <td colSpan={3} className="border-b p-2">KEGIATAN PENILAIAN HASIL BELAJAR</td>
+                                        </tr>
+                                      )}
+                                      <tr className="hover:bg-gray-50/50">
+                                        <td className="border-b border-r p-2 text-center">{idx + 1}</td>
+                                        <td className="border-b border-r p-2 font-medium">{comp}</td>
+                                        <td className="border-b border-r p-2 text-center font-bold text-green-600">{score}</td>
+                                        <td className="border-b p-2 text-gray-500 italic">{result.implementation?.comments[comp] || '-'}</td>
+                                      </tr>
+                                    </React.Fragment>
                                   ))}
                                 </tbody>
                               </table>

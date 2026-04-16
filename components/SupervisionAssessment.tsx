@@ -607,36 +607,62 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
                         </thead>
                         <tbody>
                           {IMPLEMENTATION_COMPONENTS.map((comp, idx) => (
-                            <tr key={idx} className="hover:bg-gray-50">
-                              <td className="border p-3 text-center font-medium">{idx + 1}</td>
-                              <td className="border p-3 font-bold text-gray-800">{comp}</td>
-                              <td className="border p-3">
-                                <div className="flex justify-center gap-2">
-                                  {[1, 2, 3, 4].map(val => (
-                                    <button
-                                      key={val}
-                                      onClick={() => setImplScores(prev => ({ ...prev, [comp]: val }))}
-                                      className={`w-8 h-8 rounded-full font-bold transition ${
-                                        implScores[comp] === val 
-                                          ? 'bg-green-600 text-white shadow-md' 
-                                          : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
-                                      }`}
-                                    >
-                                      {val}
-                                    </button>
-                                  ))}
-                                </div>
-                              </td>
-                              <td className="border p-3">
-                                <input
-                                  type="text"
-                                  placeholder="..."
-                                  className="w-full bg-transparent outline-none border-b border-transparent focus:border-green-300"
-                                  value={implComments[comp] || ''}
-                                  onChange={(e) => setImplComments(prev => ({ ...prev, [comp]: e.target.value }))}
-                                />
-                              </td>
-                            </tr>
+                            <React.Fragment key={idx}>
+                              {idx === 0 && (
+                                <tr className="bg-gray-50 font-bold text-blue-700">
+                                  <td className="border p-2 text-center">A</td>
+                                  <td colSpan={3} className="border p-2">KEGIATAN PENDAHULUAN</td>
+                                </tr>
+                              )}
+                              {idx === 5 && (
+                                <tr className="bg-gray-50 font-bold text-blue-700">
+                                  <td className="border p-2 text-center">B</td>
+                                  <td colSpan={3} className="border p-2">KEGIATAN INTI</td>
+                                </tr>
+                              )}
+                              {idx === 11 && (
+                                <tr className="bg-gray-50 font-bold text-blue-700">
+                                  <td className="border p-2 text-center">C</td>
+                                  <td colSpan={3} className="border p-2">KEGIATAN PENUTUP</td>
+                                </tr>
+                              )}
+                              {idx === 15 && (
+                                <tr className="bg-gray-50 font-bold text-blue-700">
+                                  <td className="border p-2 text-center">D</td>
+                                  <td colSpan={3} className="border p-2">KEGIATAN PENILAIAN HASIL BELAJAR</td>
+                                </tr>
+                              )}
+                              <tr className="hover:bg-gray-50">
+                                <td className="border p-3 text-center font-medium">{idx + 1}</td>
+                                <td className="border p-3 font-bold text-gray-800">{comp}</td>
+                                <td className="border p-3">
+                                  <div className="flex justify-center gap-2">
+                                    {[1, 2, 3, 4].map(val => (
+                                      <button
+                                        key={val}
+                                        onClick={() => setImplScores(prev => ({ ...prev, [comp]: val }))}
+                                        className={`w-8 h-8 rounded-full font-bold transition ${
+                                          implScores[comp] === val 
+                                            ? 'bg-green-600 text-white shadow-md' 
+                                            : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+                                        }`}
+                                      >
+                                        {val}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </td>
+                                <td className="border p-3">
+                                  <input
+                                    type="text"
+                                    placeholder="..."
+                                    className="w-full bg-transparent outline-none border-b border-transparent focus:border-green-300"
+                                    value={implComments[comp] || ''}
+                                    onChange={(e) => setImplComments(prev => ({ ...prev, [comp]: e.target.value }))}
+                                  />
+                                </td>
+                              </tr>
+                            </React.Fragment>
                           ))}
                         </tbody>
                         <tfoot className="bg-gray-50 font-bold">
