@@ -40,6 +40,7 @@ export interface User extends Syncable {
   // RPP Quota Tracking
   rppUsageCount?: number; // Jumlah RPP dibuat bulan ini
   rppLastReset?: string; // Format "YYYY-MM" untuk menandai bulan terakhir reset
+  isSupervisor?: boolean; // NEW: Guru yang ditunjuk sebagai supervisor
 }
 
 export interface SystemSettings extends Syncable {
@@ -418,6 +419,31 @@ export interface TeacherCalendarEvent extends Syncable {
   date: string;   // Format YYYY-MM-DD
   type: 'HOLIDAY' | 'LEAVE' | 'SCHOOL_EVENT' | 'OTHER';
   description: string;
+}
+
+export interface SupervisionAssignment extends Syncable {
+  id: string;
+  supervisorId: string; // User ID of the supervisor
+  teacherId: string; // User ID of the teacher being supervised
+  schoolNpsn: string;
+  status: 'PENDING' | 'COMPLETED';
+  scheduledDate?: string;
+}
+
+export interface SupervisionResult extends Syncable {
+  id: string;
+  assignmentId: string;
+  supervisorId: string;
+  teacherId: string;
+  schoolNpsn: string;
+  date: string;
+  score: number;
+  notes?: string;
+  aspects: {
+    aspect: string;
+    score: number;
+    comment?: string;
+  }[];
 }
 
 export interface BackupData {
