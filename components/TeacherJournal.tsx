@@ -87,43 +87,43 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
 
   // Auto-populate Jam Ke (Range) based on Class, Date, and Subject
   useEffect(() => {
-    if (formData.classId && formData.date && formSubject && schedules.length > 0) {
-      const dayName = getDayName(formData.date);
-      const cls = classes.find(c => c.id === formData.classId);
-      
-      const now = new Date();
-      const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-      const isToday = formData.date === now.toISOString().split('T')[0];
+    const autoPopulateMeetingNo = async () => {
+      if (formData.classId && formData.date && formSubject) {
+        const dayName = getDayName(formData.date);
+        const cls = classes.find(c => c.id === formData.classId);
+        
+        if (!cls) return;
 
-      let matchingSchedule;
-      
-      if (isToday) {
-        // Try to find schedule matching current time
-        matchingSchedule = schedules.find(s => 
-          s.className === cls?.name &&
-          s.day === dayName &&
-          s.subject === formSubject &&
-          currentTime >= (s.timeStart || '00:00') &&
-          currentTime <= (s.timeEnd || '23:59')
-        );
-      }
-
-      // Fallback to first match for the day if no time match or not today
-      if (!matchingSchedule) {
-        matchingSchedule = schedules.find(s => 
-          s.className === cls?.name &&
+        // Fetch schedules for this specific class and day to be more accurate
+        // We use all schedules fetched in the other useEffect
+        let matchingSchedules = schedules.filter(s => 
+          s.className === cls.name &&
           s.day === dayName &&
           s.subject === formSubject
         );
-      }
 
-      if (matchingSchedule) {
-        const range = matchingSchedule.meetingNoEnd 
-          ? `${matchingSchedule.meetingNo}-${matchingSchedule.meetingNoEnd}`
-          : `${matchingSchedule.meetingNo}`;
-        setFormData(prev => ({ ...prev, meetingNo: range }));
+        if (matchingSchedules.length > 0) {
+          // Sort by meetingNo to get the range correctly
+          matchingSchedules.sort((a, b) => (a.meetingNo || 0) - (b.meetingNo || 0));
+          
+          const first = matchingSchedules[0];
+          const last = matchingSchedules[matchingSchedules.length - 1];
+          
+          let range = "";
+          if (first.meetingNo === last.meetingNo && !first.meetingNoEnd) {
+            range = `${first.meetingNo}`;
+          } else {
+            const start = first.meetingNo;
+            const end = last.meetingNoEnd || last.meetingNo;
+            range = start === end ? `${start}` : `${start}-${end}`;
+          }
+          
+          setFormData(prev => ({ ...prev, meetingNo: range }));
+        }
       }
-    }
+    };
+    
+    autoPopulateMeetingNo();
   }, [formData.classId, formData.date, formSubject, schedules, classes]);
   
   // Initialize Subject based on Teacher Type
