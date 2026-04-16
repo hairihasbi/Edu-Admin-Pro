@@ -1403,10 +1403,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                         whereClauses.push("user_id = ?"); args = [userId];
                     }
                 }
-                else if (['scores','schedules','materials','inventory','home_visits','parent_calls','teacher_calendar'].includes(tableConfig.table)) { 
+                else if (['scores','materials','inventory','home_visits','parent_calls','teacher_calendar'].includes(tableConfig.table)) { 
                     if (userNpsn && userNpsn !== 'DEFAULT') {
                         whereClauses.push("(user_id = ? OR user_id IN (SELECT id FROM users WHERE school_npsn = ?))"); 
                         args = [userId, userNpsn];
+                    } else {
+                        whereClauses.push("user_id = ?"); args = [userId]; 
+                    }
+                }
+                else if (tableConfig.table === 'schedules') {
+                    // Schedules should be visible to everyone in the same school (so teachers see Wakasek's input)
+                    if (userNpsn && userNpsn !== 'DEFAULT') {
+                        whereClauses.push("school_npsn = ?"); 
+                        args = [userNpsn];
                     } else {
                         whereClauses.push("user_id = ?"); args = [userId]; 
                     }
