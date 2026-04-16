@@ -437,9 +437,35 @@ export interface SupervisionResult extends Syncable {
   teacherId: string;
   schoolNpsn: string;
   date: string;
-  score: number;
-  notes?: string;
-  aspects: {
+  score: number; // Overall score
+  notes?: string; // Overall notes
+  
+  // Section 1: Administrasi Perencanaan Pembelajaran
+  planningAdmin?: {
+    scores: Record<string, number>;
+    comments: Record<string, string>;
+    totalRealScore: number;
+    finalScore: number;
+    predicate: string;
+    coachingSuggestion?: string;
+  };
+
+  // Section 2: RPP Guru (Placeholder)
+  lessonPlan?: {
+    score: number;
+    notes?: string;
+    aspects?: { aspect: string; score: number; comment?: string }[];
+  };
+
+  // Section 3: Pelaksanaan Pembelajaran (Placeholder)
+  implementation?: {
+    score: number;
+    notes?: string;
+    aspects?: { aspect: string; score: number; comment?: string }[];
+  };
+
+  // Legacy support
+  aspects?: {
     aspect: string;
     score: number;
     comment?: string;
