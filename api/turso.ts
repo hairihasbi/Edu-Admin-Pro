@@ -45,6 +45,7 @@ const DB_SCHEMAS = [
         teacher_type TEXT,
         phase TEXT,
         secondary_subject TEXT,
+        is_supervisor INTEGER DEFAULT 0,
         last_modified INTEGER,
         version INTEGER DEFAULT 1,
         deleted INTEGER DEFAULT 0
@@ -498,6 +499,31 @@ const DB_SCHEMAS = [
     `ALTER TABLE system_settings ADD COLUMN headmaster_name TEXT`,
     `ALTER TABLE system_settings ADD COLUMN headmaster_nip TEXT`,
     `ALTER TABLE system_settings ADD COLUMN school_city TEXT`,
+    `ALTER TABLE users ADD COLUMN is_supervisor INTEGER DEFAULT 0`,
+    `CREATE TABLE IF NOT EXISTS supervision_assignments (
+        id TEXT PRIMARY KEY,
+        supervisor_id TEXT,
+        teacher_id TEXT,
+        school_npsn TEXT,
+        status TEXT,
+        scheduled_date TEXT,
+        last_modified INTEGER,
+        version INTEGER DEFAULT 1,
+        deleted INTEGER DEFAULT 0
+    )`,
+    `CREATE TABLE IF NOT EXISTS supervision_results (
+        id TEXT PRIMARY KEY,
+        assignment_id TEXT,
+        supervisor_id TEXT,
+        teacher_id TEXT,
+        date TEXT,
+        score REAL,
+        notes TEXT,
+        aspects TEXT,
+        last_modified INTEGER,
+        version INTEGER DEFAULT 1,
+        deleted INTEGER DEFAULT 0
+    )`,
     `CREATE TABLE IF NOT EXISTS home_visits (
         id TEXT PRIMARY KEY,
         student_id TEXT,
@@ -572,8 +598,8 @@ const getTableConfig = (collection: string) => {
   switch (collection) {
     case 'eduadmin_users': return { 
         table: 'users', 
-        columns: ['id', 'username', 'password', 'full_name', 'role', 'status', 'school_name', 'school_npsn', 'nip', 'email', 'phone', 'subject', 'secondary_subject', 'avatar', 'additional_role', 'homeroom_class_id', 'homeroom_class_name', 'rpp_usage_count', 'rpp_last_reset', 'teacher_type', 'phase', 'last_modified', 'version', 'deleted'], 
-        mapFn: (item: any) => [s(item.id), s(item.username), s(item.password), s(item.fullName), s(item.role), s(item.status), s(item.schoolName), s(item.schoolNpsn), s(item.nip), s(item.email), s(item.phone), s(item.subject), s(item.secondarySubject), s(item.avatar), s(item.additionalRole), s(item.homeroomClassId), s(item.homeroomClassName), item.rppUsageCount || 0, s(item.rppLastReset), s(item.teacherType), s(item.phase), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] 
+        columns: ['id', 'username', 'password', 'full_name', 'role', 'status', 'school_name', 'school_npsn', 'nip', 'email', 'phone', 'subject', 'secondary_subject', 'is_supervisor', 'avatar', 'additional_role', 'homeroom_class_id', 'homeroom_class_name', 'rpp_usage_count', 'rpp_last_reset', 'teacher_type', 'phase', 'last_modified', 'version', 'deleted'], 
+        mapFn: (item: any) => [s(item.id), s(item.username), s(item.password), s(item.fullName), s(item.role), s(item.status), s(item.schoolName), s(item.schoolNpsn), s(item.nip), s(item.email), s(item.phone), s(item.subject), s(item.secondarySubject), item.isSupervisor ? 1 : 0, s(item.avatar), s(item.additionalRole), s(item.homeroomClassId), s(item.homeroomClassName), item.rppUsageCount || 0, s(item.rppLastReset), s(item.teacherType), s(item.phase), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] 
     };
     case 'eduadmin_classes': return { table: 'classes', columns: ['id', 'user_id', 'school_npsn', 'name', 'description', 'student_count', 'homeroom_teacher_id', 'homeroom_teacher_name', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.userId), s(item.schoolNpsn || 'DEFAULT'), s(item.name), s(item.description), s(item.studentCount), s(item.homeroomTeacherId), s(item.homeroomTeacherName), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_students': return { table: 'students', columns: ['id', 'class_id', 'school_npsn', 'name', 'nis', 'gender', 'phone', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.classId), s(item.schoolNpsn || 'DEFAULT'), s(item.name), s(item.nis), s(item.gender), s(item.phone || ''), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
@@ -619,6 +645,16 @@ const getTableConfig = (collection: string) => {
         columns: ['id', 'student_id', 'student_name', 'teacher_id', 'class_id', 'visual_score', 'auditory_score', 'kinesthetic_score', 'dominant_style', 'assessment_date', 'method', 'last_modified', 'version', 'deleted'], 
         mapFn: (item: any) => [s(item.id), s(item.studentId), s(item.studentName), s(item.teacherId), s(item.classId), s(item.visualScore), s(item.auditoryScore), s(item.kinestheticScore), s(item.dominantStyle), s(item.assessmentDate), s(item.method), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] 
     };
+    case 'eduadmin_supervision_assignments': return { 
+        table: 'supervision_assignments', 
+        columns: ['id', 'supervisor_id', 'teacher_id', 'school_npsn', 'status', 'scheduled_date', 'last_modified', 'version', 'deleted'], 
+        mapFn: (item: any) => [s(item.id), s(item.supervisorId), s(item.teacherId), s(item.schoolNpsn), s(item.status), s(item.scheduledDate), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] 
+    };
+    case 'eduadmin_supervision_results': return { 
+        table: 'supervision_results', 
+        columns: ['id', 'assignment_id', 'supervisor_id', 'teacher_id', 'date', 'score', 'notes', 'aspects', 'last_modified', 'version', 'deleted'], 
+        mapFn: (item: any) => [s(item.id), s(item.assignmentId), s(item.supervisorId), s(item.teacherId), s(item.date), s(item.score), s(item.notes), JSON.stringify(item.aspects || []), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] 
+    };
     default:
       return null;
   }
@@ -650,6 +686,7 @@ const mapRowToJSON = (collection: string, row: any) => {
         rppLastReset: row.rpp_last_reset,
         teacherType: row.teacher_type,
         phase: row.phase,
+        isSupervisor: Boolean(row.is_supervisor),
         lastModified: row.last_modified,
         version: row.version,
         deleted: Boolean(row.deleted)
@@ -806,6 +843,17 @@ const mapRowToJSON = (collection: string, row: any) => {
         visualScore: row.visual_score, auditoryScore: row.auditory_score,
         kinestheticScore: row.kinesthetic_score, dominantStyle: row.dominant_style,
         assessmentDate: row.assessment_date, method: row.method,
+        lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
+    };
+    case 'eduadmin_supervision_assignments': return {
+        id: row.id, supervisorId: row.supervisor_id, teacherId: row.teacher_id,
+        schoolNpsn: row.school_npsn, status: row.status, scheduledDate: row.scheduled_date,
+        lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
+    };
+    case 'eduadmin_supervision_results': return {
+        id: row.id, assignmentId: row.assignment_id, supervisorId: row.supervisor_id,
+        teacherId: row.teacher_id, date: row.date, score: row.score, notes: row.notes,
+        aspects: parseJSONSafe(row.aspects),
         lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
     };
     default:
@@ -1470,6 +1518,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     if (userNpsn) {
                         whereClauses.push("picket_id IN (SELECT id FROM daily_pickets WHERE school_npsn = ?)");
                         args = [userNpsn];
+                    }
+                }
+                else if (tableConfig.table === 'supervision_assignments') {
+                    if (userNpsn && userNpsn !== 'DEFAULT') {
+                        whereClauses.push("school_npsn = ?");
+                        args = [userNpsn];
+                    } else {
+                        whereClauses.push("(supervisor_id = ? OR teacher_id = ?)");
+                        args = [userId, userId];
+                    }
+                }
+                else if (tableConfig.table === 'supervision_results') {
+                    if (userNpsn && userNpsn !== 'DEFAULT') {
+                        whereClauses.push("(supervisor_id IN (SELECT id FROM users WHERE school_npsn = ?) OR teacher_id IN (SELECT id FROM users WHERE school_npsn = ?))");
+                        args = [userNpsn, userNpsn];
+                    } else {
+                        whereClauses.push("(supervisor_id = ? OR teacher_id = ?)");
+                        args = [userId, userId];
                     }
                 }
             }
