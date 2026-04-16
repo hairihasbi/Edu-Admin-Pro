@@ -6,7 +6,8 @@ import {
   TeachingSchedule, LogEntry, MasterSubject, Ticket, 
   StudentViolation, StudentPointReduction, StudentAchievement, CounselingSession, EmailConfig,
   WhatsAppConfig, Notification, ApiKey, SystemSettings, Donation, DailyPicket, StudentIncident,
-  TeacherCalendarEvent, PasswordReset, ClassInventory, HomeVisit, ParentCall, LearningStyleAssessment
+  TeacherCalendarEvent, PasswordReset, ClassInventory, HomeVisit, ParentCall, LearningStyleAssessment,
+  SupervisionAssignment, SupervisionResult
 } from '../types';
 
 export class EduAdminDatabase extends Dexie {
@@ -41,6 +42,8 @@ export class EduAdminDatabase extends Dexie {
   homeVisits!: Table<HomeVisit>;
   parentCalls!: Table<ParentCall>;
   learningStyleAssessments!: Table<LearningStyleAssessment>;
+  supervisionAssignments!: Table<SupervisionAssignment>;
+  supervisionResults!: Table<SupervisionResult>;
 
   constructor() {
     super('EduAdminDB');
@@ -50,8 +53,8 @@ export class EduAdminDatabase extends Dexie {
     // * = Multi-entry index (not used here)
     // [field] = Indexed field for searching
     // Added schoolNpsn indexes for multi-tenancy filtering
-    // Bumped to version 28 to include learningStyleAssessments
-    (this as any).version(28).stores({
+    // Bumped to version 29 to include supervision tables
+    (this as any).version(29).stores({
       users: '&id, username, role, status, schoolNpsn, isSynced',
       classes: '&id, userId, schoolNpsn, name, homeroomTeacherId, isSynced', 
       students: '&id, classId, schoolNpsn, name, nis, gender, isSynced', 
@@ -80,7 +83,9 @@ export class EduAdminDatabase extends Dexie {
       classInventory: '&id, classId, userId, schoolNpsn, isSynced',
       homeVisits: '&id, studentId, classId, schoolNpsn, userId, isSynced',
       parentCalls: '&id, studentId, classId, schoolNpsn, userId, isSynced',
-      learningStyleAssessments: '&id, studentId, classId, schoolNpsn, userId, isSynced'
+      learningStyleAssessments: '&id, studentId, classId, schoolNpsn, userId, isSynced',
+      supervisionAssignments: '&id, supervisorId, teacherId, schoolNpsn, status, isSynced',
+      supervisionResults: '&id, assignmentId, supervisorId, teacherId, schoolNpsn, date, isSynced'
     });
   }
 }

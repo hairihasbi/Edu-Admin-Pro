@@ -6,7 +6,8 @@ import {
   TeachingSchedule, LogEntry, MasterSubject, Ticket, 
   StudentViolation, StudentPointReduction, StudentAchievement, CounselingSession, 
   EmailConfig, WhatsAppConfig, Notification, ApiKey, SystemSettings,
-  BackupData, StudentWithDetails, LessonPlanRequest, DashboardStatsData, TeacherCalendarEvent, PasswordReset, ClassInventory, HomeVisit, ParentCall, LearningStyleAssessment
+  BackupData, StudentWithDetails, LessonPlanRequest, DashboardStatsData, TeacherCalendarEvent, PasswordReset, ClassInventory, HomeVisit, ParentCall, LearningStyleAssessment,
+  SupervisionAssignment, SupervisionResult
 } from '../types';
 import { initTurso, pushToTurso, pullFromTurso, deleteFromTurso, clearRemoteTable, requestPasswordResetApi, verifyResetTokenApi, completePasswordResetApi } from './tursoService';
 import bcrypt from 'bcryptjs';
@@ -2036,4 +2037,71 @@ export const submitPublicAssessment = async (assessment: any) => {
         console.error("submitPublicAssessment Error:", e);
         return null;
     }
+};
+
+// --- SUPERVISION ---
+export const toggleSupervisorStatus = async (userId: string, isSupervisor: boolean) => {
+    await db.users.update(userId, { isSupervisor, lastModified: Date.now(), isSynced: false });
+    triggerDebouncedSync();
+};
+
+export const getSupervisionAssignments = async (schoolNpsn: string) => {
+    return await db.supervisionAssignments.where('schoolNpsn').equals(schoolNpsn).toArray();
+};
+
+export const getAssignmentsForSupervisor = async (supervisorId: string) => {
+    return await db.supervisionAssignments.where('supervisorId').equals(supervisorId).toArray();
+};
+
+export const saveSupervisionAssignment = async (assignment: Omit<SupervisionAssignment, 'id'|'lastModified'|'isSynced'>) => {
+    const item: SupervisionAssignment = {
+        ...assignment,
+        id: uuidv4(),
+        lastModified: Date.now(),
+        isSynced: false
+    };
+    await db.supervisionAssignments.put(item);
+    triggerDebouncedSync();
+    return item;
+};
+
+export const deleteSupervisionAssignment = async (id: string) => {
+    await db.supervisionAssignments.delete(id);
+    pushToTurso('eduadmin_supervision_assignments', [{id, deleted: true}]);
+};
+
+export const getSupervisionResults = async (teacherId?: string, supervisorId?: string) => {
+    if (teacherId) {
+        return await db.supervisionResults.where('teacherId').equals(teacherId).toArray();
+    }
+    if (supervisorId) {
+        return await db.supervisionResults.where('supervisorId').equals(supervisorId).toArray();
+    }
+    return await db.supervisionResults.toArray();
+};
+
+export const getSupervisionResultsForSchool = async (schoolNpsn: string) => {
+    return await db.supervisionResults.where('schoolNpsn').equals(schoolNpsn).toArray();
+};
+
+export const saveSupervisionResult = async (result: Omit<SupervisionResult, 'id'|'lastModified'|'isSynced'>) => {
+    const item: SupervisionResult = {
+        ...result,
+        id: uuidv4(),
+        lastModified: Date.now(),
+        isSynced: false
+    };
+    await db.supervisionResults.put(item);
+    
+    // Mark assignment as completed
+    if (item.assignmentId) {
+        await db.supervisionAssignments.update(item.assignmentId, { 
+            status: 'COMPLETED', 
+            lastModified: Date.now(), 
+            isSynced: false 
+        });
+    }
+    
+    triggerDebouncedSync();
+    return item;
 };
