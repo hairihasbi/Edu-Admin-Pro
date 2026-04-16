@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { User, SupervisionAssignment, SupervisionResult } from '../types';
-import { getAssignmentsForSupervisor, getSchoolTeachers, saveSupervisionResult } from '../services/database';
+import { getAssignmentsForSupervisor, getSchoolTeachers, saveSupervisionResult, getSupervisionResultByAssignment, updateSupervisionAssignmentStatus } from '../services/database';
 import { ClipboardCheck, User as UserIcon, Calendar, CheckCircle, AlertCircle, Loader2, ChevronRight, Save, Star } from './Icons';
 
 interface SupervisionAssessmentProps {
@@ -106,6 +106,7 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
   const [generalNotes, setGeneralNotes] = useState('');
   
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     if (!user.isSupervisor) {
@@ -115,6 +116,18 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
     fetchData();
   }, [user.id, user.isSupervisor]);
 
+  useEffect(() => {
+    // Handle deep link to an assignment
+    const params = new URLSearchParams(location.search);
+    const assignmentId = params.get('assignmentId');
+    if (assignmentId && assignments.length > 0) {
+      const target = assignments.find(a => a.id === assignmentId);
+      if (target && selectedAssignment?.id !== target.id) {
+        handleSelectAssignment(target);
+      }
+    }
+  }, [location.search, assignments]);
+
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -122,7 +135,8 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
         getAssignmentsForSupervisor(user.id),
         getSchoolTeachers(user.schoolNpsn!)
       ]);
-      setAssignments(myAssignments.filter(a => a.status === 'PENDING'));
+      // Show both pending and completed assignments so they can be edited
+      setAssignments(myAssignments.sort((a,b) => (a.status === 'PENDING' ? -1 : 1)));
       setTeachers(schoolTeachers);
     } catch (error) {
       console.error("Failed to fetch assignments:", error);
@@ -131,39 +145,67 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
     }
   };
 
-  const handleSelectAssignment = (assignment: SupervisionAssignment) => {
+  const handleSelectAssignment = async (assignment: SupervisionAssignment) => {
     setSelectedAssignment(assignment);
+    setIsSaving(true);
     
-    // Reset Tab 1
-    const initialPlanningScores: Record<string, number> = {};
-    PLANNING_ADMIN_COMPONENTS.forEach(c => { initialPlanningScores[c] = 0; });
-    setPlanningScores(initialPlanningScores);
-    setPlanningComments({});
-    setCoachingSuggestion('');
+    try {
+      const existing = await getSupervisionResultByAssignment(assignment.id);
 
-    // Reset Tab 2
-    const initialLessonPlanScores: Record<string, number> = {};
-    LESSON_PLAN_COMPONENTS.forEach(c => { initialLessonPlanScores[c] = 0; });
-    setLessonPlanScores(initialLessonPlanScores);
-    setLessonPlanComments({});
-    setLessonPlanCoaching('');
+      if (existing) {
+        // Load Tab 1
+        setPlanningScores(existing.planningAdmin?.scores || {});
+        setPlanningComments(existing.planningAdmin?.comments || {});
+        setCoachingSuggestion(existing.planningAdmin?.coachingSuggestion || '');
 
-    // Reset Tab 3
-    const initialImplScores: Record<string, number> = {};
-    IMPLEMENTATION_COMPONENTS.forEach(c => { initialImplScores[c] = 1; }); // Min score is 1 for this one
-    setImplScores(initialImplScores);
-    setImplComments({});
-    setImplCoaching('');
+        // Load Tab 2
+        setLessonPlanScores(existing.lessonPlan?.scores || {});
+        setLessonPlanComments(existing.lessonPlan?.comments || {});
+        setLessonPlanCoaching(existing.lessonPlan?.coachingSuggestion || '');
 
-    // Reset Legacy
-    const initialScores: Record<string, number> = {};
-    SUPERVISION_ASPECTS.forEach(aspect => { initialScores[aspect] = 0; });
-    setScores(initialScores);
-    setComments({});
-    setGeneralNotes('');
-    
-    setSuccessMessage('');
-    setActiveTab('PLANNING');
+        // Load Tab 3
+        setImplScores(existing.implementation?.scores || {});
+        setImplComments(existing.implementation?.comments || {});
+        setImplCoaching(existing.implementation?.coachingSuggestion || '');
+
+        // Load Legacy/Notes
+        setScores({}); // Aspect scores are legacy
+        setComments({});
+        setGeneralNotes(existing.notes || '');
+      } else {
+        // Reset Tab 1
+        const initialPlanningScores: Record<string, number> = {};
+        PLANNING_ADMIN_COMPONENTS.forEach(c => { initialPlanningScores[c] = 0; });
+        setPlanningScores(initialPlanningScores);
+        setPlanningComments({});
+        setCoachingSuggestion('');
+
+        // Reset Tab 2
+        const initialLessonPlanScores: Record<string, number> = {};
+        LESSON_PLAN_COMPONENTS.forEach(c => { initialLessonPlanScores[c] = 0; });
+        setLessonPlanScores(initialLessonPlanScores);
+        setLessonPlanComments({});
+        setLessonPlanCoaching('');
+
+        // Reset Tab 3
+        const initialImplScores: Record<string, number> = {};
+        IMPLEMENTATION_COMPONENTS.forEach(c => { initialImplScores[c] = 1; });
+        setImplScores(initialImplScores);
+        setImplComments({});
+        setImplCoaching('');
+
+        // Reset Legacy
+        setScores({});
+        setComments({});
+        setGeneralNotes('');
+      }
+    } catch (error) {
+      console.error("Error loading existing result:", error);
+    } finally {
+      setIsSaving(false);
+      setSuccessMessage('');
+      setActiveTab('PLANNING');
+    }
   };
 
   const calculatePlanningResults = () => {
@@ -202,7 +244,7 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
     return { totalRealScore, finalScore, predicate };
   };
 
-  const handleSubmit = async () => {
+  const handleSaveTab = async () => {
     if (!selectedAssignment) return;
 
     setIsSaving(true);
@@ -211,19 +253,13 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
       const lessonPlanData = calculateLessonPlanResults();
       const implData = calculateImplementationResults();
 
-      const legacyAspects = SUPERVISION_ASPECTS.map(aspect => ({
-        aspect,
-        score: scores[aspect] || 0,
-        comment: comments[aspect] || ''
-      }));
-
-      const result: Omit<SupervisionResult, 'id'|'lastModified'|'isSynced'> = {
+      const result: Partial<SupervisionResult> & { assignmentId: string } = {
         assignmentId: selectedAssignment.id,
         supervisorId: user.id,
         teacherId: selectedAssignment.teacherId,
         schoolNpsn: user.schoolNpsn!,
         date: new Date().toISOString().split('T')[0],
-        score: (planningData.finalScore + lessonPlanData.finalScore + implData.finalScore) / 3, // Combined average
+        score: (planningData.finalScore + lessonPlanData.finalScore + implData.finalScore) / 3,
         notes: generalNotes,
         planningAdmin: {
           scores: planningScores,
@@ -248,16 +284,32 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
           finalScore: implData.finalScore,
           predicate: implData.predicate,
           coachingSuggestion: implCoaching
-        },
-        aspects: legacyAspects // Keep for backward compatibility
+        }
       };
 
       await saveSupervisionResult(result);
-      setSuccessMessage("Penilaian supervisi berhasil disimpan!");
+      setSuccessMessage(`Progres ${activeTab === 'PLANNING' ? 'Administrasi' : activeTab === 'RPP' ? 'RPP' : 'Pelaksanaan'} berhasil disimpan!`);
+      setTimeout(() => setSuccessMessage(''), 3000);
+    } catch (error) {
+      console.error("Failed to save progress:", error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleFinishSupervision = async () => {
+    if (!selectedAssignment) return;
+    if (!confirm("Selesaikan supervisi ini? Setelah diselesaikan, hasil akan muncul di laporan monitoring.")) return;
+
+    setIsSaving(true);
+    try {
+      await handleSaveTab();
+      await updateSupervisionAssignmentStatus(selectedAssignment.id, 'COMPLETED');
+      setSuccessMessage("Supervisi telah diselesaikan!");
       setSelectedAssignment(null);
       await fetchData();
     } catch (error) {
-      console.error("Failed to save supervision result:", error);
+      console.error("Failed to finish supervision:", error);
     } finally {
       setIsSaving(false);
     }
@@ -300,40 +352,53 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
           <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm">
             <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
               <Calendar className="text-blue-600" size={18} />
-              Tugas Menunggu
+              Daftar Penugasan
             </h3>
             
             {assignments.length === 0 ? (
               <div className="text-center py-10 bg-gray-50 rounded-lg border border-dashed border-gray-200">
                 <AlertCircle className="mx-auto text-gray-300 mb-2" size={32} />
-                <p className="text-xs text-gray-400 italic">Tidak ada penugasan supervisi yang aktif.</p>
+                <p className="text-xs text-gray-400 italic">Tidak ada penugasan supervisi.</p>
               </div>
             ) : (
               <div className="space-y-3">
                 {assignments.map(a => {
                   const teacher = teachers.find(t => t.id === a.teacherId);
                   const isSelected = selectedAssignment?.id === a.id;
+                  const isCompleted = a.status === 'COMPLETED';
                   return (
                     <button
                       key={a.id}
                       onClick={() => handleSelectAssignment(a)}
-                      className={`w-full text-left p-4 rounded-xl border transition flex items-center justify-between group ${
+                      className={`w-full text-left p-4 rounded-xl border transition flex items-center justify-between group relative overflow-hidden ${
                         isSelected 
                           ? 'bg-purple-50 border-purple-200 ring-2 ring-purple-100' 
                           : 'bg-white border-gray-100 hover:border-purple-200 hover:bg-gray-50'
                       }`}
                     >
+                      {isCompleted && (
+                        <div className="absolute top-0 right-0 p-1 bg-green-500 text-white rounded-bl-lg">
+                          <CheckCircle size={10} />
+                        </div>
+                      )}
                       <div className="min-w-0">
                         <div className={`text-sm font-bold truncate ${isSelected ? 'text-purple-700' : 'text-gray-800'}`}>
                           {teacher?.fullName || 'Guru'}
                         </div>
-                        <div className="text-[10px] text-gray-500 mt-1 flex items-center gap-1">
-                          <Calendar size={12} />
-                          {a.startDate && a.endDate ? (
-                            `Rentang: ${new Date(a.startDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })} - ${new Date(a.endDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}`
-                          ) : (
-                            `Rencana: ${a.scheduledDate ? new Date(a.scheduledDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) : '-'}`
-                          )}
+                        <div className="text-[10px] text-gray-500 mt-1 flex flex-col gap-1">
+                          <div className="flex items-center gap-1">
+                            <Calendar size={12} />
+                            {a.startDate && a.endDate ? (
+                              `${new Date(a.startDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })} - ${new Date(a.endDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}`
+                            ) : (
+                              `${a.scheduledDate ? new Date(a.scheduledDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) : '-'}`
+                            )}
+                          </div>
+                          <div className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-bold w-fit ${
+                            isCompleted ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+                          }`}>
+                            {isCompleted ? 'SELESAI (EDITABLE)' : 'MENUNGGU'}
+                          </div>
                         </div>
                       </div>
                       <ChevronRight size={18} className={`transition ${isSelected ? 'text-purple-500 translate-x-1' : 'text-gray-300 group-hover:text-purple-400'}`} />
@@ -718,15 +783,28 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
                   </div>
                 )}
 
-                <div className="flex justify-end pt-8 border-t border-gray-100 mt-8">
-                  <button
-                    onClick={handleSubmit}
-                    disabled={isSaving}
-                    className="flex items-center gap-2 px-8 py-3 bg-purple-600 text-white rounded-xl font-bold hover:bg-purple-700 transition shadow-lg shadow-purple-200 disabled:opacity-50"
-                  >
-                    {isSaving ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />}
-                    Simpan Penilaian
-                  </button>
+                <div className="flex flex-col md:flex-row justify-between items-center pt-8 border-t border-gray-100 mt-8 gap-4">
+                  <div className="text-xs text-gray-500 italic max-w-sm">
+                    Penilaian disimpan secara berkelanjutan. Anda bisa menyimpan tiap tab dan kembali lagi nanti untuk menyelesaikan seluruh instrumen.
+                  </div>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={handleSaveTab}
+                      disabled={isSaving}
+                      className="flex items-center gap-2 px-6 py-2.5 bg-blue-50 text-blue-600 rounded-xl font-bold hover:bg-blue-100 transition border border-blue-200 disabled:opacity-50"
+                    >
+                      {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                      Simpan Progres
+                    </button>
+                    <button
+                      onClick={handleFinishSupervision}
+                      disabled={isSaving}
+                      className="flex items-center gap-2 px-6 py-2.5 bg-purple-600 text-white rounded-xl font-bold hover:bg-purple-700 transition shadow-lg shadow-purple-200 disabled:opacity-50"
+                    >
+                      {isSaving ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle size={18} />}
+                      {selectedAssignment.status === 'COMPLETED' ? 'Update & Selesai' : 'Selesaikan Supervisi'}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

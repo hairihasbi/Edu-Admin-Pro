@@ -1,8 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { User, SupervisionResult } from '../types';
 import { getSupervisionResults, getSupervisionResultsForSchool, getSchoolTeachers } from '../services/database';
-import { ClipboardCheck, User as UserIcon, Calendar, Star, ChevronDown, ChevronUp, Search, Filter, Loader2, AlertCircle, Shield } from './Icons';
+import { ClipboardCheck, User as UserIcon, Calendar, Star, ChevronDown, ChevronUp, Search, Filter, Loader2, AlertCircle, Shield, Pencil as Edit } from './Icons';
 
 interface SupervisionResultsProps {
   user: User;
@@ -16,6 +17,7 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
   const [searchTerm, setSearchTerm] = useState('');
 
   const isWakasek = user.additionalRole === 'WAKASEK_KURIKULUM';
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchData();
@@ -157,13 +159,27 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
                         <div className="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm">
                           <div className="bg-gray-50 p-3 border-b border-gray-100 flex justify-between items-center">
                             <h5 className="text-xs font-black text-gray-500 uppercase tracking-widest">Administrasi Perencanaan Pembelajaran</h5>
-                            <span className={`px-3 py-1 rounded-full text-[10px] font-black text-white ${
-                              result.planningAdmin.predicate === 'BAIK SEKALI' ? 'bg-green-500' :
-                              result.planningAdmin.predicate === 'BAIK' ? 'bg-blue-500' :
-                              result.planningAdmin.predicate === 'CUKUP' ? 'bg-yellow-500' : 'bg-red-500'
-                            }`}>
-                              {result.planningAdmin.predicate} ({result.planningAdmin.finalScore.toFixed(2)})
-                            </span>
+                            <div className="flex items-center gap-2">
+                              {supervisor?.id === user.id && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigate(`/supervision-assessment?assignmentId=${result.assignmentId}`);
+                                  }}
+                                  className="flex items-center gap-1 px-2 py-1 bg-white border border-gray-200 rounded-lg text-[10px] font-bold text-blue-600 hover:bg-blue-50 transition shadow-sm"
+                                >
+                                  <Edit size={12} />
+                                  Edit Penilaian
+                                </button>
+                              )}
+                              <span className={`px-3 py-1 rounded-full text-[10px] font-black text-white ${
+                                result.planningAdmin.predicate === 'BAIK SEKALI' ? 'bg-green-500' :
+                                result.planningAdmin.predicate === 'BAIK' ? 'bg-blue-500' :
+                                result.planningAdmin.predicate === 'CUKUP' ? 'bg-yellow-500' : 'bg-red-500'
+                              }`}>
+                                {result.planningAdmin.predicate} ({result.planningAdmin.finalScore.toFixed(2)})
+                              </span>
+                            </div>
                           </div>
                           <div className="overflow-x-auto">
                             <table className="w-full text-[10px] border-collapse">
