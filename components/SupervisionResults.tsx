@@ -28,7 +28,10 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
       if (isWakasek) {
         data = await getSupervisionResultsForSchool(user.schoolNpsn!);
       } else {
-        data = await getSupervisionResults(user.id); // As teacher (being supervised)
+        // STRICT FILTERING: Only retrieve and show results where the current user is the teacher being supervised.
+        // Supervisors should NOT be able to see the results of teachers they supervised here.
+        const rawResults = await getSupervisionResults(user.id);
+        data = rawResults.filter(r => r.teacherId === user.id);
       }
       
       const schoolTeachers = await getSchoolTeachers(user.schoolNpsn!);
@@ -67,7 +70,9 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
             <ClipboardCheck size={24} />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-gray-800">Hasil Supervisi Akademik</h2>
+            <h2 className="text-xl font-bold text-gray-800">
+              {isWakasek ? 'Monitoring Hasil Supervisi' : 'Hasil Supervisi Akademik Saya'}
+            </h2>
             <p className="text-gray-500 text-sm">
               {isWakasek 
                 ? "Pantau hasil penilaian supervisi seluruh guru di sekolah." 
