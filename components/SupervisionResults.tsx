@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, SupervisionResult } from '../types';
 import { getSupervisionResults, getSupervisionResultsForSchool, getSchoolTeachers } from '../services/database';
-import { ClipboardCheck, User as UserIcon, Calendar, Star, ChevronDown, ChevronUp, Search, Filter, Loader2, AlertCircle } from './Icons';
+import { ClipboardCheck, User as UserIcon, Calendar, Star, ChevronDown, ChevronUp, Search, Filter, Loader2, AlertCircle, Shield } from './Icons';
 
 interface SupervisionResultsProps {
   user: User;
@@ -74,6 +74,12 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
                 : "Lihat hasil penilaian supervisi yang telah dilakukan terhadap Anda."}
             </p>
           </div>
+          {!isWakasek && (
+            <div className="flex items-center gap-1.5 px-3 py-1 bg-green-50 text-green-600 rounded-full text-[10px] font-bold border border-green-100">
+              <Shield size={12} />
+              DATA PRIBADI
+            </div>
+          )}
         </div>
 
         <div className="relative">

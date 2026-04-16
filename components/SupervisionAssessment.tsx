@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { User, SupervisionAssignment, SupervisionResult } from '../types';
 import { getAssignmentsForSupervisor, getSchoolTeachers, saveSupervisionResult } from '../services/database';
 import { ClipboardCheck, User as UserIcon, Calendar, CheckCircle, AlertCircle, Loader2, ChevronRight, Save, Star } from './Icons';
@@ -30,10 +31,15 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
   const [scores, setScores] = useState<Record<string, number>>({});
   const [comments, setComments] = useState<Record<string, string>>({});
   const [generalNotes, setGeneralNotes] = useState('');
+  const navigate = useNavigate();
 
   useEffect(() => {
+    if (!user.isSupervisor) {
+      navigate('/');
+      return;
+    }
     fetchData();
-  }, [user.id]);
+  }, [user.id, user.isSupervisor]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -129,7 +135,7 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
           <ClipboardCheck size={24} />
         </div>
         <div>
-          <h2 className="text-xl font-bold text-gray-800">Penilaian Supervisi Akademik</h2>
+          <h2 className="text-xl font-bold text-gray-800">Instrumen Supervisi Akademik</h2>
           <p className="text-gray-500 text-sm">
             Lakukan penilaian terhadap rekan sejawat sesuai dengan penugasan dari Wakasek Kurikulum.
           </p>
