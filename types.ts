@@ -427,7 +427,9 @@ export interface SupervisionAssignment extends Syncable {
   teacherId: string; // User ID of the teacher being supervised
   schoolNpsn: string;
   status: 'PENDING' | 'COMPLETED';
-  scheduledDate?: string;
+  startDate?: string; // Format YYYY-MM-DD
+  endDate?: string;   // Format YYYY-MM-DD
+  scheduledDate?: string; // Legacy field for compatibility
 }
 
 export interface SupervisionResult extends Syncable {
