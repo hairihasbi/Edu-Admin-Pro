@@ -39,7 +39,7 @@ import Breadcrumbs from './components/Breadcrumbs';
 import OnboardingTour from './components/OnboardingTour';
 import ForgotPassword from './components/ForgotPassword';
 import ResetPassword from './components/ResetPassword';
-import { initDatabase, loginUser, registerUser, getNotifications, createNotification, markNotificationAsRead, clearNotifications, getSystemSettings, syncAllData, checkSchoolNameByNpsn, updateUserProfile } from './services/database';
+import { initDatabase, loginUser, registerUser, getNotifications, createNotification, markNotificationAsRead, clearNotifications, getSystemSettings, syncAllData, checkSchoolNameByNpsn, updateUserProfile, getUserProfile } from './services/database';
 import { db } from './services/db';
 import { 
   LayoutDashboard, 
@@ -184,6 +184,19 @@ const AppContent: React.FC = () => {
   useEffect(() => {
     let isMounted = true;
 
+    // Refresh user profile from DB to catch role/status changes (like isSupervisor)
+    const refreshUserProfile = async () => {
+      if (currentUser && isMounted) {
+        const updatedUser = await getUserProfile(currentUser.id);
+        if (updatedUser && JSON.stringify(updatedUser) !== JSON.stringify(currentUser)) {
+          setCurrentUser(updatedUser);
+          localStorage.setItem('eduadmin_user', JSON.stringify(updatedUser));
+        }
+      }
+    };
+
+    const profileInterval = setInterval(refreshUserProfile, 5000); // Check every 5s
+
     // Check PWA Mode
     if (window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true) {
         setIsPWA(true);
@@ -292,6 +305,7 @@ const AppContent: React.FC = () => {
 
     return () => {
       isMounted = false;
+      clearInterval(profileInterval);
 
       window.removeEventListener('unsaved-changes', handleUnsavedStatus);
       window.removeEventListener('auth-error', handleAuthError);
@@ -316,7 +330,9 @@ const AppContent: React.FC = () => {
                       // Only update if critical fields changed to avoid loops
                       if (freshUser.rppUsageCount !== currentUser.rppUsageCount || 
                           freshUser.rppLastReset !== currentUser.rppLastReset ||
-                          freshUser.role !== currentUser.role) {
+                          freshUser.role !== currentUser.role ||
+                          freshUser.isSupervisor !== currentUser.isSupervisor ||
+                          freshUser.additionalRole !== currentUser.additionalRole) {
                           
                           console.log("[App] Sync updated user data:", freshUser);
                           setCurrentUser(freshUser);
@@ -791,13 +807,13 @@ const AppContent: React.FC = () => {
                 )}
                 <NavLink to="/picket" icon={CalendarCheck} label="Piket Harian" /> {/* NEW LINK */}
                 {currentUser.isSupervisor && (
-                  <NavLink to="/supervision-assessment" icon={ClipboardCheck} label="Penilaian Supervisi" />
+                  <NavLink to="/supervision-assessment" icon={ClipboardCheck} label="Instrumen Supervisi" />
                 )}
                 {currentUser.subject === 'Bimbingan Konseling' && (
                    <NavLink to="/guidance" icon={ShieldAlert} label="Bimbingan Konseling" />
                 )}
                 <NavLink to="/attendance" icon={CalendarCheck} label="Daftar Hadir" />
-                <NavLink to="/supervision-results" icon={ClipboardCheck} label="Hasil Supervisi" />
+                <NavLink to="/supervision-results" icon={ClipboardCheck} label="Hasil Supervisi Akademik" />
                 <NavLink to="/scope-material" icon={List} label="Lingkup Materi" />
                 <NavLink to="/journal" icon={NotebookPen} label="Jurnal Mengajar" />
                 <NavLink to="/summative" icon={Calculator} label="Asesmen Sumatif" />
