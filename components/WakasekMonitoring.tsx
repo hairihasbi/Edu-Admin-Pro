@@ -3,7 +3,8 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, TeachingJournal, AttendanceRecord, ClassRoom, TeachingSchedule } from '../types';
 import { getSchoolTeachers, getSchoolJournals, getSchoolAttendance, syncAllData, getAvailableClassesForHomeroom, getSchoolSchedules, getSchoolJournalsByRange } from '../services/database';
-import { Activity, CheckCircle, XCircle, Calendar, Users, Search, Filter, Clock, Info, AlertCircle, RefreshCcw, Loader2, BookOpen, LayoutGrid, List as ListIcon, ChevronDown, ChevronUp, TrendingUp, BarChart3, PieChart, Download, Printer, FileSpreadsheet, FileText, School } from './Icons';
+import SupervisionManager from './SupervisionManager';
+import { Activity, CheckCircle, XCircle, Calendar, Users, Search, Filter, Clock, Info, AlertCircle, RefreshCcw, Loader2, BookOpen, LayoutGrid, List as ListIcon, ChevronDown, ChevronUp, TrendingUp, BarChart3, PieChart, Download, Printer, FileSpreadsheet, FileText, School, ShieldCheck } from './Icons';
 import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -24,7 +25,7 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<'GURU' | 'KELAS' | 'PRESENSI'>('GURU');
+  const [activeTab, setActiveTab] = useState<'GURU' | 'KELAS' | 'PRESENSI' | 'SUPERVISI'>('GURU');
   const [allPeriodJournals, setAllPeriodJournals] = useState<TeachingJournal[]>([]);
   const [expandedTeacherId, setExpandedTeacherId] = useState<string | null>(null);
   const [expandedClassId, setExpandedClassId] = useState<string | null>(null);
@@ -481,10 +482,24 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
           <TrendingUp size={18} />
           Presensi Kehadiran Guru
         </button>
+        <button
+          onClick={() => setActiveTab('SUPERVISI')}
+          className={`flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-medium transition ${
+            activeTab === 'SUPERVISI' 
+              ? 'bg-white text-purple-600 shadow-sm' 
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <ShieldCheck size={18} />
+          Supervisi
+        </button>
       </div>
 
       {/* Main Content */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      {activeTab === 'SUPERVISI' ? (
+        <SupervisionManager user={user} />
+      ) : (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-center gap-4">
           <div className="relative w-full sm:w-64">
             <Search className="absolute left-3 top-2.5 text-gray-400" size={16} />
@@ -955,9 +970,10 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
           </div>
         </div>
       </div>
-    </div>
+    )}
+  </div>
 
-    {/* Printable Infographic Section */}
+  {/* Printable Infographic Section */}
       <div ref={infographicRef} className="hidden print:block p-10 bg-white font-sans text-gray-900 w-[210mm]">
         {/* Header */}
         <div className="flex items-center justify-between border-b-4 border-purple-600 pb-8 mb-10">

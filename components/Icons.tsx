@@ -24,6 +24,7 @@ import {
   School, 
   CalendarDays, 
   Calendar, // Added Calendar
+  ClipboardCheck,
   CreditCard as IdCard, // Aliased for missing export
   ClipboardList, 
   Layout,
@@ -142,6 +143,7 @@ export {
   School, 
   CalendarDays, 
   Calendar,
+  ClipboardCheck,
   IdCard, 
   ClipboardList, 
   Layout,
