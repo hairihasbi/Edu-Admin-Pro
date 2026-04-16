@@ -28,6 +28,8 @@ import BroadcastPage from './components/BroadcastPage';
 import SyncPage from './components/SyncPage'; // Import SyncPage
 import DailyPicket from './components/DailyPicket'; // Import DailyPicket
 import WakasekMonitoring from './components/WakasekMonitoring'; // Import WakasekMonitoring
+import SupervisionAssessment from './components/SupervisionAssessment';
+import SupervisionResults from './components/SupervisionResults';
 import WakasekScheduleManager from './components/WakasekScheduleManager'; // Import WakasekScheduleManager
 import DonationHistory from './components/DonationHistory'; // Import DonationHistory
 import NotificationPanel from './components/NotificationPanel';
@@ -70,6 +72,7 @@ import {
   WifiOff,
   Smartphone,
   Send,
+  ClipboardCheck,
   BrainCircuit,
   Megaphone,
   Database,
@@ -551,6 +554,7 @@ const AppContent: React.FC = () => {
     if (path.includes('guidance')) return 'Bimbingan Konseling';
     if (path.includes('broadcast')) return 'Broadcast WhatsApp';
     if (path.includes('sync')) return 'Sinkronisasi Data'; // NEW
+    if (path.includes('supervision-assessment')) return 'Penilaian Supervisi';
     if (path.includes('monitoring-kurikulum')) return 'Monitoring Kurikulum'; // NEW
     if (path.includes('learning-style')) return 'Asesmen Gaya Belajar';
     return appConfig.name || 'EduAdmin';
@@ -786,10 +790,14 @@ const AppContent: React.FC = () => {
                    </>
                 )}
                 <NavLink to="/picket" icon={CalendarCheck} label="Piket Harian" /> {/* NEW LINK */}
+                {currentUser.isSupervisor && (
+                  <NavLink to="/supervision-assessment" icon={ClipboardCheck} label="Penilaian Supervisi" />
+                )}
                 {currentUser.subject === 'Bimbingan Konseling' && (
                    <NavLink to="/guidance" icon={ShieldAlert} label="Bimbingan Konseling" />
                 )}
                 <NavLink to="/attendance" icon={CalendarCheck} label="Daftar Hadir" />
+                <NavLink to="/supervision-results" icon={ClipboardCheck} label="Hasil Supervisi" />
                 <NavLink to="/scope-material" icon={List} label="Lingkup Materi" />
                 <NavLink to="/journal" icon={NotebookPen} label="Jurnal Mengajar" />
                 <NavLink to="/summative" icon={Calculator} label="Asesmen Sumatif" />
@@ -935,9 +943,13 @@ const AppContent: React.FC = () => {
                    <Route path="/picket" element={<DailyPicket currentUser={currentUser} />} /> {/* NEW ROUTE */}
                    {currentUser.subject === 'Bimbingan Konseling' && <Route path="/guidance" element={<TeacherGuidance user={currentUser} />} />}
                    <Route path="/attendance" element={<TeacherAttendance user={currentUser} />} />
+                   <Route path="/supervision-results" element={<SupervisionResults user={currentUser} />} />
                    <Route path="/scope-material" element={<TeacherScopeMaterial user={currentUser} />} />
                    <Route path="/journal" element={<TeacherJournal user={currentUser} />} />
                    <Route path="/summative" element={<TeacherSummative user={currentUser} />} />
+                   {currentUser.isSupervisor && (
+                     <Route path="/supervision-assessment" element={<SupervisionAssessment user={currentUser} />} />
+                   )}
                    {currentUser.additionalRole === 'WAKASEK_KURIKULUM' && (
                      <>
                        <Route path="/monitoring-kurikulum" element={<WakasekMonitoring user={currentUser} />} />
