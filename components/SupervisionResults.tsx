@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, SupervisionResult } from '../types';
 import { getSupervisionResults, getSupervisionResultsForSchool, getSchoolTeachers } from '../services/database';
-import { ClipboardCheck, User as UserIcon, Calendar, Star, ChevronDown, ChevronUp, Search, Filter, Loader2, AlertCircle, Shield, Pencil as Edit } from './Icons';
+import { ClipboardCheck, User as UserIcon, Calendar, Star, ChevronDown, ChevronUp, Search, Filter, Loader2, AlertCircle, Shield, Pencil as Edit, Printer, X } from './Icons';
 
 interface SupervisionResultsProps {
   user: User;
@@ -18,6 +18,19 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
 
   const isWakasek = user.additionalRole === 'WAKASEK_KURIKULUM';
   const navigate = useNavigate();
+
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [printResult, setPrintResult] = useState<SupervisionResult | null>(null);
+  const [printConfig, setPrintConfig] = useState({
+    className: '',
+    semester: '',
+    competence: '',
+    timeAllocation: '',
+    principalName: localStorage.getItem('sup_principal_name') || '',
+    principalNip: localStorage.getItem('sup_principal_nip') || '',
+    location: localStorage.getItem('sup_location') || '',
+    date: new Date().toISOString().split('T')[0]
+  });
 
   useEffect(() => {
     fetchData();
@@ -48,9 +61,227 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
   const filteredResults = results.filter(r => {
     const teacher = teachers.find(t => t.id === r.teacherId);
     const supervisor = teachers.find(t => t.id === r.supervisorId);
-    const searchStr = `${teacher?.fullName} ${supervisor?.fullName} ${r.date}`.toLowerCase();
+    const searchStr = `${teacher?.fullName || ''} ${supervisor?.fullName || ''} ${r.date}`.toLowerCase();
     return searchStr.includes(searchTerm.toLowerCase());
   });
+
+  const handlePrint = (result: SupervisionResult) => {
+    setPrintResult(result);
+    setIsPrintModalOpen(true);
+  };
+
+  const generatePrint = () => {
+    if (!printResult) return;
+    const teacher = teachers.find(t => t.id === printResult.teacherId);
+    const supervisor = teachers.find(t => t.id === printResult.supervisorId);
+
+    const printWindow = window.open('', '', 'height=800,width=1000');
+    if (!printWindow) return;
+
+    // Save preferences
+    localStorage.setItem('sup_principal_name', printConfig.principalName);
+    localStorage.setItem('sup_principal_nip', printConfig.principalNip);
+    localStorage.setItem('sup_location', printConfig.location);
+
+    const formatDate = (dateStr: string) => {
+        return new Date(dateStr).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+    };
+
+    const generateTableRows = (scores: Record<string, number>, comments: Record<string, string>, components: string[]) => {
+        return components.map((comp, idx) => `
+            <tr>
+                <td style="text-align: center;">${idx + 1}</td>
+                <td>${comp}</td>
+                <td style="text-align: center;">${scores[comp] || 0}</td>
+                <td>${comments[comp] || ''}</td>
+            </tr>
+        `).join('');
+    };
+
+    const implComponents = [
+        { label: 'KEGIATAN PENDAHULUAN', startIdx: 0, endIdx: 5 },
+        { label: 'KEGIATAN INTI', startIdx: 5, endIdx: 11 },
+        { label: 'KEGIATAN PENUTUP', startIdx: 11, endIdx: 15 },
+        { label: 'KEGIATAN PENILAIAN HASIL BELAJAR', startIdx: 15, endIdx: 19 }
+    ];
+
+    const generateImplTableRows = (scores: Record<string, number>, comments: Record<string, string>, components: string[]) => {
+        let rows = '';
+        implComponents.forEach((section, sIdx) => {
+            rows += `
+                <tr style="background-color: #f9fafb; font-weight: bold;">
+                    <td style="text-align: center;">${String.fromCharCode(65 + sIdx)}</td>
+                    <td colspan="3">${section.label}</td>
+                </tr>
+            `;
+            const sectionComps = components.slice(section.startIdx, section.endIdx);
+            sectionComps.forEach((comp, idx) => {
+                rows += `
+                    <tr>
+                        <td style="text-align: center;">${section.startIdx + idx + 1}</td>
+                        <td>${comp}</td>
+                        <td style="text-align: center;">${scores[comp] || 0}</td>
+                        <td>${comments[comp] || ''}</td>
+                    </tr>
+                `;
+            });
+        });
+        return rows;
+    };
+
+    // Components from SupervisionAssessment.tsx constants
+    // I will redefine them here or import them if exported. They are not exported so I redefine.
+    const PLANNING_ADMIN_COMPONENTS = ["Kalender Pendidikan", "Program Tahunan", "Program Semester", "Silabus", "RPP", "Jadwal Pelajaran", "Agenda Harian", "Daftar Nilai", "KKM", "Daftar Hadir Peserta Didik", "Ketersediaan Bahan Ajar", "Buku Pedoman Guru"];
+    const LESSON_PLAN_COMPONENTS = ["Identitas Sekolah", "Identitas Mata Pelajaran", "Kelas/Semester", "Materi Pokok/Kompetensi Dasar", "Alokasi Waktu", "Tujuan Pembelajaran", "Metode & Model Pembelajaran", "Media Pembelajaran (LMS)", "Media Pembelajaran (Visual)", "Sumber Belajar", "Kegiatan Pembelajaran (Sistematis)", "Kegiatan Inti (HOTS)", "Langkah Integrasi (4C, PPK, Literasi)", "Penilaian Proses (Otentik)", "Penilaian Hasil (Mencerminkan Proses)", "Teknik Penilaian (Alat Tes/Instrumen)", "Kunci Jawaban/Rubrik"];
+    const IMPLEMENTATION_COMPONENTS = ["Memberikan motivasi & menyiapkan peserta didik", "Mengajukan pertanyaan & mengaitkan pengetahuan sebelumnya", "Menjelaskan tujuan pembelajaran/KD", "Penanaman/Pembudayaan karakter dan literasi", "Menyampaikan tugas & arahan mekanisme penyelesaian", "Menggunakan Learning Manajemen Sistem (LMS)", "Memanfaatkan fasilitas akun belajar.id", "Memanfaatkan penggunaan video, power point, dll", "Metode/Pendekatan mewujudkan suasana menyenangkan (integrasi 21st Century)", "Menggunakan media pembelajaran sebagai alat bantu", "Memanfaatkan berbagai fasilitas Sumber belajar", "Kesimpulan bersama & manfaat pembelajaran", "Memberikan umpan balik proses & hasil", "Kegiatan tindak lanjut (tugas individu/kelompok)", "Rencana kegiatan pertemuan berikutnya", "Penilaian proses sesuai perencanaan", "Penilaian hasil (tes, portofolio, penugasan)", "Teknik Penilaian (instrumen sesuai KD)", "Penerapan TIK terintegrasi & efektif"];
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Instrumen Supervisi Akademik - ${teacher?.fullName}</title>
+          <style>
+            body { font-family: 'Times New Roman', serif; font-size: 11pt; line-height: 1.4; color: #333; margin: 0; padding: 20px; }
+            .header-info { margin-bottom: 20px; width: 100%; border-collapse: collapse; }
+            .header-info td { padding: 2px 5px; }
+            h2 { text-align: center; font-size: 14pt; margin-top: 0; margin-bottom: 10px; text-decoration: underline; }
+            table.data-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+            table.data-table th, table.data-table td { border: 1px solid #000; padding: 6px; }
+            table.data-table th { background-color: #f2f2f2; text-align: center; font-weight: bold; }
+            .section-title { font-weight: bold; margin-top: 25px; margin-bottom: 5px; background: #eee; padding: 5px; border: 1px solid #000; border-bottom: none; }
+            .summary-box { margin-top: 10px; border: 1px solid #000; padding: 10px; }
+            .signature-section { margin-top: 30px; width: 100%; border-collapse: collapse; page-break-inside: avoid; }
+            .signature-section td { width: 33.33%; text-align: center; vertical-align: top; padding-top: 10px; }
+            .signature-space { height: 80px; }
+            @media print {
+              @page { size: portrait; margin: 1.5cm; }
+              button { display: none; }
+              .no-print { display: none; }
+              .page-break { page-break-before: always; }
+            }
+          </style>
+        </head>
+        <body>
+          <h2>INSTRUMEN SUPERVISI AKADEMIK</h2>
+          
+          <table class="header-info">
+            <tr>
+              <td width="150">Satuan Pendidikan</td><td width="10">:</td><td>${user.schoolName || '-'}</td>
+              <td width="150">Kelas / Semester</td><td width="10">:</td><td>${printConfig.className} / ${printConfig.semester}</td>
+            </tr>
+            <tr>
+              <td>Nama Guru</td><td>:</td><td>${teacher?.fullName || '-'}</td>
+              <td>Kompetensi Dasar</td><td>:</td><td>${printConfig.competence}</td>
+            </tr>
+            <tr>
+              <td>Mata Pelajaran</td><td>:</td><td>${teacher?.subject || '-'}</td>
+              <td>Alokasi Waktu</td><td>:</td><td>${printConfig.timeAllocation}</td>
+            </tr>
+          </table>
+
+          <div class="section-title">I. ADMINISTRASI PERENCANAAN PEMBELAJARAN</div>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th width="40">No</th>
+                <th>Komponen Administrasi</th>
+                <th width="60">Skor</th>
+                <th>Catatan Perbaikan</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${generateTableRows(printResult.planningAdmin?.scores || {}, printResult.planningAdmin?.comments || {}, PLANNING_ADMIN_COMPONENTS)}
+              <tr style="font-weight: bold;">
+                <td colspan="2" style="text-align: right;">Skor Akhir / Predikat</td>
+                <td style="text-align: center;">${printResult.planningAdmin?.finalScore.toFixed(2)}</td>
+                <td style="text-align: center;">${printResult.planningAdmin?.predicate}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="page-break"></div>
+          <h2>INSTRUMEN RENCANA PELAKSANAAN PEMBELAJARAN (RPP)</h2>
+          <div class="section-title">II. RENCANA PELAKSANAAN PEMBELAJARAN (RPP) GURU</div>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th width="40">No</th>
+                <th>Komponen RPP</th>
+                <th width="60">Skor</th>
+                <th>Catatan Perbaikan</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${generateTableRows(printResult.lessonPlan?.scores || {}, printResult.lessonPlan?.comments || {}, LESSON_PLAN_COMPONENTS)}
+              <tr style="font-weight: bold;">
+                <td colspan="2" style="text-align: right;">Skor Akhir / Predikat</td>
+                <td style="text-align: center;">${printResult.lessonPlan?.finalScore.toFixed(2)}</td>
+                <td style="text-align: center;">${printResult.lessonPlan?.predicate}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="page-break"></div>
+          <h2>INSTRUMEN SUPERVISI PELAKSANAAN PEMBELAJARAN</h2>
+          <div class="section-title">III. PELAKSANAAN PEMBELAJARAN</div>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th width="40">No</th>
+                <th>Kegiatan Pembelajaran</th>
+                <th width="60">Skor</th>
+                <th>Catatan / Penguatan</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${generateImplTableRows(printResult.implementation?.scores || {}, printResult.implementation?.comments || {}, IMPLEMENTATION_COMPONENTS)}
+              <tr style="font-weight: bold;">
+                <td colspan="2" style="text-align: right;">Skor Akhir / Predikat</td>
+                <td style="text-align: center;">${printResult.implementation?.finalScore.toFixed(2)}</td>
+                <td style="text-align: center;">${printResult.implementation?.predicate}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="summary-box">
+            <strong>Catatan Umum Supervisor:</strong><br>
+            ${printResult.notes || '-'}
+          </div>
+
+          <table class="signature-section">
+            <tr>
+              <td>
+                <p>Mengetahui,</p>
+                <p>Kepala Sekolah</p>
+                <div class="signature-space"></div>
+                <p><strong>${printConfig.principalName || '................................'}</strong></p>
+                <p>NIP. ${printConfig.principalNip || '................................'}</p>
+              </td>
+              <td>
+                <p>&nbsp;</p>
+                <p>Supervisor / Penilai</p>
+                <div class="signature-space"></div>
+                <p><strong>${supervisor?.fullName || '................................'}</strong></p>
+                <p>NIP. ${supervisor?.nip || '................................'}</p>
+              </td>
+              <td>
+                <p>${printConfig.location}, ${formatDate(printConfig.date)}</p>
+                <p>Guru Mata Pelajaran</p>
+                <div class="signature-space"></div>
+                <p><strong>${teacher?.fullName || '................................'}</strong></p>
+                <p>NIP. ${teacher?.nip || '................................'}</p>
+              </td>
+            </tr>
+          </table>
+
+          <script>
+            window.onload = function() { window.print(); window.close(); }
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    setIsPrintModalOpen(false);
+  };
 
   if (loading) {
     return (
@@ -107,7 +338,7 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
         </div>
       ) : (
         <div className="space-y-4">
-          {filteredResults.map((result) => {
+          {filteredResults.map((result: SupervisionResult) => {
             const teacher = teachers.find(t => t.id === result.teacherId);
             const supervisor = teachers.find(t => t.id === result.supervisorId);
             const isExpanded = expandedId === result.id;
@@ -138,6 +369,16 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
                   </div>
                   
                   <div className="flex items-center gap-4">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handlePrint(result);
+                      }}
+                      className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                      title="Cetak Laporan Supervisi"
+                    >
+                      <Printer size={18} />
+                    </button>
                     <div className="hidden md:flex items-center gap-1">
                       {[1, 2, 3, 4, 5].map(star => (
                         <Star 
@@ -196,7 +437,7 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
                                   <tr key={idx} className="hover:bg-gray-50/50">
                                     <td className="border-b border-r p-2 text-center">{idx + 1}</td>
                                     <td className="border-b border-r p-2 font-medium">{comp}</td>
-                                    <td className="border-b border-r p-2 text-center font-bold text-purple-600">{score}</td>
+                                    <td className="border-b border-r p-2 text-center font-bold text-purple-600">{score as React.ReactNode}</td>
                                     <td className="border-b p-2 text-gray-500 italic">{result.planningAdmin?.comments[comp] || '-'}</td>
                                   </tr>
                                 ))}
@@ -232,7 +473,7 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
                                     <tr key={idx} className="hover:bg-gray-50/50">
                                       <td className="border-b border-r p-2 text-center">{idx + 1}</td>
                                       <td className="border-b border-r p-2 font-medium">{comp}</td>
-                                      <td className="border-b border-r p-2 text-center font-bold text-blue-600">{score}</td>
+                                      <td className="border-b border-r p-2 text-center font-bold text-blue-600">{score as React.ReactNode}</td>
                                       <td className="border-b p-2 text-gray-500 italic">{result.lessonPlan?.comments[comp] || '-'}</td>
                                     </tr>
                                   ))}
@@ -294,7 +535,7 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
                                       <tr className="hover:bg-gray-50/50">
                                         <td className="border-b border-r p-2 text-center">{idx + 1}</td>
                                         <td className="border-b border-r p-2 font-medium">{comp}</td>
-                                        <td className="border-b border-r p-2 text-center font-bold text-green-600">{score}</td>
+                                        <td className="border-b border-r p-2 text-center font-bold text-green-600">{score as React.ReactNode}</td>
                                         <td className="border-b p-2 text-gray-500 italic">{result.implementation?.comments[comp] || '-'}</td>
                                       </tr>
                                     </React.Fragment>
@@ -337,7 +578,7 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
                         <div className="space-y-4">
                           <h5 className="text-xs font-black text-gray-400 uppercase tracking-widest">Detail Aspek Penilaian</h5>
                           <div className="space-y-3">
-                            {result.aspects?.map((aspect, idx) => (
+                            {result.aspects?.map((aspect: any, idx: number) => (
                               <div key={idx} className="bg-white p-3 rounded-lg border border-gray-100">
                                 <div className="flex justify-between items-start mb-1">
                                   <span className="text-xs font-bold text-gray-700">{aspect.aspect}</span>
@@ -372,6 +613,131 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
               </div>
             );
           })}
+        </div>
+      )}
+      {/* Print Metadata Modal */}
+      {isPrintModalOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden animate-in zoom-in duration-200">
+            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-blue-600 text-white">
+              <div className="flex items-center gap-2">
+                <Printer size={20} />
+                <h3 className="font-bold">Pengaturan Cetak Dokumen Supervisi</h3>
+              </div>
+              <button 
+                onClick={() => setIsPrintModalOpen(false)}
+                className="p-2 hover:bg-white/10 rounded-lg transition"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Kelas</label>
+                  <input 
+                    type="text" 
+                    value={printConfig.className}
+                    onChange={(e) => setPrintConfig({...printConfig, className: e.target.value})}
+                    placeholder="Contoh: VII A"
+                    className="w-full p-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Semester</label>
+                  <input 
+                    type="text" 
+                    value={printConfig.semester}
+                    onChange={(e) => setPrintConfig({...printConfig, semester: e.target.value})}
+                    placeholder="Contoh: 1 (Ganjil)"
+                    className="w-full p-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Kompetensi Dasar / Materi</label>
+                  <input 
+                    type="text" 
+                    value={printConfig.competence}
+                    onChange={(e) => setPrintConfig({...printConfig, competence: e.target.value})}
+                    placeholder="Contoh: 3.1 Memahami teks narasi..."
+                    className="w-full p-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Alokasi Waktu</label>
+                  <input 
+                    type="text" 
+                    value={printConfig.timeAllocation}
+                    onChange={(e) => setPrintConfig({...printConfig, timeAllocation: e.target.value})}
+                    placeholder="Contoh: 2 x 40 Menit"
+                    className="w-full p-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Lokasi (Kota/Kecamatan)</label>
+                  <input 
+                    type="text" 
+                    value={printConfig.location}
+                    onChange={(e) => setPrintConfig({...printConfig, location: e.target.value})}
+                    placeholder="Contoh: Jakarta"
+                    className="w-full p-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Tanggal Cetak</label>
+                  <input 
+                    type="date" 
+                    value={printConfig.date}
+                    onChange={(e) => setPrintConfig({...printConfig, date: e.target.value})}
+                    className="w-full p-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-gray-100">
+                <h4 className="text-xs font-black text-gray-400 uppercase mb-3">Informasi Kepala Sekolah</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Nama Kepala Sekolah</label>
+                    <input 
+                      type="text" 
+                      value={printConfig.principalName}
+                      onChange={(e) => setPrintConfig({...printConfig, principalName: e.target.value})}
+                      placeholder="Nama Lengkap & Gelar"
+                      className="w-full p-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">NIP Kepala Sekolah</label>
+                    <input 
+                      type="text" 
+                      value={printConfig.principalNip}
+                      onChange={(e) => setPrintConfig({...printConfig, principalNip: e.target.value})}
+                      placeholder="NIP"
+                      className="w-full p-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
+              <button 
+                onClick={() => setIsPrintModalOpen(false)}
+                className="px-6 py-2 rounded-xl font-bold text-gray-500 hover:bg-gray-100 transition"
+              >
+                Batal
+              </button>
+              <button 
+                onClick={generatePrint}
+                className="px-6 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition flex items-center gap-2 shadow-lg shadow-blue-200"
+              >
+                <Printer size={18} />
+                Cetak Sekarang
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

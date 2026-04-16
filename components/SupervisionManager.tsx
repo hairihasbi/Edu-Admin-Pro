@@ -163,8 +163,8 @@ const SupervisionManager: React.FC<SupervisionManagerProps> = ({ user }) => {
               <h3 className="font-bold text-gray-800">Tambah Penugasan Supervisi</h3>
             </div>
             
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                <div className="md:col-span-1">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+                <div className="lg:col-span-1">
                   <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Supervisor</label>
                   <select
                     value={selectedSupervisor}
@@ -177,7 +177,7 @@ const SupervisionManager: React.FC<SupervisionManagerProps> = ({ user }) => {
                     ))}
                   </select>
                 </div>
-                <div className="md:col-span-1">
+                <div className="lg:col-span-1">
                   <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Guru yang Disupervisi</label>
                   <select
                     value={selectedTeacher}
@@ -190,7 +190,7 @@ const SupervisionManager: React.FC<SupervisionManagerProps> = ({ user }) => {
                     ))}
                   </select>
                 </div>
-                <div className="md:col-span-1">
+                <div className="lg:col-span-1">
                   <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Rentang Waktu</label>
                   <div className="flex items-center gap-2">
                     <input
@@ -208,7 +208,7 @@ const SupervisionManager: React.FC<SupervisionManagerProps> = ({ user }) => {
                     />
                   </div>
                 </div>
-                <div className="md:col-span-1">
+                <div className="lg:col-span-1">
                   <button
                     onClick={handleAddAssignment}
                     disabled={isSaving || !selectedSupervisor || !selectedTeacher}
