@@ -18,7 +18,8 @@ const SupervisionManager: React.FC<SupervisionManagerProps> = ({ user }) => {
   // Form state for new assignment
   const [selectedSupervisor, setSelectedSupervisor] = useState('');
   const [selectedTeacher, setSelectedTeacher] = useState('');
-  const [scheduledDate, setScheduledDate] = useState(new Date().toISOString().split('T')[0]);
+  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
 
   useEffect(() => {
     fetchData();
@@ -68,7 +69,8 @@ const SupervisionManager: React.FC<SupervisionManagerProps> = ({ user }) => {
         teacherId: selectedTeacher,
         schoolNpsn: user.schoolNpsn!,
         status: 'PENDING',
-        scheduledDate
+        startDate,
+        endDate
       };
       await saveSupervisionAssignment(newAssignment);
       await fetchData();
@@ -161,53 +163,62 @@ const SupervisionManager: React.FC<SupervisionManagerProps> = ({ user }) => {
               <h3 className="font-bold text-gray-800">Tambah Penugasan Supervisi</h3>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-              <div>
-                <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Supervisor</label>
-                <select
-                  value={selectedSupervisor}
-                  onChange={(e) => setSelectedSupervisor(e.target.value)}
-                  className="w-full p-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Pilih Supervisor</option>
-                  {supervisors.map(s => (
-                    <option key={s.id} value={s.id}>{s.fullName}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Guru yang Disupervisi</label>
-                <select
-                  value={selectedTeacher}
-                  onChange={(e) => setSelectedTeacher(e.target.value)}
-                  className="w-full p-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Pilih Guru</option>
-                  {teachers.map(t => (
-                    <option key={t.id} value={t.id}>{t.fullName}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex gap-2">
-                <div className="flex-1">
-                  <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Tanggal Rencana</label>
-                  <input
-                    type="date"
-                    value={scheduledDate}
-                    onChange={(e) => setScheduledDate(e.target.value)}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                <div className="md:col-span-1">
+                  <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Supervisor</label>
+                  <select
+                    value={selectedSupervisor}
+                    onChange={(e) => setSelectedSupervisor(e.target.value)}
                     className="w-full p-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+                  >
+                    <option value="">Pilih Supervisor</option>
+                    {supervisors.map(s => (
+                      <option key={s.id} value={s.id}>{s.fullName}</option>
+                    ))}
+                  </select>
                 </div>
-                <button
-                  onClick={handleAddAssignment}
-                  disabled={isSaving || !selectedSupervisor || !selectedTeacher}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 flex items-center gap-2"
-                >
-                  {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} />}
-                  Tugaskan
-                </button>
+                <div className="md:col-span-1">
+                  <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Guru yang Disupervisi</label>
+                  <select
+                    value={selectedTeacher}
+                    onChange={(e) => setSelectedTeacher(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Pilih Guru</option>
+                    {teachers.map(t => (
+                      <option key={t.id} value={t.id}>{t.fullName}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="md:col-span-1">
+                  <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Rentang Waktu</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      className="w-full p-2 border border-gray-300 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <span className="text-gray-400">s/d</span>
+                    <input
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      className="w-full p-2 border border-gray-300 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+                <div className="md:col-span-1">
+                  <button
+                    onClick={handleAddAssignment}
+                    disabled={isSaving || !selectedSupervisor || !selectedTeacher}
+                    className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} />}
+                    Tugaskan
+                  </button>
+                </div>
               </div>
-            </div>
           </div>
 
           {/* Assignment List */}
@@ -247,7 +258,18 @@ const SupervisionManager: React.FC<SupervisionManagerProps> = ({ user }) => {
                             <div className="text-sm font-medium text-gray-700">{teacher?.fullName || 'N/A'}</div>
                           </td>
                           <td className="px-6 py-4">
-                            <div className="text-xs text-gray-600">{a.scheduledDate ? new Date(a.scheduledDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '-'}</div>
+                            <div className="text-xs text-gray-600">
+                              {a.startDate && a.endDate ? (
+                                <>
+                                  <div className="font-medium text-gray-800">
+                                    {new Date(a.startDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })} - {new Date(a.endDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                  </div>
+                                  <div className="text-[10px] text-gray-400">Rentang Waktu</div>
+                                </>
+                              ) : a.scheduledDate ? (
+                                new Date(a.scheduledDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
+                              ) : '-'}
+                            </div>
                           </td>
                           <td className="px-6 py-4 text-center">
                             <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold border ${

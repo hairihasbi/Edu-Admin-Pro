@@ -329,7 +329,11 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
                         </div>
                         <div className="text-[10px] text-gray-500 mt-1 flex items-center gap-1">
                           <Calendar size={12} />
-                          Rencana: {a.scheduledDate ? new Date(a.scheduledDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) : '-'}
+                          {a.startDate && a.endDate ? (
+                            `Rentang: ${new Date(a.startDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })} - ${new Date(a.endDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}`
+                          ) : (
+                            `Rencana: ${a.scheduledDate ? new Date(a.scheduledDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) : '-'}`
+                          )}
                         </div>
                       </div>
                       <ChevronRight size={18} className={`transition ${isSelected ? 'text-purple-500 translate-x-1' : 'text-gray-300 group-hover:text-purple-400'}`} />

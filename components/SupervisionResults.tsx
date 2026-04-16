@@ -28,10 +28,8 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
       if (isWakasek) {
         data = await getSupervisionResultsForSchool(user.schoolNpsn!);
       } else {
-        // STRICT FILTERING: Only retrieve and show results where the current user is the teacher being supervised.
-        // Supervisors should NOT be able to see the results of teachers they supervised here.
-        const rawResults = await getSupervisionResults(user.id);
-        data = rawResults.filter(r => r.teacherId === user.id);
+        // Supervisor sees results they have assessed
+        data = await getSupervisionResults(undefined, user.id);
       }
       
       const schoolTeachers = await getSchoolTeachers(user.schoolNpsn!);
@@ -71,20 +69,18 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
           </div>
           <div>
             <h2 className="text-xl font-bold text-gray-800">
-              {isWakasek ? 'Monitoring Hasil Supervisi' : 'Hasil Supervisi Akademik Saya'}
+              {isWakasek ? 'Monitoring Supervisi (Wakasek)' : 'Laporan Hasil Supervisi (Supervisor)'}
             </h2>
             <p className="text-gray-500 text-sm">
               {isWakasek 
                 ? "Pantau hasil penilaian supervisi seluruh guru di sekolah." 
-                : "Lihat hasil penilaian supervisi yang telah dilakukan terhadap Anda."}
+                : "Kelola dan lihat hasil penilaian supervisi terhadap guru yang Anda nilai."}
             </p>
           </div>
-          {!isWakasek && (
-            <div className="flex items-center gap-1.5 px-3 py-1 bg-green-50 text-green-600 rounded-full text-[10px] font-bold border border-green-100">
-              <Shield size={12} />
-              DATA PRIBADI
-            </div>
-          )}
+          <div className="flex items-center gap-1.5 px-3 py-1 bg-purple-50 text-purple-600 rounded-full text-[10px] font-bold border border-purple-100">
+            <Shield size={12} />
+            HAK AKSES PENILAI
+          </div>
         </div>
 
         <div className="relative">
