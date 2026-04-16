@@ -2095,24 +2095,47 @@ export const getSupervisionResultsForSchool = async (schoolNpsn: string) => {
     return await db.supervisionResults.where('schoolNpsn').equals(schoolNpsn).toArray();
 };
 
-export const saveSupervisionResult = async (result: Omit<SupervisionResult, 'id'|'lastModified'|'isSynced'>) => {
-    const item: SupervisionResult = {
-        ...result,
-        id: uuidv4(),
-        lastModified: Date.now(),
-        isSynced: false
-    };
+export const getSupervisionResultByAssignment = async (assignmentId: string) => {
+    return await db.supervisionResults.where('assignmentId').equals(assignmentId).first();
+};
+
+export const saveSupervisionResult = async (result: Partial<SupervisionResult> & { assignmentId: string }) => {
+    // Check if result already exists for this assignment
+    const existing = await db.supervisionResults.where('assignmentId').equals(result.assignmentId).first();
+    
+    let item: SupervisionResult;
+    if (existing) {
+        item = {
+            ...existing,
+            ...result,
+            lastModified: Date.now(),
+            isSynced: false
+        } as SupervisionResult;
+    } else {
+        item = {
+            ...result,
+            id: uuidv4(),
+            lastModified: Date.now(),
+            isSynced: false
+        } as SupervisionResult;
+    }
+    
     await db.supervisionResults.put(item);
     
-    // Mark assignment as completed
-    if (item.assignmentId) {
-        await db.supervisionAssignments.update(item.assignmentId, { 
-            status: 'COMPLETED', 
-            lastModified: Date.now(), 
-            isSynced: false 
-        });
-    }
+    // We don't automatically mark as COMPLETED here anymore if we want to allow ongoing edits
+    // Or we keep it as PENDING while editing?
+    // User says: "when finished saving all, supervisor still can edit"
+    // So status can be COMPLETED but supervisor still sees it.
     
     triggerDebouncedSync();
     return item;
+};
+
+export const updateSupervisionAssignmentStatus = async (id: string, status: 'PENDING' | 'COMPLETED') => {
+    await db.supervisionAssignments.update(id, { 
+        status, 
+        lastModified: Date.now(), 
+        isSynced: false 
+    });
+    triggerDebouncedSync();
 };
