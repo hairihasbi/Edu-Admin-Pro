@@ -9,6 +9,21 @@ interface SupervisionAssessmentProps {
   user: User;
 }
 
+const PLANNING_ADMIN_COMPONENTS = [
+  "Kalender Pendidikan",
+  "Program Tahunan",
+  "Program Semester",
+  "Silabus",
+  "RPP",
+  "Jadwal Pelajaran",
+  "Agenda Harian",
+  "Daftar Nilai",
+  "KKM",
+  "Daftar Hadir Peserta Didik",
+  "Ketersediaan Bahan Ajar",
+  "Buku Pedoman Guru"
+];
+
 const SUPERVISION_ASPECTS = [
   "Penguasaan materi pembelajaran",
   "Kesesuaian metode dengan karakteristik siswa",
@@ -26,11 +41,18 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
   const [selectedAssignment, setSelectedAssignment] = useState<SupervisionAssignment | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [activeTab, setActiveTab] = useState<'PLANNING' | 'RPP' | 'IMPLEMENTATION'>('PLANNING');
 
-  // Form state
+  // Tab 1: Administrasi Perencanaan Pembelajaran
+  const [planningScores, setPlanningScores] = useState<Record<string, number>>({});
+  const [planningComments, setPlanningComments] = useState<Record<string, string>>({});
+  const [coachingSuggestion, setCoachingSuggestion] = useState('');
+
+  // Tab 2 & 3: Legacy/Placeholder state
   const [scores, setScores] = useState<Record<string, number>>({});
   const [comments, setComments] = useState<Record<string, string>>({});
   const [generalNotes, setGeneralNotes] = useState('');
+  
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -59,42 +81,49 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
 
   const handleSelectAssignment = (assignment: SupervisionAssignment) => {
     setSelectedAssignment(assignment);
-    // Initialize scores
+    
+    // Reset Tab 1
+    const initialPlanningScores: Record<string, number> = {};
+    PLANNING_ADMIN_COMPONENTS.forEach(c => { initialPlanningScores[c] = 0; });
+    setPlanningScores(initialPlanningScores);
+    setPlanningComments({});
+    setCoachingSuggestion('');
+
+    // Reset Tab 2/3
     const initialScores: Record<string, number> = {};
     SUPERVISION_ASPECTS.forEach(aspect => { initialScores[aspect] = 0; });
     setScores(initialScores);
     setComments({});
     setGeneralNotes('');
+    
     setSuccessMessage('');
+    setActiveTab('PLANNING');
   };
 
-  const handleScoreChange = (aspect: string, score: number) => {
-    setScores(prev => ({ ...prev, [aspect]: score }));
-  };
+  const calculatePlanningResults = () => {
+    const totalRealScore = Object.values(planningScores).reduce((a, b) => a + b, 0);
+    const finalScore = (totalRealScore / 24) * 100;
+    
+    let predicate = 'KURANG';
+    if (finalScore > 90) predicate = 'BAIK SEKALI';
+    else if (finalScore > 75) predicate = 'BAIK';
+    else if (finalScore > 60) predicate = 'CUKUP';
 
-  const handleCommentChange = (aspect: string, comment: string) => {
-    setComments(prev => ({ ...prev, [aspect]: comment }));
+    return { totalRealScore, finalScore, predicate };
   };
 
   const handleSubmit = async () => {
     if (!selectedAssignment) return;
 
-    // Validate all aspects have scores
-    const missingScores = SUPERVISION_ASPECTS.filter(aspect => scores[aspect] === 0);
-    if (missingScores.length > 0) {
-      alert("Harap berikan nilai untuk semua aspek penilaian.");
-      return;
-    }
-
     setIsSaving(true);
     try {
-      const aspects = SUPERVISION_ASPECTS.map(aspect => ({
+      const { totalRealScore, finalScore, predicate } = calculatePlanningResults();
+
+      const legacyAspects = SUPERVISION_ASPECTS.map(aspect => ({
         aspect,
-        score: scores[aspect],
+        score: scores[aspect] || 0,
         comment: comments[aspect] || ''
       }));
-
-      const totalScore = aspects.reduce((acc, curr) => acc + curr.score, 0) / aspects.length;
 
       const result: Omit<SupervisionResult, 'id'|'lastModified'|'isSynced'> = {
         assignmentId: selectedAssignment.id,
@@ -102,9 +131,17 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
         teacherId: selectedAssignment.teacherId,
         schoolNpsn: user.schoolNpsn!,
         date: new Date().toISOString().split('T')[0],
-        score: totalScore,
+        score: finalScore, // Using finalScore from planning for now as main score
         notes: generalNotes,
-        aspects
+        planningAdmin: {
+          scores: planningScores,
+          comments: planningComments,
+          totalRealScore,
+          finalScore,
+          predicate,
+          coachingSuggestion
+        },
+        aspects: legacyAspects // Keep for backward compatibility
       };
 
       await saveSupervisionResult(result);
@@ -128,7 +165,7 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
   }
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
+    <div className="max-w-6xl mx-auto space-y-6">
       {/* Header */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
         <div className="p-3 bg-purple-50 text-purple-600 rounded-full">
@@ -149,7 +186,7 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Left: Assignment List */}
         <div className="lg:col-span-1 space-y-4">
           <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm">
@@ -197,7 +234,7 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
         </div>
 
         {/* Right: Assessment Form */}
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-3">
           {!selectedAssignment ? (
             <div className="bg-white h-full min-h-[400px] rounded-xl border border-gray-100 shadow-sm flex flex-col items-center justify-center p-12 text-center">
               <div className="p-6 bg-gray-50 rounded-full mb-6">
@@ -210,9 +247,41 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
             </div>
           ) : (
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden animate-in fade-in slide-in-from-right-4 duration-300">
+              {/* Tabs */}
+              <div className="flex border-b border-gray-100">
+                <button
+                  onClick={() => setActiveTab('PLANNING')}
+                  className={`flex-1 py-4 text-xs font-black uppercase tracking-wider transition ${
+                    activeTab === 'PLANNING' ? 'text-purple-600 border-b-2 border-purple-600 bg-purple-50/30' : 'text-gray-400 hover:text-gray-600'
+                  }`}
+                >
+                  Administrasi Perencanaan
+                </button>
+                <button
+                  onClick={() => setActiveTab('RPP')}
+                  className={`flex-1 py-4 text-xs font-black uppercase tracking-wider transition ${
+                    activeTab === 'RPP' ? 'text-purple-600 border-b-2 border-purple-600 bg-purple-50/30' : 'text-gray-400 hover:text-gray-600'
+                  }`}
+                >
+                  RPP Guru
+                </button>
+                <button
+                  onClick={() => setActiveTab('IMPLEMENTATION')}
+                  className={`flex-1 py-4 text-xs font-black uppercase tracking-wider transition ${
+                    activeTab === 'IMPLEMENTATION' ? 'text-purple-600 border-b-2 border-purple-600 bg-purple-50/30' : 'text-gray-400 hover:text-gray-600'
+                  }`}
+                >
+                  Pelaksanaan Pembelajaran
+                </button>
+              </div>
+
               <div className="p-6 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
                 <div>
-                  <h3 className="font-bold text-gray-800">Form Penilaian Supervisi</h3>
+                  <h3 className="font-bold text-gray-800">
+                    {activeTab === 'PLANNING' && "Administrasi Perencanaan Pembelajaran"}
+                    {activeTab === 'RPP' && "Rencana Pelaksanaan Pembelajaran (RPP) Guru"}
+                    {activeTab === 'IMPLEMENTATION' && "Supervisi Pelaksanaan Pembelajaran"}
+                  </h3>
                   <p className="text-xs text-gray-500">
                     Guru: <span className="font-bold text-purple-600">{teachers.find(t => t.id === selectedAssignment.teacherId)?.fullName}</span>
                   </p>
@@ -225,51 +294,115 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
                 </button>
               </div>
 
-              <div className="p-6 space-y-8">
-                {SUPERVISION_ASPECTS.map((aspect, idx) => (
-                  <div key={idx} className="space-y-3">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                      <div className="flex-1">
-                        <h4 className="text-sm font-bold text-gray-800 flex items-start gap-2">
-                          <span className="flex-shrink-0 w-5 h-5 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center text-[10px] mt-0.5">{idx + 1}</span>
-                          {aspect}
-                        </h4>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        {[1, 2, 3, 4, 5].map(star => (
-                          <button
-                            key={star}
-                            onClick={() => handleScoreChange(aspect, star)}
-                            className={`p-1 transition ${scores[aspect] >= star ? 'text-yellow-400 scale-110' : 'text-gray-200 hover:text-yellow-200'}`}
-                          >
-                            <Star size={24} fill={scores[aspect] >= star ? 'currentColor' : 'none'} />
-                          </button>
-                        ))}
-                        <span className="ml-2 text-sm font-bold text-gray-400 w-4">{scores[aspect] || ''}</span>
+              <div className="p-6">
+                {activeTab === 'PLANNING' && (
+                  <div className="space-y-6">
+                    <div className="overflow-x-auto">
+                      <table className="w-full border-collapse text-sm">
+                        <thead>
+                          <tr className="bg-gray-100 text-gray-700">
+                            <th className="border p-3 text-center w-12">No</th>
+                            <th className="border p-3 text-left">Komponen</th>
+                            <th className="border p-3 text-center w-48">Kriteria Nilai (0-2)</th>
+                            <th className="border p-3 text-left">Catatan Perbaikan</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {PLANNING_ADMIN_COMPONENTS.map((comp, idx) => (
+                            <tr key={idx} className="hover:bg-gray-50">
+                              <td className="border p-3 text-center font-medium">{idx + 1}</td>
+                              <td className="border p-3 font-bold text-gray-800">{comp}</td>
+                              <td className="border p-3">
+                                <div className="flex justify-center gap-2">
+                                  {[0, 1, 2].map(val => (
+                                    <button
+                                      key={val}
+                                      onClick={() => setPlanningScores(prev => ({ ...prev, [comp]: val }))}
+                                      className={`w-8 h-8 rounded-full font-bold transition ${
+                                        planningScores[comp] === val 
+                                          ? 'bg-purple-600 text-white shadow-md' 
+                                          : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+                                      }`}
+                                    >
+                                      {val}
+                                    </button>
+                                  ))}
+                                </div>
+                              </td>
+                              <td className="border p-3">
+                                <input
+                                  type="text"
+                                  placeholder="..."
+                                  className="w-full bg-transparent outline-none border-b border-transparent focus:border-purple-300"
+                                  value={planningComments[comp] || ''}
+                                  onChange={(e) => setPlanningComments(prev => ({ ...prev, [comp]: e.target.value }))}
+                                />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot className="bg-gray-50 font-bold">
+                          <tr>
+                            <td colSpan={2} className="border p-3 text-right">JUMLAH SKOR RIIL</td>
+                            <td className="border p-3 text-center text-purple-600 text-lg">
+                              {Object.values(planningScores).reduce((a, b) => a + b, 0)}
+                            </td>
+                            <td className="border p-3"></td>
+                          </tr>
+                          <tr>
+                            <td colSpan={2} className="border p-3 text-right">JUMLAH SKOR IDEAL</td>
+                            <td className="border p-3 text-center">24</td>
+                            <td className="border p-3"></td>
+                          </tr>
+                          <tr>
+                            <td colSpan={2} className="border p-3 text-right">NILAI AKHIR</td>
+                            <td className="border p-3 text-center text-blue-600 text-lg">
+                              {calculatePlanningResults().finalScore.toFixed(2)}
+                            </td>
+                            <td className="border p-3 bg-black text-white text-center uppercase tracking-widest">
+                              {calculatePlanningResults().predicate}
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+
+                    <div className="pt-6 border-t border-gray-100">
+                      <label className="block text-sm font-bold text-gray-800 mb-2">Saran Pembinaan</label>
+                      <textarea
+                        placeholder="Berikan saran pembinaan untuk guru..."
+                        className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-purple-500"
+                        rows={4}
+                        value={coachingSuggestion}
+                        onChange={(e) => setCoachingSuggestion(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
+                      <h5 className="text-xs font-black text-blue-600 uppercase mb-2 tracking-widest">Keterangan Nilai:</h5>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="text-[10px]"><span className="font-bold">A (Baik Sekali):</span> 90.01 - 100.00</div>
+                        <div className="text-[10px]"><span className="font-bold">B (Baik):</span> 75.01 - 90.00</div>
+                        <div className="text-[10px]"><span className="font-bold">C (Cukup):</span> 60.01 - 75.00</div>
+                        <div className="text-[10px]"><span className="font-bold">D (Kurang):</span> 0.00 - 60.00</div>
                       </div>
                     </div>
-                    <textarea
-                      placeholder="Catatan tambahan untuk aspek ini (opsional)..."
-                      className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-purple-500 resize-none"
-                      rows={2}
-                      value={comments[aspect] || ''}
-                      onChange={(e) => handleCommentChange(aspect, e.target.value)}
-                    />
                   </div>
-                ))}
+                )}
 
-                <div className="pt-6 border-t border-gray-100">
-                  <label className="block text-sm font-bold text-gray-800 mb-2">Catatan & Rekomendasi Umum</label>
-                  <textarea
-                    placeholder="Berikan masukan konstruktif untuk pengembangan profesional guru..."
-                    className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-purple-500"
-                    rows={4}
-                    value={generalNotes}
-                    onChange={(e) => setGeneralNotes(e.target.value)}
-                  />
-                </div>
+                {(activeTab === 'RPP' || activeTab === 'IMPLEMENTATION') && (
+                  <div className="py-20 text-center space-y-4">
+                    <div className="p-4 bg-gray-50 rounded-full w-16 h-16 mx-auto flex items-center justify-center">
+                      <AlertCircle className="text-gray-300" size={32} />
+                    </div>
+                    <h4 className="font-bold text-gray-700">Instrumen Belum Tersedia</h4>
+                    <p className="text-sm text-gray-500 max-w-xs mx-auto">
+                      Detail instrumen untuk bagian ini sedang dalam tahap pengembangan.
+                    </p>
+                  </div>
+                )}
 
-                <div className="flex justify-end pt-4">
+                <div className="flex justify-end pt-8 border-t border-gray-100 mt-8">
                   <button
                     onClick={handleSubmit}
                     disabled={isSaving}

@@ -151,39 +151,87 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
 
                 {isExpanded && (
                   <div className="px-5 pb-6 pt-2 border-t border-gray-50 bg-gray-50/30 animate-in slide-in-from-top-2 duration-200">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
-                      <div className="space-y-4">
-                        <h5 className="text-xs font-black text-gray-400 uppercase tracking-widest">Detail Aspek Penilaian</h5>
-                        <div className="space-y-3">
-                          {result.aspects.map((aspect, idx) => (
-                            <div key={idx} className="bg-white p-3 rounded-lg border border-gray-100">
-                              <div className="flex justify-between items-start mb-1">
-                                <span className="text-xs font-bold text-gray-700">{aspect.aspect}</span>
-                                <span className="text-xs font-black text-purple-600">{aspect.score}/5</span>
-                              </div>
-                              <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden mb-2">
-                                <div 
-                                  className="h-full bg-purple-500 rounded-full" 
-                                  style={{ width: `${(aspect.score / 5) * 100}%` }}
-                                />
-                              </div>
-                              {aspect.comment && (
-                                <p className="text-[10px] text-gray-500 italic">"{aspect.comment}"</p>
-                              )}
-                            </div>
-                          ))}
+                    {result.planningAdmin ? (
+                      <div className="mt-4 space-y-6">
+                        <div className="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm">
+                          <div className="bg-gray-50 p-3 border-b border-gray-100 flex justify-between items-center">
+                            <h5 className="text-xs font-black text-gray-500 uppercase tracking-widest">Administrasi Perencanaan Pembelajaran</h5>
+                            <span className={`px-3 py-1 rounded-full text-[10px] font-black text-white ${
+                              result.planningAdmin.predicate === 'BAIK SEKALI' ? 'bg-green-500' :
+                              result.planningAdmin.predicate === 'BAIK' ? 'bg-blue-500' :
+                              result.planningAdmin.predicate === 'CUKUP' ? 'bg-yellow-500' : 'bg-red-500'
+                            }`}>
+                              {result.planningAdmin.predicate} ({result.planningAdmin.finalScore.toFixed(2)})
+                            </span>
+                          </div>
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-[10px] border-collapse">
+                              <thead>
+                                <tr className="bg-gray-50/50">
+                                  <th className="border-b border-r p-2 text-left w-8">No</th>
+                                  <th className="border-b border-r p-2 text-left">Komponen</th>
+                                  <th className="border-b border-r p-2 text-center w-16">Nilai</th>
+                                  <th className="border-b p-2 text-left">Catatan</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {Object.entries(result.planningAdmin.scores).map(([comp, score], idx) => (
+                                  <tr key={idx} className="hover:bg-gray-50/50">
+                                    <td className="border-b border-r p-2 text-center">{idx + 1}</td>
+                                    <td className="border-b border-r p-2 font-medium">{comp}</td>
+                                    <td className="border-b border-r p-2 text-center font-bold text-purple-600">{score}</td>
+                                    <td className="border-b p-2 text-gray-500 italic">{result.planningAdmin?.comments[comp] || '-'}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
                         </div>
-                      </div>
 
-                      <div className="space-y-4">
-                        <h5 className="text-xs font-black text-gray-400 uppercase tracking-widest">Catatan & Rekomendasi</h5>
-                        <div className="bg-white p-5 rounded-xl border border-gray-100 h-full">
-                          <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
-                            {result.notes || "Tidak ada catatan tambahan."}
-                          </p>
+                        {result.planningAdmin.coachingSuggestion && (
+                          <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                            <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Saran Pembinaan</h5>
+                            <p className="text-xs text-gray-700 leading-relaxed italic">
+                              "{result.planningAdmin.coachingSuggestion}"
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+                        <div className="space-y-4">
+                          <h5 className="text-xs font-black text-gray-400 uppercase tracking-widest">Detail Aspek Penilaian</h5>
+                          <div className="space-y-3">
+                            {result.aspects?.map((aspect, idx) => (
+                              <div key={idx} className="bg-white p-3 rounded-lg border border-gray-100">
+                                <div className="flex justify-between items-start mb-1">
+                                  <span className="text-xs font-bold text-gray-700">{aspect.aspect}</span>
+                                  <span className="text-xs font-black text-purple-600">{aspect.score}/5</span>
+                                </div>
+                                <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden mb-2">
+                                  <div 
+                                    className="h-full bg-purple-500 rounded-full" 
+                                    style={{ width: `${(aspect.score / 5) * 100}%` }}
+                                  />
+                                </div>
+                                {aspect.comment && (
+                                  <p className="text-[10px] text-gray-500 italic">"{aspect.comment}"</p>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="space-y-4">
+                          <h5 className="text-xs font-black text-gray-400 uppercase tracking-widest">Catatan & Rekomendasi</h5>
+                          <div className="bg-white p-5 rounded-xl border border-gray-100 h-full">
+                            <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
+                              {result.notes || "Tidak ada catatan tambahan."}
+                            </p>
+                          </div>
                         </div>
                       </div>
-                    </div>
+                    )}
                   </div>
                 )}
               </div>
