@@ -68,6 +68,10 @@ export const registerUser = async (fullName: string, username: string, password:
     } catch (e: any) { return { success: false, message: e.message || 'Gagal menghubungi server.' }; }
 };
 
+export const getUserProfile = async (id: string) => {
+    return await db.users.get(id);
+};
+
 export const updateUserProfile = async (id: string, data: Partial<User>, forceSync = false) => {
     await db.users.update(id, { ...data, lastModified: Date.now(), isSynced: false });
     if (forceSync) {
