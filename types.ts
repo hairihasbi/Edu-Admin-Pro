@@ -450,18 +450,24 @@ export interface SupervisionResult extends Syncable {
     coachingSuggestion?: string;
   };
 
-  // Section 2: RPP Guru (Placeholder)
+  // Section 2: RPP Guru
   lessonPlan?: {
-    score: number;
-    notes?: string;
-    aspects?: { aspect: string; score: number; comment?: string }[];
+    scores: Record<string, number>;
+    comments: Record<string, string>;
+    totalRealScore: number;
+    finalScore: number;
+    predicate: string;
+    coachingSuggestion?: string;
   };
 
-  // Section 3: Pelaksanaan Pembelajaran (Placeholder)
+  // Section 3: Pelaksanaan Pembelajaran
   implementation?: {
-    score: number;
-    notes?: string;
-    aspects?: { aspect: string; score: number; comment?: string }[];
+    scores: Record<string, number>;
+    comments: Record<string, string>;
+    totalRealScore: number;
+    finalScore: number;
+    predicate: string;
+    coachingSuggestion?: string;
   };
 
   // Legacy support
