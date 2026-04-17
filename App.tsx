@@ -792,41 +792,56 @@ const AppContent: React.FC = () => {
 
             {currentUser.role === UserRole.GURU && (
               <>
-                {currentUser.additionalRole === 'WAKASEK_KURIKULUM' && (
+                {/* Special Menu for Kepala Sekolah */}
+                {currentUser.additionalRole === 'KEPALA_SEKOLAH' ? (
                   <>
-                    <NavLink to="/monitoring-kurikulum" icon={Activity} label="Monitoring Kurikulum" />
-                    <NavLink to="/manage-schedules" icon={Calendar} label="Manajemen Jadwal" />
+                    <NavLink to="/supervision-assessment" icon={ClipboardCheck} label="Instrumen Supervisi" />
+                    <NavLink to="/supervision-results" icon={ClipboardCheck} label="Monitoring Hasil Supervisi" />
+                    <NavLink to="/sync" icon={ArrowLeftRight} label="Sinkronisasi Data" />
+                    <NavLink to="/backup" icon={DatabaseBackup} label="Backup & Restore" />
+                    <NavLink to="/help-center" icon={LifeBuoy} label="Pusat Bantuan" />
+                    <NavLink to="/profile" icon={UserIcon} label="Profil & Akun" />
+                    <NavLink to="/donation" icon={Heart} label="Dukungan Aplikasi" />
+                  </>
+                ) : (
+                  <>
+                    {currentUser.additionalRole === 'WAKASEK_KURIKULUM' && (
+                      <>
+                        <NavLink to="/monitoring-kurikulum" icon={Activity} label="Monitoring Kurikulum" />
+                        <NavLink to="/manage-schedules" icon={Calendar} label="Manajemen Jadwal" />
+                      </>
+                    )}
+                    <NavLink to="/classes" icon={BookOpen} label="Manajemen Kelas" />
+                    {currentUser.homeroomClassId && (
+                      <>
+                        <NavLink to="/homeroom" icon={Users} label="Wali Kelas" />
+                        <NavLink to="/learning-style" icon={Activity} label="Gaya Belajar" />
+                      </>
+                    )}
+                    <NavLink to="/picket" icon={CalendarCheck} label="Piket Harian" />
+                    {currentUser.isSupervisor && (
+                      <NavLink to="/supervision-assessment" icon={ClipboardCheck} label="Instrumen Supervisi" />
+                    )}
+                    {(currentUser.isSupervisor || currentUser.additionalRole === 'WAKASEK_KURIKULUM') && (
+                      <NavLink to="/supervision-results" icon={ClipboardCheck} label="Monitoring Hasil Supervisi" />
+                    )}
+                    {currentUser.subject === 'Bimbingan Konseling' && (
+                      <NavLink to="/guidance" icon={ShieldAlert} label="Bimbingan Konseling" />
+                    )}
+                    <NavLink to="/attendance" icon={CalendarCheck} label="Daftar Hadir" />
+                    <NavLink to="/scope-material" icon={List} label="Lingkup Materi" />
+                    <NavLink to="/journal" icon={NotebookPen} label="Jurnal Mengajar" />
+                    <NavLink to="/summative" icon={Calculator} label="Asesmen Sumatif" />
+                    <NavLink to="/rpp-generator" icon={BrainCircuit} label="AI RPP Generator" /> 
+                    <NavLink to="/gen-quiz" icon={FileQuestion} label="AI Generator Soal" />
+                    <NavLink to="/broadcast" icon={Send} label="Broadcast WhatsApp" />
+                    <NavLink to="/sync" icon={ArrowLeftRight} label="Sinkronisasi Data" />
+                    <NavLink to="/backup" icon={DatabaseBackup} label="Backup & Restore" />
+                    <NavLink to="/help-center" icon={LifeBuoy} label="Pusat Bantuan" />
+                    <NavLink to="/profile" icon={UserIcon} label="Profil & Akun" />
+                    <NavLink to="/donation" icon={Heart} label="Dukungan Aplikasi" />
                   </>
                 )}
-                <NavLink to="/classes" icon={BookOpen} label="Manajemen Kelas" />
-                {currentUser.homeroomClassId && (
-                   <>
-                    <NavLink to="/homeroom" icon={Users} label="Wali Kelas" />
-                    <NavLink to="/learning-style" icon={Activity} label="Gaya Belajar" />
-                   </>
-                )}
-                <NavLink to="/picket" icon={CalendarCheck} label="Piket Harian" /> {/* NEW LINK */}
-                {currentUser.isSupervisor && (
-                  <NavLink to="/supervision-assessment" icon={ClipboardCheck} label="Instrumen Supervisi" />
-                )}
-                {(currentUser.isSupervisor || currentUser.additionalRole === 'WAKASEK_KURIKULUM') && (
-                  <NavLink to="/supervision-results" icon={ClipboardCheck} label="Monitoring Hasil Supervisi" />
-                )}
-                {currentUser.subject === 'Bimbingan Konseling' && (
-                   <NavLink to="/guidance" icon={ShieldAlert} label="Bimbingan Konseling" />
-                )}
-                <NavLink to="/attendance" icon={CalendarCheck} label="Daftar Hadir" />
-                <NavLink to="/scope-material" icon={List} label="Lingkup Materi" />
-                <NavLink to="/journal" icon={NotebookPen} label="Jurnal Mengajar" />
-                <NavLink to="/summative" icon={Calculator} label="Asesmen Sumatif" />
-                <NavLink to="/rpp-generator" icon={BrainCircuit} label="AI RPP Generator" /> 
-                <NavLink to="/gen-quiz" icon={FileQuestion} label="AI Generator Soal" />
-                <NavLink to="/broadcast" icon={Send} label="Broadcast WhatsApp" />
-                <NavLink to="/sync" icon={ArrowLeftRight} label="Sinkronisasi Data" /> {/* NEW LINK */}
-                <NavLink to="/backup" icon={DatabaseBackup} label="Backup & Restore" />
-                <NavLink to="/help-center" icon={LifeBuoy} label="Pusat Bantuan" />
-                <NavLink to="/profile" icon={UserIcon} label="Profil & Akun" />
-                <NavLink to="/donation" icon={Heart} label="Dukungan Aplikasi" />
               </>
             )}
 
@@ -965,7 +980,7 @@ const AppContent: React.FC = () => {
                    <Route path="/scope-material" element={<TeacherScopeMaterial user={currentUser} />} />
                    <Route path="/journal" element={<TeacherJournal user={currentUser} />} />
                    <Route path="/summative" element={<TeacherSummative user={currentUser} />} />
-                   {currentUser.isSupervisor && (
+                   {(currentUser.isSupervisor || currentUser.additionalRole === 'KEPALA_SEKOLAH') && (
                      <Route path="/supervision-assessment" element={<SupervisionAssessment user={currentUser} />} />
                    )}
                    {currentUser.additionalRole === 'WAKASEK_KURIKULUM' && (
@@ -994,7 +1009,7 @@ const AppContent: React.FC = () => {
             <span className="text-[10px] mt-1 font-medium">Home</span>
           </Link>
           
-          {currentUser.role === UserRole.GURU ? (
+          {currentUser.role === UserRole.GURU && currentUser.additionalRole !== 'KEPALA_SEKOLAH' ? (
              <>
                <Link to="/classes" className={`flex flex-col items-center justify-center w-full h-full ${location.pathname.includes('/classes') ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}>
                  <BookOpen size={20} />
@@ -1003,6 +1018,17 @@ const AppContent: React.FC = () => {
                <Link to="/journal" className={`flex flex-col items-center justify-center w-full h-full ${location.pathname.includes('/journal') ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}>
                  <NotebookPen size={20} />
                  <span className="text-[10px] mt-1 font-medium">Jurnal</span>
+               </Link>
+             </>
+          ) : currentUser.role === UserRole.GURU && currentUser.additionalRole === 'KEPALA_SEKOLAH' ? (
+             <>
+               <Link to="/supervision-assessment" className={`flex flex-col items-center justify-center w-full h-full ${location.pathname.includes('/supervision-assessment') ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                 <ClipboardCheck size={20} />
+                 <span className="text-[10px] mt-1 font-medium">Supervisi</span>
+               </Link>
+               <Link to="/supervision-results" className={`flex flex-col items-center justify-center w-full h-full ${location.pathname.includes('/supervision-results') ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                 <ClipboardCheck size={20} />
+                 <span className="text-[10px] mt-1 font-medium">Hasil</span>
                </Link>
              </>
           ) : (
