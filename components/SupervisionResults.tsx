@@ -88,7 +88,7 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
     };
 
     const identityHeaderHtml = `
-      <table class="header-info">
+      <table class="header-info no-print-padding">
         <tr>
           <td width="150">Satuan Pendidikan</td><td width="10">:</td><td>${user.schoolName || '-'}</td>
           <td width="150">Kelas / Semester</td><td width="10">:</td><td>${printConfig.className} / ${printConfig.semester}</td>
@@ -112,8 +112,12 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
 
       <table class="signature-section">
         <tr>
+          <td>Mengetahui,</td>
+          <td>&nbsp;</td>
+          <td>${printConfig.location}, ${formatDate(printConfig.date)}</td>
+        </tr>
+        <tr>
           <td>
-            <p>Mengetahui,</p>
             <p>Kepala Sekolah</p>
             <div class="signature-space"></div>
             <p><strong>${printConfig.principalName || '................................'}</strong></p>
@@ -127,7 +131,7 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
             <p>NIP. ${supervisor?.nip || '................................'}</p>
           </td>
           <td>
-            <p>${printConfig.location}, ${formatDate(printConfig.date)}</p>
+            <p>&nbsp;</p>
             <p>Guru Mata Pelajaran</p>
             <div class="signature-space"></div>
             <p><strong>${teacher?.fullName || '................................'}</strong></p>
@@ -187,9 +191,9 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
     printWindow.document.write(`
       <html>
         <head>
-          <title>Instrumen Supervisi Akademik - ${teacher?.fullName}</title>
+          <title></title>
           <style>
-            body { font-family: 'Times New Roman', serif; font-size: 11pt; line-height: 1.4; color: #333; margin: 0; padding: 20px; }
+            body { font-family: 'Times New Roman', serif; font-size: 11pt; line-height: 1.4; color: #333; margin: 0; padding: 0.5cm; }
             .header-info { margin-bottom: 20px; width: 100%; border-collapse: collapse; }
             .header-info td { padding: 2px 5px; }
             h2 { text-align: center; font-size: 14pt; margin-top: 0; margin-bottom: 10px; text-decoration: underline; }
@@ -199,13 +203,14 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
             .section-title { font-weight: bold; margin-top: 5px; margin-bottom: 5px; background: #eee; padding: 5px; border: 1px solid #000; border-bottom: none; }
             .summary-box { margin-top: 10px; border: 1px solid #000; padding: 10px; }
             .signature-section { margin-top: 30px; width: 100%; border-collapse: collapse; page-break-inside: avoid; }
-            .signature-section td { width: 33.33%; text-align: center; vertical-align: top; padding-top: 10px; }
-            .signature-space { height: 80px; }
+            .signature-section td { width: 33.33%; text-align: center; vertical-align: top; padding-top: 5px; padding-bottom: 5px; }
+            .signature-space { height: 75px; }
             @media print {
-              @page { size: portrait; margin: 1cm; }
+              @page { size: portrait; margin: 0; }
+              body { margin: 1.5cm; }
               button { display: none; }
               .no-print { display: none; }
-              .page-break { page-break-before: always; border-top: 1px dashed #ccc; padding-top: 20px; }
+              .page-break { page-break-before: always; border-top: 1px dashed #ccc; padding-top: 1.5cm; }
             }
           </style>
         </head>

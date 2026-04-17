@@ -163,7 +163,7 @@ const SupervisionManager: React.FC<SupervisionManagerProps> = ({ user }) => {
               <h3 className="font-bold text-gray-800">Tambah Penugasan Supervisi</h3>
             </div>
             
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
                 <div className="lg:col-span-1">
                   <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Supervisor</label>
                   <select
@@ -190,7 +190,7 @@ const SupervisionManager: React.FC<SupervisionManagerProps> = ({ user }) => {
                     ))}
                   </select>
                 </div>
-                <div className="lg:col-span-1">
+                <div className="lg:col-span-2">
                   <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Rentang Waktu</label>
                   <div className="flex items-center gap-2">
                     <input
