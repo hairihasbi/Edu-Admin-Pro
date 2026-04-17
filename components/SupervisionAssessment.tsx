@@ -108,13 +108,15 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
   const navigate = useNavigate();
   const location = useLocation();
 
+  const isKepsek = user.additionalRole === 'KEPALA_SEKOLAH';
+
   useEffect(() => {
-    if (!user.isSupervisor) {
+    if (!user.isSupervisor && !isKepsek) {
       navigate('/');
       return;
     }
     fetchData();
-  }, [user.id, user.isSupervisor]);
+  }, [user.id, user.isSupervisor, isKepsek]);
 
   useEffect(() => {
     // Handle deep link to an assignment

@@ -17,6 +17,7 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
   const [searchTerm, setSearchTerm] = useState('');
 
   const isWakasek = user.additionalRole === 'WAKASEK_KURIKULUM';
+  const isKepsek = user.additionalRole === 'KEPALA_SEKOLAH';
   const navigate = useNavigate();
 
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
@@ -60,7 +61,7 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
     setLoading(true);
     try {
       let data: SupervisionResult[] = [];
-      if (isWakasek) {
+      if (isWakasek || isKepsek) {
         data = await getSupervisionResultsForSchool(user.schoolNpsn!);
       } else {
         // Supervisor sees results they have assessed

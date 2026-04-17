@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { User, UserRole, MasterSubject, ClassRoom } from '../types';
 import { User as UserIcon, School, IdCard, BookOpen, CheckCircle, AlertCircle, Save, Lock, Shield, Smartphone, DatabaseBackup, Info, Layout } from './Icons';
-import { updateUserProfile, updateUserPassword, getMasterSubjects, getAvailableClassesForHomeroom, claimHomeroomClass, releaseHomeroomClass, checkWakasekExists } from '../services/database';
+import { updateUserProfile, updateUserPassword, getMasterSubjects, getAvailableClassesForHomeroom, claimHomeroomClass, releaseHomeroomClass, checkWakasekExists, checkPrincipalExists } from '../services/database';
 import { db } from '../services/db';
 import WhatsAppSettings from './WhatsAppSettings';
 
@@ -33,6 +33,7 @@ const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onUpdateUser }) =
   // Master Data State
   const [availableSubjects, setAvailableSubjects] = useState<MasterSubject[]>([]);
   const [wakasekInfo, setWakasekInfo] = useState<{ exists: boolean; name?: string; userId?: string }>({ exists: false });
+  const [principalInfo, setPrincipalInfo] = useState<{ exists: boolean; name?: string; userId?: string }>({ exists: false });
   
   // Homeroom Data State
   const [schoolClasses, setSchoolClasses] = useState<ClassRoom[]>([]);
@@ -57,10 +58,12 @@ const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onUpdateUser }) =
       const subData = await getMasterSubjects();
       setAvailableSubjects(subData.sort((a, b) => a.name.localeCompare(b.name)));
       
-      // Fetch Wakasek Info with force sync to ensure accuracy
+      // Fetch Status Info with force sync to ensure accuracy
       if (user.schoolNpsn) {
-          const info = await checkWakasekExists(user.schoolNpsn, true);
-          setWakasekInfo(info);
+          const wInfo = await checkWakasekExists(user.schoolNpsn, true);
+          setWakasekInfo(wInfo);
+          const pInfo = await checkPrincipalExists(user.schoolNpsn, true);
+          setPrincipalInfo(pInfo);
       }
     };
     
@@ -123,19 +126,36 @@ const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onUpdateUser }) =
           }
       }
 
+      // Validation for Principal
+      if (formData.additionalRole === 'KEPALA_SEKOLAH' && user.additionalRole !== 'KEPALA_SEKOLAH') {
+          const check = await checkPrincipalExists(user.schoolNpsn || '', true);
+          if (check.exists) {
+              setStatus({ type: 'error', message: `Jabatan Kepala Sekolah sudah diambil oleh ${check.name}. Hanya diperbolehkan satu Kepala Sekolah per NPSN.` });
+              setIsSaving(false);
+              return;
+          }
+      }
+
       const dataToSave = { ...formData };
-      const isRoleChanging = formData.additionalRole === 'WAKASEK_KURIKULUM' && user.additionalRole !== 'WAKASEK_KURIKULUM';
+      const isRoleChanging = (formData.additionalRole === 'WAKASEK_KURIKULUM' && user.additionalRole !== 'WAKASEK_KURIKULUM') || 
+                             (formData.additionalRole === 'KEPALA_SEKOLAH' && user.additionalRole !== 'KEPALA_SEKOLAH');
       const success = await updateUserProfile(user.id, dataToSave as any, isRoleChanging);
 
       if (success) {
         onUpdateUser({ ...user, ...dataToSave as any });
         setStatus({ type: 'success', message: 'Data identitas berhasil diperbarui!' });
         
-        // Refresh Wakasek Info locally
+        // Refresh Status Info locally
         if (dataToSave.additionalRole === 'WAKASEK_KURIKULUM') {
             setWakasekInfo({ exists: true, name: dataToSave.fullName, userId: user.id });
         } else if (user.additionalRole === 'WAKASEK_KURIKULUM') {
             setWakasekInfo({ exists: false });
+        }
+
+        if (dataToSave.additionalRole === 'KEPALA_SEKOLAH') {
+            setPrincipalInfo({ exists: true, name: dataToSave.fullName, userId: user.id });
+        } else if (user.additionalRole === 'KEPALA_SEKOLAH') {
+            setPrincipalInfo({ exists: false });
         }
       } else {
         setStatus({ type: 'error', message: 'Gagal menyimpan perubahan profil.' });
@@ -369,8 +389,10 @@ const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onUpdateUser }) =
                         </div>
                     )}
 
-                    {/* Additional Role Selector */}
+                    {/* Additional Roles Mutually Exclusive Section */}
                     {!isAdmin && !isTendik && (
+                      <div className="space-y-4">
+                        {/* Wakasek Kurikulum */}
                         <div className={`p-4 rounded-lg border transition ${
                             wakasekInfo.exists && wakasekInfo.userId !== user.id 
                             ? 'bg-gray-50 border-gray-200 opacity-80' 
@@ -393,7 +415,7 @@ const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onUpdateUser }) =
                                     <input 
                                         type="checkbox" 
                                         className="sr-only peer"
-                                        disabled={wakasekInfo.exists && wakasekInfo.userId !== user.id}
+                                        disabled={(wakasekInfo.exists && wakasekInfo.userId !== user.id) || formData.additionalRole === 'KEPALA_SEKOLAH'}
                                         checked={formData.additionalRole === 'WAKASEK_KURIKULUM'}
                                         onChange={(e) => {
                                             const isChecked = e.target.checked;
@@ -409,6 +431,47 @@ const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onUpdateUser }) =
                                 </label>
                             </div>
                         </div>
+
+                        {/* Kepala Sekolah */}
+                        <div className={`p-4 rounded-lg border transition ${
+                            principalInfo.exists && principalInfo.userId !== user.id 
+                            ? 'bg-gray-50 border-gray-200 opacity-80' 
+                            : 'bg-blue-50 border-blue-100'
+                        }`}>
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className={`text-sm font-bold ${principalInfo.exists && principalInfo.userId !== user.id ? 'text-gray-500' : 'text-blue-800'}`}>
+                                        Tugas Tambahan: Kepala Sekolah
+                                    </p>
+                                    {principalInfo.exists && principalInfo.userId !== user.id ? (
+                                        <p className="text-[10px] text-red-500 font-medium flex items-center gap-1">
+                                            <Lock size={10} /> Sudah diambil oleh: {principalInfo.name}
+                                        </p>
+                                    ) : (
+                                        <p className="text-[10px] text-blue-600">Hak akses penuh untuk memantau hasil supervisi seluruh guru.</p>
+                                    )}
+                                </div>
+                                <label className={`relative inline-flex items-center ${principalInfo.exists && principalInfo.userId !== user.id ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
+                                    <input 
+                                        type="checkbox" 
+                                        className="sr-only peer"
+                                        disabled={(principalInfo.exists && principalInfo.userId !== user.id) || formData.additionalRole === 'WAKASEK_KURIKULUM'}
+                                        checked={formData.additionalRole === 'KEPALA_SEKOLAH'}
+                                        onChange={(e) => {
+                                            const isChecked = e.target.checked;
+                                            setFormData({ 
+                                                ...formData, 
+                                                additionalRole: isChecked ? 'KEPALA_SEKOLAH' : (user.additionalRole === 'WALI_KELAS' ? 'WALI_KELAS' : undefined)
+                                            });
+                                        }}
+                                    />
+                                    <div className={`w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all ${
+                                        principalInfo.exists && principalInfo.userId !== user.id ? 'peer-checked:bg-gray-400' : 'peer-checked:bg-blue-600'
+                                    }`}></div>
+                                </label>
+                            </div>
+                        </div>
+                      </div>
                     )}
 
                     {formData.isMultiSubject && (
