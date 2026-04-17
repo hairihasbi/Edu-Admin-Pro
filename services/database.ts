@@ -166,7 +166,6 @@ export const getPendingTeachers = async () => {
 
 export const checkWakasekExists = async (schoolNpsn: string, forceSync = false): Promise<{ exists: boolean; name?: string; userId?: string }> => {
     if (forceSync) {
-        // Trigger a pull for users table to ensure we have the latest data from colleagues
         await runManualSync('PULL', () => {}, ['eduadmin_users']);
     }
     const wakasek = await db.users
@@ -174,6 +173,17 @@ export const checkWakasekExists = async (schoolNpsn: string, forceSync = false):
         .and(u => u.additionalRole === 'WAKASEK_KURIKULUM')
         .first();
     return { exists: !!wakasek, name: wakasek?.fullName, userId: wakasek?.id };
+};
+
+export const checkPrincipalExists = async (schoolNpsn: string, forceSync = false): Promise<{ exists: boolean; name?: string; userId?: string }> => {
+    if (forceSync) {
+        await runManualSync('PULL', () => {}, ['eduadmin_users']);
+    }
+    const principal = await db.users
+        .where('schoolNpsn').equals(schoolNpsn)
+        .and(u => u.additionalRole === 'KEPALA_SEKOLAH')
+        .first();
+    return { exists: !!principal, name: principal?.fullName, userId: principal?.id };
 };
 
 export const getSchoolTeachers = async (schoolNpsn: string): Promise<User[]> => {
