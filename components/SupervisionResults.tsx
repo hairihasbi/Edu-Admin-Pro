@@ -30,7 +30,9 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
     principalNip: localStorage.getItem('sup_principal_nip') || '',
     location: localStorage.getItem('sup_location') || '',
     date: new Date().toISOString().split('T')[0],
-    letterheadUrl: localStorage.getItem('sup_letterhead') || ''
+    letterheadUrl: localStorage.getItem('sup_letterhead') || '',
+    marginTop: localStorage.getItem('sup_margin_top') || '1.5',
+    marginBottom: localStorage.getItem('sup_margin_bottom') || '1.5'
   });
 
   const handleLetterheadUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -100,13 +102,14 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
     localStorage.setItem('sup_principal_name', printConfig.principalName);
     localStorage.setItem('sup_principal_nip', printConfig.principalNip);
     localStorage.setItem('sup_location', printConfig.location);
+    localStorage.setItem('sup_margin_top', printConfig.marginTop);
+    localStorage.setItem('sup_margin_bottom', printConfig.marginBottom);
 
     const formatDate = (dateStr: string) => {
         return new Date(dateStr).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
     };
 
     const identityHeaderHtml = `
-      ${printConfig.letterheadUrl ? `<div class="letterhead-container"><img src="${printConfig.letterheadUrl}" style="width: 100%; max-height: 150px; object-fit: contain; margin-bottom: 20px;" /></div>` : ''}
       <table class="header-info no-print-padding">
         <tr>
           <td width="150">Satuan Pendidikan</td><td width="10">:</td><td>${user.schoolName || '-'}</td>
@@ -122,6 +125,10 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
         </tr>
       </table>
     `;
+
+    const letterheadHtml = printConfig.letterheadUrl 
+      ? `<div class="letterhead-container"><img src="${printConfig.letterheadUrl}" style="width: 100%; max-height: 150px; object-fit: contain; margin-bottom: 20px;" /></div>` 
+      : '';
 
     // Aggregate coaching suggestions into notes if notes is empty or as additional info
     const aggregateCoachingSuggestions = () => {
@@ -238,7 +245,12 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
             .signature-space { height: 75px; }
             @media print {
               @page { size: portrait; margin: 0; }
-              body { margin: 1.5cm; }
+              body { 
+                margin-top: ${printConfig.marginTop}cm; 
+                margin-bottom: ${printConfig.marginBottom}cm; 
+                margin-left: 1.5cm; 
+                margin-right: 1.5cm; 
+              }
               button { display: none; }
               .no-print { display: none; }
               .page-break { page-break-before: always; border-top: 1px dashed #ccc; padding-top: 1.5cm; }
@@ -247,6 +259,7 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
         </head>
         <body>
           <!-- SECTION I: ADMINISTRASI -->
+          ${letterheadHtml}
           <h2>INSTRUMEN SUPERVISI AKADEMIK</h2>
           ${identityHeaderHtml}
           <div class="section-title">I. ADMINISTRASI PERENCANAAN PEMBELAJARAN</div>
@@ -273,6 +286,7 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
 
           <!-- SECTION II: RPP -->
           <div class="page-break"></div>
+          ${letterheadHtml}
           <h2>INSTRUMEN RENCANA PELAKSANAAN PEMBELAJARAN (RPP)</h2>
           ${identityHeaderHtml}
           <div class="section-title">II. RENCANA PELAKSANAAN PEMBELAJARAN (RPP) GURU</div>
@@ -299,6 +313,7 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
 
           <!-- SECTION III: PELAKSANAAN -->
           <div class="page-break"></div>
+          ${letterheadHtml}
           <h2>INSTRUMEN SUPERVISI PELAKSANAAN PEMBELAJARAN</h2>
           ${identityHeaderHtml}
           <div class="section-title">III. PELAKSANAAN PEMBELAJARAN</div>
@@ -765,6 +780,28 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
                     type="date" 
                     value={printConfig.date}
                     onChange={(e) => setPrintConfig({...printConfig, date: e.target.value})}
+                    className="w-full p-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Margin Atas (cm)</label>
+                  <input 
+                    type="number" 
+                    step="0.1"
+                    min="0"
+                    value={printConfig.marginTop}
+                    onChange={(e) => setPrintConfig({...printConfig, marginTop: e.target.value})}
+                    className="w-full p-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Margin Bawah (cm)</label>
+                  <input 
+                    type="number" 
+                    step="0.1"
+                    min="0"
+                    value={printConfig.marginBottom}
+                    onChange={(e) => setPrintConfig({...printConfig, marginBottom: e.target.value})}
                     className="w-full p-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
