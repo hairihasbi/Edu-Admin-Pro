@@ -29,8 +29,26 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
     principalName: localStorage.getItem('sup_principal_name') || '',
     principalNip: localStorage.getItem('sup_principal_nip') || '',
     location: localStorage.getItem('sup_location') || '',
-    date: new Date().toISOString().split('T')[0]
+    date: new Date().toISOString().split('T')[0],
+    letterheadUrl: localStorage.getItem('sup_letterhead') || ''
   });
+
+  const handleLetterheadUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        alert("Ukuran file terlalu besar. Maksimal 2MB.");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64String = reader.result as string;
+        setPrintConfig(prev => ({ ...prev, letterheadUrl: base64String }));
+        localStorage.setItem('sup_letterhead', base64String);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   useEffect(() => {
     fetchData();
@@ -88,6 +106,7 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
     };
 
     const identityHeaderHtml = `
+      ${printConfig.letterheadUrl ? `<div class="letterhead-container"><img src="${printConfig.letterheadUrl}" style="width: 100%; max-height: 150px; object-fit: contain; margin-bottom: 20px;" /></div>` : ''}
       <table class="header-info no-print-padding">
         <tr>
           <td width="150">Satuan Pendidikan</td><td width="10">:</td><td>${user.schoolName || '-'}</td>
@@ -104,39 +123,50 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
       </table>
     `;
 
+    // Aggregate coaching suggestions into notes if notes is empty or as additional info
+    const aggregateCoachingSuggestions = () => {
+      const suggestions: string[] = [];
+      if (printResult.planningAdmin?.coachingSuggestion) suggestions.push(`[Administrasi] ${printResult.planningAdmin.coachingSuggestion}`);
+      if (printResult.lessonPlan?.coachingSuggestion) suggestions.push(`[RPP] ${printResult.lessonPlan.coachingSuggestion}`);
+      if (printResult.implementation?.coachingSuggestion) suggestions.push(`[Pelaksanaan] ${printResult.implementation.coachingSuggestion}`);
+      
+      if (suggestions.length > 0) {
+        return suggestions.join('<br>');
+      }
+      return printResult.notes || '-';
+    };
+
     const summaryAndSignaturesHtml = `
       <div class="summary-box">
-        <strong>Catatan Umum Supervisor:</strong><br>
-        ${printResult.notes || '-'}
+        <strong>Catatan Umum Supervisor (Saran Pembinaan):</strong><br>
+        <div style="margin-top: 5px; font-style: italic;">${aggregateCoachingSuggestions()}</div>
       </div>
 
       <table class="signature-section">
-        <tr>
+        <tr style="height: 20px;">
           <td>Mengetahui,</td>
           <td>&nbsp;</td>
           <td>${printConfig.location}, ${formatDate(printConfig.date)}</td>
         </tr>
         <tr>
-          <td>
-            <p>Kepala Sekolah</p>
-            <div class="signature-space"></div>
-            <p><strong>${printConfig.principalName || '................................'}</strong></p>
-            <p>NIP. ${printConfig.principalNip || '................................'}</p>
-          </td>
-          <td>
-            <p>&nbsp;</p>
-            <p>Supervisor / Penilai</p>
-            <div class="signature-space"></div>
-            <p><strong>${supervisor?.fullName || '................................'}</strong></p>
-            <p>NIP. ${supervisor?.nip || '................................'}</p>
-          </td>
-          <td>
-            <p>&nbsp;</p>
-            <p>Guru Mata Pelajaran</p>
-            <div class="signature-space"></div>
-            <p><strong>${teacher?.fullName || '................................'}</strong></p>
-            <p>NIP. ${teacher?.nip || '................................'}</p>
-          </td>
+          <td>Kepala Sekolah</td>
+          <td>Supervisor / Penilai</td>
+          <td>Guru Mata Pelajaran</td>
+        </tr>
+        <tr>
+          <td class="signature-space"></td>
+          <td class="signature-space"></td>
+          <td class="signature-space"></td>
+        </tr>
+        <tr>
+          <td><strong>${printConfig.principalName || '................................'}</strong></td>
+          <td><strong>${supervisor?.fullName || '................................'}</strong></td>
+          <td><strong>${teacher?.fullName || '................................'}</strong></td>
+        </tr>
+        <tr>
+          <td>NIP. ${printConfig.principalNip || '................................'}</td>
+          <td>NIP. ${supervisor?.nip || '................................'}</td>
+          <td>NIP. ${teacher?.nip || '................................'}</td>
         </tr>
       </table>
     `;
@@ -202,6 +232,7 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
             table.data-table th { background-color: #f2f2f2; text-align: center; font-weight: bold; }
             .section-title { font-weight: bold; margin-top: 5px; margin-bottom: 5px; background: #eee; padding: 5px; border: 1px solid #000; border-bottom: none; }
             .summary-box { margin-top: 10px; border: 1px solid #000; padding: 10px; }
+            .letterhead-container { width: 100%; text-align: center; margin-bottom: 20px; border-bottom: 3px double #000; padding-bottom: 10px; }
             .signature-section { margin-top: 30px; width: 100%; border-collapse: collapse; page-break-inside: avoid; }
             .signature-section td { width: 33.33%; text-align: center; vertical-align: top; padding-top: 5px; padding-bottom: 5px; }
             .signature-space { height: 75px; }
@@ -653,6 +684,31 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
             
             <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="md:col-span-2">
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase mb-2">Upload Kop Surat (Opsional)</label>
+                  <div className="flex items-center gap-4">
+                    <div className="flex-1">
+                      <input 
+                        type="file" 
+                        accept="image/*"
+                        onChange={handleLetterheadUpload}
+                        className="w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                      />
+                      <p className="text-[9px] text-gray-400 mt-1">Format: JPG, PNG, WEBP. Maks: 2MB. Akan tampil di setiap header instrumen.</p>
+                    </div>
+                    {printConfig.letterheadUrl && (
+                      <div className="relative group">
+                        <img src={printConfig.letterheadUrl} className="w-20 h-10 object-contain rounded border border-gray-200" alt="Preview" />
+                        <button 
+                          onClick={() => setPrintConfig({...printConfig, letterheadUrl: ''})}
+                          className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition shadow-sm"
+                        >
+                          <X size={10} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
                 <div>
                   <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Kelas</label>
                   <input 
