@@ -233,27 +233,28 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
             body { font-family: 'Times New Roman', serif; font-size: 11pt; line-height: 1.4; color: #333; margin: 0; padding: 0.5cm; }
             .header-info { margin-bottom: 20px; width: 100%; border-collapse: collapse; }
             .header-info td { padding: 2px 5px; }
-            h2 { text-align: center; font-size: 14pt; margin-top: 0; margin-bottom: 10px; text-decoration: underline; }
-            table.data-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-            table.data-table th, table.data-table td { border: 1px solid #000; padding: 6px; }
+            h2 { text-align: center; font-size: 14pt; margin-top: 10px; margin-bottom: 20px; text-decoration: underline; }
+            table.data-table { width: 100%; border-collapse: collapse; margin-bottom: 30px; page-break-inside: auto; }
+            table.data-table tr { page-break-inside: avoid; }
+            table.data-table th, table.data-table td { border: 1px solid #000; padding: 8px 6px; }
             table.data-table th { background-color: #f2f2f2; text-align: center; font-weight: bold; }
-            .section-title { font-weight: bold; margin-top: 5px; margin-bottom: 5px; background: #eee; padding: 5px; border: 1px solid #000; border-bottom: none; }
-            .summary-box { margin-top: 10px; border: 1px solid #000; padding: 10px; }
-            .letterhead-container { width: 100%; text-align: center; margin-bottom: 20px; border-bottom: 3px double #000; padding-bottom: 10px; }
-            .signature-section { margin-top: 30px; width: 100%; border-collapse: collapse; page-break-inside: avoid; }
+            .section-title { font-weight: bold; margin-top: 20px; margin-bottom: 10px; background: #eee; padding: 8px; border: 1px solid #000; border-bottom: none; }
+            .summary-box { margin-top: 25px; margin-bottom: 25px; border: 1px solid #000; padding: 15px; page-break-inside: avoid; }
+            .letterhead-container { width: 100%; text-align: center; margin-bottom: 40px; border-bottom: 4px double #000; padding-bottom: 15px; }
+            .signature-section { margin-top: 50px; width: 100%; border-collapse: collapse; page-break-inside: avoid; }
             .signature-section td { width: 33.33%; text-align: center; vertical-align: top; padding-top: 5px; padding-bottom: 5px; }
-            .signature-space { height: 75px; }
+            .signature-space { height: 80px; }
             @media print {
               @page { size: portrait; margin: 0; }
               body { 
                 margin-top: ${printConfig.marginTop}cm; 
                 margin-bottom: ${printConfig.marginBottom}cm; 
-                margin-left: 1.5cm; 
-                margin-right: 1.5cm; 
+                margin-left: 2cm; 
+                margin-right: 2cm; 
               }
               button { display: none; }
               .no-print { display: none; }
-              .page-break { page-break-before: always; border-top: 1px dashed #ccc; padding-top: 1.5cm; }
+              .page-break { page-break-before: always; margin-top: 2cm; }
             }
           </style>
         </head>
