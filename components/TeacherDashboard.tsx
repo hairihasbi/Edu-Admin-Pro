@@ -532,6 +532,77 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
         </Link>
       </div>
 
+      {/* Role-Specific Sections */}
+      {!isTendik && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Section for Homeroom Teacher (Wali Kelas) */}
+          {(user.additionalRole === 'WALI_KELAS' || user.homeroomClassId) && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="bg-orange-50 px-6 py-4 border-b border-orange-100 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Layout size={18} className="text-orange-600" />
+                  <h3 className="font-semibold text-orange-800">Informasi Wali Kelas</h3>
+                </div>
+                <span className="bg-orange-600 text-white text-[10px] px-2 py-0.5 rounded font-black uppercase">Aktif</span>
+              </div>
+              <div className="p-6 space-y-4">
+                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-100">
+                  <div>
+                    <p className="text-xs text-gray-500 font-bold uppercase">Kelas yang Diampu</p>
+                    <p className="text-xl font-black text-gray-800">{user.homeroomClassName || '...'}</p>
+                  </div>
+                  <Link to="/homeroom" className="p-2 bg-white text-orange-600 border border-orange-200 rounded-lg hover:bg-orange-50 transition shadow-sm">
+                    <ArrowRight size={20} />
+                  </Link>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-3 bg-white border border-gray-100 rounded-lg shadow-sm">
+                    <p className="text-[10px] text-gray-400 font-bold uppercase mb-1">Total Siswa</p>
+                    <p className="text-lg font-bold text-gray-700">
+                      {classes.find(c => c.id === user.homeroomClassId)?.studentCount || 0}
+                    </p>
+                  </div>
+                  <div className="p-3 bg-white border border-gray-100 rounded-lg shadow-sm">
+                    <p className="text-[10px] text-gray-400 font-bold uppercase mb-1">Kehadiran Hari Ini</p>
+                    <p className="text-lg font-bold text-green-600">Terpantau</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Section for Principal / Supervisor (Monitoring) */}
+          {(user.additionalRole === 'KEPALA_SEKOLAH' || user.additionalRole === 'WAKASEK_KURIKULUM') && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="bg-blue-50 px-6 py-4 border-b border-blue-100 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <TrendingUp size={18} className="text-blue-600" />
+                  <h3 className="font-semibold text-blue-800">Pusat Monitoring Sekolah</h3>
+                </div>
+                <span className="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded font-black uppercase tracking-wider">
+                  {user.additionalRole?.split('_')[0]}
+                </span>
+              </div>
+              <div className="p-6 space-y-4">
+                <p className="text-xs text-gray-500 leading-relaxed italic border-l-2 border-blue-200 pl-3">
+                  Pantau perkembangan jurnal mengajar dan hasil supervisi akademik seluruh guru secara real-time.
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <Link to="/supervision-assessment" className="p-3 bg-blue-600 text-white rounded-xl text-center shadow-lg shadow-blue-100 hover:bg-blue-700 transition transform hover:-translate-y-1">
+                    <Zap size={20} className="mx-auto mb-1" />
+                    <span className="text-[10px] font-bold block uppercase">Lakukan Supervisi</span>
+                  </Link>
+                  <Link to="/supervision-results" className="p-3 bg-white border border-blue-200 text-blue-600 rounded-xl text-center shadow-sm hover:bg-blue-50 transition transform hover:-translate-y-1">
+                    <ClipboardList size={20} className="mx-auto mb-1" />
+                    <span className="text-[10px] font-bold block uppercase">Monitoring Hasil</span>
+                  </Link>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Jadwal Mengajar Section */}
       {!isTendik && (
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden animate-in fade-in slide-in-from-bottom-2">

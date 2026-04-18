@@ -147,16 +147,16 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
     const summaryAndSignaturesHtml = `
       <div class="summary-box">
         <strong>Catatan Umum Supervisor (Saran Pembinaan):</strong><br>
-        <div style="margin-top: 5px; font-style: italic;">${aggregateCoachingSuggestions()}</div>
+        <div style="margin-top: 5px; font-style: italic; font-size: 10pt;">${aggregateCoachingSuggestions()}</div>
       </div>
 
       <table class="signature-section">
-        <tr style="height: 20px;">
-          <td>Mengetahui,</td>
+        <tr>
+          <td style="text-align: left; padding-left: 50px;">Mengetahui,</td>
           <td>&nbsp;</td>
           <td>${printConfig.location}, ${formatDate(printConfig.date)}</td>
         </tr>
-        <tr>
+        <tr style="font-weight: bold;">
           <td>Kepala Sekolah</td>
           <td>Supervisor / Penilai</td>
           <td>Guru Mata Pelajaran</td>
@@ -166,10 +166,10 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
           <td class="signature-space"></td>
           <td class="signature-space"></td>
         </tr>
-        <tr>
-          <td><strong>${printConfig.principalName || '................................'}</strong></td>
-          <td><strong>${supervisor?.fullName || '................................'}</strong></td>
-          <td><strong>${teacher?.fullName || '................................'}</strong></td>
+        <tr style="font-weight: bold;">
+          <td>${printConfig.principalName || '................................'}</td>
+          <td>${supervisor?.fullName || '................................'}</td>
+          <td>${teacher?.fullName || '................................'}</td>
         </tr>
         <tr>
           <td>NIP. ${printConfig.principalNip || '................................'}</td>

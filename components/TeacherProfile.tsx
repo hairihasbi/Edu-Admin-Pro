@@ -48,6 +48,23 @@ const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onUpdateUser }) =
   const [status, setStatus] = useState<{ type: 'success' | 'error' | null, message: string }>({ type: null, message: '' });
   const [isSaving, setIsSaving] = useState(false);
 
+  // NEW: Sync formData when user prop changes (e.g. after releasing class)
+  useEffect(() => {
+    setFormData({
+      fullName: user.fullName || '',
+      nip: user.nip || '',
+      phone: user.phone || '',
+      subject: user.subject || '',
+      secondarySubject: user.secondarySubject || '',
+      schoolName: user.schoolName || '',
+      phase: user.phase || '',
+      teacherType: user.teacherType || 'SUBJECT',
+      isMultiSubject: user.isMultiSubject || false,
+      subjects: user.subjects || [],
+      additionalRole: user.additionalRole || undefined
+    });
+  }, [user]);
+
   const isBkTeacher = formData.subject === 'Bimbingan Konseling';
   const isClassTeacher = formData.teacherType === 'CLASS';
   const isTendik = user.role === UserRole.TENDIK;
@@ -148,13 +165,15 @@ const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onUpdateUser }) =
         // Refresh Status Info locally
         if (dataToSave.additionalRole === 'WAKASEK_KURIKULUM') {
             setWakasekInfo({ exists: true, name: dataToSave.fullName, userId: user.id });
-        } else if (user.additionalRole === 'WAKASEK_KURIKULUM') {
+        // @ts-ignore
+        } else if (user.additionalRole === 'WAKASEK_KURIKULUM' && dataToSave.additionalRole !== 'WAKASEK_KURIKULUM') {
             setWakasekInfo({ exists: false });
         }
 
         if (dataToSave.additionalRole === 'KEPALA_SEKOLAH') {
             setPrincipalInfo({ exists: true, name: dataToSave.fullName, userId: user.id });
-        } else if (user.additionalRole === 'KEPALA_SEKOLAH') {
+        // @ts-ignore
+        } else if (user.additionalRole === 'KEPALA_SEKOLAH' && dataToSave.additionalRole !== 'KEPALA_SEKOLAH') {
             setPrincipalInfo({ exists: false });
         }
       } else {
