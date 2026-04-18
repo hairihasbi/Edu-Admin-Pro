@@ -1407,6 +1407,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 let userNpsn = userRes.rows[0]?.school_npsn || null; 
                 const additionalRole = userRes.rows[0]?.additional_role || null;
                 const isWakasek = additionalRole === 'WAKASEK_KURIKULUM';
+                const isKepsek = additionalRole === 'KEPALA_SEKOLAH';
                 
                 // Fallback to NPSN from request if DB record is missing it
                 if ((!userNpsn || userNpsn === 'DEFAULT') && req.body.schoolNpsn && req.body.schoolNpsn !== 'DEFAULT') {
@@ -1444,9 +1445,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     }
                 }
                 else if (tableConfig.table === 'journals') {
-                    // Wakasek sees all journals in school
-                    if (isWakasek && userNpsn && userNpsn !== 'DEFAULT') {
+                    // Wakasek & Kepsek see all journals in school
+                    if ((isWakasek || isKepsek) && userNpsn && userNpsn !== 'DEFAULT') {
                         whereClauses.push("user_id IN (SELECT id FROM users WHERE school_npsn = ?)"); args = [userNpsn];
+                    } else {
+                        whereClauses.push("user_id = ?"); args = [userId];
+                    }
+                }
+                else if (tableConfig.table === 'attendance') {
+                    // Wakasek & Kepsek see all attendance in school
+                    if ((isWakasek || isKepsek) && userNpsn && userNpsn !== 'DEFAULT') {
+                        // Scope to school
+                        whereClauses.push("class_id IN (SELECT id FROM classes WHERE school_npsn = ?)"); args = [userNpsn];
                     } else {
                         whereClauses.push("user_id = ?"); args = [userId];
                     }
