@@ -379,48 +379,39 @@ export const claimHomeroomClass = async (classId: string, teacher: User) => {
 export const releaseHomeroomClass = async (classId: string, teacher: User) => {
     try {
         const targetClass = await db.classes.get(classId);
-        if (!targetClass) throw new Error("Kelas tidak ditemukan");
-
-        if (targetClass.homeroomTeacherId !== teacher.id) {
-            throw new Error("Anda bukan wali kelas ini");
+        
+        // 1. Clear Class record if it exists
+        if (targetClass) {
+            const updatedClass = {
+                ...targetClass,
+                homeroomTeacherId: null,
+                homeroomTeacherName: null,
+                lastModified: Date.now(),
+                isSynced: false
+            };
+            await db.classes.put(updatedClass);
         }
 
-        const updatedClass = {
-            ...targetClass,
-            homeroomTeacherId: null,
-            homeroomTeacherName: null,
-            lastModified: Date.now(),
-            isSynced: false
-        };
-        // @ts-ignore
-        delete updatedClass.homeroomTeacherId;
-        // @ts-ignore
-        delete updatedClass.homeroomTeacherName;
-        
-        await db.classes.put(updatedClass as any);
-
-        const updatedUser = {
+        // 2. Clear User record
+        const updatedUser: User = {
             ...teacher,
-            additionalRole: teacher.additionalRole === 'WALI_KELAS' ? undefined : teacher.additionalRole,
-            homeroomClassId: undefined,
-            homeroomClassName: undefined,
+            additionalRole: teacher.additionalRole === 'WALI_KELAS' ? null : teacher.additionalRole,
+            homeroomClassId: null,
+            homeroomClassName: null,
             lastModified: Date.now(),
             isSynced: false
         };
-        // @ts-ignore
-        if (updatedUser.additionalRole === null) delete (updatedUser as any).additionalRole;
-        // @ts-ignore
-        delete (updatedUser as any).homeroomClassId;
-        // @ts-ignore
-        delete (updatedUser as any).homeroomClassName;
-        
-        await db.users.put(updatedUser as any);
 
+        // Persist to Dexie
+        await db.users.put(updatedUser);
+
+        // Trigger sync
         // @ts-ignore
         triggerDebouncedSync();
 
         return { success: true, user: updatedUser };
     } catch (e: any) {
+        console.error("Release Homeroom Error:", e);
         return { success: false, message: e.message };
     }
 };
