@@ -387,29 +387,34 @@ export const releaseHomeroomClass = async (classId: string, teacher: User) => {
 
         const updatedClass = {
             ...targetClass,
-            homeroomTeacherId: undefined,
-            homeroomTeacherName: undefined,
+            homeroomTeacherId: null,
+            homeroomTeacherName: null,
             lastModified: Date.now(),
             isSynced: false
         };
+        // @ts-ignore
         delete updatedClass.homeroomTeacherId;
+        // @ts-ignore
         delete updatedClass.homeroomTeacherName;
         
-        await db.classes.put(updatedClass);
+        await db.classes.put(updatedClass as any);
 
         const updatedUser = {
             ...teacher,
-            additionalRole: undefined,
+            additionalRole: teacher.additionalRole === 'WALI_KELAS' ? undefined : teacher.additionalRole,
             homeroomClassId: undefined,
             homeroomClassName: undefined,
             lastModified: Date.now(),
             isSynced: false
         };
-        delete updatedUser.additionalRole;
-        delete updatedUser.homeroomClassId;
-        delete updatedUser.homeroomClassName;
+        // @ts-ignore
+        if (updatedUser.additionalRole === null) delete (updatedUser as any).additionalRole;
+        // @ts-ignore
+        delete (updatedUser as any).homeroomClassId;
+        // @ts-ignore
+        delete (updatedUser as any).homeroomClassName;
         
-        await db.users.put(updatedUser);
+        await db.users.put(updatedUser as any);
 
         // @ts-ignore
         triggerDebouncedSync();
