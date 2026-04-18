@@ -30,9 +30,9 @@ export interface User extends Syncable {
   schoolNpsn?: string; // NEW: Multi-tenancy Key
   subject?: string;
   secondarySubject?: string; // NEW: Second subject for teachers
-  additionalRole?: 'WALI_KELAS' | 'WAKASEK_KURIKULUM' | 'KEPALA_SEKOLAH'; 
-  homeroomClassId?: string;
-  homeroomClassName?: string; // Helper for UI
+  additionalRole?: 'WALI_KELAS' | 'WAKASEK_KURIKULUM' | 'KEPALA_SEKOLAH' | null; 
+  homeroomClassId?: string | null;
+  homeroomClassName?: string | null; // Helper for UI
   teacherType?: 'SUBJECT' | 'CLASS'; // NEW: Teacher Type
   phase?: 'A' | 'B' | 'C'; // NEW: Phase for Class Teacher
   isMultiSubject?: boolean; // NEW: Multi-Subject Mode for SMP/SMA
@@ -126,8 +126,8 @@ export interface ClassRoom extends Syncable {
   description?: string;
   studentCount: number;
   // Homeroom Logic
-  homeroomTeacherId?: string; // ID Wali Kelas
-  homeroomTeacherName?: string; // Nama Wali Kelas (untuk display)
+  homeroomTeacherId?: string | null; // ID Wali Kelas
+  homeroomTeacherName?: string | null; // Nama Wali Kelas (untuk display)
 }
 
 export interface Student extends Syncable {
