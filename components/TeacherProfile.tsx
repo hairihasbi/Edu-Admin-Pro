@@ -596,7 +596,7 @@ const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onUpdateUser }) =
                                                         {isMine ? (
                                                             <span className="text-green-600 font-bold">Milik Anda</span>
                                                         ) : isTaken ? (
-                                                            <span className="text-red-500" title={cls.homeroomTeacherName}>Diambil: {cls.homeroomTeacherName?.split(' ')[0]}</span>
+                                                            <span className="text-red-500" title={cls.homeroomTeacherName || undefined}>Diambil: {cls.homeroomTeacherName?.split(' ')[0]}</span>
                                                         ) : (
                                                             <span className="text-blue-600 bg-blue-50 px-2 py-0.5 rounded">Tersedia</span>
                                                         )}
