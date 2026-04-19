@@ -577,6 +577,63 @@ const DB_SCHEMAS = [
         deleted INTEGER DEFAULT 0
     )`,
     `CREATE INDEX IF NOT EXISTS idx_lsa_class ON learning_style_assessments(class_id)`,
+    
+    // 31. CBT EXAMS
+    `CREATE TABLE IF NOT EXISTS cbt_exams (
+        id TEXT PRIMARY KEY,
+        user_id TEXT,
+        school_npsn TEXT,
+        title TEXT,
+        subject TEXT,
+        level TEXT,
+        duration_minutes INTEGER,
+        start_time TEXT,
+        end_time TEXT,
+        status TEXT,
+        token TEXT,
+        randomize_questions INTEGER DEFAULT 0,
+        randomize_options INTEGER DEFAULT 0,
+        last_modified INTEGER,
+        version INTEGER DEFAULT 1,
+        deleted INTEGER DEFAULT 0
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_cbt_exams_npsn ON cbt_exams(school_npsn)`,
+
+    // 32. CBT QUESTIONS
+    `CREATE TABLE IF NOT EXISTS cbt_questions (
+        id TEXT PRIMARY KEY,
+        exam_id TEXT,
+        question_text TEXT,
+        type TEXT,
+        options TEXT, -- JSON Object
+        correct_answer TEXT,
+        image_data TEXT, -- Base64
+        "order" INTEGER,
+        last_modified INTEGER,
+        version INTEGER DEFAULT 1,
+        deleted INTEGER DEFAULT 0
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_cbt_questions_exam ON cbt_questions(exam_id)`,
+
+    // 33. CBT ATTEMPTS
+    `CREATE TABLE IF NOT EXISTS cbt_attempts (
+        id TEXT PRIMARY KEY,
+        exam_id TEXT,
+        student_id TEXT,
+        student_name TEXT,
+        school_npsn TEXT,
+        start_time TEXT,
+        end_time TEXT,
+        score REAL,
+        answers TEXT, -- JSON Object
+        violation_count INTEGER DEFAULT 0,
+        status TEXT,
+        last_modified INTEGER,
+        version INTEGER DEFAULT 1,
+        deleted INTEGER DEFAULT 0
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_cbt_attempts_exam ON cbt_attempts(exam_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_cbt_attempts_student ON cbt_attempts(student_id)`,
 ];
 
 // Helper to convert undefined to null for SQL
@@ -654,6 +711,21 @@ const getTableConfig = (collection: string) => {
         table: 'supervision_results', 
         columns: ['id', 'assignment_id', 'supervisor_id', 'teacher_id', 'date', 'score', 'notes', 'aspects', 'last_modified', 'version', 'deleted'], 
         mapFn: (item: any) => [s(item.id), s(item.assignmentId), s(item.supervisorId), s(item.teacherId), s(item.date), s(item.score), s(item.notes), JSON.stringify(item.aspects || []), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] 
+    };
+    case 'eduadmin_cbt_exams': return { 
+        table: 'cbt_exams', 
+        columns: ['id', 'user_id', 'school_npsn', 'title', 'subject', 'level', 'duration_minutes', 'start_time', 'end_time', 'status', 'token', 'randomize_questions', 'randomize_options', 'last_modified', 'version', 'deleted'], 
+        mapFn: (item: any) => [s(item.id), s(item.userId), s(item.schoolNpsn), s(item.title), s(item.subject), s(item.level), s(item.durationMinutes), s(item.startTime), s(item.endTime), s(item.status), s(item.token), item.randomizeQuestions ? 1 : 0, item.randomizeOptions ? 1 : 0, s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] 
+    };
+    case 'eduadmin_cbt_questions': return { 
+        table: 'cbt_questions', 
+        columns: ['id', 'exam_id', 'question_text', 'type', 'options', 'correct_answer', 'image_data', 'order', 'last_modified', 'version', 'deleted'], 
+        mapFn: (item: any) => [s(item.id), s(item.examId), s(item.questionText), s(item.type), JSON.stringify(item.options || {}), s(item.correctAnswer), s(item.imageData), s(item.order), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] 
+    };
+    case 'eduadmin_cbt_attempts': return { 
+        table: 'cbt_attempts', 
+        columns: ['id', 'exam_id', 'student_id', 'student_name', 'school_npsn', 'start_time', 'end_time', 'score', 'answers', 'violation_count', 'status', 'last_modified', 'version', 'deleted'], 
+        mapFn: (item: any) => [s(item.id), s(item.examId), s(item.studentId), s(item.studentName), s(item.schoolNpsn), s(item.startTime), s(item.endTime), s(item.score), JSON.stringify(item.answers || {}), item.violationCount || 0, s(item.status), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] 
     };
     default:
       return null;
@@ -855,6 +927,25 @@ const mapRowToJSON = (collection: string, row: any) => {
         teacherId: row.teacher_id, date: row.date, score: row.score, notes: row.notes,
         aspects: parseJSONSafe(row.aspects),
         lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
+    };
+    case 'eduadmin_cbt_exams': return {
+        id: row.id, userId: row.user_id, schoolNpsn: row.school_npsn, title: row.title,
+        subject: row.subject, level: row.level, durationMinutes: row.duration_minutes, startTime: row.start_time,
+        endTime: row.end_time, status: row.status, token: row.token,
+        randomizeQuestions: Boolean(row.randomize_questions), randomizeOptions: Boolean(row.randomize_options),
+        lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
+    };
+    case 'eduadmin_cbt_questions': return {
+        id: row.id, examId: row.exam_id, questionText: row.question_text, type: row.type,
+        options: parseJSONSafe(row.options), correctAnswer: row.correct_answer,
+        imageData: row.image_data, order: row.order,
+        lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
+    };
+    case 'eduadmin_cbt_attempts': return {
+        id: row.id, examId: row.exam_id, studentId: row.student_id, studentName: row.student_name,
+        schoolNpsn: row.school_npsn, startTime: row.start_time, endTime: row.end_time,
+        score: row.score, answers: parseJSONSafe(row.answers), violationCount: row.violation_count,
+        status: row.status, lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
     };
     default:
         return row; 
