@@ -1401,6 +1401,44 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
     }
 
+    // --- STUDENT VERIFICATION LOGIC (LOGIN WITHOUT ACCOUNT) ---
+    if (action === 'verify_student') {
+        const { npsn, nis } = body;
+        if (!npsn || !nis) return res.status(400).json({ error: 'NPSN dan NIS wajib diisi.' });
+
+        try {
+            const student = await client.execute({
+                sql: "SELECT * FROM students WHERE school_npsn = ? AND nis = ? AND deleted = 0 LIMIT 1",
+                args: [npsn, nis]
+            });
+
+            if (student.rows.length === 0) {
+                return res.status(404).json({ success: false, error: 'Siswa tidak ditemukan atau belum terdaftar di database sekolah.' });
+            }
+
+            const row = student.rows[0];
+            
+            // Format to match the User type for virtual session
+            return res.status(200).json({
+                success: true,
+                user: {
+                    id: row.id, // Using student DB ID as temporary session ID
+                    username: `siswa_${row.nis}`,
+                    fullName: row.name,
+                    role: 'SISWA',
+                    status: 'ACTIVE',
+                    schoolNpsn: row.school_npsn,
+                    nis: row.nis,
+                    gender: row.gender,
+                    avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(row.name as string)}&background=random`
+                }
+            });
+        } catch (e: any) {
+            console.error("verify_student error:", e);
+            return res.status(500).json({ error: e.message });
+        }
+    }
+
     // --- PUSH LOGIC ---
     if (action === 'push') {
         if (!items || items.length === 0) return res.status(200).json({ success: true });
