@@ -35,6 +35,10 @@ import DonationHistory from './components/DonationHistory'; // Import DonationHi
 import NotificationPanel from './components/NotificationPanel';
 import LearningStyleManager from './components/LearningStyleManager';
 import StudentAssessment from './components/StudentAssessment';
+import CbtManager from './components/CbtManager';
+import CbtEditor from './components/CbtEditor';
+import CbtResults from './components/CbtResults';
+import CbtExamEnvironment from './components/CbtExamEnvironment';
 import Breadcrumbs from './components/Breadcrumbs';
 import OnboardingTour from './components/OnboardingTour';
 import ForgotPassword from './components/ForgotPassword';
@@ -563,6 +567,8 @@ const AppContent: React.FC = () => {
     if (path.includes('system-logs')) return 'System Logs';
     if (path.includes('announcements')) return 'Live Announcements';
     if (path.includes('backup')) return 'Backup & Restore';
+    if (path.includes('cbt/exam')) return 'Ujian Online Sedang Berlangsung';
+    if (path.includes('cbt')) return 'CBT - Computer Based Test';
     if (path.includes('donation')) return 'Dukungan Aplikasi';
     if (path.includes('gen-quiz')) return 'AI Generator Soal';
     if (path.includes('rpp-generator')) return 'AI RPP Generator'; 
@@ -776,6 +782,7 @@ const AppContent: React.FC = () => {
             {currentUser.role === UserRole.ADMIN && (
               <>
                 <NavLink to="/teachers" icon={Users} label="Manajemen Guru" />
+                <NavLink to="/cbt" icon={FileQuestion} label="Monitoring CBT" />
                 <NavLink to="/students" icon={GraduationCap} label="Data Siswa" />
                 <NavLink to="/announcements" icon={Megaphone} label="Live Announcements" /> 
                 <NavLink to="/broadcast" icon={Send} label="Broadcast WhatsApp" />
@@ -829,6 +836,7 @@ const AppContent: React.FC = () => {
                       <NavLink to="/guidance" icon={ShieldAlert} label="Bimbingan Konseling" />
                     )}
                     <NavLink to="/attendance" icon={CalendarCheck} label="Daftar Hadir" />
+                    <NavLink to="/cbt" icon={FileQuestion} label="CBT (Ujian Online)" />
                     <NavLink to="/scope-material" icon={List} label="Lingkup Materi" />
                     <NavLink to="/journal" icon={NotebookPen} label="Jurnal Mengajar" />
                     <NavLink to="/summative" icon={Calculator} label="Asesmen Sumatif" />
@@ -967,6 +975,13 @@ const AppContent: React.FC = () => {
                    <Route path="/donation" element={<TeacherDonation user={currentUser} />} />
                    <Route path="*" element={<Navigate to="/dashboard" replace />} />
                  </>
+              ) : currentUser.role === UserRole.SISWA ? (
+                 <>
+                   <Route path="/dashboard" element={<div className="p-8 text-center text-gray-500">Dashboard Siswa (Akan Datang)</div>} />
+                   <Route path="/cbt/exam/:examId" element={<CbtExamEnvironment user={currentUser} />} />
+                   <Route path="/profile" element={<TeacherProfile user={currentUser} onUpdateUser={handleProfileUpdate} />} />
+                   <Route path="*" element={<Navigate to="/dashboard" replace />} />
+                 </>
               ) : (
                  <>
                    <Route path="/dashboard" element={<TeacherDashboard user={currentUser} />} />
@@ -976,6 +991,9 @@ const AppContent: React.FC = () => {
                    <Route path="/picket" element={<DailyPicket currentUser={currentUser} />} /> {/* NEW ROUTE */}
                    {currentUser.subject === 'Bimbingan Konseling' && <Route path="/guidance" element={<TeacherGuidance user={currentUser} />} />}
                    <Route path="/attendance" element={<TeacherAttendance user={currentUser} />} />
+                   <Route path="/cbt" element={<CbtManager user={currentUser} />} />
+                   <Route path="/cbt/editor/:examId" element={<CbtEditor user={currentUser} />} />
+                   <Route path="/cbt/results/:examId" element={<CbtResults user={currentUser} />} />
                    <Route path="/supervision-results" element={<SupervisionResults user={currentUser} />} />
                    <Route path="/scope-material" element={<TeacherScopeMaterial user={currentUser} />} />
                    <Route path="/journal" element={<TeacherJournal user={currentUser} />} />
@@ -994,6 +1012,7 @@ const AppContent: React.FC = () => {
                    <Route path="/broadcast" element={<BroadcastPage user={currentUser} />} />
                    <Route path="/backup" element={<BackupRestore user={currentUser} />} /> 
                    <Route path="/sync" element={<SyncPage user={currentUser} />} /> {/* NEW ROUTE */}
+                   <Route path="/cbt/exam/:examId" element={<CbtExamEnvironment user={currentUser} />} />
                    <Route path="/help-center" element={<HelpCenter user={currentUser} />} />
                    <Route path="/profile" element={<TeacherProfile user={currentUser} onUpdateUser={handleProfileUpdate} />} />
                    <Route path="/donation" element={<TeacherDonation user={currentUser} />} />
