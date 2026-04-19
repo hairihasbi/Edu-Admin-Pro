@@ -69,6 +69,10 @@ const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onUpdateUser }) =
   const isClassTeacher = formData.teacherType === 'CLASS';
   const isTendik = user.role === UserRole.TENDIK;
   const isAdmin = user.role === UserRole.ADMIN;
+  const isKepalaSekolah = user.additionalRole === 'KEPALA_SEKOLAH';
+
+  // Target: ADMIN, TENDIK, KEPALA_SEKOLAH, GURU_MAPEL, GURU_KELAS, GURU_BK
+  const canAccessBackup = isAdmin || isTendik || user.role === UserRole.GURU; // All GURU are Mapel/Kelas/BK essentially
 
   useEffect(() => {
     const fetchMasterData = async () => {
@@ -698,7 +702,7 @@ const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onUpdateUser }) =
         </div>
 
         {/* BACKUP MENU (NEW) - FULL WIDTH */}
-        {!isAdmin && (
+        {canAccessBackup && (
             <div className="col-span-1 lg:col-span-2">
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex flex-col md:flex-row items-center justify-between gap-4">
                     <div className="flex items-center gap-4">

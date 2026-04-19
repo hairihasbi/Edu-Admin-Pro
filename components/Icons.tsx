@@ -115,7 +115,8 @@ import {
   BarChart3, // Added BarChart3
   Home, // Added Home
   Moon,
-  Sun
+  Sun,
+  Play
 } from 'lucide-react';
 
 export {
@@ -233,5 +234,6 @@ export {
   BarChart3,
   Home,
   Moon,
-  Sun
+  Sun,
+  Play
 };

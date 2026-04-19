@@ -16,6 +16,14 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(true);
   const isTendik = user.role === UserRole.TENDIK;
+  const isAdmin = user.role === UserRole.ADMIN;
+  const isKepalaSekolah = user.additionalRole === 'KEPALA_SEKOLAH';
+  
+  // Target: TENDIK or KEPALA_SEKOLAH
+  const showCleanupBanner = isTendik || isKepalaSekolah;
+  
+  // Target: ADMIN, TENDIK, KEPALA_SEKOLAH, GURU_MAPEL, GURU_KELAS, GURU_BK
+  const canAccessBackup = isAdmin || isTendik || user.role === UserRole.GURU; // All GURU are Mapel/Kelas/BK in this app
   
   // Identity State
   const [academicPeriod, setAcademicPeriod] = useState({ year: '', semester: '' });
@@ -301,6 +309,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
     <div className="space-y-6 relative">
       
       {/* --- DATA WIPE WARNING BANNER --- */}
+      {showCleanupBanner && (
       <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-lg shadow-sm flex items-start gap-4">
          <div className="bg-yellow-100 p-2 rounded-full text-yellow-600 shrink-0">
             <AlertTriangle size={20} />
@@ -316,6 +325,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
             </Link>
          </div>
       </div>
+      )}
 
       {/* Kartu Identitas Guru */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
