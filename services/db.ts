@@ -7,7 +7,8 @@ import {
   StudentViolation, StudentPointReduction, StudentAchievement, CounselingSession, EmailConfig,
   WhatsAppConfig, Notification, ApiKey, SystemSettings, Donation, DailyPicket, StudentIncident,
   TeacherCalendarEvent, PasswordReset, ClassInventory, HomeVisit, ParentCall, LearningStyleAssessment,
-  SupervisionAssignment, SupervisionResult
+  SupervisionAssignment, SupervisionResult,
+  CbtExam, CbtQuestion, CbtAttempt
 } from '../types';
 
 export class EduAdminDatabase extends Dexie {
@@ -44,6 +45,9 @@ export class EduAdminDatabase extends Dexie {
   learningStyleAssessments!: Table<LearningStyleAssessment>;
   supervisionAssignments!: Table<SupervisionAssignment>;
   supervisionResults!: Table<SupervisionResult>;
+  cbtExams!: Table<CbtExam>;
+  cbtQuestions!: Table<CbtQuestion>;
+  cbtAttempts!: Table<CbtAttempt>;
 
   constructor() {
     super('EduAdminDB');
@@ -53,8 +57,8 @@ export class EduAdminDatabase extends Dexie {
     // * = Multi-entry index (not used here)
     // [field] = Indexed field for searching
     // Added schoolNpsn indexes for multi-tenancy filtering
-    // Bumped to version 29 to include supervision tables
-    (this as any).version(29).stores({
+    // Bumped to version 30 to include CBT tables
+    (this as any).version(30).stores({
       users: '&id, username, role, status, schoolNpsn, isSynced',
       classes: '&id, userId, schoolNpsn, name, homeroomTeacherId, isSynced', 
       students: '&id, classId, schoolNpsn, name, nis, gender, isSynced', 
@@ -77,7 +81,7 @@ export class EduAdminDatabase extends Dexie {
       systemSettings: '&id, isSynced',
       donations: '&id, userId, invoiceNumber, status, createdAt, isSynced',
       dailyPickets: '&id, date, schoolNpsn, isSynced',
-      studentIncidents: '&id, picketId, type, isSynced',
+      student_incidents: '&id, picketId, type, isSynced',
       teacherCalendar: '&id, userId, date, type, isSynced',
       passwordResets: '&id, token, userId, isSynced',
       classInventory: '&id, classId, userId, schoolNpsn, isSynced',
@@ -85,7 +89,10 @@ export class EduAdminDatabase extends Dexie {
       parentCalls: '&id, studentId, classId, schoolNpsn, userId, isSynced',
       learningStyleAssessments: '&id, studentId, classId, schoolNpsn, userId, isSynced',
       supervisionAssignments: '&id, supervisorId, teacherId, schoolNpsn, status, isSynced',
-      supervisionResults: '&id, assignmentId, supervisorId, teacherId, schoolNpsn, date, isSynced'
+      supervisionResults: '&id, assignmentId, supervisorId, teacherId, schoolNpsn, date, isSynced',
+      cbtExams: '&id, userId, schoolNpsn, status, isSynced',
+      cbtQuestions: '&id, examId, isSynced',
+      cbtAttempts: '&id, examId, studentId, schoolNpsn, status, isSynced'
     });
   }
 }

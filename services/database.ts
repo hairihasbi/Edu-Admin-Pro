@@ -7,7 +7,7 @@ import {
   StudentViolation, StudentPointReduction, StudentAchievement, CounselingSession, 
   EmailConfig, WhatsAppConfig, Notification, ApiKey, SystemSettings,
   BackupData, StudentWithDetails, LessonPlanRequest, DashboardStatsData, TeacherCalendarEvent, PasswordReset, ClassInventory, HomeVisit, ParentCall, LearningStyleAssessment,
-  SupervisionAssignment, SupervisionResult
+  SupervisionAssignment, SupervisionResult, CbtExam, CbtQuestion, CbtAttempt
 } from '../types';
 import { initTurso, pushToTurso, pullFromTurso, deleteFromTurso, clearRemoteTable, requestPasswordResetApi, verifyResetTokenApi, completePasswordResetApi } from './tursoService';
 import bcrypt from 'bcryptjs';
@@ -526,7 +526,9 @@ export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', logCall
             'eduadmin_bk_violations', 'eduadmin_bk_reductions', 'eduadmin_bk_achievements', 'eduadmin_bk_counseling',
             'eduadmin_wa_configs', 'eduadmin_notifications', 'eduadmin_api_keys', 'eduadmin_system_settings',
             'eduadmin_pickets', 'eduadmin_incidents', 'eduadmin_donations', 'eduadmin_teacher_calendar',
-            'eduadmin_password_resets', 'eduadmin_inventory', 'eduadmin_home_visits', 'eduadmin_parent_calls', 'eduadmin_learning_style_assessments'
+            'eduadmin_password_resets', 'eduadmin_inventory', 'eduadmin_home_visits', 'eduadmin_parent_calls', 
+            'eduadmin_learning_style_assessments', 'eduadmin_supervision_assignments', 'eduadmin_supervision_results',
+            'eduadmin_cbt_exams', 'eduadmin_cbt_questions', 'eduadmin_cbt_attempts'
         ];
 
         const collections = targetCollections || allCollections;
@@ -560,7 +562,12 @@ export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', logCall
             'eduadmin_inventory': db.classInventory,
             'eduadmin_home_visits': db.homeVisits,
             'eduadmin_parent_calls': db.parentCalls,
-            'eduadmin_learning_style_assessments': db.learningStyleAssessments
+            'eduadmin_learning_style_assessments': db.learningStyleAssessments,
+            'eduadmin_supervision_assignments': db.supervisionAssignments,
+            'eduadmin_supervision_results': db.supervisionResults,
+            'eduadmin_cbt_exams': db.cbtExams,
+            'eduadmin_cbt_questions': db.cbtQuestions,
+            'eduadmin_cbt_attempts': db.cbtAttempts
         };
 
         if (direction === 'PUSH' || direction === 'FULL') {
@@ -655,7 +662,8 @@ export const createBackup = async (user: User, semesterFilter?: string) => {
             semesterFilter
         },
         data: {
-            classes: [], students: [], scopeMaterials: [], assessmentScores: [], teachingJournals: []
+            classes: [], students: [], scopeMaterials: [], assessmentScores: [], teachingJournals: [],
+            cbtExams: [], cbtQuestions: [], cbtAttempts: []
         }
     };
 
@@ -677,6 +685,9 @@ export const createBackup = async (user: User, semesterFilter?: string) => {
         backup.data.notifications = await db.notifications.toArray();
         backup.data.apiKeys = await db.apiKeys.toArray();
         backup.data.systemSettings = await db.systemSettings.toArray();
+        backup.data.cbtExams = await db.cbtExams.toArray();
+        backup.data.cbtQuestions = await db.cbtQuestions.toArray();
+        backup.data.cbtAttempts = await db.cbtAttempts.toArray();
     } else {
         backup.data.classes = await db.classes.where('userId').equals(user.id).toArray();
         const classIds = backup.data.classes.map(c => c.id);
@@ -692,6 +703,12 @@ export const createBackup = async (user: User, semesterFilter?: string) => {
         
         backup.data.teachingJournals = await db.teachingJournals.where('userId').equals(user.id).toArray();
         backup.data.teachingSchedules = await db.teachingSchedules.where('userId').equals(user.id).toArray();
+        
+        // Include CBT Data for teacher
+        backup.data.cbtExams = await db.cbtExams.where('userId').equals(user.id).toArray();
+        const examIds = backup.data.cbtExams.map(e => e.id);
+        backup.data.cbtQuestions = await db.cbtQuestions.where('examId').anyOf(examIds).toArray();
+        backup.data.cbtAttempts = await db.cbtAttempts.where('examId').anyOf(examIds).toArray();
     }
 
     return backup;
@@ -717,6 +734,9 @@ export const restoreBackup = async (backup: BackupData) => {
             if (backup.data.notifications) await db.notifications.bulkPut(backup.data.notifications);
             if (backup.data.apiKeys) await db.apiKeys.bulkPut(backup.data.apiKeys);
             if (backup.data.systemSettings) await db.systemSettings.bulkPut(backup.data.systemSettings);
+            if (backup.data.cbtExams) await db.cbtExams.bulkPut(backup.data.cbtExams);
+            if (backup.data.cbtQuestions) await db.cbtQuestions.bulkPut(backup.data.cbtQuestions);
+            if (backup.data.cbtAttempts) await db.cbtAttempts.bulkPut(backup.data.cbtAttempts);
         });
         syncAllData(true);
         return { success: true, message: 'Data berhasil dipulihkan.' };
@@ -740,6 +760,9 @@ export const resetSystemData = async (scope: 'SEMESTER' | 'ALL', semester?: stri
             await db.violations.clear();
             await db.achievements.clear();
             await db.counselingSessions.clear();
+            await db.cbtExams.clear();
+            await db.cbtQuestions.clear();
+            await db.cbtAttempts.clear();
             return { success: true, message: 'Data tahun ajaran berhasil direset.' };
         } else {
             await db.scopeMaterials.where('semester').equals(semester).delete();
@@ -2135,6 +2158,60 @@ export const saveSupervisionResult = async (result: Partial<SupervisionResult> &
     
     triggerDebouncedSync();
     return item;
+};
+
+// --- CBT SERVICES ---
+export const getCbtExams = async (userId: string, schoolNpsn: string) => {
+    return await db.cbtExams
+        .where('schoolNpsn').equals(schoolNpsn)
+        .or('userId').equals(userId)
+        .toArray();
+};
+
+export const saveCbtExam = async (exam: CbtExam) => {
+    const toSave = { ...exam, lastModified: Date.now(), isSynced: false };
+    await db.cbtExams.put(toSave);
+    triggerDebouncedSync();
+    return toSave;
+};
+
+export const deleteCbtExam = async (id: string) => {
+    await db.cbtExams.delete(id);
+    await db.cbtQuestions.where('examId').equals(id).delete();
+    await deleteFromTurso('eduadmin_cbt_exams', id);
+    // Note: Manual deletion of questions from Turso if needed, 
+    // but typically we let sync handle deleted flag
+    return true;
+};
+
+export const getCbtQuestions = async (examId: string) => {
+    return await db.cbtQuestions.where('examId').equals(examId).sortBy('order');
+};
+
+export const saveCbtQuestions = async (examId: string, questions: CbtQuestion[]) => {
+    await db.transaction('rw', db.cbtQuestions, async () => {
+        await db.cbtQuestions.where('examId').equals(examId).delete();
+        if (questions.length > 0) {
+            await db.cbtQuestions.bulkPut(questions.map(q => ({ ...q, lastModified: Date.now(), isSynced: false })));
+        }
+    });
+    triggerDebouncedSync();
+    return true;
+};
+
+export const getCbtAttemptsByExam = async (examId: string) => {
+    return await db.cbtAttempts.where('examId').equals(examId).toArray();
+};
+
+export const getCbtAttemptsByStudent = async (studentId: string) => {
+    return await db.cbtAttempts.where('studentId').equals(studentId).toArray();
+};
+
+export const saveCbtAttempt = async (attempt: CbtAttempt) => {
+    const toSave = { ...attempt, lastModified: Date.now(), isSynced: false };
+    await db.cbtAttempts.put(toSave);
+    triggerDebouncedSync();
+    return toSave;
 };
 
 export const updateSupervisionAssignmentStatus = async (id: string, status: 'PENDING' | 'COMPLETED') => {
