@@ -1408,6 +1408,41 @@ export const getAllStudentsWithDetails = async () => {
     });
 };
 
+export const verifyStudentByNis = async (npsn: string, nis: string): Promise<User | null> => {
+    // 1. Check local DB first in case offline or already pulled
+    const local = await db.students.where({ schoolNpsn: npsn, nis }).first();
+    if (local) {
+        return {
+            id: local.id,
+            username: `siswa_${local.nis}`,
+            fullName: local.name,
+            role: UserRole.SISWA,
+            status: 'ACTIVE',
+            schoolNpsn: local.schoolNpsn,
+            avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(local.name)}&background=random`
+        };
+    }
+
+    // 2. If online and not found locally, try server
+    if (navigator.onLine) {
+        try {
+            const res = await fetch('/api/turso', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'verify_student', npsn, nis })
+            });
+            if (res.ok) {
+                const data = await res.json();
+                return data.user as User;
+            }
+        } catch (e) {
+            console.error("verifyStudentByNis error:", e);
+        }
+    }
+
+    return null;
+};
+
 export const getStudentsServerSide = async (page: number, limit: number, search: string, school: string, teacherId: string) => {
     // If online, use API
     if (navigator.onLine) {
