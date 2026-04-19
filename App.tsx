@@ -39,11 +39,12 @@ import CbtManager from './components/CbtManager';
 import CbtEditor from './components/CbtEditor';
 import CbtResults from './components/CbtResults';
 import CbtExamEnvironment from './components/CbtExamEnvironment';
+import StudentDashboard from './components/StudentDashboard';
 import Breadcrumbs from './components/Breadcrumbs';
 import OnboardingTour from './components/OnboardingTour';
 import ForgotPassword from './components/ForgotPassword';
 import ResetPassword from './components/ResetPassword';
-import { initDatabase, loginUser, registerUser, getNotifications, createNotification, markNotificationAsRead, clearNotifications, getSystemSettings, syncAllData, checkSchoolNameByNpsn, updateUserProfile, getUserProfile } from './services/database';
+import { initDatabase, loginUser, registerUser, getNotifications, createNotification, markNotificationAsRead, clearNotifications, getSystemSettings, syncAllData, checkSchoolNameByNpsn, updateUserProfile, getUserProfile, verifyStudentByNis } from './services/database';
 import { db } from './services/db';
 import { 
   LayoutDashboard, 
@@ -64,6 +65,7 @@ import {
   DatabaseBackup, 
   Heart, 
   FileQuestion,
+  Play,
   UserPlus,
   Settings,
   Activity,
@@ -85,6 +87,7 @@ import {
   CheckCircle,
   ArrowLeftRight,
   School,
+  IdCard,
   CreditCard, // Import CreditCard
   Calendar, // Import Calendar
   Sun,
@@ -116,8 +119,11 @@ const AppContent: React.FC = () => {
   const toggleDarkMode = () => setIsDarkMode(!isDarkMode);
 
   // Login State
+  const [loginMode, setLoginMode] = useState<'STAFF' | 'STUDENT'>('STAFF');
   const [loginUsername, setLoginUsername] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  const [studentNpsn, setStudentNpsn] = useState('');
+  const [studentNis, setStudentNis] = useState('');
   const [loginError, setLoginError] = useState('');
   
   // Register State
@@ -454,6 +460,32 @@ const AppContent: React.FC = () => {
     }
   };
 
+  const handleStudentLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError('');
+    if (!studentNpsn || !studentNis) {
+        setLoginError('NPSN dan NIS wajib diisi.');
+        return;
+    }
+
+    try {
+        const user = await verifyStudentByNis(studentNpsn, studentNis);
+        if (user) {
+            localStorage.setItem('eduadmin_user', JSON.stringify(user));
+            setCurrentUser(user);
+            setStudentNpsn('');
+            setStudentNis('');
+            refreshNotifications(user.role);
+            navigate('/dashboard');
+        } else {
+            setLoginError('Data siswa tidak ditemukan. Pastikan NPSN dan NIS benar (Siswa harus sudah didaftarkan oleh guru).');
+        }
+    } catch (err) {
+        if(err instanceof Error) setLoginError(err.message);
+        else setLoginError('Gagal memverifikasi data siswa.');
+    }
+  };
+
   const handleNpsnBlur = async () => {
       if (regNpsn.length < 8) return;
       setIsCheckingNpsn(true);
@@ -644,8 +676,27 @@ const AppContent: React.FC = () => {
                 </div>
                 
                 <div className="p-8">
-                  {/* ... Login/Register Forms ... */}
-                  {isRegisterMode ? (
+                   {/* Login Mode Switcher */}
+                   {!isRegisterMode && (
+                       <div className="flex bg-gray-100 p-1 rounded-xl mb-6">
+                           <button 
+                               onClick={() => { setLoginMode('STAFF'); setLoginError(''); }}
+                               className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition ${loginMode === 'STAFF' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                           >
+                               <Users size={18} />
+                               Guru / Staf
+                           </button>
+                           <button 
+                               onClick={() => { setLoginMode('STUDENT'); setLoginError(''); }}
+                               className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition ${loginMode === 'STUDENT' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                           >
+                               <GraduationCap size={18} />
+                               Siswa (Ujian)
+                           </button>
+                       </div>
+                   )}
+
+                   {isRegisterMode ? (
                      <form onSubmit={handleRegister} className="space-y-4">
                         <h2 className="text-2xl font-semibold text-gray-800 mb-2">Daftar Guru Baru</h2>
                         {regMessage && <div className={`p-3 rounded-lg text-sm mb-4 ${regMessage.type === 'success' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>{regMessage.text}</div>}
@@ -741,6 +792,50 @@ const AppContent: React.FC = () => {
                         <button type="submit" className="w-full bg-blue-600 text-white font-semibold py-2.5 rounded-lg hover:bg-blue-700">Daftar Sekarang</button>
                         <button type="button" onClick={() => setIsRegisterMode(false)} className="text-sm text-gray-600 hover:text-blue-600 w-full text-center mt-2">Sudah punya akun? Login</button>
                      </form>
+                  ) : loginMode === 'STUDENT' ? (
+                    <form onSubmit={handleStudentLogin} className="space-y-6">
+                       <div className="text-center mb-4">
+                           <h2 className="text-2xl font-semibold text-gray-800">Akses Ujian Siswa</h2>
+                           <p className="text-xs text-gray-500 mt-1">Masukkan NPSN Sekolah dan NIS Anda untuk memulai.</p>
+                       </div>
+                       
+                       {loginError && <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm">{loginError}</div>}
+                       
+                       <div className="space-y-4">
+                           <div className="relative">
+                               <School className="absolute left-3 top-3 text-gray-400" size={20} />
+                               <input 
+                                   type="text" 
+                                   required 
+                                   className="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition" 
+                                   placeholder="NPSN Sekolah (8 Digit)" 
+                                   value={studentNpsn} 
+                                   onChange={e => setStudentNpsn(e.target.value)}
+                                   maxLength={8}
+                               />
+                           </div>
+                           <div className="relative">
+                               <IdCard className="absolute left-3 top-3 text-gray-400" size={20} />
+                               <input 
+                                   type="text" 
+                                   required 
+                                   className="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition" 
+                                   placeholder="Nomor Induk Siswa (NIS/NISN)" 
+                                   value={studentNis} 
+                                   onChange={e => setStudentNis(e.target.value)} 
+                               />
+                           </div>
+                       </div>
+
+                       <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl transition shadow-lg shadow-blue-100 flex items-center justify-center gap-2">
+                           <Play size={18} fill="currentColor" />
+                           Masuk Ke Ruang Ujian
+                       </button>
+
+                       <div className="text-center text-xs text-gray-400">
+                           <p>*Hanya tersedia jika guru Anda sudah mendaftarkan data siswa di aplikasi.</p>
+                       </div>
+                    </form>
                   ) : (
                     <form onSubmit={handleLogin} className="space-y-6">
                       <h2 className="text-2xl font-semibold text-gray-800">Masuk Akun</h2>
@@ -977,7 +1072,7 @@ const AppContent: React.FC = () => {
                  </>
               ) : currentUser.role === UserRole.SISWA ? (
                  <>
-                   <Route path="/dashboard" element={<div className="p-8 text-center text-gray-500">Dashboard Siswa (Akan Datang)</div>} />
+                   <Route path="/dashboard" element={<StudentDashboard user={currentUser} />} />
                    <Route path="/cbt/exam/:examId" element={<CbtExamEnvironment user={currentUser} />} />
                    <Route path="/profile" element={<TeacherProfile user={currentUser} onUpdateUser={handleProfileUpdate} />} />
                    <Route path="*" element={<Navigate to="/dashboard" replace />} />
