@@ -1,6 +1,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import * as XLSX from 'xlsx';
+import mammoth from 'mammoth';
 import { 
   ChevronLeft, 
   Save, 
@@ -17,7 +19,11 @@ import {
   ChevronUp,
   X,
   RefreshCcw,
-  Zap
+  Zap,
+  FileSpreadsheet,
+  FileText,
+  Download,
+  Upload
 } from './Icons';
 import { User, CbtExam, CbtQuestion } from '../types';
 import { getCbtExams, saveCbtExam, getCbtQuestions, saveCbtQuestions } from '../services/database';
@@ -69,8 +75,26 @@ const CbtEditor: React.FC<CbtEditorProps> = ({ user }) => {
           console.error("Load CBT Data Error:", error);
         }
       } else {
-        // Initialize with one empty question
-        handleAddQuestion();
+        // Initialize with one empty question ONLY if empty
+        setQuestions(prev => {
+          if (prev.length === 0) {
+            const newId = crypto.randomUUID();
+            const q = {
+              id: newId,
+              examId: 'temp',
+              questionText: '',
+              type: 'MULTIPLE_CHOICE' as const,
+              options: { a: '', b: '', c: '', d: '', e: '' },
+              correctAnswer: 'a',
+              order: 1,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            };
+            setActiveQuestionId(newId);
+            return [q];
+          }
+          return prev;
+        });
       }
       setIsLoading(false);
     };
@@ -179,6 +203,111 @@ const CbtEditor: React.FC<CbtEditorProps> = ({ user }) => {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const downloadExcelTemplate = () => {
+    const headers = [['Soal', 'Pilihan A', 'Pilihan B', 'Pilihan C', 'Pilihan D', 'Pilihan E', 'Kunci Jawaban (a/b/c/d/e)']];
+    const data = [
+      ['Ibu kota Indonesia adalah...', 'Jakarta', 'Bandung', 'Surabaya', 'Medan', 'Makassar', 'a'],
+      ['Hasil dari 2 + 2 adalah...', '3', '4', '5', '6', '', 'b']
+    ];
+    const ws = XLSX.utils.aoa_to_sheet([...headers, ...data]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
+    XLSX.writeFile(wb, "Template_Soal_CBT.xlsx");
+  };
+
+  const handleImportExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const bstr = evt.target?.result;
+      const wb = XLSX.read(bstr, { type: 'binary' });
+      const wsname = wb.SheetNames[0];
+      const ws = wb.Sheets[wsname];
+      const data: any[] = XLSX.utils.sheet_to_json(ws, { header: 1 });
+
+      const newQuestions: CbtQuestion[] = data.slice(1).filter(row => row[0]).map((row, idx) => ({
+        id: crypto.randomUUID(),
+        examId: examId || 'temp',
+        questionText: String(row[0] || ''),
+        type: 'MULTIPLE_CHOICE',
+        options: {
+          a: String(row[1] || ''),
+          b: String(row[2] || ''),
+          c: String(row[3] || ''),
+          d: String(row[4] || ''),
+          e: String(row[5] || '')
+        },
+        correctAnswer: String(row[6] || 'a').toLowerCase(),
+        order: questions.length + idx + 1,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }));
+
+      if (newQuestions.length > 0) {
+        setQuestions(prev => [...prev, ...newQuestions]);
+        setActiveQuestionId(newQuestions[0].id);
+        alert(`${newQuestions.length} soal berhasil diimpor.`);
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  const handleImportDocx = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      const arrayBuffer = evt.target?.result as ArrayBuffer;
+      try {
+        const result = await mammoth.extractRawText({ arrayBuffer });
+        const text = result.value;
+        const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+        
+        // Simple Parser: Question followed by 4-5 options starting with a), b), etc.
+        const parsedQuestions: CbtQuestion[] = [];
+        let currentQ: Partial<CbtQuestion> | null = null;
+
+        lines.forEach(line => {
+          const optionMatch = line.match(/^([a-e])[.\)]\s*(.*)/i);
+          if (optionMatch) {
+            if (currentQ) {
+              const key = optionMatch[1].toLowerCase();
+              currentQ.options = { ...currentQ.options!, [key]: optionMatch[2] };
+            }
+          } else {
+            // New Question
+            if (currentQ) parsedQuestions.push(currentQ as CbtQuestion);
+            currentQ = {
+              id: crypto.randomUUID(),
+              examId: examId || 'temp',
+              questionText: line.replace(/^\d+[.\)]\s*/, ''),
+              type: 'MULTIPLE_CHOICE',
+              options: { a: '', b: '', c: '', d: '', e: '' },
+              correctAnswer: 'a',
+              order: parsedQuestions.length + questions.length + 1,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            };
+          }
+        });
+        if (currentQ) parsedQuestions.push(currentQ as CbtQuestion);
+
+        if (parsedQuestions.length > 0) {
+          setQuestions(prev => [...prev.filter(q => q.questionText !== ''), ...parsedQuestions]);
+          setActiveQuestionId(parsedQuestions[0].id);
+          alert(`${parsedQuestions.length} soal berhasil diimpor dari dokumen.`);
+        }
+      } catch (err) {
+        console.error("Docx Import Error:", err);
+        alert('Gagal mengimpor file Word. Pastikan format sesuai.');
+      }
+    };
+    reader.readAsArrayBuffer(file);
   };
 
   if (isLoading) return <div className="p-8 text-center text-gray-500">Memuat editor...</div>;
@@ -294,10 +423,29 @@ const CbtEditor: React.FC<CbtEditorProps> = ({ user }) => {
           </div>
 
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-             <h3 className="font-bold text-gray-800 flex items-center justify-between mb-4">
-                <span>Daftar Soal</span>
-                <span className="px-2 py-0.5 bg-gray-100 rounded text-[10px]">{questions.length} Butir</span>
-             </h3>
+             <div className="flex items-center justify-between border-b border-gray-50 pb-3 mb-4">
+               <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                 <span>Daftar Soal</span>
+                 <span className="px-2 py-0.5 bg-gray-100 rounded text-[10px]">{questions.length} Butir</span>
+               </h3>
+               <div className="flex gap-1">
+                 <button 
+                   onClick={downloadExcelTemplate}
+                   className="p-1.5 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition"
+                   title="Download Template Excel"
+                 >
+                   <Download size={16} />
+                 </button>
+                 <label className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition cursor-pointer" title="Impor dari Excel">
+                   <FileSpreadsheet size={16} />
+                   <input type="file" accept=".xlsx, .xls" className="hidden" onChange={handleImportExcel} />
+                 </label>
+                 <label className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition cursor-pointer" title="Impor dari Word (.docx)">
+                   <FileText size={16} />
+                   <input type="file" accept=".docx" className="hidden" onChange={handleImportDocx} />
+                 </label>
+               </div>
+             </div>
              <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-gray-200">
                 {questions.map((q, idx) => (
                   <button 
