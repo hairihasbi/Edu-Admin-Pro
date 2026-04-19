@@ -461,7 +461,9 @@ export const getSyncStats = async (user: User) => {
         'assessmentScores', 'teachingJournals', 'teachingSchedules', 'logs',
         'emailConfig', 'masterSubjects', 'tickets', 'violations', 'pointReductions',
         'achievements', 'counselingSessions', 'whatsappConfigs', 'notifications', 'apiKeys', 'systemSettings',
-        'teacherCalendar'
+        'teacherCalendar', 'dailyPickets', 'studentIncidents', 'donations', 'passwordResets',
+        'classInventory', 'homeVisits', 'parentCalls', 'learningStyleAssessments',
+        'supervisionAssignments', 'supervisionResults', 'cbtExams', 'cbtQuestions', 'cbtAttempts'
     ];
     
     let totalUnsynced = 0;

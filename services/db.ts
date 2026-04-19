@@ -81,7 +81,7 @@ export class EduAdminDatabase extends Dexie {
       systemSettings: '&id, isSynced',
       donations: '&id, userId, invoiceNumber, status, createdAt, isSynced',
       dailyPickets: '&id, date, schoolNpsn, isSynced',
-      student_incidents: '&id, picketId, type, isSynced',
+      studentIncidents: '&id, picketId, type, isSynced',
       teacherCalendar: '&id, userId, date, type, isSynced',
       passwordResets: '&id, token, userId, isSynced',
       classInventory: '&id, classId, userId, schoolNpsn, isSynced',
