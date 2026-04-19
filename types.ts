@@ -3,6 +3,8 @@ export enum UserRole {
   ADMIN = 'ADMIN',
   GURU = 'GURU',
   TENDIK = 'TENDIK',
+  SISWA = 'SISWA',
+  ORANG_TUA = 'ORANG_TUA'
 }
 
 export type UserStatus = 'ACTIVE' | 'PENDING' | 'REJECTED';
@@ -13,6 +15,8 @@ export interface Syncable {
   isSynced?: boolean;
   version?: number; // Integer version for optimistic locking
   deleted?: boolean; // NEW: Soft Delete Flag
+  createdAt?: string; // ISO String
+  updatedAt?: string; // ISO String
 }
 
 export interface User extends Syncable {
@@ -480,6 +484,55 @@ export interface SupervisionResult extends Syncable {
   }[];
 }
 
+export interface CbtExam extends Syncable {
+  id: string;
+  userId: string; // Teacher ID
+  title: string;
+  subject: string;
+  level: 'SD' | 'SMP' | 'SMA' | 'SMK' | 'MA' | 'OTHERS'; // Level for Option count
+  durationMinutes: number;
+  startTime?: string; // ISO String
+  endTime?: string;   // ISO String
+  status: 'DRAFT' | 'ACTIVE' | 'CLOSED';
+  token?: string;
+  randomizeQuestions?: boolean;
+  randomizeOptions?: boolean;
+  schoolNpsn: string;
+}
+
+export interface CbtQuestion extends Syncable {
+  id: string;
+  examId: string;
+  questionText: string;
+  type: 'MULTIPLE_CHOICE' | 'ESSAY';
+  options?: {
+    a: string;
+    b: string;
+    c: string;
+    d: string;
+    e?: string;
+  };
+  correctAnswer?: string; // 'a', 'b', 'c', 'd', 'e'
+  imageData?: string; // Base64 Compressed Image
+  order: number;
+}
+
+export interface CbtAttempt extends Syncable {
+  id: string;
+  examId: string;
+  studentId: string;
+  studentName: string;
+  startTime: string; // ISO String
+  endTime?: string;   // ISO String
+  score?: number;
+  correctCount?: number;
+  wrongCount?: number;
+  answers: Record<string, string>; // questionId -> answer
+  violationCount: number;
+  status: 'IN_PROGRESS' | 'SUBMITTED' | 'CLOSED';
+  schoolNpsn: string;
+}
+
 export interface BackupData {
   meta: {
     version: string;
@@ -507,6 +560,9 @@ export interface BackupData {
     notifications?: Notification[];
     apiKeys?: ApiKey[]; // Include keys in backup
     systemSettings?: SystemSettings[]; // Include settings
+    cbtExams?: CbtExam[];
+    cbtQuestions?: CbtQuestion[];
+    cbtAttempts?: CbtAttempt[];
   };
 }
 
