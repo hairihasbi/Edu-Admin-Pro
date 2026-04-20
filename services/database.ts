@@ -2188,6 +2188,7 @@ export const saveSupervisionResult = async (result: Partial<SupervisionResult> &
     }
     
     await db.supervisionResults.put(item);
+    triggerDebouncedSync();
     
     // We don't automatically mark as COMPLETED here anymore if we want to allow ongoing edits
     // Or we keep it as PENDING while editing?
