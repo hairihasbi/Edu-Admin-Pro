@@ -377,7 +377,21 @@ const AppContent: React.FC = () => {
 
   useEffect(() => {
     if (!currentUser) return;
+    
+    // SISWA TIDAK ADA TIMEOUT (Request User)
+    if (currentUser.role === 'SISWA') {
+        if (sessionTimerRef.current) clearTimeout(sessionTimerRef.current);
+        return;
+    }
+
     const resetSessionTimer = () => {
+      // JANGAN LOGOUT jika sedang di halaman Ujian CBT
+      const isCbtPage = window.location.hash.includes('/cbt/exam/') || window.location.pathname.includes('/cbt/exam/');
+      if (isCbtPage) {
+        if (sessionTimerRef.current) clearTimeout(sessionTimerRef.current);
+        return;
+      }
+
       if (sessionTimerRef.current) clearTimeout(sessionTimerRef.current);
       sessionTimerRef.current = setTimeout(() => {
         alert("Sesi Anda telah berakhir karena tidak ada aktivitas selama 15 menit. Silakan login kembali.");
