@@ -1419,6 +1419,7 @@ export const verifyStudentByNis = async (npsn: string, nis: string): Promise<Use
             role: UserRole.SISWA,
             status: 'ACTIVE',
             schoolNpsn: local.schoolNpsn,
+            classId: local.classId, // NEW: Include classId
             avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(local.name)}&background=random`
         };
     }
@@ -2198,12 +2199,17 @@ export const saveSupervisionResult = async (result: Partial<SupervisionResult> &
 };
 
 // --- CBT SERVICES ---
-export const getCbtExams = async (userId: string, schoolNpsn: string, role?: string) => {
+export const getCbtExams = async (userId: string, schoolNpsn: string, role?: string, studentClassId?: string) => {
     // If student, show all active exams in their school
     if (role === 'SISWA') {
+        const studentClsId = studentClassId || '';
         return await db.cbtExams
             .where('schoolNpsn').equals(schoolNpsn)
-            .filter(e => e.status === 'ACTIVE')
+            .filter(e => {
+                const isActive = e.status === 'ACTIVE';
+                const isTargeted = !e.targetClassIds || e.targetClassIds.length === 0 || e.targetClassIds.includes(studentClsId);
+                return isActive && isTargeted;
+            })
             .toArray();
     }
     
