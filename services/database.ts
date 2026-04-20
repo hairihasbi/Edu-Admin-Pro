@@ -2198,10 +2198,20 @@ export const saveSupervisionResult = async (result: Partial<SupervisionResult> &
 };
 
 // --- CBT SERVICES ---
-export const getCbtExams = async (userId: string, schoolNpsn: string) => {
+export const getCbtExams = async (userId: string, schoolNpsn: string, role?: string) => {
+    // If student, show all active exams in their school
+    if (role === 'SISWA') {
+        return await db.cbtExams
+            .where('schoolNpsn').equals(schoolNpsn)
+            .filter(e => e.status === 'ACTIVE')
+            .toArray();
+    }
+    
+    // For Teachers/Admin: ONLY their own exams
+    // We filter by userId to ensure privacy as requested: 
+    // "guru maple mtk buat soal guru sosiologi tidak bisa lihat"
     return await db.cbtExams
-        .where('schoolNpsn').equals(schoolNpsn)
-        .or('userId').equals(userId)
+        .where('userId').equals(userId)
         .toArray();
 };
 
