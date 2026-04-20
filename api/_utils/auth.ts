@@ -50,16 +50,26 @@ export async function authorize(req: VercelRequest, allowedRoles: string[] = [])
   });
 
   try {
-    const result = await client.execute({
+    let result = await client.execute({
       sql: "SELECT id, username, role, status FROM users WHERE id = ?",
       args: [userId]
     });
 
+    let user;
     if (result.rows.length === 0) {
-      throw { status: 401, message: 'User not found or invalid token' };
+      // Check students table
+      const studentResult = await client.execute({
+        sql: "SELECT id, nis as username, 'SISWA' as role, 'ACTIVE' as status FROM students WHERE id = ? AND deleted = 0",
+        args: [userId]
+      });
+      
+      if (studentResult.rows.length === 0) {
+        throw { status: 401, message: 'User not found or invalid token' };
+      }
+      user = studentResult.rows[0];
+    } else {
+      user = result.rows[0];
     }
-
-    const user = result.rows[0];
 
     if (user.status !== 'ACTIVE') {
       throw { status: 403, message: 'Account is not active' };
