@@ -150,28 +150,33 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
         <div style="margin-top: 5px; font-style: italic; font-size: 10pt;">${aggregateCoachingSuggestions()}</div>
       </div>
 
-      <table class="signature-section">
+      <table class="signature-section" style="width: 100%; border-collapse: collapse; margin-top: 30px;">
         <tr>
-          <td style="text-align: left; padding-left: 50px;">Mengetahui,</td>
           <td>&nbsp;</td>
-          <td>${printConfig.location}, ${formatDate(printConfig.date)}</td>
+          <td>&nbsp;</td>
+          <td style="text-align: center;">Mengetahui,</td>
         </tr>
-        <tr style="font-weight: bold;">
-          <td>Kepala Sekolah</td>
-          <td>Supervisor / Penilai</td>
-          <td>Guru Mata Pelajaran</td>
+        <tr>
+          <td>&nbsp;</td>
+          <td>&nbsp;</td>
+          <td style="text-align: center;">${printConfig.location}, ${formatDate(printConfig.date)}</td>
+        </tr>
+        <tr style="font-weight: bold; text-align: center;">
+          <td style="width: 33.33%;">Kepala Sekolah</td>
+          <td style="width: 33.33%;">Supervisor / Penilai</td>
+          <td style="width: 33.33%;">Guru Mata Pelajaran</td>
         </tr>
         <tr>
           <td class="signature-space"></td>
           <td class="signature-space"></td>
           <td class="signature-space"></td>
         </tr>
-        <tr style="font-weight: bold;">
-          <td>${printConfig.principalName || '................................'}</td>
-          <td>${supervisor?.fullName || '................................'}</td>
-          <td>${teacher?.fullName || '................................'}</td>
+        <tr style="font-weight: bold; text-align: center;">
+          <td style="white-space: nowrap;">${printConfig.principalName || '................................'}</td>
+          <td style="white-space: nowrap;">${supervisor?.fullName || '................................'}</td>
+          <td style="white-space: nowrap;">${teacher?.fullName || '................................'}</td>
         </tr>
-        <tr>
+        <tr style="text-align: center;">
           <td>NIP. ${printConfig.principalNip || '................................'}</td>
           <td>NIP. ${supervisor?.nip || '................................'}</td>
           <td>NIP. ${teacher?.nip || '................................'}</td>

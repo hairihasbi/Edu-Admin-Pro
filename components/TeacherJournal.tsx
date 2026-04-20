@@ -468,17 +468,18 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
 
           <div class="signature-container">
             <div class="signature-box">
-              <p>Mengetahui,</p>
+              <p>&nbsp;</p>
               <p>Kepala Sekolah ${user.schoolName || '[Nama Sekolah]'}</p>
               <br><br><br><br>
-              <p><strong>${validationData.principalName || '................................'}</strong></p>
+              <p style="white-space: nowrap;"><strong>${validationData.principalName || '................................'}</strong></p>
               <p>NIP. ${validationData.principalNip || '................................'}</p>
             </div>
             <div class="signature-box">
+              <p>Mengetahui,</p>
               <p>${validationData.placeName || '................'}, ${formattedDate}</p>
               <p>Guru Mata Pelajaran</p>
               <br><br><br><br>
-              <p><strong>${validationData.teacherName || user.fullName}</strong></p>
+              <p style="white-space: nowrap;"><strong>${validationData.teacherName || user.fullName}</strong></p>
               <p>NIP. ${validationData.teacherNip || user.nip || '................................'}</p>
             </div>
           </div>

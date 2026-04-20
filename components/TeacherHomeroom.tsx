@@ -526,17 +526,18 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
           ${printSettings.showSignature ? `
           <div class="footer">
             <div class="signature-box">
-              <p>Mengetahui,</p>
+              <p>&nbsp;</p>
               <p>Kepala Sekolah</p>
               <div class="signature-space"></div>
-              <p><strong>${printSettings.headmasterName || '................................'}</strong></p>
+              <p style="white-space: nowrap;"><strong>${printSettings.headmasterName || '................................'}</strong></p>
               <p>NIP. ${printSettings.headmasterNip || '................................'}</p>
             </div>
             <div class="signature-box">
+              <p>Mengetahui,</p>
               <p>${printSettings.place}, ${printSettings.date}</p>
               <p>Wali Kelas</p>
               <div class="signature-space"></div>
-              <p><strong>${printSettings.homeroomName}</strong></p>
+              <p style="white-space: nowrap;"><strong>${printSettings.homeroomName}</strong></p>
               <p>NIP. ${printSettings.homeroomNip}</p>
             </div>
           </div>

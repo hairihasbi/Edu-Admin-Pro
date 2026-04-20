@@ -305,7 +305,14 @@ const TeacherRPPGenerator: React.FC<TeacherRPPGeneratorProps> = ({ user, onUpdat
             return '<tr>' + cells.map((cell, index) => {
                 let style = 'padding: 5px; vertical-align: top; border: 1px solid black;';
                 if (isSignature) {
-                    style = 'padding: 5px; vertical-align: top; border: none; width: 50%; text-align: center;'; 
+                    // Logic: If there are multiple columns, divide width equally.
+                    const dynamicWidth = colCount > 0 ? (100 / colCount).toFixed(0) : 50;
+                    style = `padding: 5px; vertical-align: top; border: none; width: ${dynamicWidth}%; text-align: center;`; 
+                    
+                    // Prevent name/degree from wrapping if it's the signature name part
+                    if (cell.includes('**') || cell.includes('<b>')) {
+                        style += ' white-space: nowrap;';
+                    }
                 } else {
                     if (colCount === 2) {
                         if (index === 0) style += ' width: 25%; text-align: left; font-weight: bold;'; 
