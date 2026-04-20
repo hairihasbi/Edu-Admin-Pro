@@ -515,6 +515,7 @@ const DB_SCHEMAS = [
     `ALTER TABLE teacher_calendar ADD COLUMN school_npsn TEXT`,
     `ALTER TABLE home_visits ADD COLUMN school_npsn TEXT`,
     `ALTER TABLE parent_calls ADD COLUMN school_npsn TEXT`,
+    `ALTER TABLE cbt_questions RENAME COLUMN "order" TO sort_order`,
     `CREATE TABLE IF NOT EXISTS supervision_assignments (
         id TEXT PRIMARY KEY,
         supervisor_id TEXT,
@@ -623,7 +624,7 @@ const DB_SCHEMAS = [
         options TEXT, -- JSON Object
         correct_answer TEXT,
         image_data TEXT, -- Base64
-        "order" INTEGER,
+        sort_order INTEGER,
         last_modified INTEGER,
         version INTEGER DEFAULT 1,
         deleted INTEGER DEFAULT 0
@@ -740,8 +741,8 @@ const getTableConfig = (collection: string) => {
     };
     case 'eduadmin_cbt_questions': return { 
         table: 'cbt_questions', 
-        columns: ['id', 'exam_id', 'question_text', 'type', 'options', 'correct_answer', 'image_data', 'order', 'last_modified', 'version', 'deleted'], 
-        mapFn: (item: any) => [s(item.id), s(item.examId), s(item.questionText), s(item.type), JSON.stringify(item.options || {}), s(item.correctAnswer), s(item.imageData), s(item.order), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] 
+        columns: ['id', 'exam_id', 'question_text', 'type', 'options', 'correct_answer', 'image_data', 'sort_order', 'last_modified', 'version', 'deleted'], 
+        mapFn: (item: any) => [s(item.id), s(item.examId), s(item.questionText), s(item.type), JSON.stringify(item.options || {}), s(item.correctAnswer), s(item.imageData), s(item.sortOrder), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] 
     };
     case 'eduadmin_cbt_attempts': return { 
         table: 'cbt_attempts', 
@@ -959,7 +960,7 @@ const mapRowToJSON = (collection: string, row: any) => {
     case 'eduadmin_cbt_questions': return {
         id: row.id, examId: row.exam_id, questionText: row.question_text, type: row.type,
         options: parseJSONSafe(row.options), correctAnswer: row.correct_answer,
-        imageData: row.image_data, order: row.order,
+        imageData: row.image_data, sortOrder: row.sort_order,
         lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
     };
     case 'eduadmin_cbt_attempts': return {
