@@ -514,7 +514,7 @@ export interface CbtQuestion extends Syncable {
   };
   correctAnswer?: string; // 'a', 'b', 'c', 'd', 'e'
   imageData?: string; // Base64 Compressed Image
-  order: number;
+  sortOrder: number;
 }
 
 export interface CbtAttempt extends Syncable {
