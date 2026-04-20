@@ -532,10 +532,14 @@ const DB_SCHEMAS = [
         assignment_id TEXT,
         supervisor_id TEXT,
         teacher_id TEXT,
+        school_npsn TEXT,
         date TEXT,
         score REAL,
         notes TEXT,
         aspects TEXT,
+        planning_admin TEXT,
+        lesson_plan TEXT,
+        implementation TEXT,
         last_modified INTEGER,
         version INTEGER DEFAULT 1,
         deleted INTEGER DEFAULT 0
@@ -593,6 +597,12 @@ const DB_SCHEMAS = [
         deleted INTEGER DEFAULT 0
     )`,
     `CREATE INDEX IF NOT EXISTS idx_lsa_class ON learning_style_assessments(class_id)`,
+
+    // 34. SUPERVISION RESULTS ENHANCEMENTS
+    `ALTER TABLE supervision_results ADD COLUMN school_npsn TEXT`,
+    `ALTER TABLE supervision_results ADD COLUMN planning_admin TEXT`,
+    `ALTER TABLE supervision_results ADD COLUMN lesson_plan TEXT`,
+    `ALTER TABLE supervision_results ADD COLUMN implementation TEXT`,
     
     // 31. CBT EXAMS
     `CREATE TABLE IF NOT EXISTS cbt_exams (
@@ -731,8 +741,8 @@ const getTableConfig = (collection: string) => {
     };
     case 'eduadmin_supervision_results': return { 
         table: 'supervision_results', 
-        columns: ['id', 'assignment_id', 'supervisor_id', 'teacher_id', 'date', 'score', 'notes', 'aspects', 'last_modified', 'version', 'deleted'], 
-        mapFn: (item: any) => [s(item.id), s(item.assignmentId), s(item.supervisorId), s(item.teacherId), s(item.date), s(item.score), s(item.notes), JSON.stringify(item.aspects || []), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] 
+        columns: ['id', 'assignment_id', 'supervisor_id', 'teacher_id', 'school_npsn', 'date', 'score', 'notes', 'aspects', 'planning_admin', 'lesson_plan', 'implementation', 'last_modified', 'version', 'deleted'], 
+        mapFn: (item: any) => [s(item.id), s(item.assignmentId), s(item.supervisorId), s(item.teacherId), s(item.schoolNpsn), s(item.date), s(item.score), s(item.notes), JSON.stringify(item.aspects || []), JSON.stringify(item.planningAdmin || {}), JSON.stringify(item.lessonPlan || {}), JSON.stringify(item.implementation || {}), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] 
     };
     case 'eduadmin_cbt_exams': return { 
         table: 'cbt_exams', 
@@ -946,8 +956,11 @@ const mapRowToJSON = (collection: string, row: any) => {
     };
     case 'eduadmin_supervision_results': return {
         id: row.id, assignmentId: row.assignment_id, supervisorId: row.supervisor_id,
-        teacherId: row.teacher_id, date: row.date, score: row.score, notes: row.notes,
+        teacherId: row.teacher_id, schoolNpsn: row.school_npsn, date: row.date, score: row.score, notes: row.notes,
         aspects: parseJSONSafe(row.aspects),
+        planningAdmin: parseJSONSafe(row.planning_admin),
+        lessonPlan: parseJSONSafe(row.lesson_plan),
+        implementation: parseJSONSafe(row.implementation),
         lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
     };
     case 'eduadmin_cbt_exams': return {
