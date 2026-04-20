@@ -57,8 +57,8 @@ export class EduAdminDatabase extends Dexie {
     // * = Multi-entry index (not used here)
     // [field] = Indexed field for searching
     // Added schoolNpsn indexes for multi-tenancy filtering
-    // Bumped to version 31 to include CBT tables and fix incidents naming
-    (this as any).version(31).stores({
+    // Bumped to version 32 to apply sortOrder index on cbtQuestions
+    (this as any).version(32).stores({
       users: '&id, username, role, status, schoolNpsn, isSynced',
       classes: '&id, userId, schoolNpsn, name, homeroomTeacherId, isSynced', 
       students: '&id, classId, schoolNpsn, name, nis, gender, isSynced', 
