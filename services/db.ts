@@ -91,7 +91,7 @@ export class EduAdminDatabase extends Dexie {
       supervisionAssignments: '&id, supervisorId, teacherId, schoolNpsn, status, isSynced',
       supervisionResults: '&id, assignmentId, supervisorId, teacherId, schoolNpsn, date, isSynced',
       cbtExams: '&id, userId, schoolNpsn, status, isSynced',
-      cbtQuestions: '&id, examId, isSynced',
+      cbtQuestions: '&id, examId, sortOrder, isSynced',
       cbtAttempts: '&id, examId, studentId, schoolNpsn, status, isSynced'
     });
   }

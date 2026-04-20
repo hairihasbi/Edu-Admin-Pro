@@ -2222,7 +2222,7 @@ export const deleteCbtExam = async (id: string) => {
 };
 
 export const getCbtQuestions = async (examId: string) => {
-    return await db.cbtQuestions.where('examId').equals(examId).sortBy('order');
+    return await db.cbtQuestions.where('examId').equals(examId).sortBy('sortOrder');
 };
 
 export const saveCbtQuestions = async (examId: string, questions: CbtQuestion[]) => {
