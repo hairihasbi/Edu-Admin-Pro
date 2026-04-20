@@ -891,6 +891,7 @@ const AppContent: React.FC = () => {
             {currentUser.role === UserRole.ADMIN && (
               <>
                 <NavLink to="/teachers" icon={Users} label="Manajemen Guru" />
+                <NavLink to="/supervision-results" icon={ClipboardCheck} label="Hasil Supervisi" />
                 <NavLink to="/cbt" icon={FileQuestion} label="Monitoring CBT" />
                 <NavLink to="/students" icon={GraduationCap} label="Data Siswa" />
                 <NavLink to="/announcements" icon={Megaphone} label="Live Announcements" /> 
@@ -912,7 +913,7 @@ const AppContent: React.FC = () => {
                 {currentUser.additionalRole === 'KEPALA_SEKOLAH' ? (
                   <>
                     <NavLink to="/supervision-assessment" icon={ClipboardCheck} label="Instrumen Supervisi" />
-                    <NavLink to="/supervision-results" icon={ClipboardCheck} label="Monitoring Hasil Supervisi" />
+                    <NavLink to="/supervision-results" icon={ClipboardCheck} label="Hasil Supervisi" />
                     <NavLink to="/sync" icon={ArrowLeftRight} label="Sinkronisasi Data" />
                     <NavLink to="/backup" icon={DatabaseBackup} label="Backup & Restore" />
                     <NavLink to="/help-center" icon={LifeBuoy} label="Pusat Bantuan" />
@@ -935,11 +936,9 @@ const AppContent: React.FC = () => {
                       </>
                     )}
                     <NavLink to="/picket" icon={CalendarCheck} label="Piket Harian" />
+                    <NavLink to="/supervision-results" icon={ClipboardCheck} label="Hasil Supervisi" />
                     {currentUser.isSupervisor && (
                       <NavLink to="/supervision-assessment" icon={ClipboardCheck} label="Instrumen Supervisi" />
-                    )}
-                    {(currentUser.isSupervisor || currentUser.additionalRole === 'WAKASEK_KURIKULUM') && (
-                      <NavLink to="/supervision-results" icon={ClipboardCheck} label="Monitoring Hasil Supervisi" />
                     )}
                     {currentUser.subject === 'Bimbingan Konseling' && (
                       <NavLink to="/guidance" icon={ShieldAlert} label="Bimbingan Konseling" />
