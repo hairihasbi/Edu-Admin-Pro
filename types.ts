@@ -25,26 +25,26 @@ export interface User extends Syncable {
   password?: string;
   fullName: string;
   email?: string; 
-  phone?: string; // Added phone number
+  phone?: string;
   role: UserRole;
   status?: UserStatus; 
   avatar: string;
   nip?: string;
   schoolName?: string;
-  schoolNpsn?: string; // NEW: Multi-tenancy Key
+  schoolNpsn?: string;
   subject?: string;
-  secondarySubject?: string; // NEW: Second subject for teachers
+  secondarySubject?: string;
   additionalRole?: 'WALI_KELAS' | 'WAKASEK_KURIKULUM' | 'KEPALA_SEKOLAH' | null; 
   homeroomClassId?: string | null;
-  homeroomClassName?: string | null; // Helper for UI
-  teacherType?: 'SUBJECT' | 'CLASS'; // NEW: Teacher Type
-  phase?: 'A' | 'B' | 'C'; // NEW: Phase for Class Teacher
-  isMultiSubject?: boolean; // NEW: Multi-Subject Mode for SMP/SMA
-  subjects?: string[]; // NEW: List of subjects for Multi-Subject Mode
-  // RPP Quota Tracking
-  rppUsageCount?: number; // Jumlah RPP dibuat bulan ini
-  rppLastReset?: string; // Format "YYYY-MM" untuk menandai bulan terakhir reset
-  isSupervisor?: boolean; // NEW: Guru yang ditunjuk sebagai supervisor
+  homeroomClassName?: string | null;
+  classId?: string; // Target: Student's class ID
+  teacherType?: 'SUBJECT' | 'CLASS';
+  phase?: 'A' | 'B' | 'C';
+  isMultiSubject?: boolean;
+  subjects?: string[];
+  rppUsageCount?: number;
+  rppLastReset?: string;
+  isSupervisor?: boolean;
 }
 
 export interface SystemSettings extends Syncable {
@@ -486,18 +486,21 @@ export interface SupervisionResult extends Syncable {
 
 export interface CbtExam extends Syncable {
   id: string;
-  userId: string; // Teacher ID
+  userId: string;
   title: string;
   subject: string;
-  level: 'SD' | 'SMP' | 'SMA' | 'SMK' | 'MA' | 'OTHERS'; // Level for Option count
+  level: 'SD' | 'SMP' | 'SMA' | 'SMK' | 'MA' | 'OTHERS';
   durationMinutes: number;
-  startTime?: string; // ISO String
-  endTime?: string;   // ISO String
+  startTime?: string;
+  endTime?: string;
   status: 'DRAFT' | 'ACTIVE' | 'CLOSED';
   token?: string;
   randomizeQuestions?: boolean;
   randomizeOptions?: boolean;
   schoolNpsn: string;
+  targetClassIds?: string[];
+  questionsType?: 'INTERNAL' | 'EXTERNAL_LINK';
+  externalLink?: string;
 }
 
 export interface CbtQuestion extends Syncable {
