@@ -63,7 +63,7 @@ const CbtEditor: React.FC<CbtEditorProps> = ({ user }) => {
     const loadData = async () => {
       if (examId && examId !== 'new') {
         try {
-          const exams = await getCbtExams(user.id, user.schoolNpsn || '');
+          const exams = await getCbtExams(user.id, user.schoolNpsn || '', user.role);
           const currentExam = exams.find(e => e.id === examId);
           if (currentExam) {
             setExam(currentExam);

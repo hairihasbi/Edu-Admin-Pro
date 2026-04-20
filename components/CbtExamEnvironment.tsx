@@ -48,7 +48,7 @@ const CbtExamEnvironment: React.FC<CbtExamEnvironmentProps> = ({ user }) => {
     const loadData = async () => {
       if (!examId) return;
       try {
-        const allExams = await getCbtExams(user.id, user.schoolNpsn || '');
+        const allExams = await getCbtExams(user.id, user.schoolNpsn || '', user.role);
         const target = allExams.find(e => e.id === examId);
         if (target) {
           if (target.status !== 'ACTIVE') {
@@ -119,6 +119,11 @@ const CbtExamEnvironment: React.FC<CbtExamEnvironmentProps> = ({ user }) => {
   const handleStart = async () => {
     if (exam?.token && tokenInput !== exam.token) {
        setTokenError('Token tidak valid.');
+       return;
+    }
+    
+    if (questions.length === 0) {
+       alert('Ujian ini tidak memiliki soal. Harap hubungi pengawas.');
        return;
     }
     

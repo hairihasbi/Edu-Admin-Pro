@@ -40,7 +40,7 @@ const CbtManager: React.FC<CbtManagerProps> = ({ user }) => {
   const fetchExams = async () => {
     setIsLoading(true);
     try {
-      const data = await getCbtExams(user.id, user.schoolNpsn || '');
+      const data = await getCbtExams(user.id, user.schoolNpsn || '', user.role);
       setExams(data);
     } catch (error) {
       console.error("Fetch CBT Exams Error:", error);
