@@ -2,8 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, SupervisionResult } from '../types';
-import { getSupervisionResults, getSupervisionResultsForSchool, getSchoolTeachers } from '../services/database';
-import { ClipboardCheck, User as UserIcon, Calendar, Star, ChevronDown, ChevronUp, Search, Filter, Loader2, AlertCircle, Shield, Pencil as Edit, Printer, X } from './Icons';
+import { getSupervisionResults, getSupervisionResultsForSchool, getSchoolTeachers, runManualSync } from '../services/database';
+import { ClipboardCheck, User as UserIcon, Calendar, Star, ChevronDown, ChevronUp, Search, Filter, Loader2, AlertCircle, Shield, Pencil as Edit, Printer, X, RefreshCcw } from './Icons';
 
 interface SupervisionResultsProps {
   user: User;
@@ -13,11 +13,12 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
   const [results, setResults] = useState<SupervisionResult[]>([]);
   const [teachers, setTeachers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
   const isWakasek = user.additionalRole === 'WAKASEK_KURIKULUM';
-  const isKepsek = user.additionalRole === 'KEPALA_SEKOLAH';
+  const isKepsek = user.additionalRole === 'KEPALA_SEKOLAH' || user.role === 'ADMIN';
   const navigate = useNavigate();
 
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
@@ -57,15 +58,27 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
     fetchData();
   }, [user.id]);
 
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = async (forceSync = false) => {
+    if (!forceSync) setLoading(true);
+    else setIsSyncing(true);
+    
     try {
+      // If management, offer to sync first to get latest distributed results
+      if (forceSync && navigator.onLine) {
+        await runManualSync('PULL', () => {}, ['eduadmin_supervision_results', 'eduadmin_users', 'eduadmin_supervision_assignments']);
+      }
+
       let data: SupervisionResult[] = [];
       if (isWakasek || isKepsek) {
         data = await getSupervisionResultsForSchool(user.schoolNpsn!);
       } else {
-        // Supervisor sees results they have assessed
-        data = await getSupervisionResults(undefined, user.id);
+        // Supervisor sees results they have assessed, Teacher sees results for them
+        const supervisorResults = await getSupervisionResults(undefined, user.id);
+        const teacherResults = await getSupervisionResults(user.id, undefined);
+        
+        // Merge and deduplicate by ID
+        const combined = [...supervisorResults, ...teacherResults];
+        data = Array.from(new Map(combined.map(item => [item.id, item])).values());
       }
       
       const schoolTeachers = await getSchoolTeachers(user.schoolNpsn!);
@@ -76,6 +89,7 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
       console.error("Failed to fetch supervision results:", error);
     } finally {
       setLoading(false);
+      setIsSyncing(false);
     }
   };
 
@@ -374,17 +388,27 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
           </div>
           <div>
             <h2 className="text-xl font-bold text-gray-800">
-              {isWakasek ? 'Monitoring Supervisi (Wakasek)' : 'Laporan Hasil Supervisi (Supervisor)'}
+              {isKepsek ? 'Monitoring Supervisi (Kepsek)' : isWakasek ? 'Monitoring Supervisi (Wakasek)' : 'Laporan Hasil Supervisi'}
             </h2>
             <p className="text-gray-500 text-sm">
-              {isWakasek 
+              {isKepsek || isWakasek 
                 ? "Pantau hasil penilaian supervisi seluruh guru di sekolah." 
-                : "Kelola dan lihat hasil penilaian supervisi terhadap guru yang Anda nilai."}
+                : "Lihat hasil penilaian supervisi Anda atau guru yang Anda nilai."}
             </p>
           </div>
-          <div className="flex items-center gap-1.5 px-3 py-1 bg-purple-50 text-purple-600 rounded-full text-[10px] font-bold border border-purple-100">
-            <Shield size={12} />
-            HAK AKSES PENILAI
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => fetchData(true)}
+              disabled={isSyncing}
+              className="flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-bold transition disabled:opacity-50"
+            >
+              <RefreshCcw size={14} className={isSyncing ? 'animate-spin' : ''} />
+              {isSyncing ? 'Sinkronisasi...' : 'Tarik Data Terbaru'}
+            </button>
+            <div className="flex items-center gap-1.5 px-3 py-1 bg-purple-50 text-purple-600 rounded-full text-[10px] font-bold border border-purple-100">
+              <Shield size={12} />
+              {isKepsek ? 'AKSES KEPALA SEKOLAH' : isWakasek ? 'AKSES WAKASEK' : 'AKSES GURU'}
+            </div>
           </div>
         </div>
 
