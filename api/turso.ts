@@ -1016,11 +1016,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     let currentUser;
     // Allow public access for password reset flow and student assessments
-    const publicActions = ['init', 'check', 'request_password_reset', 'verify_reset_token', 'complete_password_reset', 'get_public_assessment_data', 'submit_public_assessment'];
+    const publicActions = ['init', 'check', 'request_password_reset', 'verify_reset_token', 'complete_password_reset', 'get_public_assessment_data', 'submit_public_assessment', 'verify_student'];
     
     if (!publicActions.includes(action)) {
         try {
-            currentUser = await authorize(req, ['ADMIN', 'GURU']);
+            currentUser = await authorize(req, ['ADMIN', 'GURU', 'SISWA']);
         } catch (err: any) {
              const isUserPush = action === 'push' && collection === 'eduadmin_users';
              const isAuthError = err.status === 401 || (err.message && err.message.includes('User not found'));
@@ -1449,6 +1449,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         
         const statements = [];
         for (const item of items) {
+            // SISWA SECURITY: Prevent students from pushing to restricted tables
+            const SISWA_RESTRICTED_TABLES = ['users', 'classes', 'students', 'journals', 'schedules', 'materials', 'attendance'];
+            if (currentUser?.role === 'SISWA' && SISWA_RESTRICTED_TABLES.includes(tableName)) {
+                return res.status(403).json({ error: `Siswa tidak diizinkan untuk mengubah data di tabel ${tableName}` });
+            }
+
             if (tableConfig) {
                 // --- SELF HEALING: ADMIN ROLE SAFEGUARD ---
                 if (collection === 'eduadmin_users' && item.role === 'ADMIN') {
