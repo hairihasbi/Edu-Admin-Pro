@@ -23,10 +23,13 @@ import {
   FileSpreadsheet,
   FileText,
   Download,
-  Upload
+  Upload,
+  Globe,
+  ExternalLink,
+  Users
 } from './Icons';
-import { User, CbtExam, CbtQuestion } from '../types';
-import { getCbtExams, saveCbtExam, getCbtQuestions, saveCbtQuestions } from '../services/database';
+import { User, CbtExam, CbtQuestion, ClassRoom } from '../types';
+import { getCbtExams, saveCbtExam, getCbtQuestions, saveCbtQuestions, getClasses } from '../services/database';
 
 interface CbtEditorProps {
   user: User;
@@ -45,8 +48,14 @@ const CbtEditor: React.FC<CbtEditorProps> = ({ user }) => {
     status: 'DRAFT',
     randomizeQuestions: true,
     randomizeOptions: true,
-    schoolNpsn: user.schoolNpsn
+    schoolNpsn: user.schoolNpsn,
+    targetClassIds: [],
+    questionsType: 'INTERNAL',
+    externalLink: ''
   });
+
+  const [availableClasses, setAvailableClasses] = useState<ClassRoom[]>([]);
+  const [showClassPicker, setShowClassPicker] = useState(false);
 
   const getOptionKeys = () => {
     return ['SMA', 'SMK', 'MA'].includes(exam.level || '') 
@@ -61,12 +70,25 @@ const CbtEditor: React.FC<CbtEditorProps> = ({ user }) => {
 
   useEffect(() => {
     const loadData = async () => {
+      // Load classes
+      try {
+        const cls = await getClasses(user.id, user.schoolNpsn);
+        setAvailableClasses(cls);
+      } catch (err) {
+        console.error("Load Classes Error:", err);
+      }
+
       if (examId && examId !== 'new') {
         try {
           const exams = await getCbtExams(user.id, user.schoolNpsn || '', user.role);
           const currentExam = exams.find(e => e.id === examId);
           if (currentExam) {
-            setExam(currentExam);
+            setExam({
+              ...currentExam,
+              targetClassIds: currentExam.targetClassIds || [],
+              questionsType: currentExam.questionsType || 'INTERNAL',
+              externalLink: currentExam.externalLink || ''
+            });
             const qData = await getCbtQuestions(examId);
             setQuestions(qData.sort((a, b) => a.sortOrder - b.sortOrder));
             if (qData.length > 0) setActiveQuestionId(qData[0].id);
@@ -100,6 +122,15 @@ const CbtEditor: React.FC<CbtEditorProps> = ({ user }) => {
     };
     loadData();
   }, [examId, user]);
+
+  const toggleClass = (classId: string) => {
+    const current = [...(exam.targetClassIds || [])];
+    if (current.includes(classId)) {
+      setExam({ ...exam, targetClassIds: current.filter(id => id !== classId) });
+    } else {
+      setExam({ ...exam, targetClassIds: [...current, classId] });
+    }
+  };
 
   const handleAddQuestion = () => {
     const newId = crypto.randomUUID();
@@ -418,6 +449,88 @@ const CbtEditor: React.FC<CbtEditorProps> = ({ user }) => {
                   </div>
                   <span className="text-sm font-medium text-gray-700">Acak Pilihan Jawaban</span>
                 </label>
+              </div>
+
+              {/* TARGET KELAS */}
+              <div className="pt-2">
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5 flex justify-between">
+                  Target Kelas {exam.targetClassIds && exam.targetClassIds.length > 0 && <span className="text-blue-600">({exam.targetClassIds.length})</span>}
+                  <button onClick={() => setShowClassPicker(!showClassPicker)} className="text-blue-500 hover:underline normal-case font-bold">
+                     {showClassPicker ? 'Selesai' : 'Pilih Kelas'}
+                  </button>
+                </label>
+                
+                {showClassPicker ? (
+                   <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg grid grid-cols-1 gap-2 max-h-40 overflow-y-auto">
+                      {availableClasses.length === 0 ? (
+                        <p className="text-[10px] text-gray-400 uppercase font-black text-center py-2">Belum ada kelas.</p>
+                      ) : (
+                        availableClasses.map(cls => (
+                           <label key={cls.id} className="flex items-center gap-2 cursor-pointer hover:bg-white p-2 rounded-lg transition text-xs">
+                              <input 
+                                type="checkbox" 
+                                checked={exam.targetClassIds?.includes(cls.id)}
+                                onChange={() => toggleClass(cls.id)}
+                                className="w-4 h-4 rounded text-blue-600"
+                              />
+                              <span className="font-bold text-gray-700">{cls.name}</span>
+                           </label>
+                        ))
+                      )}
+                   </div>
+                ) : (
+                   <div className="flex flex-wrap gap-1">
+                      {(!exam.targetClassIds || exam.targetClassIds.length === 0) ? (
+                        <span className="px-2 py-1 bg-gray-100 text-gray-500 text-[10px] rounded-md font-bold uppercase tracking-wider border border-gray-200">Semua Kelas</span>
+                      ) : (
+                        availableClasses.filter(c => exam.targetClassIds?.includes(c.id)).map(c => (
+                          <span key={c.id} className="px-2 py-1 bg-blue-100 text-blue-700 text-[10px] rounded-md font-bold border border-blue-200">{c.name}</span>
+                        ))
+                      )}
+                   </div>
+                )}
+              </div>
+
+              {/* TIPE SOAL */}
+              <div className="pt-4 border-t border-gray-50">
+                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">Metode Soal</label>
+                 <div className="grid grid-cols-2 gap-2">
+                    <button 
+                      onClick={() => setExam({...exam, questionsType: 'INTERNAL'})}
+                      className={`flex flex-col items-center p-3 rounded-xl border-2 transition-all gap-1 ${exam.questionsType === 'INTERNAL' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-100 bg-gray-50 text-gray-500 hover:border-gray-200'}`}
+                    >
+                      <Layout size={20} />
+                      <span className="text-xs font-bold">Internal</span>
+                    </button>
+                    <button 
+                      onClick={() => setExam({...exam, questionsType: 'EXTERNAL_LINK'})}
+                      className={`flex flex-col items-center p-3 rounded-xl border-2 transition-all gap-1 ${exam.questionsType === 'EXTERNAL_LINK' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-100 bg-gray-50 text-gray-500 hover:border-gray-200'}`}
+                    >
+                      <ExternalLink size={20} />
+                      <span className="text-xs font-bold">Link URL</span>
+                    </button>
+                 </div>
+                 
+                 {exam.questionsType === 'EXTERNAL_LINK' && (
+                    <div className="mt-3 space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                       <label className="block text-[10px] font-bold text-gray-400 uppercase">Link Google Form / Ujian Luar</label>
+                       <div className="relative">
+                          <Globe size={16} className="absolute left-3 top-2.5 text-gray-400" />
+                          <input 
+                            type="url" 
+                            className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                            placeholder="https://docs.google.com/forms/..."
+                            value={exam.externalLink}
+                            onChange={e => setExam({...exam, externalLink: e.target.value})}
+                          />
+                       </div>
+                       <div className="p-2 bg-blue-50 border border-blue-100 rounded-lg">
+                          <p className="text-[10px] text-blue-700 leading-relaxed font-bold">
+                            Tips: Gunakan link Google Form yang sudah di-"Shorten" atau "Embed" agar tampilan lebih rapi di dalam sistem.
+                          </p>
+                       </div>
+                    </div>
+                 )}
               </div>
             </div>
           </div>

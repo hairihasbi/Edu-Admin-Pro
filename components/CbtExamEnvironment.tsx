@@ -15,7 +15,8 @@ import {
   HelpCircle,
   Maximize2,
   Minimize2,
-  FileText
+  FileText,
+  Globe
 } from './Icons';
 import { User, CbtExam, CbtQuestion, CbtAttempt } from '../types';
 import { getCbtExams, getCbtQuestions, saveCbtAttempt } from '../services/database';
@@ -48,22 +49,36 @@ const CbtExamEnvironment: React.FC<CbtExamEnvironmentProps> = ({ user }) => {
     const loadData = async () => {
       if (!examId) return;
       try {
-        const allExams = await getCbtExams(user.id, user.schoolNpsn || '', user.role);
+        const allExams = await getCbtExams(user.id, user.schoolNpsn || '', user.role, user.classId);
         const target = allExams.find(e => e.id === examId);
         if (target) {
+          // Double check target class permissions
+          if (user.role === 'SISWA' && target.targetClassIds && target.targetClassIds.length > 0) {
+            if (!user.classId || !target.targetClassIds.includes(user.classId)) {
+                alert('Kelas Anda tidak terdaftar untuk mengikuti ujian ini.');
+                navigate('/dashboard');
+                return;
+            }
+          }
+
           if (target.status !== 'ACTIVE') {
             alert('Ujian ini tidak sedang aktif.');
             navigate('/dashboard');
             return;
           }
           setExam(target);
-          const qData = await getCbtQuestions(examId);
-          // Randomize if needed
-          let finalQs = [...qData];
-          if (target.randomizeQuestions) {
-            finalQs = finalQs.sort(() => Math.random() - 0.5);
+          
+          if (target.questionsType === 'EXTERNAL_LINK') {
+            setQuestions([]); // No internal questions
+          } else {
+            const qData = await getCbtQuestions(examId);
+            // Randomize if needed
+            let finalQs = [...qData];
+            if (target.randomizeQuestions) {
+              finalQs = finalQs.sort(() => Math.random() - 0.5);
+            }
+            setQuestions(finalQs);
           }
-          setQuestions(finalQs);
           setTimeLeft(target.durationMinutes * 60);
         }
       } catch (error) {
@@ -122,7 +137,7 @@ const CbtExamEnvironment: React.FC<CbtExamEnvironmentProps> = ({ user }) => {
        return;
     }
     
-    if (questions.length === 0) {
+    if (exam?.questionsType !== 'EXTERNAL_LINK' && questions.length === 0) {
        alert('Ujian ini tidak memiliki soal. Harap hubungi pengawas.');
        return;
     }
@@ -295,11 +310,11 @@ const CbtExamEnvironment: React.FC<CbtExamEnvironmentProps> = ({ user }) => {
       <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between sticky top-0 z-10 shadow-sm">
          <div className="flex items-center gap-4">
             <div className="w-10 h-10 bg-blue-600 text-white rounded-lg flex items-center justify-center font-black">
-               {currentIdx + 1}
+               {exam.questionsType === 'EXTERNAL_LINK' ? <Globe size={20} /> : currentIdx + 1}
             </div>
             <div className="hidden sm:block">
                <h3 className="font-bold text-gray-800 text-sm">{exam.title}</h3>
-               <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{exam.subject}</p>
+               <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{exam.subject} {exam.questionsType === 'EXTERNAL_LINK' && '| Link Eksternal'}</p>
             </div>
          </div>
 
@@ -321,106 +336,136 @@ const CbtExamEnvironment: React.FC<CbtExamEnvironmentProps> = ({ user }) => {
       {/* Main Layout */}
       <main className="flex-1 flex flex-col lg:flex-row p-6 gap-6 overflow-hidden">
          
-         {/* Question Area */}
-         <div className="flex-1 flex flex-col gap-6 overflow-y-auto pr-2">
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 space-y-8">
-               
-               {q.imageData && (
-                 <div className="w-full rounded-2xl overflow-hidden border border-gray-100 shadow-sm">
-                    <img 
-                      src={q.imageData} 
-                      alt="Question" 
-                      className="w-full h-auto max-h-[400px] object-contain bg-gray-50"
-                      referrerPolicy="no-referrer"
-                    />
+         {exam.questionsType === 'EXTERNAL_LINK' ? (
+           <div className="flex-1 flex flex-col gap-4">
+              <div className="flex-1 bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden relative">
+                 <div className="absolute top-0 left-0 right-0 h-1.5 bg-blue-600 z-20"></div>
+                 <iframe 
+                   src={exam.externalLink} 
+                   className="w-full h-full border-none"
+                   title="External Exam"
+                   allow="camera; microphone; geolocation"
+                 />
+              </div>
+              <div className="bg-amber-50 border border-amber-100 p-4 rounded-2xl flex items-center justify-between shadow-sm">
+                 <div className="flex items-center gap-3">
+                    <div className="p-2 bg-amber-100 rounded-lg text-amber-600">
+                       <AlertTriangle size={20} />
+                    </div>
+                    <div>
+                       <h5 className="text-xs font-black text-amber-900 uppercase">Petunjuk Ujian Link Eksternal</h5>
+                       <p className="text-[10px] text-amber-700 font-medium">Klik tombol <span className="font-bold underline text-green-700">Selesai</span> di pojok kanan atas setelah Anda mengirimkan jawaban di form tersebut.</p>
+                    </div>
                  </div>
-               )}
-
-               <div className="prose prose-lg max-w-none text-gray-800 font-medium leading-relaxed">
-                  {q.questionText}
-               </div>
-
-               <div className="grid grid-cols-1 gap-4">
-                  {(['SMA', 'SMK', 'MA'].includes(exam.level) ? (['a', 'b', 'c', 'd', 'e'] as const) : (['a', 'b', 'c', 'd'] as const)).map(key => (
-                    <button 
-                      key={key}
-                      onClick={() => setAnswers(prev => ({ ...prev, [q.id]: key }))}
-                      className={`group flex items-center p-5 rounded-2xl border-2 transition-all text-left ${
-                        answers[q.id] === key 
-                          ? 'border-blue-600 bg-blue-50 text-blue-900 shadow-md ring-4 ring-blue-50' 
-                          : 'border-gray-100 bg-white hover:border-blue-200 hover:bg-gray-50'
-                      }`}
-                    >
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-lg shrink-0 mr-4 transition ${
-                        answers[q.id] === key ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-400 group-hover:bg-blue-100 group-hover:text-blue-600'
-                      }`}>
-                        {key.toUpperCase()}
+                 <div className="hidden sm:flex items-center gap-2 text-[10px] font-black text-orange-600 uppercase tracking-widest animate-pulse">
+                    <Lock size={12} /> Keamanan Aktif
+                 </div>
+              </div>
+           </div>
+         ) : (
+           <>
+              {/* Question Area */}
+              <div className="flex-1 flex flex-col gap-6 overflow-y-auto pr-2">
+                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 space-y-8">
+                    
+                    {q && q.imageData && (
+                      <div className="w-full rounded-2xl overflow-hidden border border-gray-100 shadow-sm">
+                         <img 
+                           src={q.imageData} 
+                           alt="Question" 
+                           className="w-full h-auto max-h-[400px] object-contain bg-gray-50"
+                           referrerPolicy="no-referrer"
+                         />
                       </div>
-                      <span className="font-semibold">{q.options?.[key]}</span>
-                    </button>
-                  ))}
-               </div>
-            </div>
+                    )}
 
-            {/* Navigation Buttons */}
-            <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-gray-100">
-               <button 
-                 disabled={currentIdx === 0}
-                 onClick={() => setCurrentIdx(prev => prev - 1)}
-                 className="flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-gray-500 hover:bg-gray-50 disabled:opacity-30"
-               >
-                 <ChevronLeft size={20} /> Sebelumnya
-               </button>
-               <button 
-                 onClick={() => {
-                   if (currentIdx < questions.length - 1) setCurrentIdx(prev => prev + 1);
-                   else handleFinish();
-                 }}
-                 className="flex items-center gap-2 px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-lg shadow-blue-100 transition"
-               >
-                 {currentIdx === questions.length - 1 ? 'Kirim Jawaban' : 'Selanjutnya'} <ChevronRight size={20} />
-               </button>
-            </div>
-         </div>
+                    <div className="prose prose-lg max-w-none text-gray-800 font-medium leading-relaxed">
+                       {q && q.questionText}
+                    </div>
 
-         {/* Sidebar Navigation */}
-         <aside className="lg:w-80 flex flex-col gap-6">
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-               <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center justify-between">
-                  Navigasi Soal
-                  <span className="text-blue-600">{Object.keys(answers).length} / {questions.length}</span>
-               </h4>
-               <div className="grid grid-cols-5 gap-2">
-                  {questions.map((item, idx) => (
-                    <button 
-                      key={item.id}
-                      onClick={() => setCurrentIdx(idx)}
-                      className={`aspect-square rounded-lg flex items-center justify-center text-sm font-black transition ${
-                        currentIdx === idx ? 'bg-blue-600 text-white ring-4 ring-blue-50' : 
-                        answers[item.id] ? 'bg-green-100 text-green-700 border border-green-200' :
-                        'bg-gray-50 text-gray-400 border border-gray-100 hover:bg-gray-100'
-                      }`}
-                    >
-                      {idx + 1}
-                    </button>
-                  ))}
-               </div>
-            </div>
-
-            <div className="bg-orange-50 p-6 rounded-2xl border border-orange-100 space-y-4">
-               <div className="flex items-center gap-2 text-orange-800 font-bold text-sm">
-                  <AlertTriangle size={18} /> Hard-Protocol Active
-               </div>
-               <p className="text-[10px] text-orange-700 leading-relaxed font-medium uppercase tracking-wider">
-                  Jangan tinggalkan halaman ini. Deteksi pindah tab atau keluar layar akan dicatat sebagai pelanggaran.
-               </p>
-               {violations > 0 && (
-                 <div className="text-xs font-bold text-red-600 bg-white p-2 rounded-lg border border-red-100 text-center animate-bounce">
-                    Jumlah Pelanggaran: {violations}
+                    <div className="grid grid-cols-1 gap-4">
+                       {q && (['SMA', 'SMK', 'MA'].includes(exam.level) ? (['a', 'b', 'c', 'd', 'e'] as const) : (['a', 'b', 'c', 'd'] as const)).map(key => (
+                         <button 
+                           key={key}
+                           onClick={() => setAnswers(prev => ({ ...prev, [q.id]: key }))}
+                           className={`group flex items-center p-5 rounded-2xl border-2 transition-all text-left ${
+                             answers[q.id] === key 
+                               ? 'border-blue-600 bg-blue-50 text-blue-900 shadow-md ring-4 ring-blue-50' 
+                               : 'border-gray-100 bg-white hover:border-blue-200 hover:bg-gray-50'
+                           }`}
+                         >
+                           <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-lg shrink-0 mr-4 transition ${
+                             answers[q.id] === key ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-400 group-hover:bg-blue-100 group-hover:text-blue-600'
+                           }`}>
+                             {key.toUpperCase()}
+                           </div>
+                           <span className="font-semibold">{q.options?.[key]}</span>
+                         </button>
+                       ))}
+                    </div>
                  </div>
-               )}
-            </div>
-         </aside>
+
+                 {/* Navigation Buttons */}
+                 <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-gray-100">
+                    <button 
+                      disabled={currentIdx === 0}
+                      onClick={() => setCurrentIdx(prev => prev - 1)}
+                      className="flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-gray-500 hover:bg-gray-50 disabled:opacity-30"
+                    >
+                      <ChevronLeft size={20} /> Sebelumnya
+                    </button>
+                    <button 
+                      onClick={() => {
+                        if (currentIdx < questions.length - 1) setCurrentIdx(prev => prev + 1);
+                        else handleFinish();
+                      }}
+                      className="flex items-center gap-2 px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-lg shadow-blue-100 transition"
+                    >
+                      {currentIdx === questions.length - 1 ? 'Kirim Jawaban' : 'Selanjutnya'} <ChevronRight size={20} />
+                    </button>
+                 </div>
+              </div>
+
+              {/* Sidebar Navigation */}
+              <aside className="lg:w-80 flex flex-col gap-6">
+                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                    <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center justify-between">
+                       Navigasi Soal
+                       <span className="text-blue-600">{Object.keys(answers).length} / {questions.length}</span>
+                    </h4>
+                    <div className="grid grid-cols-5 gap-2">
+                       {questions.map((item, idx) => (
+                         <button 
+                           key={item.id}
+                           onClick={() => setCurrentIdx(idx)}
+                           className={`aspect-square rounded-lg flex items-center justify-center text-sm font-black transition ${
+                             currentIdx === idx ? 'bg-blue-600 text-white ring-4 ring-blue-50' : 
+                             answers[item.id] ? 'bg-green-100 text-green-700 border border-green-200' :
+                             'bg-gray-50 text-gray-400 border border-gray-100 hover:bg-gray-100'
+                           }`}
+                         >
+                           {idx + 1}
+                         </button>
+                       ))}
+                    </div>
+                 </div>
+
+                 <div className="bg-orange-50 p-6 rounded-2xl border border-orange-100 space-y-4">
+                    <div className="flex items-center gap-2 text-orange-800 font-bold text-sm">
+                       <AlertTriangle size={18} /> Hard-Protocol Active
+                    </div>
+                    <p className="text-[10px] text-orange-700 leading-relaxed font-medium uppercase tracking-wider">
+                       Jangan tinggalkan halaman ini. Deteksi pindah tab atau keluar layar akan dicatat sebagai pelanggaran.
+                    </p>
+                    {violations > 0 && (
+                      <div className="text-xs font-bold text-red-600 bg-white p-2 rounded-lg border border-red-100 text-center animate-bounce">
+                         Jumlah Pelanggaran: {violations}
+                      </div>
+                    )}
+                 </div>
+              </aside>
+           </>
+         )}
 
       </main>
 
