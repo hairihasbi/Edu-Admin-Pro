@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
-import mammoth from 'mammoth';
+import * as mammoth from 'mammoth';
 import { 
   ChevronLeft, 
   Save, 
@@ -68,7 +68,7 @@ const CbtEditor: React.FC<CbtEditorProps> = ({ user }) => {
           if (currentExam) {
             setExam(currentExam);
             const qData = await getCbtQuestions(examId);
-            setQuestions(qData.sort((a, b) => a.order - b.order));
+            setQuestions(qData.sort((a, b) => a.sortOrder - b.sortOrder));
             if (qData.length > 0) setActiveQuestionId(qData[0].id);
           }
         } catch (error) {
@@ -86,7 +86,7 @@ const CbtEditor: React.FC<CbtEditorProps> = ({ user }) => {
               type: 'MULTIPLE_CHOICE' as const,
               options: { a: '', b: '', c: '', d: '', e: '' },
               correctAnswer: 'a',
-              order: 1,
+              sortOrder: 1,
               createdAt: new Date().toISOString(),
               updatedAt: new Date().toISOString()
             };
@@ -110,7 +110,7 @@ const CbtEditor: React.FC<CbtEditorProps> = ({ user }) => {
       type: 'MULTIPLE_CHOICE',
       options: { a: '', b: '', c: '', d: '', e: '' },
       correctAnswer: 'a',
-      order: questions.length + 1,
+      sortOrder: questions.length + 1,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -190,7 +190,7 @@ const CbtEditor: React.FC<CbtEditorProps> = ({ user }) => {
       const questionsToSave = questions.map((q, idx) => ({
         ...q,
         examId: finalExamId,
-        order: idx + 1
+        sortOrder: idx + 1
       }));
       
       await saveCbtQuestions(finalExamId, questionsToSave);
@@ -242,7 +242,7 @@ const CbtEditor: React.FC<CbtEditorProps> = ({ user }) => {
           e: String(row[5] || '')
         },
         correctAnswer: String(row[6] || 'a').toLowerCase(),
-        order: questions.length + idx + 1,
+        sortOrder: questions.length + idx + 1,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       }));
@@ -266,17 +266,17 @@ const CbtEditor: React.FC<CbtEditorProps> = ({ user }) => {
       try {
         const result = await mammoth.extractRawText({ arrayBuffer });
         const text = result.value;
-        const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+        const lines = text.split('\n').map((l: string) => l.trim()).filter((l: string) => l);
         
         // Simple Parser: Question followed by 4-5 options starting with a), b), etc.
         const parsedQuestions: CbtQuestion[] = [];
         let currentQ: Partial<CbtQuestion> | null = null;
 
-        lines.forEach(line => {
+        lines.forEach((line: string) => {
           const optionMatch = line.match(/^([a-e])[.\)]\s*(.*)/i);
           if (optionMatch) {
             if (currentQ) {
-              const key = optionMatch[1].toLowerCase();
+              const key = optionMatch[1].toLowerCase() as 'a'|'b'|'c'|'d'|'e';
               currentQ.options = { ...currentQ.options!, [key]: optionMatch[2] };
             }
           } else {
@@ -289,7 +289,7 @@ const CbtEditor: React.FC<CbtEditorProps> = ({ user }) => {
               type: 'MULTIPLE_CHOICE',
               options: { a: '', b: '', c: '', d: '', e: '' },
               correctAnswer: 'a',
-              order: parsedQuestions.length + questions.length + 1,
+              sortOrder: parsedQuestions.length + questions.length + 1,
               createdAt: new Date().toISOString(),
               updatedAt: new Date().toISOString()
             };
