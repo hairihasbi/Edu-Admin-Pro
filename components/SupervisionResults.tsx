@@ -164,7 +164,26 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
         <div style="margin-top: 5px; font-style: italic; font-size: 10pt;">${aggregateCoachingSuggestions()}</div>
       </div>
 
-      <div style="margin-top: 30px; page-break-inside: avoid;">
+      <div style="margin-top: 20px; page-break-inside: avoid;">
+        <table class="signature-section" style="width: 100%; border-collapse: collapse; margin-bottom: 40px;">
+          <tr>
+            <td style="text-align: center;">
+              Mengetahui,<br>
+              ${printConfig.location}, ${formatDate(printConfig.date)}<br>
+              <span style="font-weight: bold;">Kepala Sekolah</span>
+            </td>
+          </tr>
+          <tr>
+            <td class="signature-space"></td>
+          </tr>
+          <tr style="font-weight: bold; text-align: center;">
+            <td style="white-space: nowrap;">${printConfig.principalName || '................................'}</td>
+          </tr>
+          <tr style="text-align: center;">
+            <td>NIP. ${printConfig.principalNip || '................................'}</td>
+          </tr>
+        </table>
+
         <table class="signature-section" style="width: 100%; border-collapse: collapse;">
           <tr style="font-weight: bold; text-align: center;">
             <td style="width: 50%;">Supervisor / Penilai</td>
@@ -181,25 +200,6 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
           <tr style="text-align: center;">
             <td>NIP. ${supervisor?.nip || '................................'}</td>
             <td>NIP. ${teacher?.nip || '................................'}</td>
-          </tr>
-        </table>
-
-        <table class="signature-section" style="width: 100%; border-collapse: collapse; margin-top: 40px;">
-          <tr>
-            <td style="text-align: center;">
-              Mengetahui,<br>
-              ${printConfig.location}, ${formatDate(printConfig.date)}<br>
-              <span style="font-weight: bold;">Kepala Sekolah</span>
-            </td>
-          </tr>
-          <tr>
-            <td class="signature-space"></td>
-          </tr>
-          <tr style="font-weight: bold; text-align: center;">
-            <td style="white-space: nowrap;">${printConfig.principalName || '................................'}</td>
-          </tr>
-          <tr style="text-align: center;">
-            <td>NIP. ${printConfig.principalNip || '................................'}</td>
           </tr>
         </table>
       </div>
