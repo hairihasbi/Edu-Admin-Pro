@@ -164,38 +164,45 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
         <div style="margin-top: 5px; font-style: italic; font-size: 10pt;">${aggregateCoachingSuggestions()}</div>
       </div>
 
-      <table class="signature-section" style="width: 100%; border-collapse: collapse; margin-top: 30px;">
-        <tr>
-          <td>&nbsp;</td>
-          <td>&nbsp;</td>
-          <td style="text-align: center;">Mengetahui,</td>
-        </tr>
-        <tr>
-          <td>&nbsp;</td>
-          <td>&nbsp;</td>
-          <td style="text-align: center;">${printConfig.location}, ${formatDate(printConfig.date)}</td>
-        </tr>
-        <tr style="font-weight: bold; text-align: center;">
-          <td style="width: 33.33%;">Kepala Sekolah</td>
-          <td style="width: 33.33%;">Supervisor / Penilai</td>
-          <td style="width: 33.33%;">Guru Mata Pelajaran</td>
-        </tr>
-        <tr>
-          <td class="signature-space"></td>
-          <td class="signature-space"></td>
-          <td class="signature-space"></td>
-        </tr>
-        <tr style="font-weight: bold; text-align: center;">
-          <td style="white-space: nowrap;">${printConfig.principalName || '................................'}</td>
-          <td style="white-space: nowrap;">${supervisor?.fullName || '................................'}</td>
-          <td style="white-space: nowrap;">${teacher?.fullName || '................................'}</td>
-        </tr>
-        <tr style="text-align: center;">
-          <td>NIP. ${printConfig.principalNip || '................................'}</td>
-          <td>NIP. ${supervisor?.nip || '................................'}</td>
-          <td>NIP. ${teacher?.nip || '................................'}</td>
-        </tr>
-      </table>
+      <div style="margin-top: 30px; page-break-inside: avoid;">
+        <table class="signature-section" style="width: 100%; border-collapse: collapse;">
+          <tr style="font-weight: bold; text-align: center;">
+            <td style="width: 50%;">Supervisor / Penilai</td>
+            <td style="width: 50%;">Guru Mata Pelajaran</td>
+          </tr>
+          <tr>
+            <td class="signature-space"></td>
+            <td class="signature-space"></td>
+          </tr>
+          <tr style="font-weight: bold; text-align: center;">
+            <td style="white-space: nowrap;">${supervisor?.fullName || '................................'}</td>
+            <td style="white-space: nowrap;">${teacher?.fullName || '................................'}</td>
+          </tr>
+          <tr style="text-align: center;">
+            <td>NIP. ${supervisor?.nip || '................................'}</td>
+            <td>NIP. ${teacher?.nip || '................................'}</td>
+          </tr>
+        </table>
+
+        <table class="signature-section" style="width: 100%; border-collapse: collapse; margin-top: 40px;">
+          <tr>
+            <td style="text-align: center;">
+              Mengetahui,<br>
+              ${printConfig.location}, ${formatDate(printConfig.date)}<br>
+              <span style="font-weight: bold;">Kepala Sekolah</span>
+            </td>
+          </tr>
+          <tr>
+            <td class="signature-space"></td>
+          </tr>
+          <tr style="font-weight: bold; text-align: center;">
+            <td style="white-space: nowrap;">${printConfig.principalName || '................................'}</td>
+          </tr>
+          <tr style="text-align: center;">
+            <td>NIP. ${printConfig.principalNip || '................................'}</td>
+          </tr>
+        </table>
+      </div>
     `;
 
     const generateTableRows = (scores: Record<string, number>, comments: Record<string, string>, components: string[]) => {
@@ -262,7 +269,7 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
             .summary-box { margin-top: 25px; margin-bottom: 25px; border: 1px solid #000; padding: 15px; page-break-inside: avoid; }
             .letterhead-container { width: 100%; text-align: center; margin-bottom: 40px; border-bottom: 4px double #000; padding-bottom: 15px; }
             .signature-section { margin-top: 50px; width: 100%; border-collapse: collapse; page-break-inside: avoid; }
-            .signature-section td { width: 33.33%; text-align: center; vertical-align: top; padding-top: 5px; padding-bottom: 5px; }
+            .signature-section td { text-align: center; vertical-align: top; padding-top: 5px; padding-bottom: 5px; }
             .signature-space { height: 80px; }
             @media print {
               @page { size: portrait; margin: 0; }
