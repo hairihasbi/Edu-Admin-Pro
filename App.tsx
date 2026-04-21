@@ -943,7 +943,6 @@ const AppContent: React.FC = () => {
                     )}
                     <NavLink to="/attendance" icon={CalendarCheck} label="Daftar Hadir" />
                     <NavLink to="/cbt" icon={FileQuestion} label="CBT (Ujian Online)" />
-                    <NavLink to="/cbt-monitoring" icon={Activity} label="Monitoring CBT" />
                     <NavLink to="/scope-material" icon={List} label="Lingkup Materi" />
                     <NavLink to="/journal" icon={NotebookPen} label="Jurnal Mengajar" />
                     <NavLink to="/summative" icon={Calculator} label="Asesmen Sumatif" />
@@ -1099,7 +1098,6 @@ const AppContent: React.FC = () => {
                    {currentUser.subject === 'Bimbingan Konseling' && <Route path="/guidance" element={<TeacherGuidance user={currentUser} />} />}
                    <Route path="/attendance" element={<TeacherAttendance user={currentUser} />} />
                    <Route path="/cbt" element={<CbtManager user={currentUser} />} />
-                   <Route path="/cbt-monitoring" element={<CbtManager user={currentUser} isMonitoring={true} />} />
                    <Route path="/cbt/editor/:examId" element={<CbtEditor user={currentUser} />} />
                    <Route path="/cbt/results/:examId" element={<CbtResults user={currentUser} />} />
                    <Route path="/supervision-results" element={<SupervisionResults user={currentUser} />} />
