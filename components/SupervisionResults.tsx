@@ -164,30 +164,34 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
         <div style="margin-top: 5px; font-style: italic; font-size: 10pt;">${aggregateCoachingSuggestions()}</div>
       </div>
 
-      <div style="margin-top: 20px; page-break-inside: avoid;">
-        <table class="signature-section" style="width: 100%; border-collapse: collapse; margin-bottom: 40px;">
+      <div style="margin-top: 30px; page-break-inside: avoid;">
+        <table class="signature-section" style="width: 100%; border-collapse: collapse;">
           <tr>
-            <td style="text-align: center;">
+            <td style="width: 50%;">&nbsp;</td>
+            <td style="width: 50%; text-align: center;">
               Mengetahui,<br>
               ${printConfig.location}, ${formatDate(printConfig.date)}<br>
               <span style="font-weight: bold;">Kepala Sekolah</span>
             </td>
           </tr>
           <tr>
+            <td>&nbsp;</td>
             <td class="signature-space"></td>
           </tr>
-          <tr style="font-weight: bold; text-align: center;">
-            <td style="white-space: nowrap;">${printConfig.principalName || '................................'}</td>
+          <tr>
+            <td>&nbsp;</td>
+            <td style="text-align: center; font-weight: bold; white-space: nowrap;">${printConfig.principalName || '................................'}</td>
           </tr>
-          <tr style="text-align: center;">
-            <td>NIP. ${printConfig.principalNip || '................................'}</td>
+          <tr>
+            <td>&nbsp;</td>
+            <td style="text-align: center;">NIP. ${printConfig.principalNip || '................................'}</td>
           </tr>
-        </table>
-
-        <table class="signature-section" style="width: 100%; border-collapse: collapse;">
+          
+          <tr><td colspan="2" style="height: 40px;">&nbsp;</td></tr>
+          
           <tr style="font-weight: bold; text-align: center;">
-            <td style="width: 50%;">Supervisor / Penilai</td>
-            <td style="width: 50%;">Guru Mata Pelajaran</td>
+            <td>Supervisor / Penilai</td>
+            <td>Guru Mata Pelajaran</td>
           </tr>
           <tr>
             <td class="signature-space"></td>
