@@ -1584,32 +1584,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             let whereClauses: string[] = [];
             let args: any[] = [];
 
-            if (isStaff) {
-                const userRes = await client.execute({ sql: "SELECT school_npsn, additional_role FROM users WHERE id = ?", args: [userId] });
-                let userNpsn = userRes.rows[0]?.school_npsn || null; 
-                const additionalRole = userRes.rows[0]?.additional_role || null;
-                const isWakasek = additionalRole === 'WAKASEK_KURIKULUM';
-                const isKepsek = additionalRole === 'KEPALA_SEKOLAH';
-                
-                // Fallback to NPSN from request if DB record is missing it
-                if ((!userNpsn || userNpsn === 'DEFAULT') && req.body.schoolNpsn && req.body.schoolNpsn !== 'DEFAULT') {
-                    userNpsn = req.body.schoolNpsn;
-                    console.log(`[API] Using fallback NPSN ${userNpsn} from request for user ${userId}`);
-                    
-                    // Optional: Update the user record in DB to fix it for future requests
-                    client.execute({ 
-                        sql: "UPDATE users SET school_npsn = ?, last_modified = ? WHERE id = ?", 
-                        args: [userNpsn, Date.now(), userId] 
-                    }).catch(err => console.error("Failed to auto-fix user NPSN:", err));
-                }
+            const userRes = await client.execute({ sql: "SELECT school_npsn, additional_role, role FROM users WHERE id = ?", args: [userId] });
+            let userNpsn = userRes.rows[0]?.school_npsn || null; 
+            const userRole = userRes.rows[0]?.role || null;
+            const additionalRole = userRes.rows[0]?.additional_role || null;
+            const isWakasek = additionalRole === 'WAKASEK_KURIKULUM';
+            const isKepsek = additionalRole === 'KEPALA_SEKOLAH';
+            const isStaff = userRole === 'GURU' || userRole === 'TENDIK' || userRole === 'ADMIN';
+            
+            // Fallback to NPSN from request if DB record is missing it
+            if ((!userNpsn || userNpsn === 'DEFAULT') && req.body.schoolNpsn && req.body.schoolNpsn !== 'DEFAULT') {
+                userNpsn = req.body.schoolNpsn;
+            }
 
-                if (!userNpsn) {
-                    // Fallback: if user is Guru but NPSN is missing in Turso, 
-                    // they might need to push their profile first.
-                    console.warn(`[API] Guru ${userId} has no NPSN in Turso.`);
-                }
-                
-                // Logic Filter for Staff (GURU/TENDIK)
+            if (isStaff) {
+                // Logic Filter for Staff (GURU/TENDIK/ADMIN)
                 if (tableConfig.table === 'classes') {
                     // Show classes in same school OR created by user
                     if (userNpsn && userNpsn !== 'DEFAULT') { 
@@ -1739,17 +1728,51 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                         args = [userId];
                     }
                 }
-                else if (tableConfig.table === 'cbt_attempts') {
-                    // Students see their own, teachers see school's
-                    if (currentUser?.role === 'SISWA') {
-                        whereClauses.push("student_id = ?");
+                else if (tableConfig.table === 'cbt_questions') {
+                     if (userNpsn && userNpsn !== 'DEFAULT') {
+                        whereClauses.push("exam_id IN (SELECT id FROM cbt_exams WHERE school_npsn = ?)");
+                        args = [userNpsn];
+                     } else {
+                        whereClauses.push("exam_id IN (SELECT id FROM cbt_exams WHERE user_id = ?)");
                         args = [userId];
-                    } else if (userNpsn && userNpsn !== 'DEFAULT') {
+                     }
+                }
+                else if (tableConfig.table === 'cbt_attempts') {
+                    // Staff see all attempts in school
+                    if (userNpsn && userNpsn !== 'DEFAULT') {
                         whereClauses.push("school_npsn = ?");
                         args = [userNpsn];
                     } else {
                         whereClauses.push("student_id = ?");
                         args = [userId];
+                    }
+                }
+            } else {
+                // Students / Others
+                if (tableConfig.table === 'cbt_exams') {
+                    if (userNpsn && userNpsn !== 'DEFAULT') {
+                        whereClauses.push("school_npsn = ?");
+                        args = [userNpsn];
+                    }
+                }
+                else if (tableConfig.table === 'cbt_questions') {
+                     if (userNpsn && userNpsn !== 'DEFAULT') {
+                        whereClauses.push("exam_id IN (SELECT id FROM cbt_exams WHERE school_npsn = ?)");
+                        args = [userNpsn];
+                     }
+                }
+                else if (tableConfig.table === 'cbt_attempts') {
+                    whereClauses.push("student_id = ?");
+                    args = [userId];
+                }
+                else if (tableConfig.table === 'users') {
+                    whereClauses.push("id = ?");
+                    args = [userId];
+                }
+                else {
+                    if (userId) {
+                        whereClauses.push("(user_id = ? OR id = ? OR student_id = ?)");
+                        args = [userId, userId, userId];
                     }
                 }
             }
