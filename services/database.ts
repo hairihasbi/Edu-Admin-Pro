@@ -2275,6 +2275,16 @@ export const saveCbtAttempt = async (attempt: CbtAttempt) => {
     return toSave;
 };
 
+export const deleteAllCbtAttemptsByExam = async (examId: string) => {
+    const attempts = await db.cbtAttempts.where('examId').equals(examId).toArray();
+    for (const attempt of attempts) {
+        await db.cbtAttempts.delete(attempt.id);
+        await deleteFromTurso('eduadmin_cbt_attempts', attempt.id);
+    }
+    triggerDebouncedSync();
+    return true;
+};
+
 export const updateSupervisionAssignmentStatus = async (id: string, status: 'PENDING' | 'COMPLETED') => {
     await db.supervisionAssignments.update(id, { 
         status, 
