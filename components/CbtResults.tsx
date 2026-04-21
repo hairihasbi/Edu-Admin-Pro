@@ -9,10 +9,11 @@ import {
   XCircle, 
   Clock, 
   Search, 
-  Download 
+  Download,
+  RefreshCcw
 } from './Icons';
 import { CbtExam, CbtAttempt, User as UserType } from '../types';
-import { getCbtExams, getCbtAttemptsByExam } from '../services/database';
+import { getCbtExams, getCbtAttemptsByExam, syncAllData } from '../services/database';
 
 interface CbtResultsProps {
   user: UserType;
@@ -24,26 +25,37 @@ const CbtResults: React.FC<CbtResultsProps> = ({ user }) => {
   const [exam, setExam] = useState<CbtExam | null>(null);
   const [attempts, setAttempts] = useState<CbtAttempt[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
-  useEffect(() => {
-    const loadData = async () => {
-      if (!examId) return;
-      try {
-        const exams = await getCbtExams(user.id, user.schoolNpsn || '', user.role);
-        const currentExam = exams.find(e => e.id === examId);
-        if (currentExam) {
-          setExam(currentExam);
-          const attemptData = await getCbtAttemptsByExam(examId);
-          setAttempts(attemptData);
-        }
-      } catch (error) {
-        console.error("Load Results Error:", error);
-      } finally {
-        setIsLoading(false);
+  const loadData = async (shouldSync = false) => {
+    if (!examId) return;
+    if (shouldSync) setIsSyncing(true);
+    else setIsLoading(true);
+
+    try {
+      if (shouldSync) {
+        await syncAllData(true);
       }
-    };
-    loadData();
+      
+      const exams = await getCbtExams(user.id, user.schoolNpsn || '', user.role);
+      const currentExam = exams.find(e => e.id === examId);
+      if (currentExam) {
+        setExam(currentExam);
+        const attemptData = await getCbtAttemptsByExam(examId);
+        setAttempts(attemptData);
+      }
+    } catch (error) {
+      console.error("Load Results Error:", error);
+    } finally {
+      setIsLoading(false);
+      setIsSyncing(false);
+    }
+  };
+
+  useEffect(() => {
+    // Auto sync on mount to get the latest student attempts
+    loadData(true);
   }, [examId]);
 
   const filteredAttempts = attempts.filter(a => 
@@ -115,9 +127,19 @@ const CbtResults: React.FC<CbtResultsProps> = ({ user }) => {
                 onChange={e => setSearchTerm(e.target.value)}
               />
            </div>
-           <button className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-600 rounded-lg font-bold text-xs hover:bg-gray-200 transition">
-              <Download size={16} /> Unduh Excel
-           </button>
+           <div className="flex items-center gap-2 w-full md:w-auto">
+             <button 
+               onClick={() => loadData(true)}
+               disabled={isSyncing}
+               className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg font-bold text-xs hover:bg-blue-100 transition disabled:opacity-50"
+             >
+                <RefreshCcw size={16} className={isSyncing ? 'animate-spin' : ''} />
+                {isSyncing ? 'Sinkronisasi...' : 'Tarik Data Terbaru'}
+             </button>
+             <button className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 text-gray-600 rounded-lg font-bold text-xs hover:bg-gray-200 transition">
+                <Download size={16} /> Unduh Excel
+             </button>
+           </div>
         </div>
 
         <div className="overflow-x-auto">
@@ -136,7 +158,19 @@ const CbtResults: React.FC<CbtResultsProps> = ({ user }) => {
             <tbody className="divide-y divide-gray-50">
               {filteredAttempts.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-10 text-center text-gray-400 text-sm">Belum ada data hasil.</td>
+                  <td colSpan={7} className="px-6 py-12 text-center">
+                    <div className="flex flex-col items-center justify-center space-y-3">
+                      <div className="p-4 bg-gray-50 rounded-full">
+                        <User size={32} className="text-gray-300" />
+                      </div>
+                      <div>
+                        <p className="text-gray-500 font-bold">Belum ada data hasil.</p>
+                        <p className="text-xs text-gray-400 max-w-xs mx-auto">
+                           Pastikan siswa sudah mengirimkan (Submit) ujian dan status perangkat mereka terhubung ke internet untuk sinkronisasi data.
+                        </p>
+                      </div>
+                    </div>
+                  </td>
                 </tr>
               ) : (
                 filteredAttempts.map((attempt, idx) => (
