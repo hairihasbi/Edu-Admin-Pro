@@ -212,6 +212,7 @@ const CbtEditor: React.FC<CbtEditorProps> = ({ user }) => {
         ...exam as CbtExam,
         id: finalExamId,
         userId: user.id,
+        teacherName: user.fullName,
         updatedAt: new Date().toISOString(),
         createdAt: exam.createdAt || new Date().toISOString()
       };

@@ -24,9 +24,10 @@ import { getCbtExams, deleteCbtExam, saveCbtExam } from '../services/database';
 
 interface CbtManagerProps {
   user: User;
+  isMonitoring?: boolean;
 }
 
-const CbtManager: React.FC<CbtManagerProps> = ({ user }) => {
+const CbtManager: React.FC<CbtManagerProps> = ({ user, isMonitoring }) => {
   const navigate = useNavigate();
   const [exams, setExams] = useState<CbtExam[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -40,7 +41,7 @@ const CbtManager: React.FC<CbtManagerProps> = ({ user }) => {
   const fetchExams = async () => {
     setIsLoading(true);
     try {
-      const data = await getCbtExams(user.id, user.schoolNpsn || '', user.role);
+      const data = await getCbtExams(user.id, user.schoolNpsn || '', user.role, undefined, isMonitoring);
       setExams(data);
     } catch (error) {
       console.error("Fetch CBT Exams Error:", error);
@@ -108,15 +109,23 @@ const CbtManager: React.FC<CbtManagerProps> = ({ user }) => {
       {/* Header & Stats */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">CBT - Computer Based Test</h1>
-          <p className="text-gray-500 text-sm">Kelola ujian daring, bank soal, dan pantau hasil siswa secara real-time.</p>
+          <h1 className="text-2xl font-bold text-gray-800">
+            {isMonitoring ? 'Monitoring CBT Sekolah' : 'CBT - Computer Based Test'}
+          </h1>
+          <p className="text-gray-500 text-sm">
+            {isMonitoring 
+              ? 'Pantau seluruh aktivitas ujian yang sedang berlangsung di sekolah.' 
+              : 'Kelola ujian daring, bank soal, dan pantau hasil siswa secara real-time.'}
+          </p>
         </div>
-        <Link 
-          to="/cbt/editor/new"
-          className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-blue-100 transition flex items-center justify-center gap-2"
-        >
-          <Plus size={20} /> Buat Ujian Baru
-        </Link>
+        {!isMonitoring && (
+          <Link 
+            to="/cbt/editor/new"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-blue-100 transition flex items-center justify-center gap-2"
+          >
+            <Plus size={20} /> Buat Ujian Baru
+          </Link>
+        )}
       </div>
 
       {/* Quick Summary Grid */}
@@ -212,7 +221,8 @@ const CbtManager: React.FC<CbtManagerProps> = ({ user }) => {
                 </div>
 
                 <div className="flex items-center justify-between gap-2">
-                   <div className="flex gap-1">
+                   {!isMonitoring ? (
+                    <div className="flex gap-1">
                       <button 
                         onClick={() => handleToggleStatus(exam)}
                         className={`p-2 rounded-lg transition ${
@@ -240,7 +250,12 @@ const CbtManager: React.FC<CbtManagerProps> = ({ user }) => {
                       >
                         <Trash2 size={16} />
                       </button>
-                   </div>
+                    </div>
+                   ) : (
+                    <div className="text-[10px] text-gray-400 font-medium italic">
+                      Dikelola oleh: {exam.teacherName || 'Guru'}
+                    </div>
+                   )}
                    
                    <Link 
                     to={`/cbt/results/${exam.id}`}
