@@ -934,7 +934,9 @@ const AppContent: React.FC = () => {
                       </>
                     )}
                     <NavLink to="/picket" icon={CalendarCheck} label="Piket Harian" />
-                    <NavLink to="/supervision-results" icon={ClipboardCheck} label="Hasil Supervisi" />
+                    {(currentUser.additionalRole === 'WAKASEK_KURIKULUM' || currentUser.isSupervisor) && (
+                      <NavLink to="/supervision-results" icon={ClipboardCheck} label="Hasil Supervisi" />
+                    )}
                     {currentUser.isSupervisor && (
                       <NavLink to="/supervision-assessment" icon={ClipboardCheck} label="Instrumen Supervisi" />
                     )}
@@ -1100,7 +1102,9 @@ const AppContent: React.FC = () => {
                    <Route path="/cbt" element={<CbtManager user={currentUser} />} />
                    <Route path="/cbt/editor/:examId" element={<CbtEditor user={currentUser} />} />
                    <Route path="/cbt/results/:examId" element={<CbtResults user={currentUser} />} />
-                   <Route path="/supervision-results" element={<SupervisionResults user={currentUser} />} />
+                   {(currentUser.additionalRole === 'KEPALA_SEKOLAH' || currentUser.additionalRole === 'WAKASEK_KURIKULUM' || currentUser.isSupervisor) && (
+                     <Route path="/supervision-results" element={<SupervisionResults user={currentUser} />} />
+                   )}
                    <Route path="/scope-material" element={<TeacherScopeMaterial user={currentUser} />} />
                    <Route path="/journal" element={<TeacherJournal user={currentUser} />} />
                    <Route path="/summative" element={<TeacherSummative user={currentUser} />} />
