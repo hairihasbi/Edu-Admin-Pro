@@ -10,10 +10,11 @@ import {
   Clock, 
   Search, 
   Download,
-  RefreshCcw
+  RefreshCcw,
+  Trash2
 } from './Icons';
 import { CbtExam, CbtAttempt, User as UserType } from '../types';
-import { getCbtExams, getCbtAttemptsByExam, syncAllData } from '../services/database';
+import { getCbtExams, getCbtAttemptsByExam, syncAllData, deleteAllCbtAttemptsByExam } from '../services/database';
 
 interface CbtResultsProps {
   user: UserType;
@@ -50,6 +51,23 @@ const CbtResults: React.FC<CbtResultsProps> = ({ user }) => {
     } finally {
       setIsLoading(false);
       setIsSyncing(false);
+    }
+  };
+
+  const handleDeleteAll = async () => {
+    if (!examId) return;
+    if (window.confirm('Apakah Anda yakin ingin menghapus SEMUA hasil ujian ini? Tindakan ini tidak dapat dibatalkan.')) {
+      try {
+        setIsLoading(true);
+        await deleteAllCbtAttemptsByExam(examId);
+        setAttempts([]);
+        alert('Semua hasil ujian berhasil dihapus.');
+      } catch (error) {
+        console.error("Delete All Error:", error);
+        alert('Gagal menghapus hasil ujian.');
+      } finally {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -139,6 +157,14 @@ const CbtResults: React.FC<CbtResultsProps> = ({ user }) => {
              <button className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 text-gray-600 rounded-lg font-bold text-xs hover:bg-gray-200 transition">
                 <Download size={16} /> Unduh Excel
              </button>
+             {attempts.length > 0 && (
+               <button 
+                 onClick={handleDeleteAll}
+                 className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-lg font-bold text-xs hover:bg-red-100 transition"
+               >
+                  <Trash2 size={16} /> Hapus Semua
+               </button>
+             )}
            </div>
         </div>
 
