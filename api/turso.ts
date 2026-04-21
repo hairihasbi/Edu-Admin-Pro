@@ -603,6 +603,10 @@ const DB_SCHEMAS = [
     `ALTER TABLE supervision_results ADD COLUMN planning_admin TEXT`,
     `ALTER TABLE supervision_results ADD COLUMN lesson_plan TEXT`,
     `ALTER TABLE supervision_results ADD COLUMN implementation TEXT`,
+    `ALTER TABLE cbt_exams ADD COLUMN teacher_name TEXT`,
+    `ALTER TABLE cbt_exams ADD COLUMN target_class_ids TEXT`,
+    `ALTER TABLE cbt_exams ADD COLUMN questions_type TEXT`,
+    `ALTER TABLE cbt_exams ADD COLUMN external_link TEXT`,
     
     // 31. CBT EXAMS
     `CREATE TABLE IF NOT EXISTS cbt_exams (
@@ -617,6 +621,10 @@ const DB_SCHEMAS = [
         end_time TEXT,
         status TEXT,
         token TEXT,
+        teacher_name TEXT,
+        target_class_ids TEXT,
+        questions_type TEXT,
+        external_link TEXT,
         randomize_questions INTEGER DEFAULT 0,
         randomize_options INTEGER DEFAULT 0,
         last_modified INTEGER,
@@ -746,8 +754,8 @@ const getTableConfig = (collection: string) => {
     };
     case 'eduadmin_cbt_exams': return { 
         table: 'cbt_exams', 
-        columns: ['id', 'user_id', 'school_npsn', 'title', 'subject', 'level', 'duration_minutes', 'start_time', 'end_time', 'status', 'token', 'randomize_questions', 'randomize_options', 'last_modified', 'version', 'deleted'], 
-        mapFn: (item: any) => [s(item.id), s(item.userId), s(item.schoolNpsn), s(item.title), s(item.subject), s(item.level), s(item.durationMinutes), s(item.startTime), s(item.endTime), s(item.status), s(item.token), item.randomizeQuestions ? 1 : 0, item.randomizeOptions ? 1 : 0, s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] 
+        columns: ['id', 'user_id', 'school_npsn', 'title', 'subject', 'level', 'duration_minutes', 'start_time', 'end_time', 'status', 'token', 'teacher_name', 'target_class_ids', 'questions_type', 'external_link', 'randomize_questions', 'randomize_options', 'last_modified', 'version', 'deleted'], 
+        mapFn: (item: any) => [s(item.id), s(item.userId), s(item.schoolNpsn), s(item.title), s(item.subject), s(item.level), s(item.durationMinutes), s(item.startTime), s(item.endTime), s(item.status), s(item.token), s(item.teacherName), JSON.stringify(item.targetClassIds || []), s(item.questionsType), s(item.externalLink), item.randomizeQuestions ? 1 : 0, item.randomizeOptions ? 1 : 0, s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] 
     };
     case 'eduadmin_cbt_questions': return { 
         table: 'cbt_questions', 
@@ -967,6 +975,10 @@ const mapRowToJSON = (collection: string, row: any) => {
         id: row.id, userId: row.user_id, schoolNpsn: row.school_npsn, title: row.title,
         subject: row.subject, level: row.level, durationMinutes: row.duration_minutes, startTime: row.start_time,
         endTime: row.end_time, status: row.status, token: row.token,
+        teacherName: row.teacher_name,
+        targetClassIds: parseJSONSafe(row.target_class_ids),
+        questionsType: row.questions_type,
+        externalLink: row.external_link,
         randomizeQuestions: Boolean(row.randomize_questions), randomizeOptions: Boolean(row.randomize_options),
         lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
     };
