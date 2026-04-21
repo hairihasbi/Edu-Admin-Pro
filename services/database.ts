@@ -2200,7 +2200,7 @@ export const saveSupervisionResult = async (result: Partial<SupervisionResult> &
 };
 
 // --- CBT SERVICES ---
-export const getCbtExams = async (userId: string, schoolNpsn: string, role?: string, studentClassId?: string) => {
+export const getCbtExams = async (userId: string, schoolNpsn: string, role?: string, studentClassId?: string, isMonitoring?: boolean) => {
     // If student, show all active exams in their school
     if (role === 'SISWA') {
         const studentClsId = studentClassId || '';
@@ -2211,6 +2211,13 @@ export const getCbtExams = async (userId: string, schoolNpsn: string, role?: str
                 const isTargeted = !e.targetClassIds || e.targetClassIds.length === 0 || e.targetClassIds.includes(studentClsId);
                 return isActive && isTargeted;
             })
+            .toArray();
+    }
+    
+    // Monitoring Mode: Show all exams in the school
+    if (isMonitoring) {
+        return await db.cbtExams
+            .where('schoolNpsn').equals(schoolNpsn)
             .toArray();
     }
     
