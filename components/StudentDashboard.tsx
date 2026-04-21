@@ -43,7 +43,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
     setIsLoading(true);
     try {
       // Students can see all active exams in their school
-      const examData = await getCbtExams('', user.schoolNpsn || '');
+      const examData = await getCbtExams(user.id, user.schoolNpsn || '', user.role, user.classId);
       const activeExams = examData.filter(e => e.status === 'ACTIVE');
       setExams(activeExams);
       
