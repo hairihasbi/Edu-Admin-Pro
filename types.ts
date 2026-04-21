@@ -498,6 +498,7 @@ export interface CbtExam extends Syncable {
   randomizeQuestions?: boolean;
   randomizeOptions?: boolean;
   schoolNpsn: string;
+  teacherName?: string;
   targetClassIds?: string[];
   questionsType?: 'INTERNAL' | 'EXTERNAL_LINK';
   externalLink?: string;
