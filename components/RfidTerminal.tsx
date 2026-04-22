@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { User, Student, RfidLog } from '../types';
-import { getStudentByRfid, saveRfidLog } from '../services/database';
+import { User, Student, RfidLog, SystemSettings } from '../types';
+import { getStudentByRfid, saveRfidLog, getSystemSettings } from '../services/database';
 import { 
   Wifi, WifiOff, Smartphone, IdCard, 
   CheckCircle, AlertCircle, Clock, ArrowLeftRight 
@@ -17,8 +17,13 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
   const [message, setMessage] = useState('Silakan Tap Kartu RFID Anda');
   const [lastStudent, setLastStudent] = useState<Student | null>(null);
   const [logs, setLogs] = useState<RfidLog[]>([]);
+  const [settings, setSettings] = useState<SystemSettings | null>(null);
   const [serialConnected, setSerialConnected] = useState(false);
   const [scanning, setScanning] = useState(false);
+
+  useEffect(() => {
+    getSystemSettings().then(s => setSettings(s || null));
+  }, []);
 
   const keyboardBuffer = useRef('');
   const serialReader = useRef<ReadableStreamDefaultReader | null>(null);
@@ -94,20 +99,34 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
       const student = await getStudentByRfid(tagId, user.schoolNpsn || '');
       
       if (student) {
-        // Simple Logic for Masuk/Pulang: Check last log
-        // For now, let's just mark as 'HADIR' (Masuk)
         const now = new Date();
-        const hour = now.getHours();
+        const timeStr = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false });
+        
+        // Defaults if no settings
+        const checkInStart = settings?.rfidCheckInStart || '06:00';
+        const checkInLate = settings?.rfidCheckInLate || '07:30';
+        const checkOutStart = settings?.rfidCheckOutStart || '14:00';
+
         let attendanceStatus: 'HADIR' | 'PULANG' | 'TERLAMBAT' = 'HADIR';
         
-        if (hour >= 13) attendanceStatus = 'PULANG';
-        else if (hour >= 8) attendanceStatus = 'TERLAMBAT';
+        if (timeStr < checkInStart) {
+          setStatus('READING');
+          setMessage(`Terlalu Awal (Mulai Jam ${checkInStart})`);
+          playErrorSound();
+          return;
+        }
+
+        if (timeStr >= checkOutStart) {
+          attendanceStatus = 'PULANG';
+        } else if (timeStr > checkInLate) {
+          attendanceStatus = 'TERLAMBAT';
+        }
 
         const newLog = await saveRfidLog({
           studentId: student.id,
           studentName: student.name,
           classId: student.classId,
-          className: 'Kelas Siswa', // In production, we'd fetch the class name
+          className: student.classId, // We should ideally have the actual class name string
           schoolNpsn: user.schoolNpsn || '',
           timestamp: now.toISOString(),
           status: attendanceStatus,

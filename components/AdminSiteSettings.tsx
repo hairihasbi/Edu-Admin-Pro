@@ -5,7 +5,7 @@ import { getSystemSettings, saveSystemSettings } from '../services/database';
 import { Save, Globe, Image, Clock, CheckCircle, AlertCircle, LayoutTemplate, BrainCircuit } from './Icons';
 
 const AdminSiteSettings: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'general' | 'seo' | 'appearance' | 'ai'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'seo' | 'appearance' | 'ai' | 'attendance'>('general');
   const [settings, setSettings] = useState<SystemSettings>({
     id: 'global-settings',
     featureRppEnabled: true,
@@ -21,7 +21,10 @@ const AdminSiteSettings: React.FC = () => {
     aiProvider: 'GOOGLE',
     aiBaseUrl: '',
     aiApiKey: '',
-    aiModel: ''
+    aiModel: '',
+    rfidCheckInStart: '06:00',
+    rfidCheckInLate: '07:30',
+    rfidCheckOutStart: '14:00'
   });
   
   const [isLoading, setIsLoading] = useState(false);
@@ -120,6 +123,14 @@ const AdminSiteSettings: React.FC = () => {
           }`}
         >
           <BrainCircuit size={16} /> AI Config
+        </button>
+        <button
+          onClick={() => setActiveTab('attendance')}
+          className={`px-4 sm:px-6 py-2.5 rounded-md text-sm font-medium transition flex items-center gap-2 whitespace-nowrap ${
+            activeTab === 'attendance' ? 'bg-white text-green-600 shadow-sm' : 'text-gray-600 hover:text-gray-800'
+          }`}
+        >
+          <Clock size={16} /> Absensi RFID
         </button>
       </div>
 
@@ -356,6 +367,60 @@ const AdminSiteSettings: React.FC = () => {
                    </div>
                 )}
              </div>
+          </div>
+        )}
+
+        {/* TAB: ATTENDANCE */}
+        {activeTab === 'attendance' && (
+          <div className="space-y-6">
+            <div className="bg-green-50 border border-green-200 p-4 rounded-lg mb-6">
+              <div className="flex items-start gap-3">
+                <div className="bg-green-100 p-2 rounded-full text-green-700 mt-1">
+                  <Clock size={20} />
+                </div>
+                <div>
+                  <h4 className="text-green-900 font-bold text-lg mb-1">Pengaturan Waktu Absensi RFID</h4>
+                  <p className="text-sm text-green-700">
+                    Tentukan batas waktu kehadiran siswa sebagai patokan status kehadiran (Tepat Waktu, Terlambat, dll).
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">Waktu Mulai Masuk</label>
+                <input 
+                  type="time" 
+                  className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-green-500 outline-none"
+                  value={settings.rfidCheckInStart || '06:00'}
+                  onChange={(e) => handleChange('rfidCheckInStart', e.target.value)}
+                />
+                <p className="text-[10px] text-gray-500 mt-1">Absensi mulai direkam untuk hari tersebut.</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">Batas Terlambat</label>
+                <input 
+                  type="time" 
+                  className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-red-500 outline-none"
+                  value={settings.rfidCheckInLate || '07:30'}
+                  onChange={(e) => handleChange('rfidCheckInLate', e.target.value)}
+                />
+                <p className="text-[10px] text-gray-500 mt-1">Lewat dari jam ini akan berstatus "TERLAMBAT".</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">Waktu Mulai Pulang</label>
+                <input 
+                  type="time" 
+                  className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                  value={settings.rfidCheckOutStart || '14:00'}
+                  onChange={(e) => handleChange('rfidCheckOutStart', e.target.value)}
+                />
+                <p className="text-[10px] text-gray-500 mt-1">Siswa diperbolehkan melakukan tap pulang.</p>
+              </div>
+            </div>
           </div>
         )}
 
