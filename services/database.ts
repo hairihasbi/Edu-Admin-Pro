@@ -657,60 +657,61 @@ export const syncAllData = async (force = false) => {
 export const createBackup = async (user: User, semesterFilter?: string) => {
     const backup: BackupData = {
         meta: {
-            version: '1.0',
+            version: '2.0',
+            dbVersion: db.verno,
             date: new Date().toISOString(),
             generatedBy: user.username,
             role: user.role,
             semesterFilter
         },
-        data: {
-            classes: [], students: [], scopeMaterials: [], assessmentScores: [], teachingJournals: [],
-            cbtExams: [], cbtQuestions: [], cbtAttempts: []
-        }
+        data: {}
     };
 
     if (user.role === UserRole.ADMIN) {
-        backup.data.users = await db.users.toArray();
-        backup.data.classes = await db.classes.toArray();
-        backup.data.students = await db.students.toArray();
-        backup.data.scopeMaterials = await db.scopeMaterials.toArray();
-        backup.data.assessmentScores = await db.assessmentScores.toArray();
-        backup.data.teachingJournals = await db.teachingJournals.toArray();
-        backup.data.teachingSchedules = await db.teachingSchedules.toArray();
-        backup.data.attendanceRecords = await db.attendanceRecords.toArray();
-        backup.data.masterSubjects = await db.masterSubjects.toArray();
-        backup.data.tickets = await db.tickets.toArray();
-        backup.data.violations = await db.violations.toArray();
-        backup.data.pointReductions = await db.pointReductions.toArray();
-        backup.data.achievements = await db.achievements.toArray();
-        backup.data.counselingSessions = await db.counselingSessions.toArray();
-        backup.data.notifications = await db.notifications.toArray();
-        backup.data.apiKeys = await db.apiKeys.toArray();
-        backup.data.systemSettings = await db.systemSettings.toArray();
-        backup.data.cbtExams = await db.cbtExams.toArray();
-        backup.data.cbtQuestions = await db.cbtQuestions.toArray();
-        backup.data.cbtAttempts = await db.cbtAttempts.toArray();
-    } else {
-        backup.data.classes = await db.classes.where('userId').equals(user.id).toArray();
-        const classIds = backup.data.classes.map(c => c.id);
-        backup.data.students = await db.students.where('classId').anyOf(classIds).toArray();
-        
-        if (semesterFilter) {
-            backup.data.scopeMaterials = await db.scopeMaterials.where('userId').equals(user.id).and(m => m.semester === semesterFilter).toArray();
-            backup.data.assessmentScores = await db.assessmentScores.where('userId').equals(user.id).and(s => s.semester === semesterFilter).toArray();
-        } else {
-            backup.data.scopeMaterials = await db.scopeMaterials.where('userId').equals(user.id).toArray();
-            backup.data.assessmentScores = await db.assessmentScores.where('userId').equals(user.id).toArray();
+        // Admin gets all tables
+        for (const table of db.tables) {
+            backup.data[table.name] = await table.toArray();
         }
-        
-        backup.data.teachingJournals = await db.teachingJournals.where('userId').equals(user.id).toArray();
-        backup.data.teachingSchedules = await db.teachingSchedules.where('userId').equals(user.id).toArray();
-        
-        // Include CBT Data for teacher
-        backup.data.cbtExams = await db.cbtExams.where('userId').equals(user.id).toArray();
-        const examIds = backup.data.cbtExams.map(e => e.id);
-        backup.data.cbtQuestions = await db.cbtQuestions.where('examId').anyOf(examIds).toArray();
-        backup.data.cbtAttempts = await db.cbtAttempts.where('examId').anyOf(examIds).toArray();
+    } else {
+        // Teacher gets filtered data
+        // 1. Tables filtered by userId
+        const userFilteredTables = [
+            'classes', 'scopeMaterials', 'assessmentScores', 'teachingJournals', 
+            'teachingSchedules', 'whatsappConfigs', 'teacherCalendar', 
+            'classInventory', 'homeVisits', 'parentCalls', 'learningStyleAssessments',
+            'supervisionAssignments', 'supervisionResults', 'cbtExams'
+        ];
+
+        for (const tableName of userFilteredTables) {
+            const table = (db as any)[tableName] as Table;
+            if (!table) continue;
+
+            if (semesterFilter && (tableName === 'scopeMaterials' || tableName === 'assessmentScores')) {
+                backup.data[tableName] = await table.where('userId').equals(user.id).and(m => (m as any).semester === semesterFilter).toArray();
+            } else if (tableName === 'supervisionAssignments' || tableName === 'supervisionResults') {
+                backup.data[tableName] = await table.where('supervisorId').equals(user.id).toArray();
+            } else {
+                backup.data[tableName] = await table.where('userId').equals(user.id).toArray();
+            }
+        }
+
+        // 2. Cascading relations (Students from Classes)
+        if (backup.data.classes) {
+            const classIds = backup.data.classes.map(c => c.id);
+            backup.data.students = await db.students.where('classId').anyOf(classIds).toArray();
+        }
+
+        // 3. Cascading relations (CBT Questions/Attempts from Exams)
+        if (backup.data.cbtExams) {
+            const examIds = backup.data.cbtExams.map(e => e.id);
+            backup.data.cbtQuestions = await db.cbtQuestions.where('examId').anyOf(examIds).toArray();
+            backup.data.cbtAttempts = await db.cbtAttempts.where('examId').anyOf(examIds).toArray();
+        }
+
+        // 4. RFID Logs if the teacher is an RFID officer
+        if (user.isRfidOfficer) {
+            backup.data.rfidLogs = await db.rfidLogs.where('schoolNpsn').equals(user.schoolNpsn || '').toArray();
+        }
     }
 
     return backup;
@@ -719,26 +720,13 @@ export const createBackup = async (user: User, semesterFilter?: string) => {
 export const restoreBackup = async (backup: BackupData) => {
     try {
         await db.transaction('rw', db.tables, async () => {
-            if (backup.data.users) await db.users.bulkPut(backup.data.users);
-            if (backup.data.classes) await db.classes.bulkPut(backup.data.classes);
-            if (backup.data.students) await db.students.bulkPut(backup.data.students);
-            if (backup.data.scopeMaterials) await db.scopeMaterials.bulkPut(backup.data.scopeMaterials);
-            if (backup.data.assessmentScores) await db.assessmentScores.bulkPut(backup.data.assessmentScores);
-            if (backup.data.teachingJournals) await db.teachingJournals.bulkPut(backup.data.teachingJournals);
-            if (backup.data.teachingSchedules) await db.teachingSchedules.bulkPut(backup.data.teachingSchedules);
-            if (backup.data.attendanceRecords) await db.attendanceRecords.bulkPut(backup.data.attendanceRecords);
-            if (backup.data.masterSubjects) await db.masterSubjects.bulkPut(backup.data.masterSubjects);
-            if (backup.data.tickets) await db.tickets.bulkPut(backup.data.tickets);
-            if (backup.data.violations) await db.violations.bulkPut(backup.data.violations);
-            if (backup.data.pointReductions) await db.pointReductions.bulkPut(backup.data.pointReductions);
-            if (backup.data.achievements) await db.achievements.bulkPut(backup.data.achievements);
-            if (backup.data.counselingSessions) await db.counselingSessions.bulkPut(backup.data.counselingSessions);
-            if (backup.data.notifications) await db.notifications.bulkPut(backup.data.notifications);
-            if (backup.data.apiKeys) await db.apiKeys.bulkPut(backup.data.apiKeys);
-            if (backup.data.systemSettings) await db.systemSettings.bulkPut(backup.data.systemSettings);
-            if (backup.data.cbtExams) await db.cbtExams.bulkPut(backup.data.cbtExams);
-            if (backup.data.cbtQuestions) await db.cbtQuestions.bulkPut(backup.data.cbtQuestions);
-            if (backup.data.cbtAttempts) await db.cbtAttempts.bulkPut(backup.data.cbtAttempts);
+            const tableNames = Object.keys(backup.data);
+            for (const tableName of tableNames) {
+                const table = (db as any)[tableName] as Table;
+                if (table && Array.isArray(backup.data[tableName])) {
+                    await table.bulkPut(backup.data[tableName]);
+                }
+            }
         });
         syncAllData(true);
         return { success: true, message: 'Data berhasil dipulihkan.' };
@@ -753,18 +741,20 @@ export const resetSystemData = async (scope: 'SEMESTER' | 'ALL', semester?: stri
         return { success: true, message: 'Semua data telah dihapus.' };
     } else if (scope === 'SEMESTER' && semester) {
         if (semester === 'FULL_YEAR') {
-            await db.students.clear();
-            await db.classes.clear();
-            await db.attendanceRecords.clear();
-            await db.scopeMaterials.clear();
-            await db.assessmentScores.clear();
-            await db.teachingJournals.clear();
-            await db.violations.clear();
-            await db.achievements.clear();
-            await db.counselingSessions.clear();
-            await db.cbtExams.clear();
-            await db.cbtQuestions.clear();
-            await db.cbtAttempts.clear();
+            // Comprehensive Year Reset
+            const yearResetTables = [
+                'students', 'classes', 'attendanceRecords', 'scopeMaterials', 
+                'assessmentScores', 'teachingJournals', 'violations', 'pointReductions', 
+                'achievements', 'counselingSessions', 'cbtExams', 'cbtQuestions', 
+                'cbtAttempts', 'rfidLogs', 'dailyPickets', 'studentIncidents',
+                'homeVisits', 'parentCalls', 'classInventory'
+            ];
+            
+            await Promise.all(yearResetTables.map(tableName => {
+                const table = (db as any)[tableName] as Table;
+                return table ? table.clear() : Promise.resolve();
+            }));
+
             return { success: true, message: 'Data tahun ajaran berhasil direset.' };
         } else {
             await db.scopeMaterials.where('semester').equals(semester).delete();
