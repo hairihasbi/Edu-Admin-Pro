@@ -942,7 +942,7 @@ const AppContent: React.FC = () => {
                     )}
                     <NavLink to="/picket" icon={CalendarCheck} label="Piket Harian" />
                     <NavLink to="/absensi-rfid" icon={IdCard} label="Terminal RFID" />
-                    {(currentUser.additionalRole === 'WAKASEK_KURIKULUM' || currentUser.homeroomClassId || currentUser.subject === 'Bimbingan Konseling') && (
+                    {( (currentUser.additionalRole as any) === 'KEPALA_SEKOLAH' || currentUser.additionalRole === 'WAKASEK_KURIKULUM' || currentUser.homeroomClassId || currentUser.subject === 'Bimbingan Konseling') && (
                       <NavLink to="/attendance-monitoring" icon={Clock} label="Pantau Absensi RFID" />
                     )}
                     {(currentUser.additionalRole === 'WAKASEK_KURIKULUM' || currentUser.isSupervisor) && (
@@ -1111,7 +1111,7 @@ const AppContent: React.FC = () => {
                    <Route path="/classes" element={<TeacherClasses user={currentUser} />} />
                    <Route path="/picket" element={<DailyPicket currentUser={currentUser} />} /> 
                    <Route path="/absensi-rfid" element={<RfidTerminal user={currentUser} />} />
-                   {(currentUser.additionalRole === 'WAKASEK_KURIKULUM' || currentUser.homeroomClassId || currentUser.subject === 'Bimbingan Konseling') && (
+                   {((currentUser.additionalRole as any) === 'KEPALA_SEKOLAH' || currentUser.additionalRole === 'WAKASEK_KURIKULUM' || currentUser.homeroomClassId || currentUser.subject === 'Bimbingan Konseling') && (
                      <Route path="/attendance-monitoring" element={<AttendanceMonitoring user={currentUser} />} />
                    )}
                    {currentUser.additionalRole === 'KEPALA_SEKOLAH' && (

@@ -61,6 +61,10 @@ export interface SystemSettings extends Syncable {
   faviconUrl?: string; // URL Favicon
   timezone?: string; // e.g. 'Asia/Jakarta'
   footerText?: string;
+  // RFID Attendance Settings
+  rfidCheckInStart?: string; // e.g. "06:00"
+  rfidCheckInLate?: string; // e.g. "07:30"
+  rfidCheckOutStart?: string; // e.g. "14:00"
   // AI Configuration (LiteLLM / Custom Gateway)
   aiProvider?: 'GOOGLE' | 'CUSTOM';
   aiBaseUrl?: string; // e.g. https://my-litellm.com/v1
