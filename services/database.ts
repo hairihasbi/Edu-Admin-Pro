@@ -1,5 +1,6 @@
 
 import { db } from './db';
+import { Table } from 'dexie';
 import { 
   User, UserRole, ClassRoom, Student, AttendanceRecord, 
   ScopeMaterial, AssessmentScore, TeachingJournal, 
@@ -687,7 +688,7 @@ export const createBackup = async (user: User, semesterFilter?: string) => {
             if (!table) continue;
 
             if (semesterFilter && (tableName === 'scopeMaterials' || tableName === 'assessmentScores')) {
-                backup.data[tableName] = await table.where('userId').equals(user.id).and(m => (m as any).semester === semesterFilter).toArray();
+                backup.data[tableName] = await table.where('userId').equals(user.id).and((m: any) => m.semester === semesterFilter).toArray();
             } else if (tableName === 'supervisionAssignments' || tableName === 'supervisionResults') {
                 backup.data[tableName] = await table.where('supervisorId').equals(user.id).toArray();
             } else {
