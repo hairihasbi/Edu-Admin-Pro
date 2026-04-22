@@ -45,6 +45,7 @@ export interface User extends Syncable {
   rppUsageCount?: number;
   rppLastReset?: string;
   isSupervisor?: boolean;
+  isRfidOfficer?: boolean;
 }
 
 export interface SystemSettings extends Syncable {
@@ -144,6 +145,7 @@ export interface Student extends Syncable {
   attendance?: number; 
   averageScore?: number;
   phone?: string; // Added phone number for WhatsApp
+  rfidTag?: string;
 }
 
 export interface StudentWithDetails extends Student {
@@ -152,6 +154,17 @@ export interface StudentWithDetails extends Student {
   schoolName: string;
 }
 
+export interface RfidLog extends Syncable {
+  id: string;
+  studentId: string;
+  studentName: string;
+  classId: string;
+  className: string;
+  schoolNpsn: string;
+  timestamp: string;
+  status: 'HADIR' | 'PULANG' | 'TERLAMBAT' | 'IZIN';
+  method: 'KEYBOARD' | 'SERIAL';
+}
 export interface AttendanceRecord extends Syncable {
   id: string;
   studentId: string;

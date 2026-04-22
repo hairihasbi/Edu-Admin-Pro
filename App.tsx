@@ -40,6 +40,9 @@ import CbtEditor from './components/CbtEditor';
 import CbtResults from './components/CbtResults';
 import CbtExamEnvironment from './components/CbtExamEnvironment';
 import StudentDashboard from './components/StudentDashboard';
+import RfidTerminal from './components/RfidTerminal';
+import RfidOfficerManager from './components/RfidOfficerManager';
+import AttendanceMonitoring from './components/AttendanceMonitoring';
 import Breadcrumbs from './components/Breadcrumbs';
 import OnboardingTour from './components/OnboardingTour';
 import ForgotPassword from './components/ForgotPassword';
@@ -91,7 +94,8 @@ import {
   CreditCard, // Import CreditCard
   Calendar, // Import Calendar
   Sun,
-  Moon
+  Moon,
+  Clock
 } from './components/Icons';
 
 // Konstanta Timeout: 15 Menit
@@ -910,6 +914,9 @@ const AppContent: React.FC = () => {
                 {/* Special Menu for Kepala Sekolah */}
                 {currentUser.additionalRole === 'KEPALA_SEKOLAH' ? (
                   <>
+                    <NavLink to="/absensi-rfid" icon={IdCard} label="Terminal RFID" />
+                    <NavLink to="/attendance-monitoring" icon={Clock} label="Pantau Absensi RFID" />
+                    <NavLink to="/rfid-officers" icon={UserCheck} label="Petugas RFID" />
                     <NavLink to="/supervision-assessment" icon={ClipboardCheck} label="Instrumen Supervisi" />
                     <NavLink to="/supervision-results" icon={ClipboardCheck} label="Hasil Supervisi" />
                     <NavLink to="/sync" icon={ArrowLeftRight} label="Sinkronisasi Data" />
@@ -934,6 +941,10 @@ const AppContent: React.FC = () => {
                       </>
                     )}
                     <NavLink to="/picket" icon={CalendarCheck} label="Piket Harian" />
+                    <NavLink to="/absensi-rfid" icon={IdCard} label="Terminal RFID" />
+                    {(currentUser.additionalRole === 'WAKASEK_KURIKULUM' || currentUser.homeroomClassId || currentUser.subject === 'Bimbingan Konseling') && (
+                      <NavLink to="/attendance-monitoring" icon={Clock} label="Pantau Absensi RFID" />
+                    )}
                     {(currentUser.additionalRole === 'WAKASEK_KURIKULUM' || currentUser.isSupervisor) && (
                       <NavLink to="/supervision-results" icon={ClipboardCheck} label="Hasil Supervisi" />
                     )}
@@ -964,6 +975,7 @@ const AppContent: React.FC = () => {
             {currentUser.role === UserRole.TENDIK && (
               <>
                 <NavLink to="/picket" icon={CalendarCheck} label="Piket Harian" />
+                <NavLink to="/absensi-rfid" icon={IdCard} label="Terminal RFID" />
                 <NavLink to="/sync" icon={ArrowLeftRight} label="Sinkronisasi Data" />
                 <NavLink to="/backup" icon={DatabaseBackup} label="Backup & Restore" />
                 <NavLink to="/help-center" icon={LifeBuoy} label="Pusat Bantuan" />
@@ -1076,6 +1088,7 @@ const AppContent: React.FC = () => {
                  <>
                    <Route path="/dashboard" element={<TeacherDashboard user={currentUser} />} />
                    <Route path="/picket" element={<DailyPicket currentUser={currentUser} />} />
+                   <Route path="/absensi-rfid" element={<RfidTerminal user={currentUser} />} />
                    <Route path="/backup" element={<BackupRestore user={currentUser} />} /> 
                    <Route path="/sync" element={<SyncPage user={currentUser} />} />
                    <Route path="/help-center" element={<HelpCenter user={currentUser} />} />
@@ -1096,7 +1109,14 @@ const AppContent: React.FC = () => {
                    <Route path="/homeroom" element={<TeacherHomeroom user={currentUser} />} />
                    <Route path="/learning-style" element={<LearningStyleManager user={currentUser} />} />
                    <Route path="/classes" element={<TeacherClasses user={currentUser} />} />
-                   <Route path="/picket" element={<DailyPicket currentUser={currentUser} />} /> {/* NEW ROUTE */}
+                   <Route path="/picket" element={<DailyPicket currentUser={currentUser} />} /> 
+                   <Route path="/absensi-rfid" element={<RfidTerminal user={currentUser} />} />
+                   {(currentUser.additionalRole === 'WAKASEK_KURIKULUM' || currentUser.homeroomClassId || currentUser.subject === 'Bimbingan Konseling') && (
+                     <Route path="/attendance-monitoring" element={<AttendanceMonitoring user={currentUser} />} />
+                   )}
+                   {currentUser.additionalRole === 'KEPALA_SEKOLAH' && (
+                     <Route path="/rfid-officers" element={<RfidOfficerManager user={currentUser} />} />
+                   )}
                    {currentUser.subject === 'Bimbingan Konseling' && <Route path="/guidance" element={<TeacherGuidance user={currentUser} />} />}
                    <Route path="/attendance" element={<TeacherAttendance user={currentUser} />} />
                    <Route path="/cbt" element={<CbtManager user={currentUser} />} />
