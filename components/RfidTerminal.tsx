@@ -166,6 +166,18 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
             <p className="text-blue-100 opacity-90">{user.schoolName}</p>
           </div>
           <div className="flex gap-2">
+            {method === 'SERIAL' && (
+                <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-bold border transition ${serialConnected ? 'bg-green-500/20 border-green-400 text-green-100' : 'bg-red-500/20 border-red-400 text-red-100'}`}>
+                    <div className={`w-2 h-2 rounded-full ${serialConnected ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`} />
+                    {serialConnected ? 'HARDWARE TERHUBUNG' : 'HARDWARE TERPUTUS'}
+                </div>
+            )}
+            {method === 'KEYBOARD' && (
+                <div className="flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-bold border bg-blue-500/20 border-blue-400 text-blue-100">
+                    <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+                    KONTROL KEYBOARD AKTIF
+                </div>
+            )}
             <button 
               onClick={() => setMethod('KEYBOARD')}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${method === 'KEYBOARD' ? 'bg-white text-blue-600 shadow-md' : 'bg-blue-500 text-white hover:bg-blue-400'}`}
@@ -227,6 +239,14 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
               <p className="text-gray-500 flex items-center justify-center gap-2">
                 <Clock size={16} /> Mode {method === 'KEYBOARD' ? 'Keyboard Emulator' : 'Web Serial API'} Aktif
               </p>
+            )}
+            {method === 'SERIAL' && !serialConnected && (
+                <button 
+                    onClick={connectSerial}
+                    className="mt-4 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg text-sm font-bold border border-blue-100 hover:bg-blue-100 transition"
+                >
+                    Hubungkan Hardware Scanner
+                </button>
             )}
           </div>
 

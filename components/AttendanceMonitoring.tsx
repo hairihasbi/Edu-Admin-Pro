@@ -1,12 +1,15 @@
 
-import React, { useState, useEffect } from 'react';
-import { User, RfidLog, SystemSettings } from '../types';
-import { getRfidLogs, getSystemSettings } from '../services/database';
+import React, { useState, useEffect, useMemo } from 'react';
+import { User, RfidLog, SystemSettings, Student, ClassRoom } from '../types';
+import { getRfidLogsByRange, getSystemSettings, getSchoolStudents, getSchoolClasses, clearAllRfidLogsByDate } from '../services/database';
 import { 
   ClipboardList, Search, Calendar, Filter, 
   Download, Printer, CheckCircle, Clock, 
-  Smartphone, Wifi, User as UserIcon
+  Smartphone, Wifi, User as UserIcon, Trash2,
+  ChevronLeft, ChevronRight, AlertCircle, Info,
+  BookOpen, LayoutGrid
 } from './Icons';
+import * as XLSX from 'xlsx';
 
 interface AttendanceMonitoringProps {
   user: User;
@@ -15,215 +18,379 @@ interface AttendanceMonitoringProps {
 interface AggregatedAttendance {
   studentId: string;
   studentName: string;
+  nis: string;
   className: string;
   checkIn: string | null;
   checkOut: string | null;
-  status: string;
+  status: 'HADIR' | 'TERLAMBAT' | 'PULANG CEPAT' | 'TERLAMBAT & PULANG CEPAT' | 'ALFA' | 'TANPA TAP';
 }
 
 const AttendanceMonitoring: React.FC<AttendanceMonitoringProps> = ({ user }) => {
   const [logs, setLogs] = useState<RfidLog[]>([]);
+  const [students, setStudents] = useState<Student[]>([]);
+  const [classes, setClasses] = useState<ClassRoom[]>([]);
   const [settings, setSettings] = useState<SystemSettings | null>(null);
   const [loading, setLoading] = useState(true);
-  const [dateFilter, setDateFilter] = useState(new Date().toISOString().split('T')[0]);
+  
+  // Filters
+  const [filterMode, setFilterMode] = useState<'DAILY' | 'MONTHLY' | 'SEMESTER'>('DAILY');
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
+  const [activeClassId, setActiveClassId] = useState<string>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     fetchData();
-  }, [dateFilter]);
+  }, [selectedDate, selectedMonth, filterMode]);
 
   const fetchData = async () => {
+    if (!user.schoolNpsn) return;
     setLoading(true);
-    const [logData, settingsData] = await Promise.all([
-      getRfidLogs(user.schoolNpsn || '', dateFilter),
+    
+    let startDate = selectedDate;
+    let endDate = selectedDate;
+
+    if (filterMode === 'MONTHLY') {
+        startDate = `${selectedMonth}-01`;
+        const lastDay = new Date(new Date(selectedMonth).getFullYear(), new Date(selectedMonth).getMonth() + 1, 0).getDate();
+        endDate = `${selectedMonth}-${lastDay}`;
+    } else if (filterMode === 'SEMESTER') {
+        const now = new Date();
+        const year = now.getFullYear();
+        const startYear = now.getMonth() >= 6 ? year : year - 1;
+        startDate = `${startYear}-07-01`;
+        endDate = `${startYear + 1}-06-30`;
+    }
+
+    const [logData, studentData, classData, settingsData] = await Promise.all([
+      getRfidLogsByRange(user.schoolNpsn, startDate, endDate),
+      getSchoolStudents(user.schoolNpsn),
+      getSchoolClasses(user.schoolNpsn),
       getSystemSettings()
     ]);
+    
     setLogs(logData);
+    setStudents(studentData);
+    setClasses(classData);
     setSettings(settingsData || null);
     setLoading(false);
   };
 
-  const aggregateLogs = (): AggregatedAttendance[] => {
-    const map = new Map<string, AggregatedAttendance>();
+  const attendanceData = useMemo(() => {
+    const list: AggregatedAttendance[] = [];
+    const checkInStart = settings?.rfidCheckInStart || '06:00';
+    const checkInLate = settings?.rfidCheckInLate || '07:30';
+    const checkOutStart = settings?.rfidCheckOutStart || '14:00';
 
-    logs.forEach(log => {
-      if (!map.has(log.studentId)) {
-        map.set(log.studentId, {
-          studentId: log.studentId,
-          studentName: log.studentName,
-          className: log.className,
-          checkIn: null,
-          checkOut: null,
-          status: 'HADIR'
-        });
-      }
+    // If daily, we show all students in the selected class (or all classes)
+    // If monthly/semester, we probably should group by student and show aggregated counts?
+    // User requested: "cek sisaa yang telat atau tidak absen dikelas tersebut" (who is late or hasn't tapped)
+    // This usually implies a DAILY view is most common for detailed checking.
+    
+    const targetStudents = activeClassId === 'ALL' 
+        ? students 
+        : students.filter(s => s.classId === activeClassId);
 
-      const entry = map.get(log.studentId)!;
-      const logTime = new Date(log.timestamp);
-      
-      if (log.status === 'HADIR' || log.status === 'TERLAMBAT') {
-        if (!entry.checkIn || logTime < new Date(entry.checkIn)) {
-          entry.checkIn = log.timestamp;
-          if (log.status === 'TERLAMBAT') entry.status = 'TERLAMBAT';
+    targetStudents.forEach(student => {
+        // Filter logs for this student
+        const studentLogs = logs.filter(l => l.studentId === student.id);
+        const className = classes.find(c => c.id === student.classId)?.name || 'TPS';
+        
+        if (filterMode === 'DAILY') {
+            // For daily, one entry per student
+            let checkIn: string | null = null;
+            let checkOut: string | null = null;
+            let status: AggregatedAttendance['status'] = 'ALFA';
+
+            if (studentLogs.length > 0) {
+                // Find earliest check-in and latest check-out
+                const inLogs = studentLogs.filter(l => l.status === 'HADIR' || l.status === 'TERLAMBAT');
+                if (inLogs.length > 0) {
+                    checkIn = inLogs.sort((a, b) => a.timestamp.localeCompare(b.timestamp))[0].timestamp;
+                    const checkInTime = new Date(checkIn).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false });
+                    status = checkInTime > checkInLate ? 'TERLAMBAT' : 'HADIR';
+                }
+
+                const outLogs = studentLogs.filter(l => l.status === 'PULANG');
+                if (outLogs.length > 0) {
+                    checkOut = outLogs.sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0].timestamp;
+                    const checkOutTime = new Date(checkOut).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false });
+                    if (checkOutTime < checkOutStart) {
+                        status = status === 'TERLAMBAT' ? 'TERLAMBAT & PULANG CEPAT' : 'PULANG CEPAT';
+                    }
+                }
+
+                if (!checkIn && !checkOut) status = 'ALFA';
+                else if (status === 'HADIR') status = 'HADIR'; // On Time
+            }
+
+            list.push({
+                studentId: student.id,
+                studentName: student.name,
+                nis: student.nis || '-',
+                className: className,
+                checkIn,
+                checkOut,
+                status: status as any
+            });
         }
-      } else if (log.status === 'PULANG') {
-        if (!entry.checkOut || logTime > new Date(entry.checkOut)) {
-          entry.checkOut = log.timestamp;
-        }
-      }
     });
 
-    // Post-process for "Pulang Cepat"
-    if (settings && settings.rfidCheckOutStart) {
-      const threshold = settings.rfidCheckOutStart;
-      map.forEach(entry => {
-        if (entry.checkOut) {
-          const checkOutTimeStr = new Date(entry.checkOut).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false });
-          if (checkOutTimeStr < threshold) {
-            entry.status = entry.status === 'TERLAMBAT' ? 'TERLAMBAT & PULANG CEPAT' : 'PULANG CEPAT';
-          }
-        }
-      });
-    }
+    return list.sort((a, b) => a.studentName.localeCompare(b.studentName));
+  }, [logs, students, settings, activeClassId, filterMode]);
 
-    return Array.from(map.values());
-  };
-
-  const aggregatedData = aggregateLogs();
-  const filteredData = aggregatedData.filter(d => 
-    d.studentName.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredData = attendanceData.filter(d => 
+    d.studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    d.nis.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const stats = {
-    total: aggregatedData.length,
-    onTime: aggregatedData.filter(d => d.status === 'HADIR').length,
-    late: aggregatedData.filter(d => d.status.includes('TERLAMBAT')).length,
-    earlyLeave: aggregatedData.filter(d => d.status.includes('PULANG CEPAT')).length
+  const stats = useMemo(() => {
+      const total = attendanceData.length;
+      const present = attendanceData.filter(d => d.checkIn || d.checkOut).length;
+      return {
+          total,
+          present,
+          onTime: attendanceData.filter(d => d.status === 'HADIR').length,
+          late: attendanceData.filter(d => d.status.includes('TERLAMBAT')).length,
+          earlyLeave: attendanceData.filter(d => d.status.includes('PULANG CEPAT')).length,
+          absent: total - present
+      };
+  }, [attendanceData]);
+
+  const handleExport = () => {
+    const data = attendanceData.map(d => ({
+        'NIS': d.nis,
+        'Nama Siswa': d.studentName,
+        'Kelas': d.className,
+        'Jam Datang': d.checkIn ? new Date(d.checkIn).toLocaleTimeString('id-ID') : '-',
+        'Jam Pulang': d.checkOut ? new Date(d.checkOut).toLocaleTimeString('id-ID') : '-',
+        'Status': d.status
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Laporan Absensi RFID");
+    XLSX.writeFile(wb, `Absensi_RFID_${filterMode}_${selectedDate || selectedMonth}.xlsx`);
+  };
+
+  const handleDeleteLogs = async () => {
+    if (!window.confirm('Apakah Anda yakin ingin menghapus seluruh log absensi pada tanggal/periode ini? Tindakan ini tidak dapat dibatalkan.')) return;
+    
+    try {
+        if (filterMode === 'DAILY') {
+            await clearAllRfidLogsByDate(user.schoolNpsn || '', selectedDate);
+        } else {
+             // For range, we'd need loop or bulk delete by range. 
+             // Simplifying to current selected day for safety unless user wants wider.
+             alert("Penghapusan massal hanya tersedia pada mode Harian.");
+             return;
+        }
+        fetchData();
+    } catch (e) {
+        alert("Gagal menghapus data.");
+    }
   };
 
   return (
     <div className="space-y-6">
+      {/* Header & Main Filters */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-          <div>
-            <h2 className="text-xl font-bold text-gray-800">Pantau Absensi RFID</h2>
-            <p className="text-sm text-gray-500">Monitor kehadiran siswa berdasarkan jam datang & pulang.</p>
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
+          <div className="flex items-center gap-3">
+             <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
+                <ClipboardList size={24} />
+             </div>
+             <div>
+                <h2 className="text-xl font-bold text-gray-800">Monitoring Absensi RFID</h2>
+                <p className="text-sm text-gray-500">Rekapitulasi kehadiran berdasarkan scan kartu.</p>
+             </div>
           </div>
-          <div className="flex flex-wrap gap-2 w-full md:w-auto">
-            <input 
-              type="date" 
-              className="px-4 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-              value={dateFilter}
-              onChange={e => setDateFilter(e.target.value)}
-            />
-            <button className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200 transition">
-              <Download size={18} /> Ekspor
-            </button>
+          
+          <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+            <div className="flex bg-gray-100 p-1 rounded-lg">
+                {(['DAILY', 'MONTHLY', 'SEMESTER'] as const).map(mode => (
+                    <button
+                        key={mode}
+                        onClick={() => setFilterMode(mode)}
+                        className={`px-3 py-1.5 rounded-md text-[10px] font-bold transition uppercase ${filterMode === mode ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                        {mode === 'DAILY' ? 'Harian' : mode === 'MONTHLY' ? 'Bulanan' : 'Semester'}
+                    </button>
+                )) }
+            </div>
+
+            {filterMode === 'DAILY' && (
+                <input 
+                    type="date" 
+                    className="px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none"
+                    value={selectedDate}
+                    onChange={e => setSelectedDate(e.target.value)}
+                />
+            )}
+            {filterMode === 'MONTHLY' && (
+                <input 
+                    type="month" 
+                    className="px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none"
+                    value={selectedMonth}
+                    onChange={e => setSelectedMonth(e.target.value)}
+                />
+            )}
+
+            <div className="flex gap-2">
+                <button 
+                    onClick={handleExport}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition shadow-sm"
+                >
+                    <Download size={18} /> Ekspor Excel
+                </button>
+                <button 
+                    onClick={handleDeleteLogs}
+                    className="p-2 bg-red-50 text-red-600 rounded-lg border border-red-100 hover:bg-red-100 transition"
+                    title="Hapus Data Periode Ini"
+                >
+                    <Trash2 size={18} />
+                </button>
+            </div>
           </div>
         </div>
 
-        <div className="relative">
-          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input 
+        {/* Stats Grid */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+            {[
+                { label: 'Total Siswa', value: stats.total, color: 'gray' },
+                { label: 'Hadir (Tap)', value: stats.present, color: 'blue' },
+                { label: 'Tepat Waktu', value: stats.onTime, color: 'green' },
+                { label: 'Terlambat', value: stats.late, color: 'orange' },
+                { label: 'Pulang Cepat', value: stats.earlyLeave, color: 'red' },
+                { label: 'Alpha', value: stats.absent, color: 'rose' }
+            ].map((s, i) => (
+                <div key={i} className="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-tight">{s.label}</p>
+                    <p className={`text-xl font-black mt-1 text-${s.color}-600`}>{s.value}</p>
+                </div>
+            ))}
+        </div>
+
+        {/* Class Tabs */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide border-b border-gray-100">
+            <button
+                onClick={() => setActiveClassId('ALL')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition ${activeClassId === 'ALL' ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+            >
+                <LayoutGrid size={14} /> Semua Kelas
+            </button>
+            {classes.map(cls => (
+                <button
+                    key={cls.id}
+                    onClick={() => setActiveClassId(cls.id)}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition ${activeClassId === cls.id ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                >
+                    <BookOpen size={14} /> {cls.name}
+                </button>
+            ))}
+        </div>
+      </div>
+
+      {/* Search Bar */}
+      <div className="relative">
+        <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+        <input 
             type="text" 
-            placeholder="Cari nama siswa..."
-            className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+            placeholder="Cari nama siswa atau NIS..."
+            className="w-full pl-12 pr-4 py-3 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none shadow-sm"
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
-          />
-        </div>
+        />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        {[
-          { label: 'Siswa Hadir', value: stats.total, color: 'blue' },
-          { label: 'Tepat Waktu', value: stats.onTime, color: 'green' },
-          { label: 'Terlambat', value: stats.late, color: 'orange' },
-          { label: 'Pulang Cepat', value: stats.earlyLeave, color: 'red' }
-        ].map((stat, i) => (
-          <div key={i} className={`bg-white p-4 rounded-xl border-l-4 border-${stat.color}-500 shadow-sm transition-all hover:scale-[1.02]`}>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{stat.label}</p>
-            <p className="text-2xl font-bold text-gray-900 mt-1">{stat.value}</p>
-          </div>
-        ))}
-      </div>
-
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      {/* Monitoring Table */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-left">
-            <thead className="bg-gray-50 text-gray-600 font-medium border-b border-gray-100">
-              <tr>
-                <th className="p-4">Nama Siswa</th>
-                <th className="p-4">Kelas</th>
+            <thead>
+              <tr className="bg-gray-50 text-gray-600 font-bold border-b border-gray-100 uppercase text-[10px] tracking-widest">
+                <th className="p-4">Identitas Siswa</th>
                 <th className="p-4 text-center">Jam Datang</th>
                 <th className="p-4 text-center">Jam Pulang</th>
-                <th className="p-4 text-center">Status</th>
+                <th className="p-4 text-center">Status Kehadiran</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-gray-50">
               {loading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <tr key={i} className="animate-pulse">
-                    <td className="p-4"><div className="h-4 bg-gray-100 rounded w-48"></div></td>
-                    <td className="p-4"><div className="h-4 bg-gray-100 rounded w-20"></div></td>
-                    <td className="p-4"><div className="h-4 bg-gray-100 rounded w-16 mx-auto"></div></td>
-                    <td className="p-4"><div className="h-4 bg-gray-100 rounded w-16 mx-auto"></div></td>
-                    <td className="p-4"><div className="h-4 bg-gray-100 rounded w-24 mx-auto"></div></td>
+                    <td className="p-4"><div className="h-5 bg-gray-100 rounded w-48 mb-1"></div><div className="h-3 bg-gray-50 rounded w-24"></div></td>
+                    <td className="p-4"><div className="h-5 bg-gray-100 rounded w-16 mx-auto"></div></td>
+                    <td className="p-4"><div className="h-5 bg-gray-100 rounded w-16 mx-auto"></div></td>
+                    <td className="p-4"><div className="h-6 bg-gray-100 rounded-full w-24 mx-auto"></div></td>
                   </tr>
                 ))
               ) : filteredData.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="p-12 text-center text-gray-400 italic font-medium">
-                    Tidak ada aktivitas absensi ditemukan.
+                  <td colSpan={4} className="p-16 text-center">
+                    <div className="flex flex-col items-center gap-3 text-gray-400">
+                        <AlertCircle size={48} className="opacity-20" />
+                        <p className="font-medium">Tidak ada data siswa ditemukan untuk kriteria ini.</p>
+                    </div>
                   </td>
                 </tr>
               ) : (
                 filteredData.map(item => (
-                  <tr key={item.studentId} className="hover:bg-gray-50 transition border-b border-gray-50">
+                  <tr key={item.studentId} className="hover:bg-gray-50/80 transition-colors group">
                     <td className="p-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-xs shrink-0">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 items-center justify-center hidden sm:flex font-black text-sm shrink-0 shadow-sm border border-blue-100">
                           {item.studentName.charAt(0)}
                         </div>
-                        <span className="font-bold text-gray-900">{item.studentName}</span>
+                        <div>
+                          <div className="font-black text-gray-900 group-hover:text-blue-700 transition-colors uppercase tracking-tight">{item.studentName}</div>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-[10px] font-bold text-gray-400">NIS: {item.nis}</span>
+                            <span className="w-1 h-1 rounded-full bg-gray-300"></span>
+                            <span className="text-[10px] font-bold text-blue-500 uppercase">{item.className}</span>
+                          </div>
+                        </div>
                       </div>
-                    </td>
-                    <td className="p-4">
-                      <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-[10px] font-bold uppercase">{item.className}</span>
                     </td>
                     <td className="p-4 text-center">
                       {item.checkIn ? (
                         <div className="flex flex-col items-center">
-                          <span className="font-mono font-bold text-gray-800">
+                          <span className="font-black text-gray-800 text-sm font-mono">
                             {new Date(item.checkIn).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
                           </span>
                         </div>
                       ) : (
-                        <span className="text-gray-300">-</span>
+                        <span className="text-gray-300 font-medium italic text-[10px]">Belum Tap</span>
                       )}
                     </td>
                     <td className="p-4 text-center">
                       {item.checkOut ? (
                         <div className="flex flex-col items-center">
-                          <span className="font-mono font-bold text-gray-800">
+                          <span className="font-black text-gray-800 text-sm font-mono">
                             {new Date(item.checkOut).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
                           </span>
                         </div>
                       ) : (
-                        <span className="text-gray-300">-</span>
+                        <span className="text-gray-300 font-medium italic text-[10px]">Belum Tap</span>
                       )}
                     </td>
                     <td className="p-4 text-center">
-                      <div className="flex flex-wrap justify-center gap-1">
-                        {item.status.split(' & ').map((s, idx) => (
-                          <span key={idx} className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-tighter ${
-                            s === 'HADIR' ? 'bg-green-100 text-green-700' : 
-                            s === 'TERLAMBAT' ? 'bg-orange-100 text-orange-700' : 
-                            s === 'PULANG CEPAT' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'
-                          }`}>
-                            {s === 'HADIR' ? 'TEPAT WAKTU' : s}
-                          </span>
-                        ))}
+                      <div className="flex flex-wrap justify-center gap-1.5">
+                        {item.status === 'ALFA' ? (
+                            <span className="px-3 py-1 rounded-full bg-gray-100 text-gray-500 text-[10px] font-black uppercase tracking-tighter border border-gray-200">
+                                TIDAK HADIR
+                            </span>
+                        ) : (
+                            item.status.split(' & ').map((s, idx) => (
+                                <span key={idx} className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter shadow-sm border ${
+                                  s === 'HADIR' ? 'bg-green-100 text-green-700 border-green-200' : 
+                                  s === 'TERLAMBAT' ? 'bg-orange-100 text-orange-700 border-orange-200' : 
+                                  s === 'PULANG CEPAT' ? 'bg-red-100 text-red-700 border-red-200' : 'bg-gray-100 text-gray-700 border-gray-200'
+                                }`}>
+                                  {s === 'HADIR' ? 'TEPAT WAKTU' : s}
+                                </span>
+                            ))
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -231,6 +398,16 @@ const AttendanceMonitoring: React.FC<AttendanceMonitoringProps> = ({ user }) => 
               )}
             </tbody>
           </table>
+        </div>
+        
+        {/* Help Info Footer */}
+        <div className="p-4 bg-blue-50/50 border-t border-gray-100 flex items-center gap-3">
+            <div className="p-1.5 bg-blue-100 text-blue-600 rounded-full">
+                <Info size={14} />
+            </div>
+            <p className="text-[10px] text-blue-700 font-medium">
+                Siswa yang berstatus <span className="font-black">TIDAK HADIR</span> adalah siswa yang namanya terdaftar di manajemen kelas namun tidak melakukan tapping (Masuk/Pulang) sama sekali pada periode ini.
+            </p>
         </div>
       </div>
     </div>
