@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { User, RfidLog, SystemSettings, Student, ClassRoom } from '../types';
-import { getRfidLogsByRange, getSystemSettings, getSchoolStudents, getSchoolClasses, clearAllRfidLogsByDate } from '../services/database';
+import { getRfidLogsByRange, getSystemSettings, getSchoolStudents, getSchoolClasses, clearAllRfidLogsByDate, clearAllRfidLogsByRange } from '../services/database';
 import { 
   ClipboardList, Search, Calendar, Filter, 
   Download, Printer, CheckCircle, Clock, 
@@ -22,6 +22,9 @@ interface AggregatedAttendance {
   className: string;
   checkIn: string | null;
   checkOut: string | null;
+  presentCount?: number;
+  lateCount?: number;
+  earlyLeaveCount?: number;
   status: 'HADIR' | 'TERLAMBAT' | 'PULANG CEPAT' | 'TERLAMBAT & PULANG CEPAT' | 'ALFA' | 'TANPA TAP';
 }
 
@@ -36,13 +39,14 @@ const AttendanceMonitoring: React.FC<AttendanceMonitoringProps> = ({ user }) => 
   const [filterMode, setFilterMode] = useState<'DAILY' | 'MONTHLY' | 'SEMESTER'>('DAILY');
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
+  const [selectedSemester, setSelectedSemester] = useState<'Ganjil' | 'Genap'>(new Date().getMonth() >= 6 ? 'Ganjil' : 'Genap');
   const [activeClassId, setActiveClassId] = useState<string>('ALL');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'HADIR' | 'TERLAMBAT' | 'PULANG CEPAT' | 'ALFA'>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     fetchData();
-  }, [selectedDate, selectedMonth, filterMode]);
+  }, [selectedDate, selectedMonth, selectedSemester, filterMode]);
 
   const fetchData = async () => {
     if (!user.schoolNpsn) return;
@@ -53,14 +57,19 @@ const AttendanceMonitoring: React.FC<AttendanceMonitoringProps> = ({ user }) => 
 
     if (filterMode === 'MONTHLY') {
         startDate = `${selectedMonth}-01`;
-        const lastDay = new Date(new Date(selectedMonth).getFullYear(), new Date(selectedMonth).getMonth() + 1, 0).getDate();
+        const dateObj = new Date(selectedMonth);
+        const lastDay = new Date(dateObj.getFullYear(), dateObj.getMonth() + 1, 0).getDate();
         endDate = `${selectedMonth}-${lastDay}`;
     } else if (filterMode === 'SEMESTER') {
         const now = new Date();
         const year = now.getFullYear();
-        const startYear = now.getMonth() >= 6 ? year : year - 1;
-        startDate = `${startYear}-07-01`;
-        endDate = `${startYear + 1}-06-30`;
+        if (selectedSemester === 'Ganjil') { // July-Dec
+            startDate = `${year}-07-01`;
+            endDate = `${year}-12-31`;
+        } else { // Jan-June
+            startDate = `${year}-01-01`;
+            endDate = `${year}-06-30`;
+        }
     }
 
     const [logData, studentData, classData, settingsData] = await Promise.all([
@@ -93,18 +102,15 @@ const AttendanceMonitoring: React.FC<AttendanceMonitoringProps> = ({ user }) => 
         : students.filter(s => s.classId === activeClassId);
 
     targetStudents.forEach(student => {
-        // Filter logs for this student
         const studentLogs = logs.filter(l => l.studentId === student.id);
         const className = classes.find(c => c.id === student.classId)?.name || 'TPS';
         
         if (filterMode === 'DAILY') {
-            // For daily, one entry per student
             let checkIn: string | null = null;
             let checkOut: string | null = null;
             let status: AggregatedAttendance['status'] = 'ALFA';
 
             if (studentLogs.length > 0) {
-                // Find earliest check-in and latest check-out
                 const inLogs = studentLogs.filter(l => l.status === 'HADIR' || l.status === 'TERLAMBAT');
                 if (inLogs.length > 0) {
                     checkIn = inLogs.sort((a, b) => a.timestamp.localeCompare(b.timestamp))[0].timestamp;
@@ -120,32 +126,84 @@ const AttendanceMonitoring: React.FC<AttendanceMonitoringProps> = ({ user }) => 
                         status = status === 'TERLAMBAT' ? 'TERLAMBAT & PULANG CEPAT' : 'PULANG CEPAT';
                     }
                 }
-
                 if (!checkIn && !checkOut) status = 'ALFA';
-                else if (status === 'HADIR') status = 'HADIR'; // On Time
             }
 
             list.push({
                 studentId: student.id,
                 studentName: student.name,
                 nis: student.nis || '-',
-                className: className,
+                className,
                 checkIn,
                 checkOut,
                 status: status as any
             });
+        } else {
+            // Group logs by date to count days
+            const daysMap: { [date: string]: RfidLog[] } = {};
+            studentLogs.forEach(log => {
+                const date = log.timestamp.split('T')[0];
+                if (!daysMap[date]) daysMap[date] = [];
+                daysMap[date].push(log);
+            });
+
+            let presentCount = 0;
+            let lateCount = 0;
+            let earlyLeaveCount = 0;
+
+            Object.entries(daysMap).forEach(([date, logs]) => {
+                const dayInLogs = logs.filter(l => l.status === 'HADIR' || l.status === 'TERLAMBAT');
+                const dayOutLogs = logs.filter(l => l.status === 'PULANG');
+                
+                if (dayInLogs.length > 0 || dayOutLogs.length > 0) {
+                    presentCount++;
+                    
+                    const firstIn = dayInLogs.sort((a, b) => a.timestamp.localeCompare(b.timestamp))[0];
+                    if (firstIn) {
+                        const inTime = new Date(firstIn.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false });
+                        if (inTime > checkInLate) lateCount++;
+                    }
+
+                    const lastOut = dayOutLogs.sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0];
+                    if (lastOut) {
+                        const outTime = new Date(lastOut.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false });
+                        if (outTime < checkOutStart) earlyLeaveCount++;
+                    }
+                }
+            });
+
+            list.push({
+                studentId: student.id,
+                studentName: student.name,
+                nis: student.nis || '-',
+                className,
+                presentCount,
+                lateCount,
+                earlyLeaveCount,
+                status: presentCount > 0 ? 'HADIR' : 'ALFA'
+            } as any);
         }
     });
 
     return list.sort((a, b) => a.studentName.localeCompare(b.studentName));
-  }, [logs, students, settings, activeClassId, filterMode]);
+  }, [logs, students, settings, activeClassId, filterMode, selectedMonth, selectedSemester]);
 
   const filteredData = attendanceData.filter(d => {
     const matchesSearch = d.studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          d.nis.toLowerCase().includes(searchTerm.toLowerCase());
     
-    const matchesStatus = statusFilter === 'ALL' || 
-                         (statusFilter === 'ALFA' ? d.status === 'ALFA' : d.status.includes(statusFilter));
+    let matchesStatus = true;
+    if (statusFilter !== 'ALL') {
+        if (filterMode === 'DAILY') {
+            matchesStatus = statusFilter === 'ALFA' ? d.status === 'ALFA' : d.status.includes(statusFilter);
+        } else {
+            // Aggregate mode
+            if (statusFilter === 'HADIR') matchesStatus = (d.presentCount || 0) > 0;
+            else if (statusFilter === 'TERLAMBAT') matchesStatus = (d.lateCount || 0) > 0;
+            else if (statusFilter === 'PULANG CEPAT') matchesStatus = (d.earlyLeaveCount || 0) > 0;
+            else if (statusFilter === 'ALFA') matchesStatus = (d.presentCount || 0) === 0;
+        }
+    }
     
     return matchesSearch && matchesStatus;
   });
@@ -164,33 +222,66 @@ const AttendanceMonitoring: React.FC<AttendanceMonitoringProps> = ({ user }) => 
   }, [attendanceData]);
 
   const handleExport = () => {
-    const data = attendanceData.map(d => ({
-        'NIS': d.nis,
-        'Nama Siswa': d.studentName,
-        'Kelas': d.className,
-        'Jam Datang': d.checkIn ? new Date(d.checkIn).toLocaleTimeString('id-ID') : '-',
-        'Jam Pulang': d.checkOut ? new Date(d.checkOut).toLocaleTimeString('id-ID') : '-',
-        'Status': d.status
-    }));
+    const data = attendanceData.map(d => {
+        if (filterMode === 'DAILY') {
+            return {
+                'NIS': d.nis,
+                'Nama Siswa': d.studentName,
+                'Kelas': d.className,
+                'Jam Datang': d.checkIn ? new Date(d.checkIn).toLocaleTimeString('id-ID') : '-',
+                'Jam Pulang': d.checkOut ? new Date(d.checkOut).toLocaleTimeString('id-ID') : '-',
+                'Status': d.status
+            };
+        } else {
+            return {
+                'NIS': d.nis,
+                'Nama Siswa': d.studentName,
+                'Kelas': d.className,
+                'Hari Hadir': d.presentCount || 0,
+                'Terlambat': d.lateCount || 0,
+                'Pulang Cepat': d.earlyLeaveCount || 0,
+                'Status Akhir': d.status
+            };
+        }
+    });
 
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Laporan Absensi RFID");
-    XLSX.writeFile(wb, `Absensi_RFID_${filterMode}_${selectedDate || selectedMonth}.xlsx`);
+    XLSX.writeFile(wb, `Laporan_Absensi_RFID_${filterMode}_${selectedDate || selectedMonth || selectedSemester}.xlsx`);
   };
 
   const handleDeleteLogs = async () => {
-    if (!window.confirm('Apakah Anda yakin ingin menghapus seluruh log absensi pada tanggal/periode ini? Tindakan ini tidak dapat dibatalkan.')) return;
+    const confirmMsg = filterMode === 'DAILY' 
+        ? `Hapus seluruh log absensi RFID tanggal ${selectedDate}?`
+        : filterMode === 'MONTHLY'
+            ? `Hapus seluruh log absensi RFID bulan ${selectedMonth}?`
+            : `Hapus seluruh log absensi RFID Semester ${selectedSemester}?`;
+
+    if (!window.confirm(confirmMsg + ' Tindakan ini tidak dapat dibatalkan.')) return;
     
     try {
         if (filterMode === 'DAILY') {
             await clearAllRfidLogsByDate(user.schoolNpsn || '', selectedDate);
         } else {
-             // For range, we'd need loop or bulk delete by range. 
-             // Simplifying to current selected day for safety unless user wants wider.
-             alert("Penghapusan massal hanya tersedia pada mode Harian.");
-             return;
+            let startDate = '';
+            let endDate = '';
+            if (filterMode === 'MONTHLY') {
+                startDate = `${selectedMonth}-01`;
+                const dateObj = new Date(selectedMonth);
+                const lastDay = new Date(dateObj.getFullYear(), dateObj.getMonth() + 1, 0).getDate();
+                endDate = `${selectedMonth}-${lastDay}`;
+            } else {
+                const year = new Date().getFullYear();
+                if (selectedSemester === 'Ganjil') {
+                    startDate = `${year}-07-01`; endDate = `${year}-12-31`;
+                } else {
+                    startDate = `${year}-01-01`; endDate = `${year}-06-30`;
+                }
+            }
+            await clearAllRfidLogsByRange(user.schoolNpsn || '', startDate, endDate);
         }
+        alert("Data berhasil dihapus.");
         fetchData();
     } catch (e) {
         alert("Gagal menghapus data.");
@@ -240,6 +331,16 @@ const AttendanceMonitoring: React.FC<AttendanceMonitoringProps> = ({ user }) => 
                     value={selectedMonth}
                     onChange={e => setSelectedMonth(e.target.value)}
                 />
+            )}
+            {filterMode === 'SEMESTER' && (
+                <select 
+                    className="px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                    value={selectedSemester}
+                    onChange={e => setSelectedSemester(e.target.value as 'Ganjil' | 'Genap')}
+                >
+                    <option value="Ganjil">Semester Ganjil (Jul - Des)</option>
+                    <option value="Genap">Semester Genap (Jan - Jun)</option>
+                </select>
             )}
 
             <div className="flex gap-2">
@@ -340,9 +441,9 @@ const AttendanceMonitoring: React.FC<AttendanceMonitoringProps> = ({ user }) => 
             <thead>
               <tr className="bg-gray-50 text-gray-600 font-bold border-b border-gray-100 uppercase text-[10px] tracking-widest">
                 <th className="p-4">Identitas Siswa</th>
-                <th className="p-4 text-center">Jam Datang</th>
-                <th className="p-4 text-center">Jam Pulang</th>
-                <th className="p-4 text-center">Status Kehadiran</th>
+                <th className="p-4 text-center">{filterMode === 'DAILY' ? 'Jam Datang' : 'Hari Hadir'}</th>
+                <th className="p-4 text-center">{filterMode === 'DAILY' ? 'Jam Pulang' : 'Total Terlambat'}</th>
+                <th className="p-4 text-center">{filterMode === 'DAILY' ? 'Status Kehadiran' : 'Total Pulang Cepat'}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -383,45 +484,57 @@ const AttendanceMonitoring: React.FC<AttendanceMonitoringProps> = ({ user }) => 
                       </div>
                     </td>
                     <td className="p-4 text-center">
-                      {item.checkIn ? (
-                        <div className="flex flex-col items-center">
-                          <span className="font-black text-gray-800 text-sm font-mono">
-                            {new Date(item.checkIn).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="text-gray-300 font-medium italic text-[10px]">Belum Tap</span>
-                      )}
-                    </td>
-                    <td className="p-4 text-center">
-                      {item.checkOut ? (
-                        <div className="flex flex-col items-center">
-                          <span className="font-black text-gray-800 text-sm font-mono">
-                            {new Date(item.checkOut).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="text-gray-300 font-medium italic text-[10px]">Belum Tap</span>
-                      )}
-                    </td>
-                    <td className="p-4 text-center">
-                      <div className="flex flex-wrap justify-center gap-1.5">
-                        {item.status === 'ALFA' ? (
-                            <span className="px-3 py-1 rounded-full bg-gray-100 text-gray-500 text-[10px] font-black uppercase tracking-tighter border border-gray-200">
-                                TIDAK HADIR
-                            </span>
+                      {filterMode === 'DAILY' ? (
+                        item.checkIn ? (
+                            <div className="flex flex-col items-center">
+                              <span className="font-black text-gray-800 text-sm font-mono">
+                                {new Date(item.checkIn).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
                         ) : (
-                            item.status.split(' & ').map((s, idx) => (
-                                <span key={idx} className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter shadow-sm border ${
-                                  s === 'HADIR' ? 'bg-green-100 text-green-700 border-green-200' : 
-                                  s === 'TERLAMBAT' ? 'bg-orange-100 text-orange-700 border-orange-200' : 
-                                  s === 'PULANG CEPAT' ? 'bg-red-100 text-red-700 border-red-200' : 'bg-gray-100 text-gray-700 border-gray-200'
-                                }`}>
-                                  {s === 'HADIR' ? 'TEPAT WAKTU' : s}
+                            <span className="text-gray-300 font-medium italic text-[10px]">Belum Tap</span>
+                        )
+                      ) : (
+                        <span className="font-bold text-blue-600">{item.presentCount || 0} Hari</span>
+                      )}
+                    </td>
+                    <td className="p-4 text-center">
+                      {filterMode === 'DAILY' ? (
+                        item.checkOut ? (
+                            <div className="flex flex-col items-center">
+                              <span className="font-black text-gray-800 text-sm font-mono">
+                                {new Date(item.checkOut).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                        ) : (
+                            <span className="text-gray-300 font-medium italic text-[10px]">Belum Tap</span>
+                        )
+                      ) : (
+                        <span className={`font-bold ${(item.lateCount || 0) > 0 ? 'text-orange-600' : 'text-gray-400'}`}>{item.lateCount || 0} Kali</span>
+                      )}
+                    </td>
+                    <td className="p-4 text-center">
+                      {filterMode === 'DAILY' ? (
+                        <div className="flex flex-wrap justify-center gap-1.5">
+                            {item.status === 'ALFA' ? (
+                                <span className="px-3 py-1 rounded-full bg-gray-100 text-gray-500 text-[10px] font-black uppercase tracking-tighter border border-gray-200">
+                                    TIDAK HADIR
                                 </span>
-                            ))
-                        )}
-                      </div>
+                            ) : (
+                                item.status.split(' & ').map((s, idx) => (
+                                    <span key={idx} className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter shadow-sm border ${
+                                      s === 'HADIR' ? 'bg-green-100 text-green-700 border-green-200' : 
+                                      s === 'TERLAMBAT' ? 'bg-orange-100 text-orange-700 border-orange-200' : 
+                                      s === 'PULANG CEPAT' ? 'bg-red-100 text-red-700 border-red-200' : 'bg-gray-100 text-gray-700 border-gray-200'
+                                    }`}>
+                                      {s === 'HADIR' ? 'TEPAT WAKTU' : s}
+                                    </span>
+                                ))
+                            )}
+                        </div>
+                      ) : (
+                        <span className={`font-bold ${(item.earlyLeaveCount || 0) > 0 ? 'text-rose-600' : 'text-gray-400'}`}>{item.earlyLeaveCount || 0} Kali</span>
+                      )}
                     </td>
                   </tr>
                 ))

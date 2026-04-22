@@ -4,7 +4,8 @@ import { User, Student, RfidLog, SystemSettings } from '../types';
 import { getStudentByRfid, saveRfidLog, getSystemSettings } from '../services/database';
 import { 
   Wifi, WifiOff, Smartphone, IdCard, 
-  CheckCircle, AlertCircle, Clock, ArrowLeftRight 
+  CheckCircle, AlertCircle, Clock, ArrowLeftRight,
+  Activity
 } from './Icons';
 
 interface RfidTerminalProps {
@@ -196,6 +197,33 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
               Web Serial
             </button>
           </div>
+        </div>
+
+        {/* Status Alat Monitoring */}
+        <div className="bg-gray-50 px-8 py-3 flex items-center justify-between border-b border-gray-100">
+            <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                    <div className={`w-3 h-3 rounded-full ${status !== 'ERROR' ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+                    <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Sistem Ready</span>
+                </div>
+                <div className="h-4 w-px bg-gray-200" />
+                <div className="flex items-center gap-1.5">
+                    <Activity size={14} className="text-blue-500" />
+                    <span className="text-[10px] font-bold text-gray-500">
+                        {method === 'KEYBOARD' ? 'Menunggu Input Keyboard (HID)' : serialConnected ? 'Komunikasi Serial Aktif' : 'Hardware Belum Terkonek'}
+                    </span>
+                </div>
+            </div>
+            <div className="flex items-center gap-2">
+                <input 
+                    type="text" 
+                    readOnly 
+                    placeholder="Area Tes Scanner..."
+                    className="bg-white border border-gray-200 rounded px-2 py-1 text-[10px] w-32 focus:ring-1 focus:ring-blue-400 outline-none"
+                    onFocus={(e) => e.target.placeholder = "Tap kartu sekarang..."}
+                    onBlur={(e) => e.target.placeholder = "Area Tes Scanner..."}
+                />
+            </div>
         </div>
 
         <div className="p-8 md:p-12 text-center space-y-8">
