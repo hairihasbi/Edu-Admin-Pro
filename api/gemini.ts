@@ -235,7 +235,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
           // INCREMENT USAGE AFTER SUCCESSFUL START
           if (currentUser.role === 'GURU') {
-              incrementUsage(currentUser.userId).catch(console.error);
+              try {
+                  await incrementUsage(currentUser.userId);
+              } catch (e) {
+                  console.error("Failed to increment usage (Custom Gateway):", e);
+              }
           }
 
           res.setHeader('Content-Type', 'text/plain; charset=utf-8');
@@ -283,6 +287,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       allKeys.push({ name: key, value: process.env[key] as string });
     }
   });
+  if (allKeys.length === 0 && process.env.GEMINI_API_KEY) {
+    allKeys.push({ name: 'GEMINI_API_KEY', value: process.env.GEMINI_API_KEY });
+  }
   if (allKeys.length === 0 && process.env.API_KEY) {
     allKeys.push({ name: 'API_KEY', value: process.env.API_KEY });
   }
@@ -360,7 +367,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       
       // INCREMENT USAGE FOR USER
       if (currentUser.role === 'GURU') {
-          incrementUsage(currentUser.userId).catch(console.error);
+          try {
+              await incrementUsage(currentUser.userId);
+          } catch (e) {
+              console.error("Failed to increment usage (Critical):", e);
+          }
       }
 
       res.setHeader('Content-Type', 'text/plain; charset=utf-8');
@@ -436,13 +447,17 @@ async function incrementUsage(userId: string) {
         try {
             const client = createClient({ url, authToken, fetch: fetch as any });
             const currentMonth = new Date().toISOString().slice(0, 7);
+            
+            // Use COALESCE to handle NULL values (initialize to 0 if null)
             await client.execute({
-                sql: "UPDATE users SET rpp_usage_count = rpp_usage_count + 1, rpp_last_reset = ?, last_modified = ? WHERE id = ?",
+                sql: "UPDATE users SET rpp_usage_count = COALESCE(rpp_usage_count, 0) + 1, rpp_last_reset = ?, last_modified = ? WHERE id = ?",
                 args: [currentMonth, Date.now(), userId]
             });
+            console.log(`[QUOTA] Incremented usage for user ${userId}`);
             client.close();
         } catch (e) {
             console.error("Failed to increment usage stats:", e);
+            throw e; // Re-throw to be caught by caller
         }
     }
 }
