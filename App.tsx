@@ -42,6 +42,7 @@ import CbtExamEnvironment from './components/CbtExamEnvironment';
 import StudentDashboard from './components/StudentDashboard';
 import RfidTerminal from './components/RfidTerminal';
 import RfidOfficerManager from './components/RfidOfficerManager';
+import RfidSecurityManager from './components/RfidSecurityManager';
 import AttendanceMonitoring from './components/AttendanceMonitoring';
 import Breadcrumbs from './components/Breadcrumbs';
 import OnboardingTour from './components/OnboardingTour';
@@ -77,6 +78,7 @@ import {
   UserCheck,
   DownloadCloud,
   RefreshCcw,
+  Shield,
   Wifi,
   WifiOff,
   Smartphone,
@@ -917,6 +919,7 @@ const AppContent: React.FC = () => {
                     <NavLink to="/absensi-rfid" icon={IdCard} label="Terminal RFID" />
                     <NavLink to="/attendance-monitoring" icon={Clock} label="Pantau Absensi RFID" />
                     <NavLink to="/rfid-officers" icon={UserCheck} label="Petugas RFID" />
+                    <NavLink to="/rfid-security" icon={Shield} label="Manajemen & Keamanan RFID" />
                     <NavLink to="/supervision-assessment" icon={ClipboardCheck} label="Instrumen Supervisi" />
                     <NavLink to="/supervision-results" icon={ClipboardCheck} label="Hasil Supervisi" />
                     <NavLink to="/sync" icon={ArrowLeftRight} label="Sinkronisasi Data" />
@@ -942,6 +945,9 @@ const AppContent: React.FC = () => {
                     )}
                     <NavLink to="/picket" icon={CalendarCheck} label="Piket Harian" />
                     <NavLink to="/absensi-rfid" icon={IdCard} label="Terminal RFID" />
+                    {currentUser.isRfidOfficer && (
+                      <NavLink to="/rfid-security" icon={Shield} label="Manajemen & Keamanan RFID" />
+                    )}
                     {( (currentUser.additionalRole as any) === 'KEPALA_SEKOLAH' || currentUser.additionalRole === 'WAKASEK_KURIKULUM' || currentUser.homeroomClassId || currentUser.subject === 'Bimbingan Konseling') && (
                       <NavLink to="/attendance-monitoring" icon={Clock} label="Pantau Absensi RFID" />
                     )}
