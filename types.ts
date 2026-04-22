@@ -65,6 +65,9 @@ export interface SystemSettings extends Syncable {
   rfidCheckInStart?: string; // e.g. "06:00"
   rfidCheckInLate?: string; // e.g. "07:30"
   rfidCheckOutStart?: string; // e.g. "14:00"
+  rfidCooldownSeconds?: number; // Time between scans for same card
+  rfidAntiDuplicateMinutes?: number; // Time between scans for same student across different devices
+  rfidBlockedTags?: string[]; // List of lost/blocked card IDs
   // AI Configuration (LiteLLM / Custom Gateway)
   aiProvider?: 'GOOGLE' | 'CUSTOM';
   aiBaseUrl?: string; // e.g. https://my-litellm.com/v1
@@ -168,6 +171,7 @@ export interface RfidLog extends Syncable {
   timestamp: string;
   status: 'HADIR' | 'PULANG' | 'TERLAMBAT' | 'IZIN';
   method: 'KEYBOARD' | 'SERIAL';
+  deviceId?: string; // NEW: To track which pos/device sent the log
 }
 export interface AttendanceRecord extends Syncable {
   id: string;
