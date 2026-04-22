@@ -561,33 +561,14 @@ export interface CbtAttempt extends Syncable {
 export interface BackupData {
   meta: {
     version: string;
+    dbVersion: number;
     date: string;
     generatedBy: string;
     role: UserRole;
     semesterFilter?: string;
   };
   data: {
-    users?: User[];
-    classes: ClassRoom[];
-    students: Student[];
-    scopeMaterials: ScopeMaterial[];
-    assessmentScores: AssessmentScore[];
-    teachingJournals: TeachingJournal[];
-    classInventory?: ClassInventory[];
-    teachingSchedules?: TeachingSchedule[];
-    attendanceRecords?: AttendanceRecord[];
-    masterSubjects?: MasterSubject[]; 
-    tickets?: Ticket[];
-    violations?: StudentViolation[]; 
-    pointReductions?: StudentPointReduction[]; // Added
-    achievements?: StudentAchievement[]; 
-    counselingSessions?: CounselingSession[]; 
-    notifications?: Notification[];
-    apiKeys?: ApiKey[]; // Include keys in backup
-    systemSettings?: SystemSettings[]; // Include settings
-    cbtExams?: CbtExam[];
-    cbtQuestions?: CbtQuestion[];
-    cbtAttempts?: CbtAttempt[];
+    [tableName: string]: any[];
   };
 }
 
