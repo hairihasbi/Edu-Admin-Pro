@@ -2365,6 +2365,19 @@ export const clearAllRfidLogsByDate = async (schoolNpsn: string, date: string) =
     return true;
 };
 
+export const clearAllRfidLogsByRange = async (schoolNpsn: string, startDate: string, endDate: string) => {
+    const logs = await db.rfidLogs.where('schoolNpsn').equals(schoolNpsn).toArray();
+    const toDelete = logs.filter(l => {
+        const d = l.timestamp.split('T')[0];
+        return d >= startDate && d <= endDate;
+    }).map(l => l.id as string);
+    if (toDelete.length > 0) {
+        await db.rfidLogs.bulkDelete(toDelete);
+        triggerDebouncedSync();
+    }
+    return true;
+};
+
 export const updateRfidOfficerStatus = async (userId: string, isRfidOfficer: boolean) => {
   await db.users.update(userId, {
     isRfidOfficer,
