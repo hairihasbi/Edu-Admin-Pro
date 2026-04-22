@@ -3,11 +3,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { User, ClassRoom, Student } from '../types';
 import { 
   getClasses, addClass, deleteClass, 
-  getStudents, addStudent, deleteStudent, bulkDeleteStudents, importStudentsFromCSV 
+  getStudents, addStudent, deleteStudent, bulkDeleteStudents, importStudentsFromCSV,
+  updateStudentRfid
 } from '../services/database';
 import { 
   Plus, Search, Trash2, Users, ChevronLeft, Upload, 
-  Download, FileSpreadsheet, MoreVertical, CheckCircle, X, Check, Filter, Smartphone 
+  Download, FileSpreadsheet, MoreVertical, CheckCircle, X, Check, Filter, Smartphone,
+  IdCard, Wifi
 } from './Icons';
 import Skeleton from './Skeleton';
 import BroadcastModal from './BroadcastModal';
@@ -44,6 +46,13 @@ const TeacherClasses: React.FC<TeacherClassesProps> = ({ user }) => {
 
   // Broadcast
   const [isBroadcastOpen, setIsBroadcastOpen] = useState(false);
+
+  // RFID Registration
+  const [isRfidModalOpen, setIsRfidModalOpen] = useState(false);
+  const [rfidStudent, setRfidStudent] = useState<Student | null>(null);
+  const [tempRfid, setTempRfid] = useState('');
+  const [rfidStatus, setRfidStatus] = useState<'IDLE' | 'SUCCESS' | 'ERROR'>('IDLE');
+  const rfidInputRef = useRef<HTMLInputElement>(null);
 
   // --- INITIAL LOAD ---
   useEffect(() => {
@@ -237,12 +246,43 @@ const TeacherClasses: React.FC<TeacherClassesProps> = ({ user }) => {
     reader.readAsText(file);
   };
 
+  const handleBroadcast = () => {
+      setIsBroadcastOpen(true);
+  };
+
+  // --- RFID ACTIONS ---
+  const openRfidModal = (student: Student) => {
+    setRfidStudent(student);
+    setTempRfid(student.rfidTag || '');
+    setIsRfidModalOpen(true);
+    setRfidStatus('IDLE');
+    setTimeout(() => rfidInputRef.current?.focus(), 300);
+  };
+
+  const handleRfidKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleRegisterRfid();
+    }
+  };
+
+  const handleRegisterRfid = async () => {
+    if (!rfidStudent || !tempRfid) return;
+    const success = await updateStudentRfid(rfidStudent.id, tempRfid);
+    if (success) {
+      setStudents(prev => prev.map(s => s.id === rfidStudent.id ? { ...s, rfidTag: tempRfid } : s));
+      setRfidStatus('SUCCESS');
+      setTimeout(() => setIsRfidModalOpen(false), 1500);
+    } else {
+      setRfidStatus('ERROR');
+    }
+  };
   const getStudentsForBroadcast = () => {
-      if (selectedStudentIds.size > 0) {
-          return students.filter(s => selectedStudentIds.has(s.id));
-      }
-      // If none selected, send to all in class
-      return students; 
+    if (selectedStudentIds.size > 0) {
+        return students.filter(s => selectedStudentIds.has(s.id));
+    }
+    // If none selected, send to all in class
+    return students; 
   };
   
   if (view === 'list') {
@@ -514,13 +554,24 @@ const TeacherClasses: React.FC<TeacherClassesProps> = ({ user }) => {
                         </td>
                         <td className="p-4 text-gray-600 text-xs">{student.phone || '-'}</td>
                         <td className="p-4 text-center">
-                          <button 
-                            onClick={() => handleDeleteStudent(student.id)}
-                            className="text-gray-400 hover:text-red-500 transition p-2"
-                            title="Hapus Siswa"
-                          >
-                            <Trash2 size={16} />
-                          </button>
+                          <div className="flex items-center justify-center gap-1">
+                            {user.isRfidOfficer && (
+                              <button 
+                                onClick={() => openRfidModal(student)}
+                                className={`p-2 transition rounded-full ${student.rfidTag ? 'text-green-500 hover:bg-green-50' : 'text-blue-500 hover:bg-blue-50'}`}
+                                title={student.rfidTag ? 'Ubah RFID' : 'Daftarkan RFID'}
+                              >
+                                <IdCard size={16} />
+                              </button>
+                            )}
+                            <button 
+                              onClick={() => handleDeleteStudent(student.id)}
+                              className="text-gray-400 hover:text-red-500 transition p-2"
+                              title="Hapus Siswa"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -556,7 +607,17 @@ const TeacherClasses: React.FC<TeacherClassesProps> = ({ user }) => {
                           {student.phone && <p className="text-xs text-gray-400 mt-1">{student.phone}</p>}
                         </div>
                       </div>
-                      <button onClick={(e) => { e.stopPropagation(); handleDeleteStudent(student.id); }} className="text-gray-300 hover:text-red-500 p-2 ml-2"><Trash2 size={20} /></button>
+                      <div className="flex items-center gap-2">
+                        {user.isRfidOfficer && (
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); openRfidModal(student); }} 
+                            className={`p-2 rounded-full ${student.rfidTag ? 'text-green-500' : 'text-blue-500'}`}
+                          >
+                            <IdCard size={20} />
+                          </button>
+                        )}
+                        <button onClick={(e) => { e.stopPropagation(); handleDeleteStudent(student.id); }} className="text-gray-300 hover:text-red-500 p-2 ml-2"><Trash2 size={20} /></button>
+                      </div>
                     </div>
                   ))
                 )}
@@ -607,6 +668,59 @@ const TeacherClasses: React.FC<TeacherClassesProps> = ({ user }) => {
 
       {isBroadcastOpen && (
           <BroadcastModal user={user} recipients={getStudentsForBroadcast()} onClose={() => setIsBroadcastOpen(false)}/>
+      )}
+
+      {isRfidModalOpen && rfidStudent && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-[60] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 text-center animate-in zoom-in duration-200">
+            <div className={`w-20 h-20 mx-auto rounded-full flex items-center justify-center mb-6 ${
+              rfidStatus === 'SUCCESS' ? 'bg-green-100 text-green-600' : 
+              rfidStatus === 'ERROR' ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'
+            }`}>
+              {rfidStatus === 'SUCCESS' ? <CheckCircle size={40} /> : <IdCard size={40} />}
+            </div>
+            
+            <h3 className="text-xl font-bold text-gray-900 mb-2">Registrasi RFID</h3>
+            <p className="text-gray-500 text-sm mb-6">Silakan Tap Kartu untuk <strong>{rfidStudent.name}</strong></p>
+            
+            <div className="space-y-4">
+              <input 
+                ref={rfidInputRef}
+                type="text" 
+                value={tempRfid}
+                onChange={e => setTempRfid(e.target.value)}
+                onKeyDown={handleRfidKeyDown}
+                placeholder="ID Tag akan muncul di sini..."
+                className="w-full text-center border-2 border-gray-100 rounded-xl p-3 focus:border-blue-500 outline-none font-mono text-lg"
+              />
+              
+              {rfidStatus === 'SUCCESS' ? (
+                <p className="text-green-600 font-bold flex items-center justify-center gap-2">
+                  <Check size={18} /> Berhasil Terdaftar!
+                </p>
+              ) : (
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => setIsRfidModalOpen(false)}
+                    className="flex-1 px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-200"
+                  >
+                    Batal
+                  </button>
+                  <button 
+                    onClick={handleRegisterRfid}
+                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
+                  >
+                    Simpan
+                  </button>
+                </div>
+              )}
+            </div>
+            
+            <p className="mt-6 text-[10px] text-gray-400 uppercase tracking-widest flex items-center justify-center gap-2">
+              <Wifi size={12} /> Keyboard Emulator Aktif
+            </p>
+          </div>
+        </div>
       )}
     </div>
   );
