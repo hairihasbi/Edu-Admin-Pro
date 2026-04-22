@@ -7,7 +7,7 @@ import {
   StudentViolation, StudentPointReduction, StudentAchievement, CounselingSession, 
   EmailConfig, WhatsAppConfig, Notification, ApiKey, SystemSettings,
   BackupData, StudentWithDetails, LessonPlanRequest, DashboardStatsData, TeacherCalendarEvent, PasswordReset, ClassInventory, HomeVisit, ParentCall, LearningStyleAssessment,
-  SupervisionAssignment, SupervisionResult, CbtExam, CbtQuestion, CbtAttempt
+  SupervisionAssignment, SupervisionResult, CbtExam, CbtQuestion, CbtAttempt, RfidLog
 } from '../types';
 import { initTurso, pushToTurso, pullFromTurso, deleteFromTurso, clearRemoteTable, requestPasswordResetApi, verifyResetTokenApi, completePasswordResetApi } from './tursoService';
 import bcrypt from 'bcryptjs';
@@ -2286,10 +2286,68 @@ export const deleteAllCbtAttemptsByExam = async (examId: string) => {
 };
 
 export const updateSupervisionAssignmentStatus = async (id: string, status: 'PENDING' | 'COMPLETED') => {
-    await db.supervisionAssignments.update(id, { 
-        status, 
-        lastModified: Date.now(), 
-        isSynced: false 
-    });
-    triggerDebouncedSync();
+  await db.supervisionAssignments.update(id, { 
+      status, 
+      lastModified: Date.now(), 
+      isSynced: false 
+  });
+  triggerDebouncedSync();
+};
+
+// --- RFID SERVICES ---
+export const updateStudentRfid = async (studentId: string, rfidTag: string) => {
+  await db.students.update(studentId, {
+    rfidTag,
+    lastModified: Date.now(),
+    isSynced: false
+  });
+  triggerDebouncedSync();
+  return true;
+};
+
+export const getStudentByRfid = async (rfidTag: string, schoolNpsn: string) => {
+  return await db.students
+    .where('schoolNpsn').equals(schoolNpsn)
+    .filter(s => s.rfidTag === rfidTag)
+    .first();
+};
+
+export const saveRfidLog = async (log: Omit<RfidLog, 'id' | 'lastModified' | 'isSynced' | 'version' | 'deleted' | 'createdAt' | 'updatedAt'>) => {
+  const toSave: RfidLog = {
+    ...log,
+    id: uuidv4(),
+    lastModified: Date.now(),
+    isSynced: false,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+  await db.rfidLogs.put(toSave);
+  triggerDebouncedSync();
+  return toSave;
+};
+
+export const getRfidLogs = async (schoolNpsn: string, date?: string) => {
+  let query = db.rfidLogs.where('schoolNpsn').equals(schoolNpsn);
+  const logs = await query.toArray();
+  if (date) {
+    return logs.filter(l => l.timestamp.startsWith(date)).sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+  }
+  return logs.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+};
+
+export const updateRfidOfficerStatus = async (userId: string, isRfidOfficer: boolean) => {
+  await db.users.update(userId, {
+    isRfidOfficer,
+    lastModified: Date.now(),
+    isSynced: false
+  });
+  triggerDebouncedSync();
+  return true;
+};
+
+export const getRfidOfficers = async (schoolNpsn: string) => {
+  return await db.users
+    .where('schoolNpsn').equals(schoolNpsn)
+    .filter(u => !!u.isRfidOfficer)
+    .toArray();
 };

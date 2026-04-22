@@ -8,7 +8,8 @@ import {
   WhatsAppConfig, Notification, ApiKey, SystemSettings, Donation, DailyPicket, StudentIncident,
   TeacherCalendarEvent, PasswordReset, ClassInventory, HomeVisit, ParentCall, LearningStyleAssessment,
   SupervisionAssignment, SupervisionResult,
-  CbtExam, CbtQuestion, CbtAttempt
+  CbtExam, CbtQuestion, CbtAttempt,
+  RfidLog
 } from '../types';
 
 export class EduAdminDatabase extends Dexie {
@@ -48,6 +49,7 @@ export class EduAdminDatabase extends Dexie {
   cbtExams!: Table<CbtExam>;
   cbtQuestions!: Table<CbtQuestion>;
   cbtAttempts!: Table<CbtAttempt>;
+  rfidLogs!: Table<RfidLog>;
 
   constructor() {
     super('EduAdminDB');
@@ -57,11 +59,11 @@ export class EduAdminDatabase extends Dexie {
     // * = Multi-entry index (not used here)
     // [field] = Indexed field for searching
     // Added schoolNpsn indexes for multi-tenancy filtering
-    // Bumped to version 33 to include targetClassIds and link support fields in cbtExams
-    (this as any).version(33).stores({
-      users: '&id, username, role, status, schoolNpsn, isSynced',
+    // Bumped to version 34 to include RfidLog support and student rfid fields
+    (this as any).version(34).stores({
+      users: '&id, username, role, status, schoolNpsn, isRfidOfficer, isSynced',
       classes: '&id, userId, schoolNpsn, name, homeroomTeacherId, isSynced', 
-      students: '&id, classId, schoolNpsn, name, nis, gender, isSynced', 
+      students: '&id, classId, schoolNpsn, name, nis, gender, rfidTag, isSynced', 
       attendanceRecords: '&id, userId, studentId, classId, date, status, isSynced', // Added status
       scopeMaterials: '&id, classId, semester, userId, isSynced', 
       assessmentScores: '&id, userId, studentId, classId, semester, category, materialId, subject, isSynced',
@@ -92,7 +94,8 @@ export class EduAdminDatabase extends Dexie {
       supervisionResults: '&id, assignmentId, supervisorId, teacherId, schoolNpsn, date, isSynced',
       cbtExams: '&id, userId, schoolNpsn, status, isSynced',
       cbtQuestions: '&id, examId, sortOrder, isSynced',
-      cbtAttempts: '&id, examId, studentId, schoolNpsn, status, isSynced'
+      cbtAttempts: '&id, examId, studentId, schoolNpsn, status, isSynced',
+      rfidLogs: '&id, studentId, classId, schoolNpsn, timestamp, status, isSynced'
     });
   }
 }
