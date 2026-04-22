@@ -46,6 +46,7 @@ const DB_SCHEMAS = [
         phase TEXT,
         secondary_subject TEXT,
         is_supervisor INTEGER DEFAULT 0,
+        is_rfid_officer INTEGER DEFAULT 0,
         last_modified INTEGER,
         version INTEGER DEFAULT 1,
         deleted INTEGER DEFAULT 0
@@ -79,6 +80,7 @@ const DB_SCHEMAS = [
         nis TEXT,
         gender TEXT,
         phone TEXT,
+        rfid_tag TEXT,
         last_modified INTEGER,
         version INTEGER DEFAULT 1,
         deleted INTEGER DEFAULT 0
@@ -673,7 +675,26 @@ const DB_SCHEMAS = [
     `CREATE INDEX IF NOT EXISTS idx_schedules_npsn ON schedules(school_npsn)`,
     `CREATE INDEX IF NOT EXISTS idx_materials_npsn ON materials(school_npsn)`,
     `CREATE INDEX IF NOT EXISTS idx_attendance_npsn ON attendance(school_npsn)`,
-    `CREATE INDEX IF NOT EXISTS idx_scores_npsn ON scores(school_npsn)`
+    `CREATE INDEX IF NOT EXISTS idx_scores_npsn ON scores(school_npsn)`,
+    // 35. RFID LOGS
+    `CREATE TABLE IF NOT EXISTS rfid_logs (
+        id TEXT PRIMARY KEY,
+        student_id TEXT,
+        student_name TEXT,
+        class_id TEXT,
+        class_name TEXT,
+        school_npsn TEXT,
+        timestamp TEXT,
+        status TEXT, -- HADIR, PULANG, TERLAMBAT, IZIN
+        method TEXT, -- KEYBOARD, SERIAL
+        last_modified INTEGER,
+        version INTEGER DEFAULT 1,
+        deleted INTEGER DEFAULT 0
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_rfid_logs_npsn ON rfid_logs(school_npsn)`,
+    `CREATE INDEX IF NOT EXISTS idx_rfid_logs_student ON rfid_logs(student_id)`,
+    `ALTER TABLE users ADD COLUMN is_rfid_officer INTEGER DEFAULT 0`,
+    `ALTER TABLE students ADD COLUMN rfid_tag TEXT`
 ];
 
 // Helper to convert undefined to null for SQL
@@ -695,11 +716,11 @@ const getTableConfig = (collection: string) => {
   switch (collection) {
     case 'eduadmin_users': return { 
         table: 'users', 
-        columns: ['id', 'username', 'password', 'full_name', 'role', 'status', 'school_name', 'school_npsn', 'nip', 'email', 'phone', 'subject', 'secondary_subject', 'is_supervisor', 'avatar', 'additional_role', 'homeroom_class_id', 'homeroom_class_name', 'rpp_usage_count', 'rpp_last_reset', 'teacher_type', 'phase', 'last_modified', 'version', 'deleted'], 
-        mapFn: (item: any) => [s(item.id), s(item.username), s(item.password), s(item.fullName), s(item.role), s(item.status), s(item.schoolName), s(item.schoolNpsn), s(item.nip), s(item.email), s(item.phone), s(item.subject), s(item.secondarySubject), item.isSupervisor ? 1 : 0, s(item.avatar), s(item.additionalRole), s(item.homeroomClassId), s(item.homeroomClassName), item.rppUsageCount || 0, s(item.rppLastReset), s(item.teacherType), s(item.phase), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] 
+        columns: ['id', 'username', 'password', 'full_name', 'role', 'status', 'school_name', 'school_npsn', 'nip', 'email', 'phone', 'subject', 'secondary_subject', 'is_supervisor', 'is_rfid_officer', 'avatar', 'additional_role', 'homeroom_class_id', 'homeroom_class_name', 'rpp_usage_count', 'rpp_last_reset', 'teacher_type', 'phase', 'last_modified', 'version', 'deleted'], 
+        mapFn: (item: any) => [s(item.id), s(item.username), s(item.password), s(item.fullName), s(item.role), s(item.status), s(item.schoolName), s(item.schoolNpsn), s(item.nip), s(item.email), s(item.phone), s(item.subject), s(item.secondarySubject), item.isSupervisor ? 1 : 0, item.isRfidOfficer ? 1 : 0, s(item.avatar), s(item.additionalRole), s(item.homeroomClassId), s(item.homeroomClassName), item.rppUsageCount || 0, s(item.rppLastReset), s(item.teacherType), s(item.phase), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] 
     };
     case 'eduadmin_classes': return { table: 'classes', columns: ['id', 'user_id', 'school_npsn', 'name', 'description', 'student_count', 'homeroom_teacher_id', 'homeroom_teacher_name', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.userId), s(item.schoolNpsn || 'DEFAULT'), s(item.name), s(item.description), s(item.studentCount), s(item.homeroomTeacherId), s(item.homeroomTeacherName), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
-    case 'eduadmin_students': return { table: 'students', columns: ['id', 'class_id', 'school_npsn', 'name', 'nis', 'gender', 'phone', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.classId), s(item.schoolNpsn || 'DEFAULT'), s(item.name), s(item.nis), s(item.gender), s(item.phone || ''), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
+    case 'eduadmin_students': return { table: 'students', columns: ['id', 'class_id', 'school_npsn', 'name', 'nis', 'gender', 'phone', 'rfid_tag', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.classId), s(item.schoolNpsn || 'DEFAULT'), s(item.name), s(item.nis), s(item.gender), s(item.phone || ''), s(item.rfidTag || ''), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_scores': return { table: 'scores', columns: ['id', 'user_id', 'student_id', 'class_id', 'school_npsn', 'semester', 'subject', 'category', 'material_id', 'score', 'score_details', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.userId || 'UNKNOWN'), s(item.studentId), s(item.classId), s(item.schoolNpsn), s(item.semester), s(item.subject), s(item.category), s(item.materialId), s(item.score), JSON.stringify(item.scoreDetails || {}), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_attendance': return { table: 'attendance', columns: ['id', 'student_id', 'class_id', 'school_npsn', 'date', 'status', 'user_id', 'visibility', 'notes', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.studentId), s(item.classId), s(item.schoolNpsn), s(item.date), s(item.status), s(item.userId), s(item.visibility || 'SHARED'), s(item.notes), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_journals': return { table: 'journals', columns: ['id', 'user_id', 'class_id', 'school_npsn', 'date', 'material_id', 'learning_objective', 'meeting_no', 'activities', 'reflection', 'follow_up', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.userId), s(item.classId), s(item.schoolNpsn), s(item.date), s(item.materialId), s(item.learningObjective), s(item.meetingNo), s(item.activities), s(item.reflection), s(item.followUp), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
@@ -767,6 +788,11 @@ const getTableConfig = (collection: string) => {
         columns: ['id', 'exam_id', 'student_id', 'student_name', 'school_npsn', 'start_time', 'end_time', 'score', 'answers', 'violation_count', 'status', 'last_modified', 'version', 'deleted'], 
         mapFn: (item: any) => [s(item.id), s(item.examId), s(item.studentId), s(item.studentName), s(item.schoolNpsn), s(item.startTime), s(item.endTime), s(item.score), JSON.stringify(item.answers || {}), item.violationCount || 0, s(item.status), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] 
     };
+    case 'eduadmin_rfid_logs': return {
+        table: 'rfid_logs',
+        columns: ['id', 'student_id', 'student_name', 'class_id', 'class_name', 'school_npsn', 'timestamp', 'status', 'method', 'last_modified', 'version', 'deleted'],
+        mapFn: (item: any) => [s(item.id), s(item.studentId), s(item.studentName), s(item.classId), s(item.className), s(item.schoolNpsn), s(item.timestamp), s(item.status), s(item.method), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0]
+    };
     default:
       return null;
   }
@@ -799,6 +825,7 @@ const mapRowToJSON = (collection: string, row: any) => {
         teacherType: row.teacher_type,
         phase: row.phase,
         isSupervisor: Boolean(row.is_supervisor),
+        isRfidOfficer: Boolean(row.is_rfid_officer),
         lastModified: row.last_modified,
         version: row.version,
         deleted: Boolean(row.deleted)
@@ -811,7 +838,7 @@ const mapRowToJSON = (collection: string, row: any) => {
     };
     case 'eduadmin_students': return {
         id: row.id, classId: row.class_id, schoolNpsn: row.school_npsn, name: row.name,
-        nis: row.nis, gender: row.gender, phone: row.phone,
+        nis: row.nis, gender: row.gender, phone: row.phone, rfidTag: row.rfid_tag,
         lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
     };
     case 'eduadmin_scores': return {
