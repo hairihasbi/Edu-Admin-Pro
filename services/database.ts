@@ -1495,6 +1495,14 @@ export const getStudents = async (classId: string) => {
     return await db.students.where('classId').equals(classId).sortBy('name');
 };
 
+export const getSchoolStudents = async (schoolNpsn: string) => {
+    return await db.students.where('schoolNpsn').equals(schoolNpsn).sortBy('name');
+};
+
+export const getSchoolClasses = async (schoolNpsn: string) => {
+    return await db.classes.where('schoolNpsn').equals(schoolNpsn).sortBy('name');
+};
+
 export const importStudentsFromCSV = async (classId: string, csvText: string) => {
     const lines = csvText.split('\n').map(l => l.trim()).filter(l => l);
     const errors: string[] = [];
@@ -2333,6 +2341,28 @@ export const getRfidLogs = async (schoolNpsn: string, date?: string) => {
     return logs.filter(l => l.timestamp.startsWith(date)).sort((a, b) => b.timestamp.localeCompare(a.timestamp));
   }
   return logs.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+};
+
+export const getRfidLogsByRange = async (schoolNpsn: string, startDate: string, endDate: string) => {
+  const logs = await db.rfidLogs.where('schoolNpsn').equals(schoolNpsn).toArray();
+  return logs.filter(l => l.timestamp >= startDate && l.timestamp <= endDate + 'T23:59:59')
+             .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+};
+
+export const deleteRfidLogs = async (logIds: string[]) => {
+  await db.rfidLogs.bulkDelete(logIds);
+  triggerDebouncedSync(); // RFID logs sync is usually helpful
+  return true;
+};
+
+export const clearAllRfidLogsByDate = async (schoolNpsn: string, date: string) => {
+    const logs = await db.rfidLogs.where('schoolNpsn').equals(schoolNpsn).toArray();
+    const toDelete = logs.filter(l => l.timestamp.startsWith(date)).map(l => l.id as string);
+    if (toDelete.length > 0) {
+        await db.rfidLogs.bulkDelete(toDelete);
+        triggerDebouncedSync();
+    }
+    return true;
 };
 
 export const updateRfidOfficerStatus = async (userId: string, isRfidOfficer: boolean) => {
