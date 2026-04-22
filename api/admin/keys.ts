@@ -29,6 +29,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     Object.keys(process.env).forEach(k => {
         if (k.startsWith(KEY_PREFIX)) envKeys.push(k);
     });
+    if (envKeys.length === 0 && process.env.GEMINI_API_KEY) envKeys.push('GEMINI_API_KEY');
     if (envKeys.length === 0 && process.env.API_KEY) envKeys.push('API_KEY');
     
     // 2. Fetch Redis Data
