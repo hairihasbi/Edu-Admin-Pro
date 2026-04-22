@@ -1,10 +1,10 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, TeachingJournal, AttendanceRecord, ClassRoom, TeachingSchedule } from '../types';
-import { getSchoolTeachers, getSchoolJournals, getSchoolAttendance, syncAllData, getAvailableClassesForHomeroom, getSchoolSchedules, getSchoolJournalsByRange } from '../services/database';
+import { User, TeachingJournal, AttendanceRecord, ClassRoom, TeachingSchedule, SystemSettings } from '../types';
+import { getSchoolTeachers, getSchoolJournals, getSchoolAttendance, syncAllData, getAvailableClassesForHomeroom, getSchoolSchedules, getSchoolJournalsByRange, getSystemSettings, saveSystemSettings } from '../services/database';
 import SupervisionManager from './SupervisionManager';
-import { Activity, CheckCircle, XCircle, Calendar, Users, Search, Filter, Clock, Info, AlertCircle, RefreshCcw, Loader2, BookOpen, LayoutGrid, List as ListIcon, ChevronDown, ChevronUp, TrendingUp, BarChart3, PieChart, Download, Printer, FileSpreadsheet, FileText, School, ShieldCheck } from './Icons';
+import { Activity, CheckCircle, XCircle, Calendar, Users, Search, Filter, Clock, Info, AlertCircle, RefreshCcw, Loader2, BookOpen, LayoutGrid, List as ListIcon, ChevronDown, ChevronUp, TrendingUp, BarChart3, PieChart, Download, Printer, FileSpreadsheet, FileText, School, ShieldCheck, Save } from './Icons';
 import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -25,7 +25,10 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<'GURU' | 'KELAS' | 'PRESENSI' | 'SUPERVISI'>('GURU');
+  const [activeTab, setActiveTab] = useState<'GURU' | 'KELAS' | 'PRESENSI' | 'SUPERVISI' | 'ABSENSI_RFID'>('GURU');
+  const [settings, setSettings] = useState<SystemSettings | null>(null);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<{type: 'success' | 'error', text: string} | null>(null);
   const [allPeriodJournals, setAllPeriodJournals] = useState<TeachingJournal[]>([]);
   const [expandedTeacherId, setExpandedTeacherId] = useState<string | null>(null);
   const [expandedClassId, setExpandedClassId] = useState<string | null>(null);
@@ -35,11 +38,14 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
       if (!user.schoolNpsn) return;
       setLoading(true);
       try {
-        const [schoolTeachers, schoolClasses, schoolSchedules] = await Promise.all([
+        const [schoolTeachers, schoolClasses, schoolSchedules, systemSettings] = await Promise.all([
           getSchoolTeachers(user.schoolNpsn),
           getAvailableClassesForHomeroom(user.schoolNpsn),
-          getSchoolSchedules(user.schoolNpsn)
+          getSchoolSchedules(user.schoolNpsn),
+          getSystemSettings()
         ]);
+        
+        setSettings(systemSettings || null);
         
         const teacherIds = schoolTeachers.map(t => t.id);
         
@@ -347,6 +353,24 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
     filledAttendance: teachers.filter(t => getAttendanceStatus(t.id)).length
   };
 
+  const handleSaveSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!settings) return;
+    
+    setIsSavingSettings(true);
+    setSaveStatus(null);
+    try {
+      await saveSystemSettings(settings);
+      setSaveStatus({ type: 'success', text: 'Pengaturan Absensi RFID berhasil disimpan!' });
+      setTimeout(() => setSaveStatus(null), 3000);
+    } catch (error) {
+      console.error("Failed to save settings:", error);
+      setSaveStatus({ type: 'error', text: 'Gagal menyimpan pengaturan.' });
+    } finally {
+      setIsSavingSettings(false);
+    }
+  };
+
   if (!user.schoolNpsn) {
     return (
       <div className="max-w-4xl mx-auto p-12 text-center bg-white rounded-xl shadow-sm border border-gray-100">
@@ -493,11 +517,114 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
           <ShieldCheck size={18} />
           Supervisi
         </button>
+        <button
+          onClick={() => setActiveTab('ABSENSI_RFID')}
+          className={`flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-medium transition ${
+            activeTab === 'ABSENSI_RFID' 
+              ? 'bg-white text-purple-600 shadow-sm' 
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <Clock size={18} />
+          Absensi RFID
+        </button>
       </div>
 
       {/* Main Content */}
       {activeTab === 'SUPERVISI' ? (
         <SupervisionManager user={user} />
+      ) : activeTab === 'ABSENSI_RFID' ? (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 animate-in fade-in zoom-in duration-200">
+          <div className="max-w-2xl mx-auto">
+            <div className="flex items-center gap-3 mb-6 bg-purple-50 p-4 rounded-lg border border-purple-100">
+              <div className="p-2 bg-purple-100 text-purple-600 rounded-full">
+                <Clock size={24} />
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-800 text-lg">Konfigurasi Waktu Absensi RFID</h3>
+                <p className="text-sm text-gray-500">Atur jam operasional absensi RFID untuk sekolah Anda.</p>
+              </div>
+            </div>
+
+            {saveStatus && (
+              <div className={`mb-6 p-4 rounded-lg flex items-center gap-2 ${saveStatus.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+                {saveStatus.type === 'success' ? <CheckCircle size={20} /> : <AlertCircle size={20} />}
+                <span className="font-medium text-sm">{saveStatus.text}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveSettings} className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Jam Mulai Masuk</label>
+                  <div className="relative">
+                    <Clock size={16} className="absolute left-3 top-3 text-gray-400" />
+                    <input 
+                      type="time" 
+                      className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
+                      value={settings?.rfidCheckInStart || '06:00'}
+                      onChange={(e) => setSettings(prev => prev ? ({ ...prev, rfidCheckInStart: e.target.value }) : null)}
+                      required
+                    />
+                  </div>
+                  <p className="mt-1 text-[10px] text-gray-500 italic">Siswa bisa mulai tap masuk hari tersebut.</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2 font-red-600">Batas Terlambat</label>
+                  <div className="relative">
+                    <Clock size={16} className="absolute left-3 top-3 text-gray-400" />
+                    <input 
+                      type="time" 
+                      className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 outline-none"
+                      value={settings?.rfidCheckInLate || '07:15'}
+                      onChange={(e) => setSettings(prev => prev ? ({ ...prev, rfidCheckInLate: e.target.value }) : null)}
+                      required
+                    />
+                  </div>
+                  <p className="mt-1 text-[10px] text-gray-500 italic text-red-500">Lewat dari jam ini status otomatis "TERLAMBAT".</p>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">Jam Mulai Pulang</label>
+                <div className="relative">
+                  <Clock size={16} className="absolute left-3 top-3 text-gray-400" />
+                  <input 
+                    type="time" 
+                    className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                    value={settings?.rfidCheckOutStart || '14:00'}
+                    onChange={(e) => setSettings(prev => prev ? ({ ...prev, rfidCheckOutStart: e.target.value }) : null)}
+                    required
+                  />
+                </div>
+                <p className="mt-1 text-[10px] text-gray-500 italic">Tap sebelum jam ini akan berstatus "PULANG CEPAT".</p>
+              </div>
+
+              <div className="pt-4 flex justify-end">
+                <button 
+                  type="submit"
+                  disabled={isSavingSettings}
+                  className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2.5 px-8 rounded-lg shadow-md transition flex items-center gap-2 disabled:opacity-70"
+                >
+                  {isSavingSettings ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                  {isSavingSettings ? 'Menyimpan...' : 'Simpan Konfigurasi'}
+                </button>
+              </div>
+            </form>
+            
+            <div className="mt-12 p-4 bg-gray-50 rounded-lg border border-gray-100 text-xs text-gray-500">
+              <h4 className="font-bold text-gray-700 mb-2 flex items-center gap-1">
+                <Info size={14} /> Informasi Penting
+              </h4>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>Pengaturan ini berlaku untuk seluruh siswa di NPSN: <strong>{user.schoolNpsn}</strong>.</li>
+                <li>Perubahan waktu akan berdampak langsung pada perhitungan status di Dashboard Monitoring.</li>
+                <li>Pastikan Terminal RFID juga telah disinkronkan agar validasi suara/pesan sesuai dengan waktu terbaru.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
       ) : (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-center gap-4">
