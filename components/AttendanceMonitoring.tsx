@@ -37,6 +37,7 @@ const AttendanceMonitoring: React.FC<AttendanceMonitoringProps> = ({ user }) => 
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
   const [activeClassId, setActiveClassId] = useState<string>('ALL');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'HADIR' | 'TERLAMBAT' | 'PULANG CEPAT' | 'ALFA'>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
@@ -139,10 +140,15 @@ const AttendanceMonitoring: React.FC<AttendanceMonitoringProps> = ({ user }) => 
     return list.sort((a, b) => a.studentName.localeCompare(b.studentName));
   }, [logs, students, settings, activeClassId, filterMode]);
 
-  const filteredData = attendanceData.filter(d => 
-    d.studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    d.nis.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredData = attendanceData.filter(d => {
+    const matchesSearch = d.studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         d.nis.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesStatus = statusFilter === 'ALL' || 
+                         (statusFilter === 'ALFA' ? d.status === 'ALFA' : d.status.includes(statusFilter));
+    
+    return matchesSearch && matchesStatus;
+  });
 
   const stats = useMemo(() => {
       const total = attendanceData.length;
@@ -272,7 +278,7 @@ const AttendanceMonitoring: React.FC<AttendanceMonitoringProps> = ({ user }) => 
         </div>
 
         {/* Class Tabs */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide border-b border-gray-100">
+        <div className="flex items-center gap-2 overflow-x-auto pb-4 scrollbar-hide border-b border-gray-100">
             <button
                 onClick={() => setActiveClassId('ALL')}
                 className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition ${activeClassId === 'ALL' ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
@@ -286,6 +292,30 @@ const AttendanceMonitoring: React.FC<AttendanceMonitoringProps> = ({ user }) => 
                     className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition ${activeClassId === cls.id ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
                 >
                     <BookOpen size={14} /> {cls.name}
+                </button>
+            ))}
+        </div>
+
+        {/* Status Filters */}
+        <div className="flex flex-wrap items-center gap-2 mt-4">
+            <span className="text-[10px] font-bold text-gray-400 uppercase mr-2 tracking-wider">Filter Status:</span>
+            { [
+                { id: 'ALL', label: 'Semua Status', active: 'bg-gray-600 border-gray-700 text-white shadow-sm' },
+                { id: 'HADIR', label: 'Tepat Waktu', active: 'bg-green-600 border-green-700 text-white shadow-sm' },
+                { id: 'TERLAMBAT', label: 'Terlambat', active: 'bg-orange-600 border-orange-700 text-white shadow-sm' },
+                { id: 'PULANG CEPAT', label: 'Pulang Cepat', active: 'bg-red-600 border-red-700 text-white shadow-sm' },
+                { id: 'ALFA', label: 'Alpa / Tidak Tap', active: 'bg-rose-600 border-rose-700 text-white shadow-sm' }
+            ].map(f => (
+                <button
+                    key={f.id}
+                    onClick={() => setStatusFilter(f.id as any)}
+                    className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition border ${
+                        statusFilter === f.id 
+                            ? f.active
+                            : `bg-white border-gray-200 text-gray-500 hover:bg-gray-50`
+                    }`}
+                >
+                    {f.label}
                 </button>
             ))}
         </div>
