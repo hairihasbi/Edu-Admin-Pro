@@ -125,6 +125,7 @@ const RfidSecurityManager: React.FC<RfidSecurityManagerProps> = ({ user }) => {
 
   const [pairingStudentId, setPairingStudentId] = useState<string | null>(null);
   const [newTagId, setNewTagId] = useState("");
+  const [selectedClassId, setSelectedClassId] = useState<string>("ALL");
 
   const handlePairCard = async () => {
     if (!pairingStudentId || !newTagId) return;
@@ -152,10 +153,15 @@ const RfidSecurityManager: React.FC<RfidSecurityManagerProps> = ({ user }) => {
   };
 
   const filteredStudents = students.filter(
-    (s) =>
-      s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.nis.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (s.rfidTag && s.rfidTag.includes(searchTerm)),
+    (s) => {
+      const matchesSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        s.nis.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (s.rfidTag && s.rfidTag.includes(searchTerm));
+      
+      const matchesClass = selectedClassId === "ALL" || s.classId === selectedClassId;
+      
+      return matchesSearch && matchesClass;
+    }
   );
 
   if (loading) {
@@ -505,6 +511,25 @@ const RfidSecurityManager: React.FC<RfidSecurityManagerProps> = ({ user }) => {
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
+          </div>
+
+          {/* Tab Kelas */}
+          <div className="px-6 py-3 bg-gray-50 border-b border-gray-100 overflow-x-auto flex gap-2 scrollbar-none">
+            <button
+              onClick={() => setSelectedClassId("ALL")}
+              className={`px-4 py-1.5 rounded-full text-[10px] font-bold whitespace-nowrap transition ${selectedClassId === "ALL" ? "bg-blue-600 text-white shadow-sm" : "bg-white text-gray-500 border border-gray-200 hover:border-blue-300"}`}
+            >
+              SEMUA KELAS
+            </button>
+            {classes.sort((a,b) => a.name.localeCompare(b.name)).map((cls) => (
+              <button
+                key={cls.id}
+                onClick={() => setSelectedClassId(cls.id)}
+                className={`px-4 py-1.5 rounded-full text-[10px] font-bold whitespace-nowrap transition ${selectedClassId === cls.id ? "bg-blue-600 text-white shadow-sm" : "bg-white text-gray-500 border border-gray-200 hover:border-blue-300"}`}
+              >
+                {cls.name.toUpperCase()}
+              </button>
+            ))}
           </div>
 
           <div className="bg-blue-50/50 p-4 border-b border-blue-50 flex gap-3 text-blue-800 text-[10px]">
