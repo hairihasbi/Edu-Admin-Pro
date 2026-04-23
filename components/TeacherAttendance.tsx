@@ -10,7 +10,7 @@ interface TeacherAttendanceProps {
   user: User;
 }
 
-type AttendanceStatus = 'H' | 'S' | 'I' | 'A' | ''; 
+type AttendanceStatus = 'H' | 'S' | 'I' | 'A' | 'T' | ''; 
 
 interface AttendanceState {
   [studentId: string]: {
@@ -147,7 +147,7 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
     attendanceData.forEach(record => {
       const day = new Date(record.date).getDate();
       if (!attState[record.studentId]) attState[record.studentId] = {};
-      attState[record.studentId][day] = record.status;
+      attState[record.studentId][day] = record.status as AttendanceStatus;
       
       if (record.notes) {
         if (!notesState[record.studentId]) notesState[record.studentId] = {};
@@ -394,7 +394,7 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
             classId: selectedClassId,
             userId: user.id,
             date: localDate,
-            status: status as 'H' | 'S' | 'I' | 'A',
+            status: status as 'H' | 'S' | 'I' | 'A' | 'T',
             visibility: visibility,
             notes: notes[studentId]?.[d] || ''
           });
@@ -419,22 +419,24 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
       case 'S': return 'bg-yellow-400 text-white';
       case 'I': return 'bg-blue-400 text-white';
       case 'A': return 'bg-red-500 text-white';
+      case 'T': return 'bg-orange-500 text-white';
       default: return 'bg-white hover:bg-gray-50';
     }
   };
 
   const calculateSummary = (studentId: string) => {
     const studentRecord = attendance[studentId] || {};
-    let s = 0, i = 0, a = 0, h = 0;
+    let s = 0, i = 0, a = 0, h = 0, t = 0;
     Object.values(studentRecord).forEach(status => {
       if (status === 'S') s++;
       if (status === 'I') i++;
       if (status === 'A') a++;
       if (status === 'H') h++;
+      if (status === 'T') t++;
     });
-    const totalFilledDays = s + i + a + h;
-    const percentage = totalFilledDays > 0 ? Math.round((h / totalFilledDays) * 100) : 0;
-    return { s, i, a, h, percentage };
+    const totalFilledDays = s + i + a + h + t;
+    const percentage = totalFilledDays > 0 ? Math.round(((h + t) / totalFilledDays) * 100) : 0;
+    return { s, i, a, h, t, percentage };
   };
 
   // --- EXPORT FUNCTIONS ---
@@ -445,7 +447,7 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
     const className = currentClass?.name || 'Kelas';
     const period = `${monthNames[selectedMonth]} ${selectedYear}`;
     
-    const header = ['No', 'Nama Siswa', ...days.map(String), 'S', 'I', 'A', 'H', '%'];
+    const header = ['No', 'Nama Siswa', ...days.map(String), 'S', 'I', 'A', 'T', 'H', '%'];
     const data = students.map((s, i) => {
       const summary = calculateSummary(s.id);
       const row = [
@@ -455,6 +457,7 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
         summary.s,
         summary.i,
         summary.a,
+        summary.t,
         summary.h,
         `${summary.percentage}%`
       ];

@@ -571,13 +571,13 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2 font-red-600">Batas Terlambat</label>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Batas Terlambat</label>
                   <div className="relative">
                     <Clock size={16} className="absolute left-3 top-3 text-gray-400" />
                     <input 
                       type="time" 
                       className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 outline-none"
-                      value={settings?.rfidCheckInLate || '07:15'}
+                      value={settings?.rfidCheckInLate || '08:30'}
                       onChange={(e) => setSettings(prev => prev ? ({ ...prev, rfidCheckInLate: e.target.value }) : null)}
                       required
                     />
@@ -613,15 +613,47 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
               </div>
             </form>
             
-            <div className="mt-12 p-4 bg-gray-50 rounded-lg border border-gray-100 text-xs text-gray-500">
-              <h4 className="font-bold text-gray-700 mb-2 flex items-center gap-1">
-                <Info size={14} /> Informasi Penting
-              </h4>
-              <ul className="list-disc pl-5 space-y-1">
-                <li>Pengaturan ini berlaku untuk seluruh siswa di NPSN: <strong>{user.schoolNpsn}</strong>.</li>
-                <li>Perubahan waktu akan berdampak langsung pada perhitungan status di Dashboard Monitoring.</li>
-                <li>Pastikan Terminal RFID juga telah disinkronkan agar validasi suara/pesan sesuai dengan waktu terbaru.</li>
-              </ul>
+            <div className="mt-10 p-5 bg-gray-50 rounded-xl border border-gray-200">
+                <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2 text-sm">
+                    <AlertCircle size={16} className="text-purple-500" />
+                    Panduan Logika Batas Waktu:
+                </h4>
+                <div className="space-y-4">
+                    <div className="flex items-start gap-3">
+                        <div className="w-6 h-6 rounded-full bg-green-100 text-green-700 flex items-center justify-center text-xs font-bold shrink-0">1</div>
+                        <div>
+                            <p className="text-xs font-bold text-gray-700 uppercase">Status Hadir (H)</p>
+                            <p className="text-[11px] text-gray-500">
+                                Tap antara <span className="font-bold">{settings?.rfidCheckInStart || '06:00'}</span> s.d <span className="font-bold">{settings?.rfidCheckInLate || '08:30'}</span>.
+                            </p>
+                        </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                        <div className="w-6 h-6 rounded-full bg-orange-100 text-orange-700 flex items-center justify-center text-xs font-bold shrink-0">2</div>
+                        <div>
+                            <p className="text-xs font-bold text-gray-700 uppercase">Status Terlambat (T)</p>
+                            <p className="text-[11px] text-gray-500">
+                                Tap setelah <span className="font-bold">{settings?.rfidCheckInLate || '08:30'}</span> namun sebelum <span className="font-bold">{settings?.rfidCheckOutStart || '14:00'}</span>.
+                            </p>
+                        </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                        <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold shrink-0">3</div>
+                        <div>
+                            <p className="text-xs font-bold text-gray-700 uppercase">Status Pulang</p>
+                            <p className="text-[11px] text-gray-500">
+                                Tap pada atau setelah jam <span className="font-bold">{settings?.rfidCheckOutStart || '14:00'}</span>.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <div className="mt-5 p-3 bg-purple-50 text-purple-700 text-[10px] rounded-lg border border-purple-100 italic">
+                    <div className="flex items-center gap-2 mb-1">
+                        <Info size={12} />
+                        <strong>Sinkronisasi Otomatis:</strong>
+                    </div>
+                    Data Tap Masuk (Hadir & Terlambat) secara otomatis akan mencatatkan status siswa di Daftar Hadir Utama guru kelas.
+                </div>
             </div>
           </div>
         </div>

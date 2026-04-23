@@ -105,7 +105,7 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
         
         // Defaults if no settings
         const checkInStart = settings?.rfidCheckInStart || '06:00';
-        const checkInLate = settings?.rfidCheckInLate || '07:30';
+        const checkInLate = settings?.rfidCheckInLate || '08:30';
         const checkOutStart = settings?.rfidCheckOutStart || '14:00';
 
         let attendanceStatus: 'HADIR' | 'PULANG' | 'TERLAMBAT' = 'HADIR';
@@ -123,11 +123,13 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
           attendanceStatus = 'TERLAMBAT';
         }
 
+        const classData = await (await import('../services/database')).getClassById(student.classId);
+
         const newLog = await saveRfidLog({
           studentId: student.id,
           studentName: student.name,
           classId: student.classId,
-          className: student.classId, // We should ideally have the actual class name string
+          className: classData?.name || 'Unknown Class',
           schoolNpsn: user.schoolNpsn || '',
           timestamp: now.toISOString(),
           status: attendanceStatus,
