@@ -170,7 +170,7 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
     <div className={`min-h-screen transition-colors duration-500 flex flex-col p-4 md:p-8 ${
       status === 'SUCCESS' ? 'bg-green-600' : 
       status === 'ERROR' ? 'bg-red-600' : 
-      status === 'READING' ? 'bg-blue-600' : 'bg-gray-100'
+      status === 'READING' ? 'bg-blue-600' : 'bg-slate-900'
     }`}>
       <div className="max-w-5xl mx-auto w-full space-y-6">
         {/* Top Bar: Digital Clock & Status */}
