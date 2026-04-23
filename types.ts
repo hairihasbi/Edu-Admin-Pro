@@ -179,7 +179,7 @@ export interface AttendanceRecord extends Syncable {
   classId: string;
   userId: string; // NEW: Owner of the record
   date: string; 
-  status: 'H' | 'S' | 'I' | 'A';
+  status: 'H' | 'S' | 'I' | 'A' | 'T';
   visibility: 'PRIVATE' | 'SHARED'; // NEW: Visibility control
   notes?: string; // NEW: Additional notes
 }
