@@ -277,6 +277,10 @@ export const deleteTeacher = async (id: string) => {
 
 // --- CLASS & HOMEROOM ---
 
+export const getClassById = async (id: string) => {
+    return await db.classes.get(id);
+};
+
 export const getClasses = async (userId: string, schoolNpsn?: string) => {
     let npsn = schoolNpsn;
     // Fallback: If NPSN not provided or DEFAULT, try to get it from the local user record
@@ -2321,6 +2325,50 @@ export const saveRfidLog = async (log: Omit<RfidLog, 'id' | 'lastModified' | 'is
     updatedAt: new Date().toISOString()
   };
   await db.rfidLogs.put(toSave);
+  
+  // -- INTEGRASI OTOMATIS KE DAFTAR HADIR (AttendanceRecord) --
+  // Hanya jika statusnya HADIR atau TERLAMBAT (bukan PULANG)
+  if (toSave.status === 'HADIR' || toSave.status === 'TERLAMBAT') {
+      const date = toSave.timestamp.split('T')[0];
+      const attendanceStatus = toSave.status === 'HADIR' ? 'H' : 'T';
+
+      // Cari apakah sudah ada record absen untuk siswa ini di tanggal ini
+      const existing = await db.attendanceRecords
+          .where('[studentId+date]')
+          .equals([toSave.studentId, date])
+          .first();
+
+      if (!existing) {
+          // Buat record baru jika belum ada
+          // Kita butuh userId (pemilik record). Untuk simplisitas sistem RFID, 
+          // kita anggap record ini milik Admin atau sistem (Bisa dicari dari pengampu kelas)
+          const classData = await db.classes.get(toSave.classId);
+          const ownerId = classData?.userId || 'system';
+
+          await db.attendanceRecords.add({
+              id: uuidv4(),
+              studentId: toSave.studentId,
+              classId: toSave.classId,
+              userId: ownerId,
+              date: date,
+              status: attendanceStatus,
+              visibility: 'SHARED',
+              lastModified: Date.now(),
+              isSynced: false
+          });
+      } else {
+          // Update jika sudah ada (mungkin tadinya Alpha atau mau diupdate jam kedatangannya)
+          // Hanya update jika status sebelumnya bukan Sakit/Izin (jangan timpa izin manual guru)
+          if (existing.status === 'A' || existing.status === 'H' || existing.status === 'T') {
+              await db.attendanceRecords.update(existing.id, {
+                  status: attendanceStatus,
+                  lastModified: Date.now(),
+                  isSynced: false
+              });
+          }
+      }
+  }
+
   triggerDebouncedSync();
   return toSave;
 };
