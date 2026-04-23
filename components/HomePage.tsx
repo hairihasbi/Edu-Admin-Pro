@@ -1,5 +1,5 @@
 
-import * as React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { 
@@ -54,7 +54,7 @@ const features = [
 ];
 
 const HomePage = () => {
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-white font-sans text-gray-900">
