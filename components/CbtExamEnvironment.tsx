@@ -168,7 +168,7 @@ const CbtExamEnvironment: React.FC<CbtExamEnvironmentProps> = ({ user }) => {
     
     // Save Attempt
     const attempt: CbtAttempt = {
-      id: crypto.randomUUID(),
+      id: typeof window !== 'undefined' && window.crypto?.randomUUID ? window.crypto.randomUUID() : Math.random().toString(36).substring(2),
       examId: examId!,
       studentId: user.id,
       studentName: user.fullName,

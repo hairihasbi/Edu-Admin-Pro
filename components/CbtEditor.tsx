@@ -100,7 +100,7 @@ const CbtEditor: React.FC<CbtEditorProps> = ({ user }) => {
         // Initialize with one empty question ONLY if empty
         setQuestions(prev => {
           if (prev.length === 0) {
-            const newId = crypto.randomUUID();
+            const newId = typeof window !== 'undefined' && window.crypto?.randomUUID ? window.crypto.randomUUID() : Math.random().toString(36).substring(2);
             const q = {
               id: newId,
               examId: 'temp',
@@ -133,7 +133,7 @@ const CbtEditor: React.FC<CbtEditorProps> = ({ user }) => {
   };
 
   const handleAddQuestion = () => {
-    const newId = crypto.randomUUID();
+    const newId = typeof window !== 'undefined' && window.crypto?.randomUUID ? window.crypto.randomUUID() : Math.random().toString(36).substring(2);
     const newQuestion: CbtQuestion = {
       id: newId,
       examId: examId || 'temp',
@@ -207,7 +207,7 @@ const CbtEditor: React.FC<CbtEditorProps> = ({ user }) => {
 
     setIsSaving(true);
     try {
-      const finalExamId = examId && examId !== 'new' ? examId : crypto.randomUUID();
+      const finalExamId = examId && examId !== 'new' ? examId : (typeof window !== 'undefined' && window.crypto?.randomUUID ? window.crypto.randomUUID() : Math.random().toString(36).substring(2));
       const examData: CbtExam = {
         ...exam as CbtExam,
         id: finalExamId,
@@ -262,7 +262,7 @@ const CbtEditor: React.FC<CbtEditorProps> = ({ user }) => {
       const data: any[] = XLSX.utils.sheet_to_json(ws, { header: 1 });
 
       const newQuestions: CbtQuestion[] = data.slice(1).filter(row => row[0]).map((row, idx) => ({
-        id: crypto.randomUUID(),
+        id: typeof window !== 'undefined' && window.crypto?.randomUUID ? window.crypto.randomUUID() : Math.random().toString(36).substring(2),
         examId: examId || 'temp',
         questionText: String(row[0] || ''),
         type: 'MULTIPLE_CHOICE',
@@ -315,7 +315,7 @@ const CbtEditor: React.FC<CbtEditorProps> = ({ user }) => {
             // New Question
             if (currentQ) parsedQuestions.push(currentQ as CbtQuestion);
             currentQ = {
-              id: crypto.randomUUID(),
+              id: typeof window !== 'undefined' && window.crypto?.randomUUID ? window.crypto.randomUUID() : Math.random().toString(36).substring(2),
               examId: examId || 'temp',
               questionText: line.replace(/^\d+[.\)]\s*/, ''),
               type: 'MULTIPLE_CHOICE',

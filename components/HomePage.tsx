@@ -1,60 +1,59 @@
-
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 
-import { 
-  GraduationCap, ArrowRight, CheckCircle, BrainCircuit, 
-  CalendarCheck, NotebookPen, Calculator, ShieldCheck, 
-  Users, Menu, X, Star, Zap, Smartphone, FileSpreadsheet, Globe, Heart, MapPin,
-  IdCard, School, BookOpen, CalendarDays, Layout, ClipboardList, TrendingUp
-} from './Icons';
+// Logo and other basic UI elements
+const Logo = () => (
+  <div className="bg-blue-600 p-2 rounded-lg text-white">
+    <div className="w-6 h-6 border-2 border-white rounded flex items-center justify-center font-bold text-xs">EP</div>
+  </div>
+);
 
 // Konfigurasi Link Kontak Real
 const phoneNumber = "6285248481527";
 const whatsappLink = `https://wa.me/${phoneNumber}?text=Halo%20Admin%20EduAdmin%20Pro,%20saya%20tertarik%20menggunakan%20aplikasi%20ini%20atau%20butuh%20bantuan.`;
 const emailLink = "mailto:admin@genquiz.my.id";
 
-const features = [
-  {
-    icon: <BrainCircuit size={28} className="text-white" />,
-    title: "AI Lesson Planner",
-    desc: "Buat Rencana Pelaksanaan Pembelajaran (RPP) dalam hitungan detik dengan bantuan kecerdasan buatan Gemini AI.",
-    color: "bg-purple-600"
-  },
-  {
-    icon: <CalendarCheck size={28} className="text-white" />,
-    title: "Absensi Digital",
-    desc: "Pencatatan kehadiran siswa yang mudah, rekap otomatis, dan dapat diunduh ke format Excel/PDF.",
-    color: "bg-blue-600"
-  },
-  {
-    icon: <NotebookPen size={28} className="text-white" />,
-    title: "Jurnal Mengajar",
-    desc: "Catat kegiatan pembelajaran, tujuan, dan refleksi harian dengan antarmuka yang intuitif dan terstruktur.",
-    color: "bg-teal-600"
-  },
-  {
-    icon: <Calculator size={28} className="text-white" />,
-    title: "Asesmen Sumatif",
-    desc: "Kelola nilai Lingkup Materi (LM), STS, dan SAS dengan kalkulasi nilai rapor otomatis.",
-    color: "bg-orange-600"
-  },
-  {
-    icon: <Users size={28} className="text-white" />,
-    title: "Manajemen Data",
-    desc: "Database siswa yang terpusat, aman, dan mudah dikelola guru sendiri.",
-    color: "bg-indigo-600"
-  },
-  {
-    icon: <FileSpreadsheet size={28} className="text-white" />, 
-    title: "Ekspor Laporan",
-    desc: "Semua data administrasi dapat diekspor ke Excel dan dicetak PDF untuk kebutuhan arsip fisik.",
-    color: "bg-green-600"
-  }
-];
-
 const HomePage = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  const features = [
+    {
+      icon: <div className="text-white font-bold text-xl">AI</div>,
+      title: "AI Lesson Planner",
+      desc: "Buat Rencana Pelaksanaan Pembelajaran (RPP) dalam hitungan detik dengan bantuan kecerdasan buatan Gemini AI.",
+      color: "bg-purple-600"
+    },
+    {
+      icon: <div className="text-white font-bold text-xl">AD</div>,
+      title: "Absensi Digital",
+      desc: "Pencatatan kehadiran siswa yang mudah, rekap otomatis, dan dapat diunduh ke format Excel/PDF.",
+      color: "bg-blue-600"
+    },
+    {
+      icon: <div className="text-white font-bold text-xl">JM</div>,
+      title: "Jurnal Mengajar",
+      desc: "Catat kegiatan pembelajaran, tujuan, dan refleksi harian dengan antarmuka yang intuitif dan terstruktur.",
+      color: "bg-teal-600"
+    },
+    {
+      icon: <div className="text-white font-bold text-xl">AS</div>,
+      title: "Asesmen Sumatif",
+      desc: "Kelola nilai Lingkup Materi (LM), STS, dan SAS dengan kalkulasi nilai rapor otomatis.",
+      color: "bg-orange-600"
+    },
+    {
+      icon: <div className="text-white font-bold text-xl">MD</div>,
+      title: "Manajemen Data",
+      desc: "Database siswa yang terpusat, aman, dan mudah dikelola guru sendiri.",
+      color: "bg-indigo-600"
+    },
+    {
+      icon: <div className="text-white font-bold text-xl">EL</div>, 
+      title: "Ekspor Laporan",
+      desc: "Semua data administrasi dapat diekspor ke Excel dan dicetak PDF untuk kebutuhan arsip fisik.",
+      color: "bg-green-600"
+    }
+  ];
 
   return (
     <div className="min-h-screen bg-white font-sans text-gray-900">
@@ -66,7 +65,7 @@ const HomePage = () => {
             {/* Logo */}
             <div className="flex items-center gap-2">
               <div className="bg-blue-600 p-2 rounded-lg text-white">
-                <GraduationCap size={24} />
+                <div className="w-6 h-6 border-2 border-white rounded flex items-center justify-center font-bold text-xs">EP</div>
               </div>
               <span className="text-xl font-bold text-gray-900 tracking-tight">EduAdmin Pro</span>
             </div>
@@ -80,14 +79,14 @@ const HomePage = () => {
                 to="/login" 
                 className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-full text-sm font-semibold transition shadow-md hover:shadow-lg flex items-center gap-2"
               >
-                Masuk Aplikasi <ArrowRight size={16} />
+                Masuk Aplikasi →
               </Link>
             </div>
 
             {/* Mobile Menu Button */}
             <div className="md:hidden">
               <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="text-gray-600 p-2">
-                {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+                {isMobileMenuOpen ? <span>[X]</span> : <span>[M]</span>}
               </button>
             </div>
           </div>
@@ -122,7 +121,7 @@ const HomePage = () => {
             {/* Text Content */}
             <div className="flex-1 text-center lg:text-left">
               <div className="inline-flex items-center gap-2 bg-blue-100 text-blue-700 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide mb-6">
-                <Zap size={14} fill="currentColor" /> Gratis untuk Semua Guru
+                ⚡ Gratis untuk Semua Guru
               </div>
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-gray-900 leading-tight mb-6">
                 Administrasi Sekolah <br/>
@@ -147,8 +146,8 @@ const HomePage = () => {
               </div>
               
               <div className="mt-10 flex items-center justify-center lg:justify-start gap-6 text-sm text-gray-500 font-medium">
-                <span className="flex items-center gap-1"><CheckCircle size={16} className="text-green-500" /> Tanpa Biaya Tersembunyi</span>
-                <span className="flex items-center gap-1"><Heart size={16} className="text-pink-500" /> Didukung Donasi Sukarela</span>
+                <span className="flex items-center gap-1">✓ Tanpa Biaya Tersembunyi</span>
+                <span className="flex items-center gap-1">❤ Didukung Donasi Sukarela</span>
               </div>
             </div>
 
@@ -163,7 +162,7 @@ const HomePage = () => {
                    {/* Top Bar */}
                    <div className="h-12 bg-white border-b flex items-center justify-between px-4">
                       <div className="flex items-center gap-2">
-                         <Menu size={20} className="text-gray-400"/>
+                         <div className="w-5 h-5 bg-gray-200 rounded"></div>
                          <span className="font-bold text-gray-700 text-sm">Dashboard Guru</span>
                       </div>
                       <div className="flex items-center gap-3">
@@ -176,7 +175,7 @@ const HomePage = () => {
                       {/* Identity Card */}
                       <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-lg p-4 text-white shadow-md">
                          <div className="flex items-center gap-2 mb-3 border-b border-blue-500 pb-2">
-                            <IdCard size={16} className="text-blue-200"/>
+                            <div className="w-4 h-4 bg-blue-200 rounded"></div>
                             <span className="font-semibold text-sm">Identitas Guru</span>
                          </div>
                          <div className="grid grid-cols-2 gap-4 text-xs">
@@ -194,19 +193,19 @@ const HomePage = () => {
                       {/* Stats Grid */}
                       <div className="grid grid-cols-2 gap-3">
                          <div className="bg-white p-3 rounded-lg shadow-sm border border-gray-100 flex items-center gap-3">
-                            <div className="p-2 bg-purple-100 text-purple-600 rounded-lg"><Layout size={16}/></div>
+                            <div className="p-2 bg-purple-100 text-purple-600 rounded-lg">☐</div>
                             <div><p className="text-[10px] text-gray-500 uppercase">Kelas</p><p className="font-bold text-gray-800">5 Rombel</p></div>
                          </div>
                          <div className="bg-white p-3 rounded-lg shadow-sm border border-gray-100 flex items-center gap-3">
-                            <div className="p-2 bg-orange-100 text-orange-600 rounded-lg"><Users size={16}/></div>
+                            <div className="p-2 bg-orange-100 text-orange-600 rounded-lg">☺</div>
                             <div><p className="text-[10px] text-gray-500 uppercase">Siswa</p><p className="font-bold text-gray-800">165 Anak</p></div>
                          </div>
                          <div className="bg-white p-3 rounded-lg shadow-sm border border-gray-100 flex items-center gap-3">
-                            <div className="p-2 bg-teal-100 text-teal-600 rounded-lg"><ClipboardList size={16}/></div>
+                            <div className="p-2 bg-teal-100 text-teal-600 rounded-lg">✍</div>
                             <div><p className="text-[10px] text-gray-500 uppercase">Jurnal</p><p className="font-bold text-gray-800">24 Entri</p></div>
                          </div>
                          <div className="bg-white p-3 rounded-lg shadow-sm border border-gray-100 flex items-center gap-3">
-                            <div className="p-2 bg-blue-100 text-blue-600 rounded-lg"><CheckCircle size={16}/></div>
+                            <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">✓</div>
                             <div><p className="text-[10px] text-gray-500 uppercase">Absensi</p><p className="font-bold text-gray-800">98% Hadir</p></div>
                          </div>
                       </div>
@@ -235,8 +234,8 @@ const HomePage = () => {
 
                 {/* Floating Badge */}
                 <div className="absolute -bottom-6 -left-6 bg-white p-4 rounded-xl shadow-xl border border-gray-100 flex items-center gap-3 animate-bounce-slow z-20">
-                   <div className="bg-green-100 p-2 rounded-full text-green-600">
-                      <CheckCircle size={24} />
+                   <div className="bg-green-100 p-2 rounded-full text-green-600 font-bold">
+                      ✓
                    </div>
                    <div>
                       <p className="text-xs text-gray-500 font-bold uppercase">Status RPP</p>
@@ -292,7 +291,7 @@ const HomePage = () => {
                 className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 hover:shadow-xl hover:-translate-y-1 transition duration-300 group block relative overflow-hidden"
               >
                 <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300 text-blue-500">
-                   <ArrowRight size={20} />
+                   <span>→</span>
                 </div>
                 <div className={`${feature.color} w-14 h-14 rounded-xl flex items-center justify-center mb-6 shadow-lg group-hover:scale-110 transition`}>
                   {feature.icon}
@@ -350,13 +349,13 @@ const HomePage = () => {
               
               <ul className="space-y-4">
                 {[
-                  "Hemat waktu persiapan mengajar hingga 70%",
-                  "Materi terstruktur sesuai Kurikulum Merdeka",
-                  "Inspirasi metode pembelajaran kreatif",
-                  "Fokus kembali pada interaksi dengan siswa"
+                   "Hemat waktu persiapan mengajar hingga 70%",
+                   "Materi terstruktur sesuai Kurikulum Merdeka",
+                   "Inspirasi metode pembelajaran kreatif",
+                   "Fokus kembali pada interaksi dengan siswa"
                 ].map((item, i) => (
                   <li key={i} className="flex items-center gap-3 text-gray-700 font-medium">
-                    <CheckCircle className="text-blue-600 flex-shrink-0" size={20} />
+                    <span className="text-blue-600">✓</span>
                     {item}
                   </li>
                 ))}
@@ -392,7 +391,7 @@ const HomePage = () => {
             ].map((testi, i) => (
               <div key={i} className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
                 <div className="flex gap-1 text-yellow-400 mb-4">
-                  {[...Array(5)].map((_, j) => <Star key={j} size={16} fill="currentColor" />)}
+                  {[...Array(5)].map((_, j) => <span key={j}>★</span>)}
                 </div>
                 <p className="text-gray-600 mb-6 italic">"{testi.quote}"</p>
                 <div className="flex items-center gap-3">
@@ -450,7 +449,7 @@ const HomePage = () => {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
             <div className="col-span-1 md:col-span-1">
               <div className="flex items-center gap-2 mb-4 text-white">
-                <GraduationCap size={24} />
+                <div className="text-2xl">🎓</div>
                 <span className="text-xl font-bold">EduAdmin Pro</span>
               </div>
               <p className="text-sm text-gray-400">
@@ -482,19 +481,19 @@ const HomePage = () => {
               <h4 className="text-white font-bold mb-4">Hubungi Kami</h4>
               <ul className="space-y-2 text-sm">
                 <li className="flex items-center gap-2">
-                    <Smartphone size={16}/> 
+                    <span>📱</span> 
                     <a href={whatsappLink} target="_blank" rel="noopener noreferrer" className="hover:text-blue-400">
                       +62 852 4848 1527
                     </a>
                 </li>
                 <li className="flex items-center gap-2">
-                    <Globe size={16}/> 
+                    <span>🌐</span> 
                     <a href={emailLink} className="hover:text-blue-400">
                       admin@genquiz.my.id
                     </a>
                 </li>
                 <li className="flex items-start gap-2">
-                    <MapPin size={16} className="mt-0.5 flex-shrink-0"/> 
+                    <span>📍</span> 
                     <span>Banjarbaru,<br/>Kalimantan Selatan</span>
                 </li>
               </ul>
