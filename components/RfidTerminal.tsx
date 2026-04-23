@@ -5,7 +5,7 @@ import { getStudentByRfid, saveRfidLog, getSystemSettings } from '../services/da
 import { 
   Wifi, WifiOff, Smartphone, IdCard, 
   CheckCircle, AlertCircle, Clock, ArrowLeftRight,
-  Activity
+  Activity, Layout, X
 } from './Icons';
 
 interface RfidTerminalProps {
@@ -22,6 +22,26 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
   const [serialConnected, setSerialConnected] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const terminalRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      terminalRef.current?.requestFullscreen().catch(err => {
+        alert(`Error attempt to enable full-screen mode: ${err.message}`);
+      });
+    } else {
+      document.exitFullscreen();
+    }
+  };
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -167,19 +187,32 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
   };
 
   return (
-    <div className={`min-h-screen transition-colors duration-500 flex flex-col p-4 md:p-8 ${
-      status === 'SUCCESS' ? 'bg-green-600' : 
-      status === 'ERROR' ? 'bg-red-600' : 
-      status === 'READING' ? 'bg-blue-600' : 'bg-slate-900'
-    }`}>
+    <div 
+      ref={terminalRef}
+      className={`min-h-screen transition-colors duration-500 flex flex-col p-4 md:p-8 ${
+        status === 'SUCCESS' ? 'bg-green-600' : 
+        status === 'ERROR' ? 'bg-red-600' : 
+        status === 'READING' ? 'bg-blue-600' : 'bg-slate-900'
+      } ${isFullscreen ? 'overflow-auto' : ''}`}
+    >
       <div className="max-w-5xl mx-auto w-full space-y-6">
         {/* Top Bar: Digital Clock & Status */}
         <div className="flex flex-col md:flex-row justify-between items-center gap-4 text-white">
-          <div className="text-center md:text-left">
-            <h1 className="text-xl font-black uppercase tracking-tighter">Terminal RFID {user.schoolName}</h1>
-            <div className="flex items-center gap-2 text-xs font-bold opacity-80 uppercase">
-              <div className={`w-2 h-2 rounded-full ${status === 'IDLE' ? 'bg-green-400 animate-pulse' : 'bg-white'}`} />
-              {method === 'KEYBOARD' ? 'Keyboard Mode' : 'Serial Mode'} | {status}
+          <div className="text-center md:text-left flex items-center gap-4">
+            <button 
+              onClick={toggleFullscreen}
+              className="bg-white/10 hover:bg-white/20 p-2 rounded-lg transition border border-white/20"
+              title={isFullscreen ? "Keluar Fullscreen" : "Masuk Fullscreen"}
+            >
+              {isFullscreen ? <X size={20} /> : <Layout size={20} />}
+            </button>
+            <div>
+              <h1 className="text-xl font-black uppercase tracking-tighter">Terminal RFID {user.schoolName}</h1>
+              <div className="flex items-center gap-2 text-xs font-bold opacity-80 uppercase">
+                <div className={`w-2 h-2 rounded-full ${status === 'IDLE' ? 'bg-green-400 animate-pulse' : 'bg-white'}`} />
+                {method === 'KEYBOARD' ? 'Keyboard Mode' : 'Serial Mode'} | {status}
+                {isFullscreen && <span className="ml-2 text-yellow-400">● KIOSK MODE ACTIVE</span>}
+              </div>
             </div>
           </div>
           <div className="bg-black/20 backdrop-blur-md px-6 py-2 rounded-2xl border border-white/10 text-center">
