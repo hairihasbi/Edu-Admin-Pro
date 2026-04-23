@@ -76,12 +76,21 @@ const BroadcastPage: React.FC<BroadcastPageProps> = ({ user }) => {
         try {
             let data: Recipient[] = [];
             if (targetType === 'TEACHERS') {
-                const teachers = await getTeachers(user.schoolNpsn);
+                // For admin, we might want to get all teachers skip NPSN if needed, 
+                // but let's stick to schoolNpsn first and fallback.
+                let teachers = await getTeachers(user.schoolNpsn);
+                
+                // If no teachers found for this NPSN, try getting all (for master admin)
+                if (teachers.length === 0 && user.role === UserRole.ADMIN) {
+                    teachers = await getTeachers();
+                }
+
                 data = teachers.map(t => ({
                     id: t.id,
                     name: t.fullName,
-                    phone: t.phone,
-                    email: t.email,
+                    // Try different possible field names if phone is empty
+                    phone: t.phone || (t as any).whatsapp || (t as any).no_wa || '',
+                    email: t.email || '',
                     label: 'Guru',
                     selected: false
                 }));
@@ -312,12 +321,14 @@ const BroadcastPage: React.FC<BroadcastPageProps> = ({ user }) => {
               </button>
             )}
             
-            <button 
-              onClick={() => setTargetType('STUDENTS_CLASS')}
-              className={`px-3 py-1.5 text-xs font-bold rounded-md whitespace-nowrap transition ${targetType === 'STUDENTS_CLASS' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}
-            >
-              Per Kelas
-            </button>
+            {user.role !== UserRole.ADMIN && (
+              <button 
+                onClick={() => setTargetType('STUDENTS_CLASS')}
+                className={`px-3 py-1.5 text-xs font-bold rounded-md whitespace-nowrap transition ${targetType === 'STUDENTS_CLASS' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}
+              >
+                Per Kelas
+              </button>
+            )}
 
             <button 
               onClick={() => { setTargetType('MANUAL'); setRecipients([]); }}
@@ -421,12 +432,12 @@ const BroadcastPage: React.FC<BroadcastPageProps> = ({ user }) => {
                       <div className="flex items-center gap-2 text-xs">
                         <span className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-500">{r.label}</span>
                         {channel === 'WHATSAPP' ? (
-                            <span className={r.phone ? 'text-green-600' : 'text-red-400'}>
-                                {r.phone || 'No WA'}
+                            <span className={r.phone ? 'text-green-600' : 'text-red-500 font-bold bg-red-50 px-1 rounded animate-pulse'}>
+                                {r.phone || 'No WA Kosong'}
                             </span>
                         ) : (
-                            <span className={r.email && r.email.includes('@') ? 'text-blue-600' : 'text-red-400'}>
-                                {r.email || 'No Email'}
+                            <span className={r.email && r.email.includes('@') ? 'text-blue-600' : 'text-red-500 font-bold bg-red-50 px-1 rounded animate-pulse'}>
+                                {r.email || 'Email Kosong'}
                             </span>
                         )}
                       </div>
