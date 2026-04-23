@@ -21,6 +21,12 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
   const [settings, setSettings] = useState<SystemSettings | null>(null);
   const [serialConnected, setSerialConnected] = useState(false);
   const [scanning, setScanning] = useState(false);
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     getSystemSettings().then(s => setSettings(s || null));
@@ -161,181 +167,199 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100">
-        <div className="bg-blue-600 p-6 text-white flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold">Terminal Absensi RFID</h1>
-            <p className="text-blue-100 opacity-90">{user.schoolName}</p>
+    <div className={`min-h-screen transition-colors duration-500 flex flex-col p-4 md:p-8 ${
+      status === 'SUCCESS' ? 'bg-green-600' : 
+      status === 'ERROR' ? 'bg-red-600' : 
+      status === 'READING' ? 'bg-blue-600' : 'bg-gray-100'
+    }`}>
+      <div className="max-w-5xl mx-auto w-full space-y-6">
+        {/* Top Bar: Digital Clock & Status */}
+        <div className="flex flex-col md:flex-row justify-between items-center gap-4 text-white">
+          <div className="text-center md:text-left">
+            <h1 className="text-xl font-black uppercase tracking-tighter">Terminal RFID {user.schoolName}</h1>
+            <div className="flex items-center gap-2 text-xs font-bold opacity-80 uppercase">
+              <div className={`w-2 h-2 rounded-full ${status === 'IDLE' ? 'bg-green-400 animate-pulse' : 'bg-white'}`} />
+              {method === 'KEYBOARD' ? 'Keyboard Mode' : 'Serial Mode'} | {status}
+            </div>
           </div>
-          <div className="flex gap-2">
-            {method === 'SERIAL' && (
-                <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-bold border transition ${serialConnected ? 'bg-green-500/20 border-green-400 text-green-100' : 'bg-red-500/20 border-red-400 text-red-100'}`}>
-                    <div className={`w-2 h-2 rounded-full ${serialConnected ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`} />
-                    {serialConnected ? 'HARDWARE TERHUBUNG' : 'HARDWARE TERPUTUS'}
-                </div>
-            )}
-            {method === 'KEYBOARD' && (
-                <div className="flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-bold border bg-blue-500/20 border-blue-400 text-blue-100">
-                    <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
-                    KONTROL KEYBOARD AKTIF
-                </div>
-            )}
-            <button 
-              onClick={() => setMethod('KEYBOARD')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${method === 'KEYBOARD' ? 'bg-white text-blue-600 shadow-md' : 'bg-blue-500 text-white hover:bg-blue-400'}`}
-            >
-              <Smartphone size={18} />
-              Keyboard
-            </button>
-            <button 
-              onClick={() => {
-                setMethod('SERIAL');
-                if (!serialConnected) connectSerial();
-              }}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${method === 'SERIAL' ? 'bg-white text-blue-600 shadow-md' : 'bg-blue-500 text-white hover:bg-blue-400'}`}
-            >
-              <Wifi size={18} />
-              Web Serial
-            </button>
+          <div className="bg-black/20 backdrop-blur-md px-6 py-2 rounded-2xl border border-white/10 text-center">
+            <p className="text-4xl md:text-5xl font-mono font-black tracking-tighter">
+              {currentTime.toLocaleTimeString('id-ID', { hour12: false })}
+            </p>
+            <p className="text-[10px] uppercase font-bold opacity-70 tracking-widest">
+              {currentTime.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+            </p>
           </div>
         </div>
 
-        {/* Status Alat Monitoring */}
-        <div className="bg-gray-50 px-8 py-3 flex items-center justify-between border-b border-gray-100">
-            <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                    <div className={`w-3 h-3 rounded-full ${status !== 'ERROR' ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
-                    <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Sistem Ready</span>
+        <div className={`bg-white rounded-3xl shadow-2xl overflow-hidden border-4 transition-all duration-300 ${
+          status === 'SUCCESS' ? 'border-green-400' : 
+          status === 'ERROR' ? 'border-red-400' : 
+          'border-transparent'
+        }`}>
+          {/* Internal Navigation/Settings */}
+          <div className="bg-gray-50 px-6 py-3 border-b border-gray-100 flex flex-wrap justify-between items-center gap-4">
+             <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => setMethod('KEYBOARD')}
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition flex items-center gap-1.5 ${method === 'KEYBOARD' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-gray-500 border border-gray-200 hover:border-blue-300'}`}
+                >
+                  <Smartphone size={14} /> KEYBOARD
+                </button>
+                <button 
+                  onClick={() => {
+                    setMethod('SERIAL');
+                    if (!serialConnected) connectSerial();
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition flex items-center gap-1.5 ${method === 'SERIAL' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-gray-500 border border-gray-200 hover:border-blue-300'}`}
+                >
+                  <Wifi size={14} /> SERIAL
+                </button>
+             </div>
+             
+             <div className="flex items-center gap-4">
+                <div className="hidden sm:flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${serialConnected || method === 'KEYBOARD' ? 'bg-green-500' : 'bg-red-500 animate-pulse'}`} />
+                  <span className="text-[10px] font-bold text-gray-400 uppercase">Hardware Status</span>
                 </div>
-                <div className="h-4 w-px bg-gray-200" />
-                <div className="flex items-center gap-1.5">
-                    <Activity size={14} className="text-blue-500" />
-                    <span className="text-[10px] font-bold text-gray-500">
-                        {method === 'KEYBOARD' ? 'Menunggu Input Keyboard (HID)' : serialConnected ? 'Komunikasi Serial Aktif' : 'Hardware Belum Terkonek'}
-                    </span>
+                <div className="bg-white border border-gray-100 rounded-lg p-1">
+                   <input 
+                      type="text" 
+                      readOnly 
+                      placeholder="Fokus Scan..."
+                      className="text-[10px] w-24 px-2 py-0.5 outline-none font-mono"
+                   />
                 </div>
-            </div>
-            <div className="flex items-center gap-2">
-                <input 
-                    type="text" 
-                    readOnly 
-                    placeholder="Area Tes Scanner..."
-                    className="bg-white border border-gray-200 rounded px-2 py-1 text-[10px] w-32 focus:ring-1 focus:ring-blue-400 outline-none"
-                    onFocus={(e) => e.target.placeholder = "Tap kartu sekarang..."}
-                    onBlur={(e) => e.target.placeholder = "Area Tes Scanner..."}
-                />
-            </div>
-        </div>
+             </div>
+          </div>
 
-        <div className="p-8 md:p-12 text-center space-y-8">
-          <div className="relative mx-auto w-48 h-48 md:w-64 md:h-64 flex items-center justify-center">
-            {/* Background Animation */}
-            <div className={`absolute inset-0 rounded-full animate-ping opacity-20 ${
-              status === 'SUCCESS' ? 'bg-green-400' : 
-              status === 'ERROR' ? 'bg-red-400' : 
-              status === 'READING' ? 'bg-blue-400' : 'bg-gray-200'
-            }`} />
-            
-            <div className={`relative z-10 w-full h-full rounded-full border-8 flex items-center justify-center transition-colors duration-300 ${
-              status === 'SUCCESS' ? 'border-green-500 bg-green-50' : 
-              status === 'ERROR' ? 'border-red-500 bg-red-50' : 
-              status === 'READING' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-gray-50'
-            }`}>
-              {status === 'SUCCESS' && lastStudent ? (
-                <div className="flex flex-col items-center">
-                  <CheckCircle size={64} className="text-green-500 mb-2" />
-                  <span className="font-bold text-green-700">BERHASIL</span>
+          <div className="p-8 md:p-16 text-center">
+            {/* Main Visual Center */}
+            <div className="relative mx-auto w-48 h-48 md:w-72 md:h-72 flex items-center justify-center mb-10 transition-transform duration-300 transform hover:scale-105">
+              {/* Animated Rings */}
+              <div className={`absolute inset-0 rounded-full animate-ping opacity-10 ${
+                status === 'SUCCESS' ? 'bg-green-400' : 
+                status === 'ERROR' ? 'bg-red-400' : 
+                status === 'READING' ? 'bg-blue-400' : 'bg-gray-200'
+              }`} />
+              <div className={`absolute inset-2 rounded-full animate-pulse opacity-20 ${
+                status === 'SUCCESS' ? 'bg-green-500' : 
+                status === 'ERROR' ? 'bg-red-500' : 
+                status === 'READING' ? 'bg-blue-300' : 'bg-gray-100'
+              }`} />
+              
+              <div className={`relative z-10 w-full h-full rounded-full border-8 flex items-center justify-center transition-all duration-300 shadow-xl ${
+                status === 'SUCCESS' ? 'border-green-500 bg-green-50 rotate-0' : 
+                status === 'ERROR' ? 'border-red-500 bg-red-50 animate-shake' : 
+                status === 'READING' ? 'border-blue-500 bg-blue-50' : 'border-gray-100 bg-gray-50'
+              }`}>
+                {status === 'SUCCESS' ? (
+                  <div className="flex flex-col items-center">
+                    <CheckCircle size={100} className="text-green-500 animate-bounce" />
+                    <span className="font-black text-green-700 tracking-tighter text-xl mt-2">BERHASIL</span>
+                  </div>
+                ) : status === 'ERROR' ? (
+                  <div className="flex flex-col items-center">
+                    <AlertCircle size={100} className="text-red-500 animate-pulse" />
+                    <span className="font-black text-red-700 tracking-tighter text-xl mt-2">GAGAL</span>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-2">
+                    <IdCard size={120} className={`${status === 'READING' ? 'text-blue-500 animate-pulse' : 'text-gray-300'}`} />
+                    {status === 'IDLE' && <div className="text-[10px] font-black text-gray-400 animate-bounce">TEMPELKAN KARTU</div>}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <h2 className={`text-3xl md:text-5xl font-black tracking-tighter uppercase transition-all ${
+                status === 'SUCCESS' ? 'text-green-600 scale-110' : 
+                status === 'ERROR' ? 'text-red-600' : 'text-gray-800'
+              }`}>
+                {message}
+              </h2>
+              
+              {lastStudent && status === 'SUCCESS' && (
+                <div className="max-w-md mx-auto bg-gray-50 p-6 rounded-3xl border-2 border-green-100 flex flex-col items-center gap-4 animate-in zoom-in-95 duration-300">
+                   <div className="text-center">
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 text-center">Identitas Siswa</p>
+                      <h3 className="text-3xl font-black text-gray-900 leading-none">{lastStudent.name}</h3>
+                      <div className="flex justify-center gap-2 mt-4">
+                         <span className="bg-white px-4 py-1.5 rounded-full border border-gray-200 text-xs font-bold font-mono">NIS: {lastStudent.nis}</span>
+                         <span className={`px-4 py-1.5 rounded-full text-xs font-bold ${lastStudent.gender === 'L' ? 'bg-blue-100 text-blue-700' : 'bg-pink-100 text-pink-700'}`}>
+                           {lastStudent.gender === 'L' ? 'LAKI-LAKI' : 'PEREMPUAN'}
+                         </span>
+                      </div>
+                   </div>
                 </div>
-              ) : status === 'ERROR' ? (
-                <div className="flex flex-col items-center">
-                  <AlertCircle size={64} className="text-red-500 mb-2" />
-                  <span className="font-bold text-red-700">GAGAL</span>
-                </div>
-              ) : (
-                <IdCard size={80} className={`${status === 'READING' ? 'text-blue-500 animate-pulse' : 'text-gray-400'}`} />
               )}
             </div>
           </div>
-
-          <div className="space-y-2">
-            <h2 className={`text-2xl md:text-3xl font-bold transition-colors ${
-              status === 'SUCCESS' ? 'text-green-600' : 
-              status === 'ERROR' ? 'text-red-600' : 'text-gray-800'
-            }`}>
-              {message}
-            </h2>
-            {status === 'IDLE' && (
-              <p className="text-gray-500 flex items-center justify-center gap-2">
-                <Clock size={16} /> Mode {method === 'KEYBOARD' ? 'Keyboard Emulator' : 'Web Serial API'} Aktif
-              </p>
-            )}
-            {method === 'SERIAL' && !serialConnected && (
-                <button 
-                    onClick={connectSerial}
-                    className="mt-4 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg text-sm font-bold border border-blue-100 hover:bg-blue-100 transition"
-                >
-                    Hubungkan Hardware Scanner
-                </button>
-            )}
-          </div>
-
-          {lastStudent && status === 'SUCCESS' && (
-            <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100 flex flex-col md:flex-row items-center gap-6 animate-in slide-in-from-bottom-4">
-              <div className="w-24 h-24 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 shrink-0">
-                <span className="text-3xl font-bold">{lastStudent.name.charAt(0)}</span>
-              </div>
-              <div className="text-center md:text-left flex-1">
-                <h3 className="text-xl font-bold text-gray-900">{lastStudent.name}</h3>
-                <div className="flex flex-wrap justify-center md:justify-start gap-4 mt-2 text-sm text-gray-500 font-medium">
-                  <span className="bg-white px-3 py-1 rounded-full border border-gray-200">NIS: {lastStudent.nis}</span>
-                  <span className={`px-3 py-1 rounded-full border ${lastStudent.gender === 'L' ? 'bg-blue-50 border-blue-100 text-blue-700' : 'bg-pink-50 border-pink-100 text-pink-700'}`}>
-                    {lastStudent.gender === 'L' ? 'Laki-laki' : 'Perempuan'}
-                  </span>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
-      </div>
 
-      <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
-        <div className="p-4 bg-gray-50 border-b border-gray-100 flex justify-between items-center">
-          <h3 className="font-bold text-gray-800 flex items-center gap-2">
-            <ArrowLeftRight size={18} className="text-blue-600" />
-            Riwayat Absensi Terakhir
-          </h3>
-          <span className="text-xs text-gray-500 px-2 py-1 bg-white rounded border border-gray-200">Hari Ini</span>
-        </div>
-        <div className="divide-y divide-gray-50">
-          {logs.length === 0 ? (
-            <div className="p-8 text-center text-gray-400 italic text-sm">
-              Belum ada log absensi terpantau.
-            </div>
-          ) : (
-            logs.map(log => (
-              <div key={log.id} className="p-4 flex items-center justify-between hover:bg-gray-50 transition">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center text-blue-600 font-bold text-sm">
-                    {log.studentName.charAt(0)}
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-gray-900 text-sm">{log.studentName}</h4>
-                    <p className="text-[10px] text-gray-500">{new Date(log.timestamp).toLocaleTimeString('id-ID')}</p>
-                  </div>
+        {/* BOTTOM: RECENT HISTORY */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+           {/* RIWAYAT UTAMA */}
+           <div className="lg:col-span-3 bg-white/80 backdrop-blur-md rounded-3xl shadow-xl border border-white/20 overflow-hidden">
+             <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-white/50">
+                <h3 className="font-black text-gray-800 text-sm flex items-center gap-2">
+                   <ArrowLeftRight size={18} className="text-blue-600" />
+                   RIWAYAT TAP TERBARU
+                </h3>
+             </div>
+             <div className="p-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {logs.length === 0 ? (
+                    <div className="p-10 text-center text-gray-400 italic text-xs col-span-full">
+                       Belum ada transaksi tap hari ini.
+                    </div>
+                  ) : (
+                    logs.map((log, i) => (
+                      <div key={log.id} className={`p-4 rounded-2xl flex items-center justify-between border transition-all ${
+                        i === 0 ? 'bg-blue-600 text-white border-blue-500 shadow-lg scale-102 font-bold ring-4 ring-blue-500/20' : 'bg-white text-gray-700 border-gray-100'
+                      }`}>
+                         <div className="flex items-center gap-3">
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm ${i === 0 ? 'bg-white text-blue-600' : 'bg-gray-100 text-gray-500'}`}>
+                               {log.studentName.charAt(0)}
+                            </div>
+                            <div className="overflow-hidden">
+                               <h4 className={`text-sm truncate ${i === 0 ? 'text-white' : 'text-gray-900'}`}>{log.studentName}</h4>
+                               <p className={`text-[10px] ${i === 0 ? 'text-blue-100' : 'text-gray-500'}`}>{new Date(log.timestamp).toLocaleTimeString('id-ID')}</p>
+                            </div>
+                         </div>
+                         <div className="text-right shrink-0">
+                            <span className={`text-[10px] font-black px-3 py-1 rounded-full uppercase ${
+                              log.status === 'HADIR' ? (i === 0 ? 'bg-green-400 text-white' : 'bg-green-100 text-green-700') : 
+                              log.status === 'TERLAMBAT' ? (i === 0 ? 'bg-yellow-400 text-white' : 'bg-yellow-100 text-yellow-700') : 
+                              (i === 0 ? 'bg-blue-400 text-white' : 'bg-blue-100 text-blue-700')
+                            }`}>
+                               {log.status}
+                            </span>
+                         </div>
+                      </div>
+                    ))
+                  )}
                 </div>
-                <div className="text-right">
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                    log.status === 'HADIR' ? 'bg-green-100 text-green-700' : 
-                    log.status === 'TERLAMBAT' ? 'bg-yellow-100 text-yellow-700' : 'bg-blue-100 text-blue-700'
-                  }`}>
-                    {log.status}
-                  </span>
-                  <p className="text-[9px] text-gray-400 mt-1 uppercase tracking-tighter">via {log.method}</p>
-                </div>
+             </div>
+           </div>
+
+           {/* STATS / INFO */}
+           <div className="bg-white/80 backdrop-blur-md rounded-3xl shadow-xl border border-white/20 p-6 flex flex-col justify-center text-center">
+              <Activity size={32} className="mx-auto text-blue-600 mb-4" />
+              <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Total Tap Hari Ini</h4>
+              <p className="text-6xl font-black text-gray-900 tracking-tighter">{logs.length}</p>
+              <div className="mt-6 pt-6 border-t border-gray-100 space-y-2">
+                 <div className="flex justify-between text-[10px] font-bold">
+                    <span className="text-gray-500">MASUK</span>
+                    <span className="text-green-600">{logs.filter(l => l.status === 'HADIR' || l.status === 'TERLAMBAT').length}</span>
+                 </div>
+                 <div className="flex justify-between text-[10px] font-bold">
+                    <span className="text-gray-500">PULANG</span>
+                    <span className="text-blue-600">{logs.filter(l => l.status === 'PULANG').length}</span>
+                 </div>
               </div>
-            ))
-          )}
+           </div>
         </div>
       </div>
     </div>
