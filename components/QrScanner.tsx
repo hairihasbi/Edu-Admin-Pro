@@ -25,12 +25,12 @@ const QrScanner: React.FC<QrScannerProps> = ({ onScan, onClose }) => {
             fps: 10,
             qrbox: { width: 250, height: 250 },
           },
-          (decodedText) => {
+          (decodedText: string) => {
             // Success
             onScan(decodedText);
             stopScanner();
           },
-          (errorMessage) => {
+          (errorMessage: string) => {
             // parse error, ignore it
           }
         );
