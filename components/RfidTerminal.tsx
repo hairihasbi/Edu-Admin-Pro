@@ -23,7 +23,16 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
   const [scanning, setScanning] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [scanBuffer, setScanBuffer] = useState('');
   const terminalRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    // Auto focus scan input on mount and when mode is KEYBOARD
+    if (method === 'KEYBOARD') {
+      inputRef.current?.focus();
+    }
+  }, [method]);
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -71,15 +80,20 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
     if (method !== 'KEYBOARD') return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      // If user is typing in a real input (not our scan focus), don't intercept
+      if (e.target instanceof HTMLInputElement && e.target !== inputRef.current) return;
+
       // Common end markers for RFID readers are Enter or Tab
       if (e.key === 'Enter' || e.key === 'Tab') {
         if (keyboardBuffer.current.length > 3) {
           processTag(keyboardBuffer.current.trim());
         }
         keyboardBuffer.current = '';
+        setScanBuffer('');
         e.preventDefault();
       } else if (e.key.length === 1) {
         keyboardBuffer.current += e.key;
+        setScanBuffer(keyboardBuffer.current);
       }
     };
 
@@ -255,13 +269,21 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
                   <div className={`w-2 h-2 rounded-full ${serialConnected || method === 'KEYBOARD' ? 'bg-green-500' : 'bg-red-500 animate-pulse'}`} />
                   <span className="text-[10px] font-bold text-gray-400 uppercase">Hardware Status</span>
                 </div>
-                <div className="bg-white border border-gray-100 rounded-lg p-1">
+                <div className={`bg-white border transition-colors rounded-lg p-1 flex items-center gap-2 ${method === 'KEYBOARD' ? 'border-blue-300 ring-2 ring-blue-100' : 'border-gray-100 opacity-50'}`}>
                    <input 
+                      ref={inputRef}
                       type="text" 
-                      readOnly 
-                      placeholder="Fokus Scan..."
-                      className="text-[10px] w-24 px-2 py-0.5 outline-none font-mono"
+                      value={scanBuffer}
+                      onChange={(e) => {
+                        // Keep our ref in sync if user types directly
+                        keyboardBuffer.current = e.target.value;
+                        setScanBuffer(e.target.value);
+                      }}
+                      placeholder={method === 'KEYBOARD' ? "Siap Scan..." : "Mode Serial..."}
+                      className="text-[10px] w-24 px-2 py-0.5 outline-none font-mono font-bold text-blue-600"
+                      disabled={method !== 'KEYBOARD'}
                    />
+                   {method === 'KEYBOARD' && <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />}
                 </div>
              </div>
           </div>
