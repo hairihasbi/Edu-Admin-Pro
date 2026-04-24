@@ -117,7 +117,8 @@ import {
   Moon,
   Sun,
   Play,
-  QrCode
+  QrCode,
+  Camera
 } from 'lucide-react';
 
 export {
@@ -237,5 +238,6 @@ export {
   Moon,
   Sun,
   Play,
-  QrCode
+  QrCode,
+  Camera
 };

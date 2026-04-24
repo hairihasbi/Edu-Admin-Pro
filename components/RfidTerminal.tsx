@@ -34,6 +34,9 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
     if (method === 'KEYBOARD') {
       inputRef.current?.focus();
     }
+    if (method === 'QR') {
+      setShowQrScanner(true);
+    }
   }, [method]);
 
   useEffect(() => {
