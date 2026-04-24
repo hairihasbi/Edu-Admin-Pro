@@ -25,7 +25,7 @@ const StudentQrGenerator: React.FC<StudentQrGeneratorProps> = ({ students, class
 
   return (
     <div className="space-y-6">
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden print:shadow-none print:border-none">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden print:shadow-none print:border-none print:bg-transparent">
         <div className="p-6 border-b border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 print:hidden">
           <div>
             <h3 className="font-bold text-gray-800 flex items-center gap-2">
@@ -38,9 +38,9 @@ const StudentQrGenerator: React.FC<StudentQrGeneratorProps> = ({ students, class
           </div>
           <button 
             onClick={handlePrint}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 transition shadow-md"
+            className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-black hover:bg-blue-700 transition shadow-lg hover:shadow-blue-200"
           >
-            <Printer size={16} /> Cetak Kartu QR
+            <Printer size={18} /> CETAK KARTU QR
           </button>
         </div>
 
@@ -78,22 +78,22 @@ const StudentQrGenerator: React.FC<StudentQrGeneratorProps> = ({ students, class
           </div>
         </div>
 
-        <div className="p-6">
+        <div className="p-6 print:p-0">
           {filteredStudents.length === 0 ? (
             <div className="p-12 text-center text-gray-400 italic bg-gray-50 rounded-xl border border-dashed border-gray-200 print:hidden">
               Data siswa tidak ditemukan.
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6 print:grid-cols-4 print:gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6 print:grid-cols-3 print:gap-4 print:block">
               {filteredStudents.map((student) => {
                 const className = classes.find(c => c.id === student.classId)?.name || '-';
                 return (
-                  <div key={student.id} className="p-4 bg-white border border-gray-100 rounded-2xl shadow-sm flex flex-col items-center text-center group transition-all hover:shadow-md print:shadow-none print:border print:border-gray-200">
+                  <div key={student.id} className="p-4 bg-white border border-gray-100 rounded-2xl shadow-sm flex flex-col items-center text-center group transition-all hover:shadow-md print:shadow-none print:border print:border-gray-300 print:rounded-none print:w-[31%] print:inline-flex print:m-[1%] print:break-inside-avoid">
                     <div className="mb-3 p-2 bg-white rounded-lg">
                       <QRCodeSVG 
                         value={student.rfidTag || student.nis} 
-                        size={100}
-                        level="M"
+                        size={120}
+                        level="H"
                         includeMargin={false}
                       />
                     </div>
@@ -101,7 +101,7 @@ const StudentQrGenerator: React.FC<StudentQrGeneratorProps> = ({ students, class
                       <h4 className="font-bold text-gray-900 text-[11px] leading-tight line-clamp-2 uppercase h-8 flex items-center justify-center">
                         {student.name}
                       </h4>
-                      <p className="text-[9px] font-black text-blue-600">{className}</p>
+                      <p className="text-[10px] font-black text-blue-600">{className}</p>
                       <p className="text-[9px] text-gray-400 font-mono">NIS: {student.nis}</p>
                     </div>
                   </div>
@@ -117,12 +117,47 @@ const StudentQrGenerator: React.FC<StudentQrGeneratorProps> = ({ students, class
             <p className="font-bold mb-1 uppercase tracking-tighter">Petunjuk Pencetakan:</p>
             <ul className="list-disc ml-4 space-y-1 opacity-80 text-[10px]">
               <li>Gunakan kertas sticker atau kertas kartu untuk hasil terbaik.</li>
-              <li>Kode QR ini kompatibel dengan semua jenis Barcode/QR Scanner HID.</li>
-              <li>Siswa dapat membawa versi cetak atau menunjukkan di HP untuk absensi.</li>
+              <li>Kode QR ini kompatibel dengan semua jenis Barcode/QR Scanner HID atau Kamera.</li>
+              <li>Pastikan pengaturan "Background Graphics" dicentang saat mencetak jika menggunakan warna.</li>
             </ul>
           </div>
         </div>
       </div>
+
+      <style dangerouslySetInnerHTML={{ __html: `
+        @media print {
+          body * {
+            visibility: hidden;
+          }
+          #print-area, #print-area * {
+            visibility: visible;
+          }
+          .print\\:hidden {
+            display: none !important;
+          }
+          .print\\:block {
+            display: block !important;
+          }
+          @page {
+            margin: 1cm;
+            size: auto;
+          }
+          /* This ensures only our container is shown */
+          main, nav, aside, header, footer {
+            display: none !important;
+          }
+          div.print\\:shadow-none {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            visibility: visible;
+          }
+          div.print\\:shadow-none * {
+            visibility: visible;
+          }
+        }
+      `}} />
     </div>
   );
 };
