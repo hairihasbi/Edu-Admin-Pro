@@ -170,7 +170,7 @@ export interface RfidLog extends Syncable {
   schoolNpsn: string;
   timestamp: string;
   status: 'HADIR' | 'PULANG' | 'TERLAMBAT' | 'IZIN';
-  method: 'KEYBOARD' | 'SERIAL';
+  method: 'KEYBOARD' | 'SERIAL' | 'QR';
   deviceId?: string; // NEW: To track which pos/device sent the log
 }
 export interface AttendanceRecord extends Syncable {
