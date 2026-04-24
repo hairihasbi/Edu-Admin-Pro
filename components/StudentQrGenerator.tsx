@@ -79,7 +79,7 @@ const StudentQrGenerator: React.FC<StudentQrGeneratorProps> = ({ students, class
           </div>
         </div>
 
-        <div className="p-6 print:p-0">
+        <div id="print-area" className="p-6 print:p-0 print:absolute print:top-0 print:left-0 print:w-full">
           {filteredStudents.length === 0 ? (
             <div className="p-12 text-center text-gray-400 italic bg-gray-50 rounded-xl border border-dashed border-gray-200 print:hidden">
               Data siswa tidak ditemukan.
@@ -142,10 +142,10 @@ const StudentQrGenerator: React.FC<StudentQrGeneratorProps> = ({ students, class
       <style dangerouslySetInnerHTML={{ __html: `
         @media print {
           body * {
-            visibility: hidden;
+            visibility: hidden !important;
           }
           #print-area, #print-area * {
-            visibility: visible;
+            visibility: visible !important;
           }
           .print\\:hidden {
             display: none !important;
@@ -154,22 +154,12 @@ const StudentQrGenerator: React.FC<StudentQrGeneratorProps> = ({ students, class
             display: block !important;
           }
           @page {
-            margin: 1cm;
+            margin: 0.5cm;
             size: auto;
           }
-          /* This ensures only our container is shown */
-          main, nav, aside, header, footer {
+          /* Hide app chrome */
+          nav, aside, header, footer, [role="navigation"], .sidebar {
             display: none !important;
-          }
-          div.print\\:shadow-none {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-            visibility: visible;
-          }
-          div.print\\:shadow-none * {
-            visibility: visible;
           }
         }
       `}} />
