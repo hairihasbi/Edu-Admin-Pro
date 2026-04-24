@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
-import { Student, ClassRoom } from '../types';
+import { Student, ClassRoom, User } from '../types';
 import { QRCodeSVG } from 'qrcode.react';
 import { QrCode, Printer, Info, Search, Filter } from './Icons';
 
 interface StudentQrGeneratorProps {
   students: Student[];
   classes: ClassRoom[];
+  user: User;
 }
 
-const StudentQrGenerator: React.FC<StudentQrGeneratorProps> = ({ students, classes }) => {
+const StudentQrGenerator: React.FC<StudentQrGeneratorProps> = ({ students, classes, user }) => {
   const [selectedClassId, setSelectedClassId] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -84,25 +85,39 @@ const StudentQrGenerator: React.FC<StudentQrGeneratorProps> = ({ students, class
               Data siswa tidak ditemukan.
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6 print:grid-cols-3 print:gap-4 print:block">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6 print:grid-cols-2 print:gap-4 print:block">
               {filteredStudents.map((student) => {
                 const className = classes.find(c => c.id === student.classId)?.name || '-';
                 return (
-                  <div key={student.id} className="p-4 bg-white border border-gray-100 rounded-2xl shadow-sm flex flex-col items-center text-center group transition-all hover:shadow-md print:shadow-none print:border print:border-gray-300 print:rounded-none print:w-[31%] print:inline-flex print:m-[1%] print:break-inside-avoid">
-                    <div className="mb-3 p-2 bg-white rounded-lg">
+                  <div key={student.id} className="p-4 bg-white border border-gray-100 rounded-2xl shadow-sm flex flex-col items-center text-center group transition-all hover:shadow-md print:shadow-none print:border print:border-gray-300 print:rounded-none print:w-[8.5cm] print:h-[5.5cm] print:inline-flex print:flex-row print:m-[2mm] print:break-inside-avoid print:p-4 print:text-left print:relative">
+                    {/* ID Card Layout for Print */}
+                    <div className="hidden print:block absolute top-0 left-0 w-1.5 h-full bg-blue-600"></div>
+                    
+                    <div className="mb-3 p-2 bg-white rounded-lg print:mb-0 print:mr-4 print:p-0">
                       <QRCodeSVG 
                         value={student.rfidTag || student.nis} 
                         size={120}
                         level="H"
                         includeMargin={false}
+                        className="print:w-[3.5cm] print:h-[3.5cm]"
                       />
                     </div>
-                    <div className="space-y-1">
-                      <h4 className="font-bold text-gray-900 text-[11px] leading-tight line-clamp-2 uppercase h-8 flex items-center justify-center">
+                    
+                    <div className="space-y-1 flex-1">
+                      <div className="hidden print:block mb-2 border-b border-gray-100 pb-1">
+                        <p className="text-[8px] font-black text-blue-600 uppercase tracking-widest">{user.schoolName}</p>
+                        <p className="text-[6px] text-gray-400">KARTU IDENTITAS DIGITAL</p>
+                      </div>
+                      
+                      <h4 className="font-bold text-gray-900 text-[11px] leading-tight line-clamp-2 uppercase h-8 flex items-center justify-center print:justify-start print:text-[12px] print:h-auto print:mb-1">
                         {student.name}
                       </h4>
-                      <p className="text-[10px] font-black text-blue-600">{className}</p>
-                      <p className="text-[9px] text-gray-400 font-mono">NIS: {student.nis}</p>
+                      <p className="text-[10px] font-black text-blue-600 print:text-[10px]">{className}</p>
+                      <p className="text-[9px] text-gray-400 font-mono print:text-[10px] mt-1">NIS: {student.nis}</p>
+                      
+                      <div className="hidden print:block mt-4 pt-2 border-t border-gray-50">
+                        <p className="text-[6px] text-gray-300 italic">Scan QR ini untuk absensi kehadiran di terminal sekolah.</p>
+                      </div>
                     </div>
                   </div>
                 );

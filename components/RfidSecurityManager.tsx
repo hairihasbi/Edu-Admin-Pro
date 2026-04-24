@@ -664,7 +664,7 @@ const RfidSecurityManager: React.FC<RfidSecurityManagerProps> = ({ user }) => {
       )}
 
       {activeTab === "QR" && (
-        <StudentQrGenerator students={students} classes={classes} />
+        <StudentQrGenerator students={students} classes={classes} user={user} />
       )}
 
       {activeTab === "MANUAL" && (
