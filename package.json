@@ -24,6 +24,7 @@
     "framer-motion": "^11.11.17",
     "html2canvas": "^1.4.1",
     "html2pdf.js": "^0.10.1",
+    "html5-qrcode": "^2.3.8",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.7",
     "katex": "^0.16.9",
