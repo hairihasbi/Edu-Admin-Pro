@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { User, Student, SystemSettings, ClassRoom } from "../types";
 import { db } from "../services/db";
+import StudentQrGenerator from "./StudentQrGenerator";
+import ManualAttendance from "./ManualAttendance";
+import { QRCodeSVG } from "qrcode.react";
 import {
   getSystemSettings,
   saveSystemSettings,
@@ -24,13 +27,18 @@ import {
   Clock,
   Save,
   Info,
+  QrCode,
+  Printer,
+  Download,
+  ClipboardList,
+  Filter,
 } from "./Icons";
 
 interface RfidSecurityManagerProps {
   user: User;
 }
 
-type TabType = "CONTROL" | "SECURITY" | "CARD";
+type TabType = "CONTROL" | "SECURITY" | "CARD" | "QR" | "MANUAL";
 
 const RfidSecurityManager: React.FC<RfidSecurityManagerProps> = ({ user }) => {
   const [activeTab, setActiveTab] = useState<TabType>("CONTROL");
@@ -209,6 +217,18 @@ const RfidSecurityManager: React.FC<RfidSecurityManagerProps> = ({ user }) => {
             className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition ${activeTab === "CARD" ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
           >
             <IdCard size={18} /> Layanan Kartu
+          </button>
+          <button
+            onClick={() => setActiveTab("QR")}
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition ${activeTab === "QR" ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+          >
+            <QrCode size={18} /> Generator QR
+          </button>
+          <button
+            onClick={() => setActiveTab("MANUAL")}
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition ${activeTab === "MANUAL" ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+          >
+            <ClipboardList size={18} /> Manual
           </button>
         </div>
       </div>
@@ -641,6 +661,14 @@ const RfidSecurityManager: React.FC<RfidSecurityManagerProps> = ({ user }) => {
             </table>
           </div>
         </div>
+      )}
+
+      {activeTab === "QR" && (
+        <StudentQrGenerator students={students} classes={classes} />
+      )}
+
+      {activeTab === "MANUAL" && (
+        <ManualAttendance students={students} classes={classes} user={user} />
       )}
 
       {/* Pairing Modal */}

@@ -116,7 +116,8 @@ import {
   Home, // Added Home
   Moon,
   Sun,
-  Play
+  Play,
+  QrCode
 } from 'lucide-react';
 
 export {
@@ -235,5 +236,6 @@ export {
   Home,
   Moon,
   Sun,
-  Play
+  Play,
+  QrCode
 };

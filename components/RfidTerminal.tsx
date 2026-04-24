@@ -2,10 +2,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { User, Student, RfidLog, SystemSettings } from '../types';
 import { getStudentByRfid, saveRfidLog, getSystemSettings } from '../services/database';
+import QrScanner from './QrScanner';
 import { 
   Wifi, WifiOff, Smartphone, IdCard, 
   CheckCircle, AlertCircle, Clock, ArrowLeftRight,
-  Activity, Layout, X
+  Activity, Layout, X, QrCode, RefreshCcw
 } from './Icons';
 
 interface RfidTerminalProps {
@@ -13,7 +14,7 @@ interface RfidTerminalProps {
 }
 
 const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
-  const [method, setMethod] = useState<'KEYBOARD' | 'SERIAL'>('KEYBOARD');
+  const [method, setMethod] = useState<'KEYBOARD' | 'SERIAL' | 'QR'>('KEYBOARD');
   const [status, setStatus] = useState<'IDLE' | 'READING' | 'SUCCESS' | 'ERROR'>('IDLE');
   const [message, setMessage] = useState('Silakan Tap Kartu RFID Anda');
   const [lastStudent, setLastStudent] = useState<Student | null>(null);
@@ -23,6 +24,7 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
   const [scanning, setScanning] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showQrScanner, setShowQrScanner] = useState(false);
   const [scanBuffer, setScanBuffer] = useState('');
   const terminalRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -224,7 +226,7 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
               <h1 className="text-xl font-black uppercase tracking-tighter">Terminal RFID {user.schoolName}</h1>
               <div className="flex items-center gap-2 text-xs font-bold opacity-80 uppercase">
                 <div className={`w-2 h-2 rounded-full ${status === 'IDLE' ? 'bg-green-400 animate-pulse' : 'bg-white'}`} />
-                {method === 'KEYBOARD' ? 'Keyboard Mode' : 'Serial Mode'} | {status}
+                {method === 'KEYBOARD' ? 'Keyboard Mode' : method === 'SERIAL' ? 'Serial Mode' : 'QR Scan Mode'} | {status}
                 {isFullscreen && <span className="ml-2 text-yellow-400">● KIOSK MODE ACTIVE</span>}
               </div>
             </div>
@@ -262,14 +264,20 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
                 >
                   <Wifi size={14} /> SERIAL
                 </button>
+                <button 
+                  onClick={() => setMethod('QR')}
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition flex items-center gap-1.5 ${method === 'QR' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-gray-500 border border-gray-200 hover:border-blue-300'}`}
+                >
+                  <QrCode size={14} /> KODE QR
+                </button>
              </div>
              
              <div className="flex items-center gap-4">
                 <div className="hidden sm:flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${serialConnected || method === 'KEYBOARD' ? 'bg-green-500' : 'bg-red-500 animate-pulse'}`} />
+                  <div className={`w-2 h-2 rounded-full ${serialConnected || method === 'KEYBOARD' || method === 'QR' ? 'bg-green-500' : 'bg-red-500 animate-pulse'}`} />
                   <span className="text-[10px] font-bold text-gray-400 uppercase">Hardware Status</span>
                 </div>
-                <div className={`bg-white border transition-colors rounded-lg p-1 flex items-center gap-2 ${method === 'KEYBOARD' ? 'border-blue-300 ring-2 ring-blue-100' : 'border-gray-100 opacity-50'}`}>
+                <div className={`bg-white border transition-colors rounded-lg p-1 flex items-center gap-2 ${method !== 'SERIAL' ? 'border-blue-300 ring-2 ring-blue-100' : 'border-gray-100 opacity-50'}`}>
                    <input 
                       ref={inputRef}
                       type="text" 
@@ -321,7 +329,11 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
                 ) : (
                   <div className="flex flex-col items-center gap-2">
                     <IdCard size={120} className={`${status === 'READING' ? 'text-blue-500 animate-pulse' : 'text-gray-300'}`} />
-                    {status === 'IDLE' && <div className="text-[10px] font-black text-gray-400 animate-bounce">TEMPELKAN KARTU</div>}
+                    {status === 'IDLE' && (
+                      <div className="text-[10px] font-black text-gray-400 animate-bounce uppercase">
+                        {method === 'QR' ? 'Posisikan QR ke Scanner' : 'Tempelkan Kartu'}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -417,6 +429,16 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
            </div>
         </div>
       </div>
+
+      {showQrScanner && (
+        <QrScanner 
+          onScan={(data) => {
+            processTag(data);
+            setShowQrScanner(false);
+          }}
+          onClose={() => setShowQrScanner(false)}
+        />
+      )}
     </div>
   );
 };
