@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { User, Student, RfidLog, SystemSettings } from '../types';
-import { getStudentByRfid, saveRfidLog, getSystemSettings } from '../services/database';
+import { getStudentByRfid, saveRfidLog, getSystemSettings, normalizeRfid, getClassById } from '../services/database';
 import QrScanner from './QrScanner';
 import { 
   Wifi, WifiOff, Smartphone, IdCard, 
@@ -143,7 +143,7 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
 
     try {
       const student = await getStudentByRfid(tagId, user.schoolNpsn || '');
-      const normalizedTag = (await import('../services/database')).normalizeRfid(tagId);
+      const normalizedTag = normalizeRfid(tagId);
       
       if (student) {
         const now = new Date();
@@ -169,7 +169,7 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
           attendanceStatus = 'TERLAMBAT';
         }
 
-        const classData = await (await import('../services/database')).getClassById(student.classId);
+        const classData = await getClassById(student.classId);
 
         const newLog = await saveRfidLog({
           studentId: student.id,
