@@ -1279,11 +1279,6 @@ const AppContent: React.FC = () => {
                       label="Terminal RFID"
                     />
                     <NavLink
-                      to="/monitoring-kurikulum"
-                      icon={Activity}
-                      label="Monitoring RFID & KBM"
-                    />
-                    <NavLink
                       to="/rfid-officers"
                       icon={UserCheck}
                       label="Petugas RFID"
@@ -1326,10 +1321,8 @@ const AppContent: React.FC = () => {
                   </>
                 ) : (
                   <>
-                    {(currentUser.additionalRole === "WAKASEK_KURIKULUM" ||
-                      currentUser.additionalRole === "WALI_KELAS" ||
-                      currentUser.subject === "Bimbingan Konseling" ||
-                      currentUser.isRfidOfficer) && (
+                    {((currentUser.additionalRole as any) === "KEPALA_SEKOLAH" || 
+                      currentUser.additionalRole === "WAKASEK_KURIKULUM") && (
                       <NavLink
                         to="/monitoring-kurikulum"
                         icon={Activity}
@@ -1870,11 +1863,8 @@ const AppContent: React.FC = () => {
                     element={<SupervisionAssessment user={currentUser} />}
                   />
                 )}
-                {(currentUser.additionalRole === "KEPALA_SEKOLAH" || 
-                  currentUser.additionalRole === "WAKASEK_KURIKULUM" || 
-                  currentUser.additionalRole === "WALI_KELAS" || 
-                  currentUser.subject === "Bimbingan Konseling" || 
-                  currentUser.isRfidOfficer) && (
+                {((currentUser.additionalRole as any) === "KEPALA_SEKOLAH" || 
+                  currentUser.additionalRole === "WAKASEK_KURIKULUM") && (
                   <Route
                     path="/monitoring-kurikulum"
                     element={<WakasekMonitoring user={currentUser} />}
