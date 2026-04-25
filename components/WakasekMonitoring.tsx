@@ -613,49 +613,112 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                       <label className="block text-sm font-bold text-gray-700 mb-2">Jam Mulai Masuk (Format 24 Jam)</label>
-                      <div className="relative">
-                        <Clock size={16} className="absolute left-3 top-3 text-gray-400" />
-                        <input 
-                          type="time" 
-                          step="60"
-                          className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
-                          value={settings?.rfidCheckInStart || '06:00'}
-                          onChange={(e) => setSettings(prev => prev ? ({ ...prev, rfidCheckInStart: e.target.value }) : null)}
-                          required
-                        />
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 flex items-center gap-1">
+                          <select 
+                            className="flex-1 px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
+                            value={(settings?.rfidCheckInStart || '06:00').split(':')[0]}
+                            onChange={(e) => {
+                              const mins = (settings?.rfidCheckInStart || '06:00').split(':')[1];
+                              const newVal = `${e.target.value}:${mins}`;
+                              setSettings(prev => prev ? ({ ...prev, rfidCheckInStart: newVal }) : null);
+                            }}
+                          >
+                            {Array.from({ length: 24 }).map((_, i) => (
+                              <option key={i} value={i.toString().padStart(2, '0')}>{i.toString().padStart(2, '0')}</option>
+                            ))}
+                          </select>
+                          <span className="font-bold">:</span>
+                          <select 
+                            className="flex-1 px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
+                            value={(settings?.rfidCheckInStart || '06:00').split(':')[1]}
+                            onChange={(e) => {
+                              const hours = (settings?.rfidCheckInStart || '06:00').split(':')[0];
+                              const newVal = `${hours}:${e.target.value}`;
+                              setSettings(prev => prev ? ({ ...prev, rfidCheckInStart: newVal }) : null);
+                            }}
+                          >
+                            {Array.from({ length: 60 }).map((_, i) => (
+                              <option key={i} value={i.toString().padStart(2, '0')}>{i.toString().padStart(2, '0')}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <Clock size={20} className="text-gray-400" />
                       </div>
-                      <p className="mt-1 text-[10px] text-gray-500 italic">Gunakan format 24 jam (00:00 - 23:59). Contoh: 06:30</p>
+                      <p className="mt-1 text-[10px] text-gray-500 italic">Pilih jam dan menit (00:00 - 23:59).</p>
                     </div>
 
                     <div>
                       <label className="block text-sm font-bold text-gray-700 mb-2">Batas Terlambat (Format 24 Jam)</label>
-                      <div className="relative">
-                        <Clock size={16} className="absolute left-3 top-3 text-gray-400" />
-                        <input 
-                          type="time" 
-                          step="60"
-                          className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 outline-none"
-                          value={settings?.rfidCheckInLate || '08:30'}
-                          onChange={(e) => setSettings(prev => prev ? ({ ...prev, rfidCheckInLate: e.target.value }) : null)}
-                          required
-                        />
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 flex items-center gap-1">
+                          <select 
+                            className="flex-1 px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 outline-none"
+                            value={(settings?.rfidCheckInLate || '08:30').split(':')[0]}
+                            onChange={(e) => {
+                              const mins = (settings?.rfidCheckInLate || '08:30').split(':')[1];
+                              const newVal = `${e.target.value}:${mins}`;
+                              setSettings(prev => prev ? ({ ...prev, rfidCheckInLate: newVal }) : null);
+                            }}
+                          >
+                            {Array.from({ length: 24 }).map((_, i) => (
+                              <option key={i} value={i.toString().padStart(2, '0')}>{i.toString().padStart(2, '0')}</option>
+                            ))}
+                          </select>
+                          <span className="font-bold">:</span>
+                          <select 
+                            className="flex-1 px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 outline-none"
+                            value={(settings?.rfidCheckInLate || '08:30').split(':')[1]}
+                            onChange={(e) => {
+                              const hours = (settings?.rfidCheckInLate || '08:30').split(':')[0];
+                              const newVal = `${hours}:${e.target.value}`;
+                              setSettings(prev => prev ? ({ ...prev, rfidCheckInLate: newVal }) : null);
+                            }}
+                          >
+                            {Array.from({ length: 60 }).map((_, i) => (
+                              <option key={i} value={i.toString().padStart(2, '0')}>{i.toString().padStart(2, '0')}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <Clock size={20} className="text-gray-400" />
                       </div>
-                      <p className="mt-1 text-[10px] text-gray-500 italic text-red-500">Gunakan format 24 jam. Contoh: 08:00</p>
+                      <p className="mt-1 text-[10px] text-red-500 italic">Lewat jam ini dianggap terlambat.</p>
                     </div>
                   </div>
 
                   <div>
                     <label className="block text-sm font-bold text-gray-700 mb-2">Jam Mulai Pulang (Format 24 Jam)</label>
-                    <div className="relative">
-                      <Clock size={16} className="absolute left-3 top-3 text-gray-400" />
-                      <input 
-                        type="time" 
-                        step="60"
-                        className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                        value={settings?.rfidCheckOutStart || '14:00'}
-                        onChange={(e) => setSettings(prev => prev ? ({ ...prev, rfidCheckOutStart: e.target.value }) : null)}
-                        required
-                      />
+                    <div className="flex items-center gap-2 max-w-sm">
+                      <div className="flex-1 flex items-center gap-1">
+                        <select 
+                          className="flex-1 px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                          value={(settings?.rfidCheckOutStart || '14:00').split(':')[0]}
+                          onChange={(e) => {
+                            const mins = (settings?.rfidCheckOutStart || '14:00').split(':')[1];
+                            const newVal = `${e.target.value}:${mins}`;
+                            setSettings(prev => prev ? ({ ...prev, rfidCheckOutStart: newVal }) : null);
+                          }}
+                        >
+                          {Array.from({ length: 24 }).map((_, i) => (
+                            <option key={i} value={i.toString().padStart(2, '0')}>{i.toString().padStart(2, '0')}</option>
+                          ))}
+                        </select>
+                        <span className="font-bold">:</span>
+                        <select 
+                          className="flex-1 px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                          value={(settings?.rfidCheckOutStart || '14:00').split(':')[1]}
+                          onChange={(e) => {
+                            const hours = (settings?.rfidCheckOutStart || '14:00').split(':')[0];
+                            const newVal = `${hours}:${e.target.value}`;
+                            setSettings(prev => prev ? ({ ...prev, rfidCheckOutStart: newVal }) : null);
+                          }}
+                        >
+                          {Array.from({ length: 60 }).map((_, i) => (
+                            <option key={i} value={i.toString().padStart(2, '0')}>{i.toString().padStart(2, '0')}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <Clock size={20} className="text-gray-400" />
                     </div>
                     <p className="mt-1 text-[10px] text-gray-500 italic">Gunakan format 24 jam. Contoh: 14:30 untuk jam setengah tiga sore.</p>
                   </div>
