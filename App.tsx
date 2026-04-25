@@ -51,6 +51,7 @@ import RfidTerminal from "./components/RfidTerminal";
 import RfidOfficerManager from "./components/RfidOfficerManager";
 import RfidSecurityManager from "./components/RfidSecurityManager";
 import AttendanceMonitoring from "./components/AttendanceMonitoring";
+import ProposalPage from "./components/ProposalPage";
 import Breadcrumbs from "./components/Breadcrumbs";
 import OnboardingTour from "./components/OnboardingTour";
 import ForgotPassword from "./components/ForgotPassword";
@@ -119,6 +120,7 @@ import {
   Sun,
   Moon,
   Clock,
+  FileText,
 } from "./components/Icons";
 
 // Konstanta Timeout: 15 Menit
@@ -1238,6 +1240,16 @@ const AppContent: React.FC = () => {
                 />{" "}
                 {/* NEW LINK */}
                 <NavLink
+                  to="/attendance-monitoring"
+                  icon={Clock}
+                  label="Pantau Absensi RFID"
+                />
+                <NavLink
+                  to="/proposal"
+                  icon={FileText}
+                  label="Proposal & Fitur"
+                />
+                <NavLink
                   to="/site-settings"
                   icon={Globe}
                   label="Pengaturan Situs"
@@ -1372,7 +1384,9 @@ const AppContent: React.FC = () => {
                     {((currentUser.additionalRole as any) ===
                       "KEPALA_SEKOLAH" ||
                       currentUser.additionalRole === "WAKASEK_KURIKULUM" ||
+                      currentUser.additionalRole === "WALI_KELAS" ||
                       currentUser.homeroomClassId ||
+                      currentUser.isRfidOfficer ||
                       currentUser.subject === "Bimbingan Konseling") && (
                       <NavLink
                         to="/attendance-monitoring"
@@ -1667,6 +1681,14 @@ const AppContent: React.FC = () => {
                 />
                 <Route path="/sync" element={<SyncPage user={currentUser} />} />{" "}
                 {/* NEW ROUTE */}
+                <Route
+                  path="/attendance-monitoring"
+                  element={<AttendanceMonitoring user={currentUser} />}
+                />
+                <Route
+                  path="/proposal"
+                  element={<ProposalPage />}
+                />
                 <Route path="/site-settings" element={<AdminSiteSettings />} />
                 <Route path="/settings" element={<AdminSettings />} />
                 <Route path="/system-logs" element={<AdminSystemLogs />} />
