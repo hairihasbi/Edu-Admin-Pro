@@ -1286,7 +1286,7 @@ const AppContent: React.FC = () => {
                     <NavLink
                       to="/attendance-monitoring"
                       icon={Clock}
-                      label="Pantau Absensi RFID"
+                      label="Monitoring Absensi RFID"
                     />
                     <NavLink
                       to="/rfid-officers"
@@ -1331,8 +1331,7 @@ const AppContent: React.FC = () => {
                   </>
                 ) : (
                   <>
-                    {((currentUser.additionalRole) === "KEPALA_SEKOLAH" || 
-                      currentUser.additionalRole === "WAKASEK_KURIKULUM") && (
+                    {currentUser.additionalRole === "WAKASEK_KURIKULUM" && (
                       <NavLink
                         to="/monitoring-kurikulum"
                         icon={Activity}
@@ -1382,9 +1381,7 @@ const AppContent: React.FC = () => {
                         label="Manajemen & Keamanan RFID"
                       />
                     )}
-                    {(currentUser.additionalRole ===
-                      "KEPALA_SEKOLAH" ||
-                      currentUser.additionalRole === "WAKASEK_KURIKULUM" ||
+                    {(currentUser.additionalRole === "WAKASEK_KURIKULUM" ||
                       currentUser.additionalRole === "WALI_KELAS" ||
                       currentUser.homeroomClassId ||
                       currentUser.isRfidOfficer ||
@@ -1392,7 +1389,7 @@ const AppContent: React.FC = () => {
                       <NavLink
                         to="/attendance-monitoring"
                         icon={Clock}
-                        label="Pantau Absensi RFID"
+                        label="Monitoring Absensi RFID"
                       />
                     )}
                     {(currentUser.additionalRole === "WAKASEK_KURIKULUM" ||
@@ -1971,7 +1968,7 @@ const AppContent: React.FC = () => {
                 className={`flex flex-col items-center justify-center w-full h-full ${location.pathname.includes("/attendance-monitoring") ? "text-blue-600 dark:text-blue-400" : "text-gray-500 dark:text-gray-400"}`}
               >
                 <Clock size={20} />
-                <span className="text-[10px] mt-1 font-medium">RFID</span>
+                <span className="text-[10px] mt-1 font-medium">Monitoring</span>
               </Link>
               <Link
                 to="/supervision-assessment"
