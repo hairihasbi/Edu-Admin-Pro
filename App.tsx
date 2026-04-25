@@ -1240,11 +1240,6 @@ const AppContent: React.FC = () => {
                 />{" "}
                 {/* NEW LINK */}
                 <NavLink
-                  to="/attendance-monitoring"
-                  icon={Clock}
-                  label="Pantau Absensi RFID"
-                />
-                <NavLink
                   to="/proposal"
                   icon={FileText}
                   label="Proposal & Fitur"
