@@ -504,6 +504,7 @@ const DB_SCHEMAS = [
     // ATTENDANCE VISIBILITY
     `ALTER TABLE attendance ADD COLUMN user_id TEXT`,
     `ALTER TABLE attendance ADD COLUMN visibility TEXT DEFAULT 'SHARED'`,
+    `ALTER TABLE attendance ADD COLUMN notes TEXT`,
     `ALTER TABLE system_settings ADD COLUMN headmaster_name TEXT`,
     `ALTER TABLE system_settings ADD COLUMN headmaster_nip TEXT`,
     `ALTER TABLE system_settings ADD COLUMN school_city TEXT`,
@@ -1381,6 +1382,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                         results.push({ success: true, message: "Column already exists (skipped)" });
                     } else if (fullError.includes('already exists')) {
                          results.push({ success: true, message: "Table already exists (skipped)" });
+                    } else if (fullError.includes('no such column')) {
+                         results.push({ success: true, message: "Column match failure (ok if already migrated or fresh)" });
                     } else {
                         console.error("Migration statement failed:", schema, msg);
                         results.push({ success: false, error: msg });
@@ -1582,6 +1585,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 // Lazy Migration Logic
                 if (batchError.message && batchError.message.includes('no such column')) {
                     console.log("Lazy migration: Adding missing columns...");
+                    await client.execute(`ALTER TABLE attendance ADD COLUMN notes TEXT`).catch(() => {});
                     await client.execute(`ALTER TABLE classes ADD COLUMN homeroom_teacher_id TEXT`).catch(() => {});
                     await client.execute(`ALTER TABLE classes ADD COLUMN homeroom_teacher_name TEXT`).catch(() => {});
                     await client.execute(`ALTER TABLE users ADD COLUMN homeroom_class_name TEXT`).catch(() => {});
