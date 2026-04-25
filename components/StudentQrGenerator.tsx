@@ -39,6 +39,7 @@ const StudentQrGenerator: React.FC<StudentQrGeneratorProps> = ({ students, class
         quality: 0.95,
         backgroundColor: '#ffffff',
         pixelRatio: 2,
+        skipFonts: true,
       };
 
       let dataUrl;
