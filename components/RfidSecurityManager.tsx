@@ -69,10 +69,12 @@ const RfidSecurityManager: React.FC<RfidSecurityManagerProps> = ({ user }) => {
     setStudents(schoolStudents);
     setClasses(schoolClasses);
 
-    // Simulated Active Devices from Logs
+    // Today's logs only
+    const today = new Date().toISOString().split('T')[0];
     const recentLogs = await db.rfidLogs
       .where("schoolNpsn")
       .equals(user.schoolNpsn || "")
+      .and(log => log.timestamp.startsWith(today))
       .reverse()
       .limit(100)
       .toArray();
@@ -330,10 +332,10 @@ const RfidSecurityManager: React.FC<RfidSecurityManagerProps> = ({ user }) => {
                   <Clock size={24} className="text-blue-200" />
                   <div>
                     <p className="text-[10px] uppercase font-bold text-blue-200">
-                      Jam Masuk
+                      Jam Mulai Masuk
                     </p>
                     <p className="font-bold">
-                      {settings?.rfidCheckInLate || "-"} WIB
+                      {settings?.rfidCheckInStart || "-"} WIB
                     </p>
                   </div>
                 </div>

@@ -37,7 +37,7 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
       setLogs(recentLogs.slice(0, 10));
     };
     loadRecentLogs();
-  }, [user.schoolNpsn]);
+  }, [user.schoolNpsn, currentTime.toDateString()]);
 
   useEffect(() => {
     // Auto focus scan input on mount and when mode is KEYBOARD
