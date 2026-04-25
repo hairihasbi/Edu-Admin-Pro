@@ -849,7 +849,7 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
                         </td>
                         <td className="px-6 py-4">
                           <div className="text-xs font-bold text-gray-800">
-                            {new Date(log.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                            {new Date(log.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
                           </div>
                         </td>
                         <td className="px-6 py-4">
@@ -1459,7 +1459,9 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
           </div>
           
           <div className="flex flex-col items-center min-w-[200px]">
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-16">Wakasek Kurikulum</p>
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-16">
+              {user.additionalRole === 'KEPALA_SEKOLAH' ? 'Kepala Sekolah' : 'Wakasek Kurikulum'}
+            </p>
             <div className="w-full h-px bg-gray-900 mb-2"></div>
             <p className="text-xs font-black uppercase text-gray-900">{user.fullName}</p>
             <p className="text-[10px] text-gray-500 font-medium">NIP. {user.nip || '..........................'}</p>

@@ -228,8 +228,8 @@ const AttendanceMonitoring: React.FC<AttendanceMonitoringProps> = ({ user }) => 
                 'NIS': d.nis,
                 'Nama Siswa': d.studentName,
                 'Kelas': d.className,
-                'Jam Datang': d.checkIn ? new Date(d.checkIn).toLocaleTimeString('id-ID') : '-',
-                'Jam Pulang': d.checkOut ? new Date(d.checkOut).toLocaleTimeString('id-ID') : '-',
+                'Jam Datang': d.checkIn ? new Date(d.checkIn).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false }) : '-',
+                'Jam Pulang': d.checkOut ? new Date(d.checkOut).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false }) : '-',
                 'Status': d.status
             };
         } else {
