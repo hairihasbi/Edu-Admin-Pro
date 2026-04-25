@@ -12,7 +12,7 @@ interface ManualAttendanceProps {
 const ManualAttendance: React.FC<ManualAttendanceProps> = ({ students, classes, user }) => {
   const [selectedClassId, setSelectedClassId] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
-  const [status, setStatus] = useState<'IDLE' | 'SUCCESS' | 'ERROR'>('IDLE');
+  const [status, setStatus] = useState<'IDLE' | 'SUCCESS' | 'ERROR' | 'LOADING'>('IDLE');
   const [message, setMessage] = useState('');
 
   const filteredStudents = students.filter(s => {
@@ -21,6 +21,46 @@ const ManualAttendance: React.FC<ManualAttendanceProps> = ({ students, classes, 
                          s.nis.includes(searchQuery);
     return matchesClass && matchesSearch;
   });
+
+  const handleBulkAttendance = async (type: 'HADIR' | 'PULANG') => {
+    if (filteredStudents.length === 0) return;
+    
+    const confirmMsg = `Kirim absensi ${type} untuk ${filteredStudents.length} siswa ${selectedClassId === 'ALL' ? 'dari semua kelas' : ''}?`;
+    if (!window.confirm(confirmMsg)) return;
+
+    setStatus('LOADING');
+    setMessage(`Memproses ${filteredStudents.length} siswa...`);
+
+    try {
+      const now = new Date().toISOString();
+      const promises = filteredStudents.map(student => 
+        saveRfidLog({
+          studentId: student.id,
+          studentName: student.name,
+          classId: student.classId,
+          className: classes.find(c => c.id === student.classId)?.name || 'Unknown',
+          schoolNpsn: user.schoolNpsn,
+          timestamp: now,
+          status: type,
+          method: 'KEYBOARD'
+        })
+      );
+
+      await Promise.all(promises);
+      
+      setStatus('SUCCESS');
+      setMessage(`Berhasil memproses ${filteredStudents.length} absensi ${type} secara massal.`);
+      
+      setTimeout(() => {
+        setStatus('IDLE');
+        setMessage('');
+      }, 5000);
+    } catch (error) {
+      console.error(error);
+      setStatus('ERROR');
+      setMessage('Gagal memproses absensi massal.');
+    }
+  };
 
   const handleManualAbsence = async (student: Student, type: 'HADIR' | 'PULANG') => {
     try {
@@ -64,9 +104,35 @@ const ManualAttendance: React.FC<ManualAttendanceProps> = ({ students, classes, 
 
         {/* Feedback Alert */}
         {status !== 'IDLE' && (
-          <div className={`m-6 p-4 rounded-xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2 ${status === 'SUCCESS' ? 'bg-green-50 text-green-700 border border-green-100' : 'bg-red-50 text-red-700 border border-red-100'}`}>
-            {status === 'SUCCESS' ? <CheckCircle size={20} /> : <AlertCircle size={20} />}
+          <div className={`m-6 p-4 rounded-xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2 ${status === 'SUCCESS' ? 'bg-green-50 text-green-700 border border-green-100' : status === 'LOADING' ? 'bg-orange-50 text-orange-700 border border-orange-100' : 'bg-red-50 text-red-700 border border-red-100'}`}>
+            {status === 'SUCCESS' ? <CheckCircle size={20} /> : status === 'LOADING' ? <Clock size={20} className="animate-spin" /> : <AlertCircle size={20} />}
             <p className="text-sm font-bold">{message}</p>
+          </div>
+        )}
+
+        {/* Bulk Actions */}
+        {filteredStudents.length > 0 && (
+          <div className="mx-6 mb-4 p-4 bg-orange-50 rounded-2xl border border-orange-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="text-center sm:text-left">
+              <p className="text-xs font-black text-orange-700 uppercase tracking-wider">Aksi Massal ({filteredStudents.length} Siswa)</p>
+              <p className="text-[10px] text-orange-600 font-medium">Gunakan saat gangguan scanner / cuaca buruk</p>
+            </div>
+            <div className="flex gap-2 w-full sm:w-auto">
+              <button 
+                onClick={() => handleBulkAttendance('HADIR')}
+                disabled={status === 'LOADING'}
+                className="flex-1 sm:flex-none px-6 py-2.5 bg-green-600 text-white rounded-xl text-xs font-black shadow-sm hover:bg-green-700 transition disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                MASUK SEMUA
+              </button>
+              <button 
+                onClick={() => handleBulkAttendance('PULANG')}
+                disabled={status === 'LOADING'}
+                className="flex-1 sm:flex-none px-6 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-black shadow-sm hover:bg-blue-700 transition disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                PULANG SEMUA
+              </button>
+            </div>
           </div>
         )}
 
