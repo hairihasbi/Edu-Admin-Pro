@@ -143,6 +143,7 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
 
     try {
       const student = await getStudentByRfid(tagId, user.schoolNpsn || '');
+      const normalizedTag = (await import('../services/database')).normalizeRfid(tagId);
       
       if (student) {
         const now = new Date();
@@ -188,7 +189,7 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
         playSuccessSound();
       } else {
         setStatus('ERROR');
-        setMessage(`ID Kartu (${tagId}) tidak terdaftar.`);
+        setMessage(`ID Kartu (${normalizedTag}) tidak terdaftar.`);
         playErrorSound();
         setLastStudent(null);
       }

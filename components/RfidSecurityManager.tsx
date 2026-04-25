@@ -10,6 +10,7 @@ import {
   getSchoolStudents,
   getSchoolClasses,
   updateStudentRfid,
+  normalizeRfid,
 } from "../services/database";
 import {
   Shield,
@@ -713,7 +714,7 @@ const RfidSecurityManager: React.FC<RfidSecurityManagerProps> = ({ user }) => {
                 placeholder="Scan atau ketik ID Kartu..."
                 className="w-full p-3 border border-gray-200 rounded-xl font-mono text-center text-lg font-bold text-blue-600 focus:ring-2 focus:ring-blue-500 outline-none"
                 value={newTagId}
-                onChange={(e) => setNewTagId(e.target.value)}
+                onChange={(e) => setNewTagId(normalizeRfid(e.target.value))}
                 onKeyDown={(e) => e.key === "Enter" && handlePairCard()}
               />
               <p className="text-[10px] text-gray-400 mt-2 italic text-center italic">
