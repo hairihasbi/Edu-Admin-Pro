@@ -1279,6 +1279,16 @@ const AppContent: React.FC = () => {
                       label="Terminal RFID"
                     />
                     <NavLink
+                      to="/monitoring-kurikulum"
+                      icon={Activity}
+                      label="Monitoring RFID & KBM"
+                    />
+                    <NavLink
+                      to="/attendance-monitoring"
+                      icon={Clock}
+                      label="Pantau Absensi RFID"
+                    />
+                    <NavLink
                       to="/rfid-officers"
                       icon={UserCheck}
                       label="Petugas RFID"
@@ -1321,7 +1331,7 @@ const AppContent: React.FC = () => {
                   </>
                 ) : (
                   <>
-                    {((currentUser.additionalRole as any) === "KEPALA_SEKOLAH" || 
+                    {((currentUser.additionalRole) === "KEPALA_SEKOLAH" || 
                       currentUser.additionalRole === "WAKASEK_KURIKULUM") && (
                       <NavLink
                         to="/monitoring-kurikulum"
@@ -1372,7 +1382,7 @@ const AppContent: React.FC = () => {
                         label="Manajemen & Keamanan RFID"
                       />
                     )}
-                    {((currentUser.additionalRole as any) ===
+                    {(currentUser.additionalRole ===
                       "KEPALA_SEKOLAH" ||
                       currentUser.additionalRole === "WAKASEK_KURIKULUM" ||
                       currentUser.additionalRole === "WALI_KELAS" ||
@@ -1799,7 +1809,7 @@ const AppContent: React.FC = () => {
                     element={<RfidSecurityManager user={currentUser} />}
                   />
                 )}
-                {((currentUser.additionalRole as any) === "KEPALA_SEKOLAH" ||
+                {(currentUser.additionalRole === "KEPALA_SEKOLAH" ||
                   currentUser.additionalRole === "WAKASEK_KURIKULUM" ||
                   currentUser.homeroomClassId ||
                   currentUser.subject === "Bimbingan Konseling") && (
@@ -1863,7 +1873,7 @@ const AppContent: React.FC = () => {
                     element={<SupervisionAssessment user={currentUser} />}
                   />
                 )}
-                {((currentUser.additionalRole as any) === "KEPALA_SEKOLAH" || 
+                {(currentUser.additionalRole === "KEPALA_SEKOLAH" || 
                   currentUser.additionalRole === "WAKASEK_KURIKULUM") && (
                   <Route
                     path="/monitoring-kurikulum"
@@ -1956,6 +1966,13 @@ const AppContent: React.FC = () => {
           ) : currentUser.role === UserRole.GURU &&
             currentUser.additionalRole === "KEPALA_SEKOLAH" ? (
             <>
+              <Link
+                to="/attendance-monitoring"
+                className={`flex flex-col items-center justify-center w-full h-full ${location.pathname.includes("/attendance-monitoring") ? "text-blue-600 dark:text-blue-400" : "text-gray-500 dark:text-gray-400"}`}
+              >
+                <Clock size={20} />
+                <span className="text-[10px] mt-1 font-medium">RFID</span>
+              </Link>
               <Link
                 to="/supervision-assessment"
                 className={`flex flex-col items-center justify-center w-full h-full ${location.pathname.includes("/supervision-assessment") ? "text-blue-600 dark:text-blue-400" : "text-gray-500 dark:text-gray-400"}`}
