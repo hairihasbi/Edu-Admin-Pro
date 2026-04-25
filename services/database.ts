@@ -2307,9 +2307,20 @@ export const updateSupervisionAssignmentStatus = async (id: string, status: 'PEN
 };
 
 // --- RFID SERVICES ---
+export const normalizeRfid = (tag: string): string => {
+  if (!tag) return '';
+  const clean = tag.trim();
+  // Many RFID readers (USB) add characters or have 12-digit formats 
+  // where the last 10 are the actual ID stored in 10-digit formats.
+  if (clean.length > 10) {
+    return clean.substring(clean.length - 10);
+  }
+  return clean;
+};
+
 export const updateStudentRfid = async (studentId: string, rfidTag: string) => {
   await db.students.update(studentId, {
-    rfidTag,
+    rfidTag: normalizeRfid(rfidTag),
     lastModified: Date.now(),
     isSynced: false
   });
@@ -2318,9 +2329,10 @@ export const updateStudentRfid = async (studentId: string, rfidTag: string) => {
 };
 
 export const getStudentByRfid = async (rfidTag: string, schoolNpsn: string) => {
+  const normalizedTag = normalizeRfid(rfidTag);
   return await db.students
-    .where('schoolNpsn').equals(schoolNpsn)
-    .filter(s => s.rfidTag === rfidTag)
+    .where('rfidTag').equals(normalizedTag)
+    .filter(s => s.schoolNpsn === schoolNpsn)
     .first();
 };
 
