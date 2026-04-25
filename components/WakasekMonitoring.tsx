@@ -873,6 +873,7 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
                   ) : (
                     rfidLogs
                       .filter(log => log.studentName.toLowerCase().includes(searchQuery.toLowerCase()))
+                      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
                       .map(log => (
                       <tr key={log.id} className="hover:bg-gray-50 transition">
                         <td className="px-6 py-4">

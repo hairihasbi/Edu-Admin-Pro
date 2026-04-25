@@ -157,7 +157,9 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
       
       if (student) {
         const now = new Date();
-        const timeStr = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false });
+        const h = now.getHours().toString().padStart(2, '0');
+        const m = now.getMinutes().toString().padStart(2, '0');
+        const timeStr = `${h}:${m}`;
         
         // Defaults if no settings
         const checkInStart = settings?.rfidCheckInStart || '06:00';
