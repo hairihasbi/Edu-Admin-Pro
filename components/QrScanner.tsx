@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Html5QrcodeScanner, Html5Qrcode } from 'html5-qrcode';
-import { QrCode, X, RefreshCcw, Smartphone, Camera } from './Icons';
+import { QrCode, X, RefreshCcw, Smartphone, Camera, CheckCircle } from './Icons';
 
 interface QrScannerProps {
   onScan: (data: string) => void;
@@ -10,6 +10,9 @@ interface QrScannerProps {
 const QrScanner: React.FC<QrScannerProps> = ({ onScan, onClose }) => {
   const [error, setError] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
+  const [lastScanTime, setLastScanTime] = useState(0);
+  const [lastScanData, setLastScanData] = useState<string | null>(null);
+  const [showSuccess, setShowSuccess] = useState(false);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const scannerId = "qr-reader";
 
@@ -26,9 +29,20 @@ const QrScanner: React.FC<QrScannerProps> = ({ onScan, onClose }) => {
             qrbox: { width: 250, height: 250 },
           },
           (decodedText: string) => {
-            // Success
+            // Success - Process with throttling
+            const now = Date.now();
+            if (decodedText === lastScanData && now - lastScanTime < 3000) {
+              // Ignore same code within 3 seconds
+              return;
+            }
+
             onScan(decodedText);
-            stopScanner();
+            setLastScanData(decodedText);
+            setLastScanTime(now);
+            
+            // Visual Feedback
+            setShowSuccess(true);
+            setTimeout(() => setShowSuccess(false), 2000);
           },
           (errorMessage: string) => {
             // parse error, ignore it
@@ -46,7 +60,7 @@ const QrScanner: React.FC<QrScannerProps> = ({ onScan, onClose }) => {
     return () => {
       stopScanner();
     };
-  }, []);
+  }, [lastScanData, lastScanTime]);
 
   const stopScanner = async () => {
     if (scannerRef.current && scannerRef.current.isScanning) {
@@ -78,6 +92,16 @@ const QrScanner: React.FC<QrScannerProps> = ({ onScan, onClose }) => {
             <div className="absolute inset-x-0 h-1 bg-blue-500/80 shadow-[0_0_20px_rgba(59,130,246,1)] animate-scan-line z-20"></div>
           )}
 
+          {showSuccess && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center p-8 bg-green-500/90 text-white z-40 animate-in zoom-in duration-300">
+               <div className="bg-white rounded-full p-4 mb-4 shadow-xl">
+                 <CheckCircle size={48} className="text-green-500" />
+               </div>
+               <p className="text-xl font-black uppercase tracking-tighter">SCAN BERHASIL</p>
+               <p className="text-[10px] mt-1 font-bold opacity-80 uppercase tracking-widest">{lastScanData}</p>
+            </div>
+          )}
+
           {error && (
             <div className="absolute inset-0 flex flex-col items-center justify-center p-8 bg-black/80 text-white z-30">
               <Camera size={48} className="text-red-500 mb-4" />
@@ -99,7 +123,7 @@ const QrScanner: React.FC<QrScannerProps> = ({ onScan, onClose }) => {
           </div>
           <h2 className="text-3xl font-black tracking-tighter uppercase">SCAN KODE QR</h2>
           <p className="text-sm opacity-60 max-w-xs mx-auto">
-            Arahkan kamera ke Kode QR siswa. Pastikan kode berada di tengah kotak.
+            Arahkan kamera ke Kode QR siswa. Fitur ini akan terus aktif sampai Anda menutupnya secara manual.
           </p>
         </div>
 

@@ -438,7 +438,7 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
         <QrScanner 
           onScan={(data) => {
             processTag(data);
-            setShowQrScanner(false);
+            // setShowQrScanner(false); // Biarkan tetap aktif sesuai permintaan user
           }}
           onClose={() => setShowQrScanner(false)}
         />
