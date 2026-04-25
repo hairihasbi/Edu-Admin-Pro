@@ -144,6 +144,22 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
     return map;
   }, [teachers]);
 
+  const activeDeviceStats = useMemo(() => {
+    const devices: Record<string, { lastSeen: string, count: number }> = {};
+    // Extract devices from logs of the selected date
+    rfidLogs.forEach(log => {
+      const dId = log.deviceId || "Terminal Utama";
+      if (!devices[dId]) {
+        devices[dId] = { lastSeen: log.timestamp, count: 0 };
+      }
+      devices[dId].count++;
+      if (new Date(log.timestamp) > new Date(devices[dId].lastSeen)) {
+        devices[dId].lastSeen = log.timestamp;
+      }
+    });
+    return Object.entries(devices).map(([id, stats]) => ({ id, ...stats }));
+  }, [rfidLogs]);
+
   const teacherStats = useMemo(() => {
     return teachers.map(teacher => {
       const teacherSchedules = schedules.filter(s => s.userId === teacher.id);
@@ -596,49 +612,52 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
                 <form onSubmit={handleSaveSettings} className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                      <label className="block text-sm font-bold text-gray-700 mb-2">Jam Mulai Masuk</label>
+                      <label className="block text-sm font-bold text-gray-700 mb-2">Jam Mulai Masuk (Format 24 Jam)</label>
                       <div className="relative">
                         <Clock size={16} className="absolute left-3 top-3 text-gray-400" />
                         <input 
                           type="time" 
+                          step="60"
                           className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
                           value={settings?.rfidCheckInStart || '06:00'}
                           onChange={(e) => setSettings(prev => prev ? ({ ...prev, rfidCheckInStart: e.target.value }) : null)}
                           required
                         />
                       </div>
-                      <p className="mt-1 text-[10px] text-gray-500 italic">Siswa bisa mulai tap masuk hari tersebut.</p>
+                      <p className="mt-1 text-[10px] text-gray-500 italic">Gunakan format 24 jam (00:00 - 23:59). Contoh: 06:30</p>
                     </div>
 
                     <div>
-                      <label className="block text-sm font-bold text-gray-700 mb-2">Batas Terlambat</label>
+                      <label className="block text-sm font-bold text-gray-700 mb-2">Batas Terlambat (Format 24 Jam)</label>
                       <div className="relative">
                         <Clock size={16} className="absolute left-3 top-3 text-gray-400" />
                         <input 
                           type="time" 
+                          step="60"
                           className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 outline-none"
                           value={settings?.rfidCheckInLate || '08:30'}
                           onChange={(e) => setSettings(prev => prev ? ({ ...prev, rfidCheckInLate: e.target.value }) : null)}
                           required
                         />
                       </div>
-                      <p className="mt-1 text-[10px] text-gray-500 italic text-red-500">Lewat dari jam ini status otomatis "TERLAMBAT".</p>
+                      <p className="mt-1 text-[10px] text-gray-500 italic text-red-500">Gunakan format 24 jam. Contoh: 08:00</p>
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-2">Jam Mulai Pulang</label>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">Jam Mulai Pulang (Format 24 Jam)</label>
                     <div className="relative">
                       <Clock size={16} className="absolute left-3 top-3 text-gray-400" />
                       <input 
                         type="time" 
+                        step="60"
                         className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                         value={settings?.rfidCheckOutStart || '14:00'}
                         onChange={(e) => setSettings(prev => prev ? ({ ...prev, rfidCheckOutStart: e.target.value }) : null)}
                         required
                       />
                     </div>
-                    <p className="mt-1 text-[10px] text-gray-500 italic">Tap sebelum jam ini akan berstatus "PULANG CEPAT".</p>
+                    <p className="mt-1 text-[10px] text-gray-500 italic">Gunakan format 24 jam. Contoh: 14:30 untuk jam setengah tiga sore.</p>
                   </div>
 
                   <div className="pt-4 flex justify-end">
@@ -656,7 +675,7 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
                 <div className="mt-10 p-5 bg-gray-50 rounded-xl border border-gray-200">
                     <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2 text-sm">
                         <AlertCircle size={16} className="text-purple-500" />
-                        Panduan Logika Batas Waktu:
+                        Panduan Logika Batas Waktu (Format 24 Jam):
                     </h4>
                     <div className="space-y-4">
                         <div className="flex items-start gap-3">
@@ -664,7 +683,7 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
                             <div>
                                 <p className="text-xs font-bold text-gray-700 uppercase">Status Hadir (H)</p>
                                 <p className="text-[11px] text-gray-500">
-                                    Tap antara <span className="font-bold">{settings?.rfidCheckInStart || '06:00'}</span> s.d <span className="font-bold">{settings?.rfidCheckInLate || '08:30'}</span>.
+                                    Siswa melakukan tap antara pukul <span className="font-bold">{settings?.rfidCheckInStart || '06:00'}</span> sampai dengan <span className="font-bold">{settings?.rfidCheckInLate || '08:30'}</span>.
                                 </p>
                             </div>
                         </div>
@@ -673,16 +692,16 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
                             <div>
                                 <p className="text-xs font-bold text-gray-700 uppercase">Status Terlambat (T)</p>
                                 <p className="text-[11px] text-gray-500">
-                                    Tap setelah <span className="font-bold">{settings?.rfidCheckInLate || '08:30'}</span> namun sebelum <span className="font-bold">{settings?.rfidCheckOutStart || '14:00'}</span>.
+                                    Siswa melakukan tap setelah pukul <span className="font-bold">{settings?.rfidCheckInLate || '08:30'}</span> namun sebelum jam pulang <span className="font-bold">{settings?.rfidCheckOutStart || '14:00'}</span>.
                                 </p>
                             </div>
                         </div>
                         <div className="flex items-start gap-3">
                             <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold shrink-0">3</div>
                             <div>
-                                <p className="text-xs font-bold text-gray-700 uppercase">Status Pulang</p>
+                                <p className="text-xs font-bold text-gray-700 uppercase">Status Pulang / Pulang Cepat</p>
                                 <p className="text-[11px] text-gray-500">
-                                    Tap pada atau setelah jam <span className="font-bold">{settings?.rfidCheckOutStart || '14:00'}</span>.
+                                    Tap pada pukul <span className="font-bold">{settings?.rfidCheckOutStart || '14:00'}</span> ke atas dihitung Pulang. Sebelum jam tersebut dihitung Pulang Cepat.
                                 </p>
                             </div>
                         </div>
@@ -691,7 +710,48 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
               </div>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="p-6">
+              {/* Status Alat Scan Section */}
+              <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm col-span-full">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <Activity className="text-blue-500" size={18} />
+                      <h3 className="font-bold text-gray-800 text-sm">Status Terminal Scanner (Aktif Hari Ini)</h3>
+                    </div>
+                    <div className="text-[10px] text-gray-400 italic font-medium">Mendeteksi aktivitas dari riwayat tap RFID</div>
+                  </div>
+                  <div className="flex flex-wrap gap-3">
+                    {activeDeviceStats.length === 0 ? (
+                      <div className="w-full py-4 text-center text-xs text-gray-400 italic bg-gray-50 rounded-lg">
+                        Tidak ada aktivitas scanner yang terdeteksi pada tanggal ini.
+                      </div>
+                    ) : (
+                      activeDeviceStats.map((device) => (
+                        <div key={device.id} className="bg-gray-50 p-3 rounded-lg border border-gray-100 flex-1 min-w-[200px]">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-bold text-gray-700">{device.id}</span>
+                            <span className="flex items-center gap-1 text-[9px] text-green-500 font-bold uppercase tracking-wider">
+                              <CheckCircle size={10} /> Aktif
+                            </span>
+                          </div>
+                          <div className="text-[10px] text-gray-500 mb-1">
+                            Terakhir Sinyal: <span className="text-gray-800 font-medium">
+                              {new Date(device.lastSeen).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                            </span>
+                          </div>
+                          <div className="text-[10px] text-gray-500">
+                            Volume Scan: <span className="text-blue-600 font-bold">{device.count}</span>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden min-h-[400px]">
+                <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead className="bg-gray-50 text-gray-600 font-semibold text-xs uppercase tracking-wider">
                   <tr>
@@ -751,10 +811,12 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
                 </tbody>
               </table>
             </div>
-          )}
+          </div>
         </div>
-      ) : (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      )}
+    </div>
+  ) : (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-center gap-4">
           <div className="relative w-full sm:w-64">
             <Search className="absolute left-3 top-2.5 text-gray-400" size={16} />

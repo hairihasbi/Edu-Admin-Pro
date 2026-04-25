@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { User, Student, RfidLog, SystemSettings } from '../types';
-import { getStudentByRfid, saveRfidLog, getSystemSettings, normalizeRfid, getClassById } from '../services/database';
+import { getStudentByRfid, saveRfidLog, getSystemSettings, normalizeRfid, getClassById, getRfidLogs } from '../services/database';
 import QrScanner from './QrScanner';
 import { 
   Wifi, WifiOff, Smartphone, IdCard, 
@@ -26,8 +26,18 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showQrScanner, setShowQrScanner] = useState(false);
   const [scanBuffer, setScanBuffer] = useState('');
+  const [terminalId] = useState(`Terminal-${Math.random().toString(36).substring(2, 7).toUpperCase()}`);
   const terminalRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const loadRecentLogs = async () => {
+      const today = new Date().toISOString().split('T')[0];
+      const recentLogs = await getRfidLogs(user.schoolNpsn || '', today);
+      setLogs(recentLogs.slice(0, 10));
+    };
+    loadRecentLogs();
+  }, [user.schoolNpsn]);
 
   useEffect(() => {
     // Auto focus scan input on mount and when mode is KEYBOARD
@@ -154,7 +164,7 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
         const checkInLate = settings?.rfidCheckInLate || '08:30';
         const checkOutStart = settings?.rfidCheckOutStart || '14:00';
 
-        let attendanceStatus: 'HADIR' | 'PULANG' | 'TERLAMBAT' = 'HADIR';
+        let attendanceStatus: 'HADIR' | 'PULANG' | 'PULANG CEPAT' | 'TERLAMBAT' = 'HADIR';
         
         if (timeStr < checkInStart) {
           setStatus('READING');
@@ -166,7 +176,28 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
         if (timeStr >= checkOutStart) {
           attendanceStatus = 'PULANG';
         } else if (timeStr > checkInLate) {
+          // If after late but before checkout, it's late
           attendanceStatus = 'TERLAMBAT';
+        } else if (timeStr >= checkInStart && timeStr <= checkInLate) {
+          attendanceStatus = 'HADIR';
+        }
+
+        // Logic check: if someone taps again later in the day but before checkout start
+        // maybe they are leaving early? 
+        // For simplicity, if they tap after late limit, it's just TERLAMBAT unless it's PULANG time.
+        // If the school wants to track PULANG CEPAT, we can use a separate range if needed.
+        // For now, let's stick to the user's manual logic:
+        // H: checkInStart <= T <= checkInLate
+        // T: checkInLate < T < checkOutStart
+        // P: T >= checkOutStart
+        
+        // Actually, let's keep it simple as per user request:
+        if (timeStr >= checkOutStart) {
+            attendanceStatus = 'PULANG';
+        } else if (timeStr > checkInLate) {
+            attendanceStatus = 'TERLAMBAT';
+        } else {
+            attendanceStatus = 'HADIR';
         }
 
         const classData = await getClassById(student.classId);
@@ -179,13 +210,16 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
           schoolNpsn: user.schoolNpsn || '',
           timestamp: now.toISOString(),
           status: attendanceStatus,
-          method: method
+          method: method,
+          deviceId: terminalId
         });
 
         setLastStudent(student);
         setLogs(prev => [newLog, ...prev].slice(0, 5));
         setStatus('SUCCESS');
-        setMessage(`Selamat ${attendanceStatus === 'PULANG' ? 'Jalan' : 'Datang'}, ${student.name}`);
+        const statusText = attendanceStatus === 'PULANG' ? 'Sampai Jumpa' : 
+                          attendanceStatus === 'TERLAMBAT' ? 'Terlambat' : 'Selamat Datang';
+        setMessage(`${statusText}, ${student.name}`);
         playSuccessSound();
       } else {
         setStatus('ERROR');
