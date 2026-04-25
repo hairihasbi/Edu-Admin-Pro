@@ -79,17 +79,17 @@ const StudentQrGenerator: React.FC<StudentQrGeneratorProps> = ({ students, class
           </div>
         </div>
 
-        <div id="print-area" className="p-6 print:p-0 print:absolute print:top-0 print:left-0 print:w-full">
+        <div id="print-area" className="p-6 print:p-0 print:absolute print:top-0 print:left-0 print:w-full print:flex print:flex-col print:items-center">
           {filteredStudents.length === 0 ? (
             <div className="p-12 text-center text-gray-400 italic bg-gray-50 rounded-xl border border-dashed border-gray-200 print:hidden">
               Data siswa tidak ditemukan.
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6 print:grid-cols-2 print:gap-4 print:block">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6 print:flex print:flex-wrap print:justify-center print:gap-4 print:max-w-[190mm]">
               {filteredStudents.map((student) => {
                 const className = classes.find(c => c.id === student.classId)?.name || '-';
                 return (
-                  <div key={student.id} className="p-4 bg-white border border-gray-100 rounded-2xl shadow-sm flex flex-col items-center text-center group transition-all hover:shadow-md print:shadow-none print:border print:border-gray-300 print:rounded-none print:w-[8.5cm] print:h-[5.5cm] print:inline-flex print:flex-row print:m-[2mm] print:break-inside-avoid print:p-4 print:text-left print:relative">
+                  <div key={student.id} className="p-4 bg-white border border-gray-100 rounded-2xl shadow-sm flex flex-col items-center text-center group transition-all hover:shadow-md print:shadow-none print:border print:border-gray-300 print:rounded-none print:w-[8.5cm] print:h-[5.5cm] print:flex print:flex-row print:items-center print:m-0 print:break-inside-avoid print:p-4 print:text-left print:relative">
                     {/* ID Card Layout for Print */}
                     <div className="hidden print:block absolute top-0 left-0 w-1.5 h-full bg-blue-600"></div>
                     
@@ -141,11 +141,31 @@ const StudentQrGenerator: React.FC<StudentQrGeneratorProps> = ({ students, class
 
       <style dangerouslySetInnerHTML={{ __html: `
         @media print {
+          @page {
+            margin: 1cm;
+            size: A4 portrait;
+          }
+          body {
+            background: white !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
           body * {
             visibility: hidden !important;
           }
           #print-area, #print-area * {
             visibility: visible !important;
+          }
+          #print-area {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            padding: 0 !important;
+            margin: 0 !important;
           }
           .print\\:hidden {
             display: none !important;
@@ -153,12 +173,8 @@ const StudentQrGenerator: React.FC<StudentQrGeneratorProps> = ({ students, class
           .print\\:block {
             display: block !important;
           }
-          @page {
-            margin: 0.5cm;
-            size: auto;
-          }
           /* Hide app chrome */
-          nav, aside, header, footer, [role="navigation"], .sidebar {
+          nav, aside, header, footer, [role="navigation"], .sidebar, button {
             display: none !important;
           }
         }
