@@ -169,7 +169,7 @@ export interface RfidLog extends Syncable {
   className: string;
   schoolNpsn: string;
   timestamp: string;
-  status: 'HADIR' | 'PULANG' | 'TERLAMBAT' | 'IZIN';
+  status: 'HADIR' | 'PULANG' | 'TERLAMBAT' | 'IZIN' | 'PULANG CEPAT';
   method: 'KEYBOARD' | 'SERIAL' | 'QR';
   deviceId?: string; // NEW: To track which pos/device sent the log
 }
