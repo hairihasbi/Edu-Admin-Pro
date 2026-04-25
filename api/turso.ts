@@ -275,6 +275,12 @@ const DB_SCHEMAS = [
         ai_api_key TEXT,
         ai_model TEXT,
         rpp_monthly_limit INTEGER DEFAULT 0,
+        rfid_check_in_start TEXT,
+        rfid_check_in_late TEXT,
+        rfid_check_out_start TEXT,
+        rfid_cooldown_seconds INTEGER,
+        rfid_anti_duplicate_minutes INTEGER,
+        rfid_blocked_tags TEXT, -- JSON Array
         headmaster_name TEXT,
         headmaster_nip TEXT,
         school_city TEXT,
@@ -687,11 +693,19 @@ const DB_SCHEMAS = [
         school_npsn TEXT,
         timestamp TEXT,
         status TEXT, -- HADIR, PULANG, TERLAMBAT, IZIN
-        method TEXT, -- KEYBOARD, SERIAL
+        method TEXT, -- KEYBOARD, SERIAL, QR
+        device_id TEXT,
         last_modified INTEGER,
         version INTEGER DEFAULT 1,
         deleted INTEGER DEFAULT 0
     )`,
+    `ALTER TABLE system_settings ADD COLUMN rfid_check_in_start TEXT`,
+    `ALTER TABLE system_settings ADD COLUMN rfid_check_in_late TEXT`,
+    `ALTER TABLE system_settings ADD COLUMN rfid_check_out_start TEXT`,
+    `ALTER TABLE system_settings ADD COLUMN rfid_cooldown_seconds INTEGER`,
+    `ALTER TABLE system_settings ADD COLUMN rfid_anti_duplicate_minutes INTEGER`,
+    `ALTER TABLE system_settings ADD COLUMN rfid_blocked_tags TEXT`,
+    `ALTER TABLE rfid_logs ADD COLUMN device_id TEXT`,
     `CREATE INDEX IF NOT EXISTS idx_rfid_logs_npsn ON rfid_logs(school_npsn)`,
     `CREATE INDEX IF NOT EXISTS idx_rfid_logs_student ON rfid_logs(student_id)`,
     `ALTER TABLE users ADD COLUMN is_rfid_officer INTEGER DEFAULT 0`,
@@ -733,7 +747,7 @@ const getTableConfig = (collection: string) => {
     case 'eduadmin_bk_counseling': return { table: 'bk_counseling', columns: ['id', 'student_id', 'date', 'issue', 'notes', 'follow_up', 'status', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.studentId), s(item.date), s(item.issue), s(item.notes), s(item.follow_up), s(item.status), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_tickets': return { table: 'tickets', columns: ['id', 'user_id', 'teacher_name', 'subject', 'status', 'last_updated', 'messages', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.userId), s(item.teacherName), s(item.subject), s(item.status), s(item.lastUpdated), JSON.stringify(item.messages || []), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_api_keys': return { table: 'api_keys', columns: ['id', 'key_value', 'provider', 'status', 'added_at', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.key), s(item.provider), s(item.status), s(item.addedAt), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
-    case 'eduadmin_system_settings': return { table: 'system_settings', columns: ['id', 'feature_rpp_enabled', 'maintenance_message', 'app_name', 'school_name', 'app_description', 'app_keywords', 'logo_url', 'favicon_url', 'timezone', 'footer_text', 'ai_provider', 'ai_base_url', 'ai_api_key', 'ai_model', 'rpp_monthly_limit', 'doku_client_id', 'doku_secret_key', 'doku_is_production', 'headmaster_name', 'headmaster_nip', 'school_city', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), item.featureRppEnabled ? 1 : 0, s(item.maintenanceMessage), s(item.appName), s(item.schoolName), s(item.appDescription), s(item.appKeywords), s(item.logoUrl), s(item.faviconUrl), s(item.timezone), s(item.footerText), s(item.aiProvider), s(item.aiBaseUrl), s(item.aiApiKey), s(item.aiModel), item.rppMonthlyLimit || 0, s(item.dokuClientId), s(item.dokuSecretKey), item.dokuIsProduction ? 1 : 0, s(item.headmasterName), s(item.headmasterNip), s(item.schoolCity), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
+    case 'eduadmin_system_settings': return { table: 'system_settings', columns: ['id', 'feature_rpp_enabled', 'maintenance_message', 'app_name', 'school_name', 'app_description', 'app_keywords', 'logo_url', 'favicon_url', 'timezone', 'footer_text', 'ai_provider', 'ai_base_url', 'ai_api_key', 'ai_model', 'rpp_monthly_limit', 'doku_client_id', 'doku_secret_key', 'doku_is_production', 'rfid_check_in_start', 'rfid_check_in_late', 'rfid_check_out_start', 'rfid_cooldown_seconds', 'rfid_anti_duplicate_minutes', 'rfid_blocked_tags', 'headmaster_name', 'headmaster_nip', 'school_city', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), item.featureRppEnabled ? 1 : 0, s(item.maintenanceMessage), s(item.appName), s(item.schoolName), s(item.appDescription), s(item.appKeywords), s(item.logoUrl), s(item.faviconUrl), s(item.timezone), s(item.footerText), s(item.aiProvider), s(item.aiBaseUrl), s(item.aiApiKey), s(item.aiModel), item.rppMonthlyLimit || 0, s(item.dokuClientId), s(item.dokuSecretKey), item.dokuIsProduction ? 1 : 0, s(item.rfidCheckInStart), s(item.rfidCheckInLate), s(item.rfidCheckOutStart), s(item.rfidCooldownSeconds), s(item.rfidAntiDuplicateMinutes), JSON.stringify(item.rfidBlockedTags || []), s(item.headmasterName), s(item.headmasterNip), s(item.schoolCity), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_wa_configs': return { table: 'wa_configs', columns: ['user_id', 'provider', 'base_url', 'api_key', 'device_id', 'is_active', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.userId), s(item.provider), s(item.baseUrl), s(item.apiKey), s(item.deviceId), item.isActive ? 1 : 0, s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_notifications': return { table: 'notifications', columns: ['id', 'title', 'message', 'type', 'target_role', 'is_read', 'is_popup', 'created_at', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.title), s(item.message), s(item.type), s(item.targetRole), item.isRead ? 1 : 0, item.isPopup ? 1 : 0, s(item.createdAt), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_logs': return { table: 'logs', columns: ['id', 'timestamp', 'level', 'actor', 'role', 'action', 'details', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.timestamp), s(item.level), s(item.actor), s(item.role), s(item.action), s(item.details), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
@@ -791,8 +805,8 @@ const getTableConfig = (collection: string) => {
     };
     case 'eduadmin_rfid_logs': return {
         table: 'rfid_logs',
-        columns: ['id', 'student_id', 'student_name', 'class_id', 'class_name', 'school_npsn', 'timestamp', 'status', 'method', 'last_modified', 'version', 'deleted'],
-        mapFn: (item: any) => [s(item.id), s(item.studentId), s(item.studentName), s(item.classId), s(item.className), s(item.schoolNpsn), s(item.timestamp), s(item.status), s(item.method), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0]
+        columns: ['id', 'student_id', 'student_name', 'class_id', 'class_name', 'school_npsn', 'timestamp', 'status', 'method', 'device_id', 'last_modified', 'version', 'deleted'],
+        mapFn: (item: any) => [s(item.id), s(item.studentId), s(item.studentName), s(item.classId), s(item.className), s(item.schoolNpsn), s(item.timestamp), s(item.status), s(item.method), s(item.deviceId), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0]
     };
     default:
       return null;
@@ -907,6 +921,12 @@ const mapRowToJSON = (collection: string, row: any) => {
         aiProvider: row.ai_provider, aiBaseUrl: row.ai_base_url, aiApiKey: row.ai_api_key, aiModel: row.ai_model,
         rppMonthlyLimit: row.rpp_monthly_limit,
         dokuClientId: row.doku_client_id, dokuSecretKey: row.doku_secret_key, dokuIsProduction: Boolean(row.doku_is_production),
+        rfidCheckInStart: row.rfid_check_in_start,
+        rfidCheckInLate: row.rfid_check_in_late,
+        rfidCheckOutStart: row.rfid_check_out_start,
+        rfidCooldownSeconds: row.rfid_cooldown_seconds,
+        rfidAntiDuplicateMinutes: row.rfid_anti_duplicate_minutes,
+        rfidBlockedTags: parseJSONSafe(row.rfid_blocked_tags),
         headmasterName: row.headmaster_name, headmasterNip: row.headmaster_nip, schoolCity: row.school_city,
         lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
     };
@@ -1378,12 +1398,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     const causeMsg = (innerE.cause?.message || '').toLowerCase();
                     const fullError = msg + ' ' + causeMsg;
                     
-                    if (fullError.includes('duplicate column name')) {
-                        results.push({ success: true, message: "Column already exists (skipped)" });
-                    } else if (fullError.includes('already exists')) {
-                         results.push({ success: true, message: "Table already exists (skipped)" });
-                    } else if (fullError.includes('no such column')) {
-                         results.push({ success: true, message: "Column match failure (ok if already migrated or fresh)" });
+                    if (fullError.includes('duplicate column name') || fullError.includes('already exists')) {
+                        results.push({ success: true, message: "Column or table already exists (skipped)" });
+                    } else if (fullError.includes('no such column') || fullError.includes('no such table')) {
+                         results.push({ success: true, message: "Resource match failure (ok if already migrated or fresh)" });
                     } else {
                         console.error("Migration statement failed:", schema, msg);
                         results.push({ success: false, error: msg });
@@ -1583,10 +1601,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 await client.batch(statements);
             } catch (batchError: any) {
                 // Lazy Migration Logic
-                if (batchError.message && batchError.message.includes('no such column')) {
+                if (batchError.message && (batchError.message.includes('no such column') || batchError.message.includes('has no column'))) {
                     console.log("Lazy migration: Adding missing columns...");
-                    await client.execute(`ALTER TABLE attendance ADD COLUMN notes TEXT`).catch(() => {});
-                    await client.execute(`ALTER TABLE classes ADD COLUMN homeroom_teacher_id TEXT`).catch(() => {});
+                    try { await client.execute(`ALTER TABLE attendance ADD COLUMN notes TEXT`); } catch(e) {}
+                    try { await client.execute(`ALTER TABLE attendance ADD COLUMN user_id TEXT`); } catch(e) {}
+                    try { await client.execute(`ALTER TABLE attendance ADD COLUMN visibility TEXT DEFAULT 'SHARED'`); } catch(e) {}
+                    try { await client.execute(`ALTER TABLE attendance ADD COLUMN school_npsn TEXT`); } catch(e) {}
+                    try { await client.execute(`ALTER TABLE classes ADD COLUMN homeroom_teacher_id TEXT`); } catch(e) {}
                     await client.execute(`ALTER TABLE classes ADD COLUMN homeroom_teacher_name TEXT`).catch(() => {});
                     await client.execute(`ALTER TABLE users ADD COLUMN homeroom_class_name TEXT`).catch(() => {});
                     await client.execute(`ALTER TABLE users ADD COLUMN additional_role TEXT`).catch(() => {});
