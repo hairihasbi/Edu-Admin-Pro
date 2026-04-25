@@ -544,7 +544,7 @@ export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', logCall
             'eduadmin_pickets', 'eduadmin_incidents', 'eduadmin_donations', 'eduadmin_teacher_calendar',
             'eduadmin_password_resets', 'eduadmin_inventory', 'eduadmin_home_visits', 'eduadmin_parent_calls', 
             'eduadmin_learning_style_assessments', 'eduadmin_supervision_assignments', 'eduadmin_supervision_results',
-            'eduadmin_cbt_exams', 'eduadmin_cbt_questions', 'eduadmin_cbt_attempts'
+            'eduadmin_cbt_exams', 'eduadmin_cbt_questions', 'eduadmin_cbt_attempts', 'eduadmin_rfid_logs'
         ];
 
         const collections = targetCollections || allCollections;
@@ -583,7 +583,8 @@ export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', logCall
             'eduadmin_supervision_results': db.supervisionResults,
             'eduadmin_cbt_exams': db.cbtExams,
             'eduadmin_cbt_questions': db.cbtQuestions,
-            'eduadmin_cbt_attempts': db.cbtAttempts
+            'eduadmin_cbt_attempts': db.cbtAttempts,
+            'eduadmin_rfid_logs': db.rfidLogs
         };
 
         if (direction === 'PUSH' || direction === 'FULL') {
