@@ -2309,9 +2309,27 @@ export const updateSupervisionAssignmentStatus = async (id: string, status: 'PEN
 // --- RFID SERVICES ---
 export const normalizeRfid = (tag: string): string => {
   if (!tag) return '';
-  // User meminta agar tidak ada pemotongan angka atau penghapusan angka nol di depan.
-  // Gunakan ID asli yang terbaca oleh scanner apa adanya.
-  return tag.trim();
+  let clean = tag.trim();
+  
+  // Deteksi masalah karakter ganda (seperti pada gambar user: 0010887833 -> 00001100888877883333)
+  // Jika setiap karakter ganjil sama dengan karakter genap setelahnya, maka ini adalah input ganda
+  if (clean.length > 0 && clean.length % 2 === 0) {
+    let isDoubled = true;
+    let simplified = "";
+    for (let i = 0; i < clean.length; i += 2) {
+      if (clean[i] !== clean[i + 1]) {
+        isDoubled = false;
+        break;
+      }
+      simplified += clean[i];
+    }
+    
+    if (isDoubled) {
+      return simplified;
+    }
+  }
+
+  return clean;
 };
 
 export const updateStudentRfid = async (studentId: string, rfidTag: string) => {
