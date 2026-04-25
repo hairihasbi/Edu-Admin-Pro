@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, TeachingJournal, AttendanceRecord, ClassRoom, TeachingSchedule, SystemSettings } from '../types';
-import { getSchoolTeachers, getSchoolJournals, getSchoolAttendance, syncAllData, getAvailableClassesForHomeroom, getSchoolSchedules, getSchoolJournalsByRange, getSystemSettings, saveSystemSettings } from '../services/database';
+import { User, TeachingJournal, AttendanceRecord, ClassRoom, TeachingSchedule, SystemSettings, RfidLog } from '../types';
+import { getSchoolTeachers, getSchoolJournals, getSchoolAttendance, syncAllData, getAvailableClassesForHomeroom, getSchoolSchedules, getSchoolJournalsByRange, getSystemSettings, saveSystemSettings, getRfidLogs } from '../services/database';
 import SupervisionManager from './SupervisionManager';
 import { Activity, CheckCircle, XCircle, Calendar, Users, Search, Filter, Clock, Info, AlertCircle, RefreshCcw, Loader2, BookOpen, LayoutGrid, List as ListIcon, ChevronDown, ChevronUp, TrendingUp, BarChart3, PieChart, Download, Printer, FileSpreadsheet, FileText, School, ShieldCheck, Save } from './Icons';
 import * as XLSX from 'xlsx';
@@ -26,6 +26,8 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'GURU' | 'KELAS' | 'PRESENSI' | 'SUPERVISI' | 'ABSENSI_RFID'>('GURU');
+  const [rfidLogs, setRfidLogs] = useState<RfidLog[]>([]);
+  const [rfidViewMode, setRfidViewMode] = useState<'LOGS' | 'SETTINGS'>('LOGS');
   const [settings, setSettings] = useState<SystemSettings | null>(null);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [saveStatus, setSaveStatus] = useState<{type: 'success' | 'error', text: string} | null>(null);
@@ -38,14 +40,16 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
       if (!user.schoolNpsn) return;
       setLoading(true);
       try {
-        const [schoolTeachers, schoolClasses, schoolSchedules, systemSettings] = await Promise.all([
+        const [schoolTeachers, schoolClasses, schoolSchedules, systemSettings, schoolRfidLogs] = await Promise.all([
           getSchoolTeachers(user.schoolNpsn),
           getAvailableClassesForHomeroom(user.schoolNpsn),
           getSchoolSchedules(user.schoolNpsn),
-          getSystemSettings()
+          getSystemSettings(),
+          getRfidLogs(user.schoolNpsn, selectedDate)
         ]);
         
         setSettings(systemSettings || null);
+        setRfidLogs(schoolRfidLogs || []);
         
         const teacherIds = schoolTeachers.map(t => t.id);
         
@@ -347,6 +351,18 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
     return attendance.some(a => a.userId === teacherId);
   };
 
+  const isRfidAuthorized = useMemo(() => {
+    if (user.role === 'ADMIN') return false; 
+    return (
+      user.additionalRole === 'KEPALA_SEKOLAH' ||
+      user.additionalRole === 'WAKASEK_KURIKULUM' ||
+      user.additionalRole === 'WALI_KELAS' ||
+      user.subject === 'Bimbingan Konseling' ||
+      user.subject === 'BK' ||
+      user.isRfidOfficer === true
+    );
+  }, [user]);
+
   const stats = {
     total: teachers.length,
     filledJournal: teachers.filter(t => getJournalStatus(t.id)).length,
@@ -517,145 +533,225 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
           <ShieldCheck size={18} />
           Supervisi
         </button>
-        <button
-          onClick={() => setActiveTab('ABSENSI_RFID')}
-          className={`flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-medium transition ${
-            activeTab === 'ABSENSI_RFID' 
-              ? 'bg-white text-purple-600 shadow-sm' 
-              : 'text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          <Clock size={18} />
-          Absensi RFID
-        </button>
+        {isRfidAuthorized && (
+          <button
+            onClick={() => setActiveTab('ABSENSI_RFID')}
+            className={`flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-medium transition ${
+              activeTab === 'ABSENSI_RFID' 
+                ? 'bg-white text-purple-600 shadow-sm' 
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <Clock size={18} />
+            Absensi RFID
+          </button>
+        )}
       </div>
 
       {/* Main Content */}
       {activeTab === 'SUPERVISI' ? (
         <SupervisionManager user={user} />
       ) : activeTab === 'ABSENSI_RFID' ? (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 animate-in fade-in zoom-in duration-200">
-          <div className="max-w-2xl mx-auto">
-            <div className="flex items-center gap-3 mb-6 bg-purple-50 p-4 rounded-lg border border-purple-100">
-              <div className="p-2 bg-purple-100 text-purple-600 rounded-full">
-                <Clock size={24} />
-              </div>
-              <div>
-                <h3 className="font-bold text-gray-800 text-lg">Konfigurasi Waktu Absensi RFID</h3>
-                <p className="text-sm text-gray-500">Atur jam operasional absensi RFID untuk sekolah Anda.</p>
-              </div>
-            </div>
-
-            {saveStatus && (
-              <div className={`mb-6 p-4 rounded-lg flex items-center gap-2 ${saveStatus.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
-                {saveStatus.type === 'success' ? <CheckCircle size={20} /> : <AlertCircle size={20} />}
-                <span className="font-medium text-sm">{saveStatus.text}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleSaveSettings} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">Jam Mulai Masuk</label>
-                  <div className="relative">
-                    <Clock size={16} className="absolute left-3 top-3 text-gray-400" />
-                    <input 
-                      type="time" 
-                      className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
-                      value={settings?.rfidCheckInStart || '06:00'}
-                      onChange={(e) => setSettings(prev => prev ? ({ ...prev, rfidCheckInStart: e.target.value }) : null)}
-                      required
-                    />
-                  </div>
-                  <p className="mt-1 text-[10px] text-gray-500 italic">Siswa bisa mulai tap masuk hari tersebut.</p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">Batas Terlambat</label>
-                  <div className="relative">
-                    <Clock size={16} className="absolute left-3 top-3 text-gray-400" />
-                    <input 
-                      type="time" 
-                      className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 outline-none"
-                      value={settings?.rfidCheckInLate || '08:30'}
-                      onChange={(e) => setSettings(prev => prev ? ({ ...prev, rfidCheckInLate: e.target.value }) : null)}
-                      required
-                    />
-                  </div>
-                  <p className="mt-1 text-[10px] text-gray-500 italic text-red-500">Lewat dari jam ini status otomatis "TERLAMBAT".</p>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">Jam Mulai Pulang</label>
-                <div className="relative">
-                  <Clock size={16} className="absolute left-3 top-3 text-gray-400" />
-                  <input 
-                    type="time" 
-                    className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                    value={settings?.rfidCheckOutStart || '14:00'}
-                    onChange={(e) => setSettings(prev => prev ? ({ ...prev, rfidCheckOutStart: e.target.value }) : null)}
-                    required
-                  />
-                </div>
-                <p className="mt-1 text-[10px] text-gray-500 italic">Tap sebelum jam ini akan berstatus "PULANG CEPAT".</p>
-              </div>
-
-              <div className="pt-4 flex justify-end">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden animate-in fade-in zoom-in duration-200">
+          <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/30">
+            <div className="flex bg-gray-100 p-1 rounded-lg">
                 <button 
-                  type="submit"
-                  disabled={isSavingSettings}
-                  className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2.5 px-8 rounded-lg shadow-md transition flex items-center gap-2 disabled:opacity-70"
+                  onClick={() => setRfidViewMode('LOGS')}
+                  className={`px-4 py-1.5 rounded-md text-xs font-bold transition ${rfidViewMode === 'LOGS' ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-500'}`}
                 >
-                  {isSavingSettings ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
-                  {isSavingSettings ? 'Menyimpan...' : 'Simpan Konfigurasi'}
+                  Log Kehadiran
                 </button>
-              </div>
-            </form>
-            
-            <div className="mt-10 p-5 bg-gray-50 rounded-xl border border-gray-200">
-                <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2 text-sm">
-                    <AlertCircle size={16} className="text-purple-500" />
-                    Panduan Logika Batas Waktu:
-                </h4>
-                <div className="space-y-4">
-                    <div className="flex items-start gap-3">
-                        <div className="w-6 h-6 rounded-full bg-green-100 text-green-700 flex items-center justify-center text-xs font-bold shrink-0">1</div>
-                        <div>
-                            <p className="text-xs font-bold text-gray-700 uppercase">Status Hadir (H)</p>
-                            <p className="text-[11px] text-gray-500">
-                                Tap antara <span className="font-bold">{settings?.rfidCheckInStart || '06:00'}</span> s.d <span className="font-bold">{settings?.rfidCheckInLate || '08:30'}</span>.
-                            </p>
-                        </div>
-                    </div>
-                    <div className="flex items-start gap-3">
-                        <div className="w-6 h-6 rounded-full bg-orange-100 text-orange-700 flex items-center justify-center text-xs font-bold shrink-0">2</div>
-                        <div>
-                            <p className="text-xs font-bold text-gray-700 uppercase">Status Terlambat (T)</p>
-                            <p className="text-[11px] text-gray-500">
-                                Tap setelah <span className="font-bold">{settings?.rfidCheckInLate || '08:30'}</span> namun sebelum <span className="font-bold">{settings?.rfidCheckOutStart || '14:00'}</span>.
-                            </p>
-                        </div>
-                    </div>
-                    <div className="flex items-start gap-3">
-                        <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold shrink-0">3</div>
-                        <div>
-                            <p className="text-xs font-bold text-gray-700 uppercase">Status Pulang</p>
-                            <p className="text-[11px] text-gray-500">
-                                Tap pada atau setelah jam <span className="font-bold">{settings?.rfidCheckOutStart || '14:00'}</span>.
-                            </p>
-                        </div>
-                    </div>
-                </div>
-                <div className="mt-5 p-3 bg-purple-50 text-purple-700 text-[10px] rounded-lg border border-purple-100 italic">
-                    <div className="flex items-center gap-2 mb-1">
-                        <Info size={12} />
-                        <strong>Sinkronisasi Otomatis:</strong>
-                    </div>
-                    Data Tap Masuk (Hadir & Terlambat) secara otomatis akan mencatatkan status siswa di Daftar Hadir Utama guru kelas.
-                </div>
+                <button 
+                  onClick={() => setRfidViewMode('SETTINGS')}
+                  className={`px-4 py-1.5 rounded-md text-xs font-bold transition ${rfidViewMode === 'SETTINGS' ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-500'}`}
+                >
+                  Pengaturan Waktu
+                </button>
+            </div>
+            <div className="text-xs font-medium text-gray-500">
+               {rfidLogs.length} Data ditemukan pada {new Date(selectedDate).toLocaleDateString('id-ID')}
             </div>
           </div>
+
+          {rfidViewMode === 'SETTINGS' ? (
+            <div className="p-8">
+              <div className="max-w-2xl mx-auto">
+                <div className="flex items-center gap-3 mb-6 bg-purple-50 p-4 rounded-lg border border-purple-100">
+                  <div className="p-2 bg-purple-100 text-purple-600 rounded-full">
+                    <Clock size={24} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-gray-800 text-lg">Konfigurasi Waktu Absensi RFID</h3>
+                    <p className="text-sm text-gray-500">Atur jam operasional absensi RFID untuk sekolah Anda.</p>
+                  </div>
+                </div>
+
+                {saveStatus && (
+                  <div className={`mb-6 p-4 rounded-lg flex items-center gap-2 ${saveStatus.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+                    {saveStatus.type === 'success' ? <CheckCircle size={20} /> : <AlertCircle size={20} />}
+                    <span className="font-medium text-sm">{saveStatus.text}</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleSaveSettings} className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-bold text-gray-700 mb-2">Jam Mulai Masuk</label>
+                      <div className="relative">
+                        <Clock size={16} className="absolute left-3 top-3 text-gray-400" />
+                        <input 
+                          type="time" 
+                          className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
+                          value={settings?.rfidCheckInStart || '06:00'}
+                          onChange={(e) => setSettings(prev => prev ? ({ ...prev, rfidCheckInStart: e.target.value }) : null)}
+                          required
+                        />
+                      </div>
+                      <p className="mt-1 text-[10px] text-gray-500 italic">Siswa bisa mulai tap masuk hari tersebut.</p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-bold text-gray-700 mb-2">Batas Terlambat</label>
+                      <div className="relative">
+                        <Clock size={16} className="absolute left-3 top-3 text-gray-400" />
+                        <input 
+                          type="time" 
+                          className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 outline-none"
+                          value={settings?.rfidCheckInLate || '08:30'}
+                          onChange={(e) => setSettings(prev => prev ? ({ ...prev, rfidCheckInLate: e.target.value }) : null)}
+                          required
+                        />
+                      </div>
+                      <p className="mt-1 text-[10px] text-gray-500 italic text-red-500">Lewat dari jam ini status otomatis "TERLAMBAT".</p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">Jam Mulai Pulang</label>
+                    <div className="relative">
+                      <Clock size={16} className="absolute left-3 top-3 text-gray-400" />
+                      <input 
+                        type="time" 
+                        className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                        value={settings?.rfidCheckOutStart || '14:00'}
+                        onChange={(e) => setSettings(prev => prev ? ({ ...prev, rfidCheckOutStart: e.target.value }) : null)}
+                        required
+                      />
+                    </div>
+                    <p className="mt-1 text-[10px] text-gray-500 italic">Tap sebelum jam ini akan berstatus "PULANG CEPAT".</p>
+                  </div>
+
+                  <div className="pt-4 flex justify-end">
+                    <button 
+                      type="submit"
+                      disabled={isSavingSettings}
+                      className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2.5 px-8 rounded-lg shadow-md transition flex items-center gap-2 disabled:opacity-70"
+                    >
+                      {isSavingSettings ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                      {isSavingSettings ? 'Menyimpan...' : 'Simpan Konfigurasi'}
+                    </button>
+                  </div>
+                </form>
+
+                <div className="mt-10 p-5 bg-gray-50 rounded-xl border border-gray-200">
+                    <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2 text-sm">
+                        <AlertCircle size={16} className="text-purple-500" />
+                        Panduan Logika Batas Waktu:
+                    </h4>
+                    <div className="space-y-4">
+                        <div className="flex items-start gap-3">
+                            <div className="w-6 h-6 rounded-full bg-green-100 text-green-700 flex items-center justify-center text-xs font-bold shrink-0">1</div>
+                            <div>
+                                <p className="text-xs font-bold text-gray-700 uppercase">Status Hadir (H)</p>
+                                <p className="text-[11px] text-gray-500">
+                                    Tap antara <span className="font-bold">{settings?.rfidCheckInStart || '06:00'}</span> s.d <span className="font-bold">{settings?.rfidCheckInLate || '08:30'}</span>.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex items-start gap-3">
+                            <div className="w-6 h-6 rounded-full bg-orange-100 text-orange-700 flex items-center justify-center text-xs font-bold shrink-0">2</div>
+                            <div>
+                                <p className="text-xs font-bold text-gray-700 uppercase">Status Terlambat (T)</p>
+                                <p className="text-[11px] text-gray-500">
+                                    Tap setelah <span className="font-bold">{settings?.rfidCheckInLate || '08:30'}</span> namun sebelum <span className="font-bold">{settings?.rfidCheckOutStart || '14:00'}</span>.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex items-start gap-3">
+                            <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold shrink-0">3</div>
+                            <div>
+                                <p className="text-xs font-bold text-gray-700 uppercase">Status Pulang</p>
+                                <p className="text-[11px] text-gray-500">
+                                    Tap pada atau setelah jam <span className="font-bold">{settings?.rfidCheckOutStart || '14:00'}</span>.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead className="bg-gray-50 text-gray-600 font-semibold text-xs uppercase tracking-wider">
+                  <tr>
+                    <th className="px-6 py-4">Siswa</th>
+                    <th className="px-6 py-4">Kelas</th>
+                    <th className="px-6 py-4">Waktu Tap</th>
+                    <th className="px-6 py-4">Status</th>
+                    <th className="px-6 py-4">Metode</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {rfidLogs.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
+                        <div className="flex flex-col items-center gap-2">
+                          <Clock size={32} className="text-gray-300" />
+                          <p className="font-medium">Belum ada data tap RFID pada tanggal ini.</p>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    rfidLogs
+                      .filter(log => log.studentName.toLowerCase().includes(searchQuery.toLowerCase()))
+                      .map(log => (
+                      <tr key={log.id} className="hover:bg-gray-50 transition">
+                        <td className="px-6 py-4">
+                          <div className="font-medium text-gray-800">{log.studentName}</div>
+                          <div className="text-[10px] text-gray-400">ID: {log.studentId}</div>
+                        </td>
+                        <td className="px-6 py-4 text-xs text-gray-600">
+                          {log.className}
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-xs font-bold text-gray-800">
+                            {new Date(log.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`inline-flex px-2 py-1 rounded text-[10px] font-bold ${
+                            log.status === 'HADIR' ? 'bg-green-100 text-green-700' :
+                            log.status === 'TERLAMBAT' ? 'bg-orange-100 text-orange-700' :
+                            log.status === 'PULANG' ? 'bg-blue-100 text-blue-700' :
+                            log.status === 'PULANG CEPAT' ? 'bg-yellow-100 text-yellow-700' :
+                            'bg-gray-100 text-gray-700'
+                          }`}>
+                            {log.status === 'HADIR' ? 'HADIR' : 
+                             log.status === 'TERLAMBAT' ? 'TERLAMBAT' : 
+                             log.status.toUpperCase()}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-[10px] text-gray-500 font-medium">
+                          {log.method}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       ) : (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
