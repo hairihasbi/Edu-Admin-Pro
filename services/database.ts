@@ -2309,13 +2309,9 @@ export const updateSupervisionAssignmentStatus = async (id: string, status: 'PEN
 // --- RFID SERVICES ---
 export const normalizeRfid = (tag: string): string => {
   if (!tag) return '';
-  const clean = tag.trim();
-  // Many RFID readers (USB) add characters or have 12-digit formats 
-  // where the last 10 are the actual ID stored in 10-digit formats.
-  if (clean.length > 10) {
-    return clean.substring(clean.length - 10);
-  }
-  return clean;
+  // User meminta agar tidak ada pemotongan angka atau penghapusan angka nol di depan.
+  // Gunakan ID asli yang terbaca oleh scanner apa adanya.
+  return tag.trim();
 };
 
 export const updateStudentRfid = async (studentId: string, rfidTag: string) => {
