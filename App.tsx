@@ -1279,9 +1279,9 @@ const AppContent: React.FC = () => {
                       label="Terminal RFID"
                     />
                     <NavLink
-                      to="/attendance-monitoring"
-                      icon={Clock}
-                      label="Pantau Absensi RFID"
+                      to="/monitoring-kurikulum"
+                      icon={Activity}
+                      label="Monitoring RFID & KBM"
                     />
                     <NavLink
                       to="/rfid-officers"
@@ -1326,19 +1326,22 @@ const AppContent: React.FC = () => {
                   </>
                 ) : (
                   <>
+                    {(currentUser.additionalRole === "WAKASEK_KURIKULUM" ||
+                      currentUser.additionalRole === "WALI_KELAS" ||
+                      currentUser.subject === "Bimbingan Konseling" ||
+                      currentUser.isRfidOfficer) && (
+                      <NavLink
+                        to="/monitoring-kurikulum"
+                        icon={Activity}
+                        label="Monitoring RFID & KBM"
+                      />
+                    )}
                     {currentUser.additionalRole === "WAKASEK_KURIKULUM" && (
-                      <>
-                        <NavLink
-                          to="/monitoring-kurikulum"
-                          icon={Activity}
-                          label="Monitoring Kurikulum"
-                        />
-                        <NavLink
-                          to="/manage-schedules"
-                          icon={Calendar}
-                          label="Manajemen Jadwal"
-                        />
-                      </>
+                      <NavLink
+                        to="/manage-schedules"
+                        icon={Calendar}
+                        label="Manajemen Jadwal"
+                      />
                     )}
                     <NavLink
                       to="/classes"
@@ -1867,17 +1870,21 @@ const AppContent: React.FC = () => {
                     element={<SupervisionAssessment user={currentUser} />}
                   />
                 )}
+                {(currentUser.additionalRole === "KEPALA_SEKOLAH" || 
+                  currentUser.additionalRole === "WAKASEK_KURIKULUM" || 
+                  currentUser.additionalRole === "WALI_KELAS" || 
+                  currentUser.subject === "Bimbingan Konseling" || 
+                  currentUser.isRfidOfficer) && (
+                  <Route
+                    path="/monitoring-kurikulum"
+                    element={<WakasekMonitoring user={currentUser} />}
+                  />
+                )}
                 {currentUser.additionalRole === "WAKASEK_KURIKULUM" && (
-                  <>
-                    <Route
-                      path="/monitoring-kurikulum"
-                      element={<WakasekMonitoring user={currentUser} />}
-                    />
-                    <Route
-                      path="/manage-schedules"
-                      element={<WakasekScheduleManager user={currentUser} />}
-                    />
-                  </>
+                  <Route
+                    path="/manage-schedules"
+                    element={<WakasekScheduleManager user={currentUser} />}
+                  />
                 )}
                 <Route path="/gen-quiz" element={<TeacherGenQuiz />} />
                 <Route
