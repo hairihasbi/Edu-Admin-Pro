@@ -1042,6 +1042,12 @@ const mapRowToJSON = (collection: string, row: any) => {
         score: row.score, answers: parseJSONSafe(row.answers), violationCount: row.violation_count,
         status: row.status, lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
     };
+    case 'eduadmin_rfid_logs': return {
+        id: row.id, studentId: row.student_id, studentName: row.student_name,
+        classId: row.class_id, className: row.class_name, schoolNpsn: row.school_npsn,
+        timestamp: row.timestamp, status: row.status, method: row.method,
+        deviceId: row.device_id, lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
+    };
     default:
         return row; 
   }
