@@ -35,10 +35,25 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
   const [expandedTeacherId, setExpandedTeacherId] = useState<string | null>(null);
   const [expandedClassId, setExpandedClassId] = useState<string | null>(null);
 
+  const lastTodayRef = useRef(new Date().toISOString().split('T')[0]);
+
   useEffect(() => {
-    const fetchData = async () => {
+    // Timer to update date automatically if system time changes day
+    const dateTimer = setInterval(() => {
+      const today = new Date().toISOString().split('T')[0];
+      if (today !== lastTodayRef.current) {
+        setSelectedDate(today);
+        lastTodayRef.current = today;
+      }
+    }, 60000); // Check every minute
+
+    return () => clearInterval(dateTimer);
+  }, []);
+
+  useEffect(() => {
+    const fetchData = async (isBackground = false) => {
       if (!user.schoolNpsn) return;
-      setLoading(true);
+      if (!isBackground) setLoading(true);
       try {
         const [schoolTeachers, schoolClasses, schoolSchedules, systemSettings, schoolRfidLogs] = await Promise.all([
           getSchoolTeachers(user.schoolNpsn),
@@ -51,37 +66,51 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
         setSettings(systemSettings || null);
         setRfidLogs(schoolRfidLogs || []);
         
-        const teacherIds = schoolTeachers.map(t => t.id);
-        
-        const [schoolJournals, schoolAttendance] = await Promise.all([
-          getSchoolJournals(teacherIds, selectedDate),
-          getSchoolAttendance(teacherIds, selectedDate)
-        ]);
+        if (!isBackground) {
+          const teacherIds = schoolTeachers.map(t => t.id);
+          
+          const [schoolJournals, schoolAttendance] = await Promise.all([
+            getSchoolJournals(teacherIds, selectedDate),
+            getSchoolAttendance(teacherIds, selectedDate)
+          ]);
 
-        // Fetch all journals for the current academic year if on PRESENSI tab
-        if (activeTab === 'PRESENSI') {
-            const now = new Date();
-            const year = now.getFullYear();
-            const startYear = now.getMonth() >= 6 ? year : year - 1;
-            const startDate = `${startYear}-07-01`;
-            const endDate = `${startYear + 1}-06-30`;
-            const periodJournals = await getSchoolJournalsByRange(teacherIds, startDate, endDate);
-            setAllPeriodJournals(periodJournals);
+          // Fetch all journals for the current academic year if on PRESENSI tab
+          if (activeTab === 'PRESENSI') {
+              const now = new Date();
+              const year = now.getFullYear();
+              const startYear = now.getMonth() >= 6 ? year : year - 1;
+              const startDate = `${startYear}-07-01`;
+              const endDate = `${startYear + 1}-06-30`;
+              const periodJournals = await getSchoolJournalsByRange(teacherIds, startDate, endDate);
+              setAllPeriodJournals(periodJournals);
+          }
+
+          setTeachers(schoolTeachers.sort((a, b) => a.fullName.localeCompare(b.fullName)));
+          setClasses(schoolClasses.sort((a, b) => a.name.localeCompare(b.name)));
+          setJournals(schoolJournals);
+          setAttendance(schoolAttendance);
+          setSchedules(schoolSchedules);
         }
-
-        setTeachers(schoolTeachers.sort((a, b) => a.fullName.localeCompare(b.fullName)));
-        setClasses(schoolClasses.sort((a, b) => a.name.localeCompare(b.name)));
-        setJournals(schoolJournals);
-        setAttendance(schoolAttendance);
-        setSchedules(schoolSchedules);
       } catch (error) {
         console.error("Failed to fetch monitoring data:", error);
       } finally {
-        setLoading(false);
+        if (!isBackground) setLoading(false);
       }
     };
 
     fetchData();
+
+    // Background polling for RFID logs only if that tab is active
+    let pollInterval: any;
+    if (activeTab === 'ABSENSI_RFID') {
+      pollInterval = setInterval(() => {
+        fetchData(true);
+      }, 10000); // 10 seconds silent poll
+    }
+
+    return () => {
+      if (pollInterval) clearInterval(pollInterval);
+    };
   }, [user.schoolNpsn, selectedDate, activeTab]);
 
   const handleSync = async () => {
@@ -584,7 +613,13 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
                   Pengaturan Waktu
                 </button>
             </div>
-            <div className="text-xs font-medium text-gray-500">
+            <div className="text-xs font-medium text-gray-500 flex items-center gap-2">
+               {selectedDate === new Date().toISOString().split('T')[0] && (
+                 <span className="flex items-center gap-1.5 px-2 py-0.5 bg-red-50 text-red-600 rounded-full text-[9px] font-black uppercase tracking-wider border border-red-100 animate-pulse">
+                   <span className="w-1.5 h-1.5 bg-red-600 rounded-full"></span>
+                   Live
+                 </span>
+               )}
                {rfidLogs.length} Data ditemukan pada {new Date(selectedDate).toLocaleDateString('id-ID')}
             </div>
           </div>
