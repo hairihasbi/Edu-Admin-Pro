@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { BookOpen, School, User, IdCard, CalendarDays, Layout, Users, ClipboardList, TrendingUp, Heart, Coffee, Megaphone, AlertCircle, Info, Zap, DatabaseBackup, AlertTriangle, Database, WifiOff, RefreshCcw, Cloud, ArrowRight, CheckCircle } from './Icons';
 import { User as UserType, TeachingSchedule, DashboardStatsData, Notification, UserRole, ClassRoom } from '../types';
-import { getDashboardStats, getTeachingSchedules, getActiveAnnouncements, getSyncStats, getSchoolJournals, getAvailableClassesForHomeroom } from '../services/database';
+import { getDashboardStats, getTeachingSchedules, getActiveAnnouncements, getSyncStats, getSchoolJournals, getAvailableClassesForHomeroom, getLocalDate } from '../services/database';
 import { checkConnection } from '../services/tursoService';
 
 interface TeacherDashboardProps {
@@ -68,7 +68,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
         const scheduleData = await getTeachingSchedules(user.id, user.schoolNpsn);
         setSchedules(scheduleData);
 
-        const today = new Date().toISOString().split('T')[0];
+        const today = getLocalDate();
         const journalsData = await getSchoolJournals([user.id], today);
         setTodayJournals(journalsData);
 

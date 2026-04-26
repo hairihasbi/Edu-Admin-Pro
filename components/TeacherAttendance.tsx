@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { User, ClassRoom, Student, AttendanceRecord, TeacherCalendarEvent } from '../types';
-import { getClasses, getStudents, saveAttendanceRecords, getAttendanceRecords, deleteAttendanceRecords, getAttendanceRecordsByRange, getCalendarEvents } from '../services/database';
+import { getClasses, getStudents, saveAttendanceRecords, getAttendanceRecords, deleteAttendanceRecords, getAttendanceRecordsByRange, getCalendarEvents, getLocalDate } from '../services/database';
 import { CalendarCheck, FileSpreadsheet, Printer, Save, CheckCircle, Filter, ChevronLeft, ChevronRight, User as UserIcon, X, Check, Activity, AlertCircle, RotateCcw, Trash2, FileText, Layout, Calendar, Lock, Eye } from './Icons';
 import * as XLSX from 'xlsx';
 import TeacherCalendarManager from './TeacherCalendarManager';
@@ -221,10 +221,6 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
   // --- HANDLERS (INPUT MODE) ---
   
   const getEventForDay = (day: number) => {
-      const dateStr = new Date(selectedYear, selectedMonth, day).toISOString().split('T')[0];
-      // Adjust for timezone offset if needed, but here we construct date from year/month/day
-      // Actually, constructing Date(y, m, d) uses local time. toISOString uses UTC.
-      // Better to compare manually.
       const target = new Date(selectedYear, selectedMonth, day);
       const y = target.getFullYear();
       const m = String(target.getMonth() + 1).padStart(2, '0');
@@ -386,8 +382,10 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
         if (status) {
           const d = parseInt(dayStr);
           const dateObj = new Date(selectedYear, selectedMonth, d);
-          const offset = dateObj.getTimezoneOffset() * 60000;
-          const localDate = new Date(dateObj.getTime() - offset).toISOString().split('T')[0];
+          const y = dateObj.getFullYear();
+          const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+          const dayStrLocal = String(dateObj.getDate()).padStart(2, '0');
+          const localDate = `${y}-${m}-${dayStrLocal}`;
 
           recordsToSave.push({
             studentId,

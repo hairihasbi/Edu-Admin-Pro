@@ -23,7 +23,15 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
   const [schedules, setSchedules] = useState<TeachingSchedule[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const getLocalDate = () => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const [selectedDate, setSelectedDate] = useState(getLocalDate());
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'GURU' | 'KELAS' | 'PRESENSI' | 'SUPERVISI' | 'ABSENSI_RFID'>('GURU');
   const [rfidLogs, setRfidLogs] = useState<RfidLog[]>([]);
@@ -35,15 +43,15 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
   const [expandedTeacherId, setExpandedTeacherId] = useState<string | null>(null);
   const [expandedClassId, setExpandedClassId] = useState<string | null>(null);
 
-  const lastTodayRef = useRef(new Date().toISOString().split('T')[0]);
+  const lastTodayRef = useRef(getLocalDate());
 
   useEffect(() => {
     // Timer to update date automatically if system time changes day
     const dateTimer = setInterval(() => {
-      const today = new Date().toISOString().split('T')[0];
-      if (today !== lastTodayRef.current) {
-        setSelectedDate(today);
-        lastTodayRef.current = today;
+      const todayString = getLocalDate();
+      if (todayString !== lastTodayRef.current) {
+        setSelectedDate(todayString);
+        lastTodayRef.current = todayString;
       }
     }, 60000); // Check every minute
 

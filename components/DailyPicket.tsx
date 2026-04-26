@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User } from '../types';
-import { getDailyPicket, saveDailyPicket, deleteDailyPicket, getPicketOfficers, getSchoolAttendanceSummary, getStudentIncidents, getAttendanceSummaryByRange, getIncidentsByDateRange } from '../services/database';
+import { getDailyPicket, saveDailyPicket, deleteDailyPicket, getPicketOfficers, getSchoolAttendanceSummary, getStudentIncidents, getAttendanceSummaryByRange, getIncidentsByDateRange, getLocalDate } from '../services/database';
 import PicketAttendanceTable from './PicketAttendanceTable';
 import PicketIncidentForm from './PicketIncidentForm';
 import PermitExitLetter from './PermitExitLetter';
@@ -11,7 +11,7 @@ interface DailyPicketProps {
 }
 
 const DailyPicket: React.FC<DailyPicketProps> = ({ currentUser }) => {
-    const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+    const [date, setDate] = useState(getLocalDate());
     const [activeTab, setActiveTab] = useState<'ATTENDANCE' | 'INCIDENTS' | 'PERMIT_EXIT_LETTER'>('ATTENDANCE');
     const [officers, setOfficers] = useState<string[]>([]);
     const [notes, setNotes] = useState('');

@@ -32,8 +32,13 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
 
   useEffect(() => {
     const loadRecentLogs = async () => {
-      const today = new Date().toISOString().split('T')[0];
-      const recentLogs = await getRfidLogs(user.schoolNpsn || '', today);
+      const today = new Date();
+      const year = today.getFullYear();
+      const month = String(today.getMonth() + 1).padStart(2, '0');
+      const day = String(today.getDate()).padStart(2, '0');
+      const localToday = `${year}-${month}-${day}`;
+      
+      const recentLogs = await getRfidLogs(user.schoolNpsn || '', localToday);
       setLogs(recentLogs.slice(0, 10));
     };
     loadRecentLogs();
@@ -203,6 +208,21 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
         }
 
         const classData = await getClassById(student.classId);
+        
+        const getLocalISOString = () => {
+            const now = new Date();
+            const tzo = -now.getTimezoneOffset();
+            const dif = tzo >= 0 ? '+' : '-';
+            const pad = (num: number) => String(Math.floor(Math.abs(num))).padStart(2, '0');
+            return now.getFullYear() +
+                '-' + pad(now.getMonth() + 1) +
+                '-' + pad(now.getDate()) +
+                'T' + pad(now.getHours()) +
+                ':' + pad(now.getMinutes()) +
+                ':' + pad(now.getSeconds()) +
+                dif + pad(tzo / 60) +
+                ':' + pad(tzo % 60);
+        };
 
         const newLog = await saveRfidLog({
           studentId: student.id,
@@ -210,7 +230,7 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
           classId: student.classId,
           className: classData?.name || 'Unknown Class',
           schoolNpsn: user.schoolNpsn || '',
-          timestamp: now.toISOString(),
+          timestamp: getLocalISOString(),
           status: attendanceStatus,
           method: method,
           deviceId: terminalId

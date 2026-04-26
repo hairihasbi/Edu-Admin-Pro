@@ -11,6 +11,7 @@ import {
   getSchoolClasses,
   updateStudentRfid,
   normalizeRfid,
+  getLocalDate,
 } from "../services/database";
 import {
   Shield,
@@ -70,7 +71,7 @@ const RfidSecurityManager: React.FC<RfidSecurityManagerProps> = ({ user }) => {
     setClasses(schoolClasses);
 
     // Today's logs only
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDate();
     const recentLogs = await db.rfidLogs
       .where("schoolNpsn")
       .equals(user.schoolNpsn || "")

@@ -37,8 +37,16 @@ const AttendanceMonitoring: React.FC<AttendanceMonitoringProps> = ({ user }) => 
   
   // Filters
   const [filterMode, setFilterMode] = useState<'DAILY' | 'MONTHLY' | 'SEMESTER'>('DAILY');
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
+  const getLocalDate = () => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const [selectedDate, setSelectedDate] = useState(getLocalDate());
+  const [selectedMonth, setSelectedMonth] = useState(getLocalDate().slice(0, 7)); // YYYY-MM
   const [selectedSemester, setSelectedSemester] = useState<'Ganjil' | 'Genap'>(new Date().getMonth() >= 6 ? 'Ganjil' : 'Genap');
   const [activeClassId, setActiveClassId] = useState<string>('ALL');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'HADIR' | 'TERLAMBAT' | 'PULANG CEPAT' | 'ALFA'>('ALL');
