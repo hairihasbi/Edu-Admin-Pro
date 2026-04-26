@@ -13,8 +13,9 @@ import {
 import { 
   ShieldAlert, Trophy, MessageSquareHeart, Search, Plus, Trash2, 
   CalendarDays, FileWarning, User as UserIcon, AlertTriangle, Printer, FileSpreadsheet, FileText,
-  Heart, RefreshCcw, Home, Smartphone
+  Heart, RefreshCcw, Home, Smartphone, Shield
 } from './Icons';
+import { db } from '../services/db';
 import * as XLSX from 'xlsx';
 
 interface TeacherGuidanceProps {
@@ -22,9 +23,11 @@ interface TeacherGuidanceProps {
 }
 
 const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
-  const [activeTab, setActiveTab] = useState<'violations' | 'reductions' | 'achievements' | 'counseling' | 'homeVisits' | 'parentCalls' | 'print'>('violations');
+  const [activeTab, setActiveTab] = useState<'violations' | 'reductions' | 'achievements' | 'counseling' | 'homeVisits' | 'parentCalls' | 'priority' | 'print'>('violations');
   
-  // Data State
+  // New State for Priority Monitor
+  const [flaggedStudents, setFlaggedStudents] = useState<any[]>([]);
+  const [isLoadingPriority, setIsLoadingPriority] = useState(false);
   const [classes, setClasses] = useState<ClassRoom[]>([]);
   const [allSchoolClasses, setAllSchoolClasses] = useState<ClassRoom[]>([]);
   const [students, setStudents] = useState<Student[]>([]); // For Dropdown (Filtered)
@@ -96,8 +99,71 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
     loadFeatureData();
   }, [activeTab]); 
 
+  const loadPriorityData = async () => {
+    setIsLoadingPriority(true);
+    try {
+      // 1. Get current month range (30 days)
+      const now = new Date();
+      const thirtyDaysAgo = new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000));
+      const startOfMonth = thirtyDaysAgo.toISOString().split('T')[0];
+      const endOfMonth = now.toISOString().split('T')[0];
+
+      // 2. We need all students in this BK's managed classes
+      // Get all students for the school to be comprehensive if school-wide BK
+      const allStudents = await db.students.where('schoolNpsn').equals(user.schoolNpsn || 'DEFAULT').toArray();
+      
+      // Fetch shared attendance records for the school this month
+      const attendance = await db.attendanceRecords
+        .where('date').between(startOfMonth, endOfMonth, true, true)
+        .filter((r: any) => r.schoolNpsn === user.schoolNpsn && (r.visibility === 'SHARED' || r.visibility === undefined))
+        .toArray();
+
+      const prioritized: any[] = [];
+
+      allStudents.forEach((student: any) => {
+        const studentAtt = attendance.filter((a: any) => a.studentId === student.id).sort((a: any, b: any) => a.date.localeCompare(b.date));
+        
+        // 1. Check > 5 Tardies (T)
+        const tardies = studentAtt.filter((a: any) => a.status === 'T').length;
+        
+        // 2. Check 3 Consecutive Absences (A) - Alpha/Unexcused
+        let consecutiveAbsences = 0;
+        let maxConsecutive = 0;
+        studentAtt.forEach((record: any) => {
+          if (record.status === 'A') {
+            consecutiveAbsences++;
+            if (consecutiveAbsences > maxConsecutive) maxConsecutive = consecutiveAbsences;
+          } else {
+            // Note: only reset on any status that is NOT Alpha
+            consecutiveAbsences = 0;
+          }
+        });
+
+        if (maxConsecutive >= 3 || tardies >= 5) {
+          prioritized.push({
+            student,
+            tardies,
+            maxConsecutive,
+            reasons: [
+              ...(maxConsecutive >= 3 ? [`Absen 3 hari berturut-turut (${maxConsecutive} hari)`] : []),
+              ...(tardies >= 5 ? [`Terlambat ${tardies} kali bulan ini`] : [])
+            ]
+          });
+        }
+      });
+
+      setFlaggedStudents(prioritized);
+    } catch (error) {
+      console.error("Priority Load Error:", error);
+    } finally {
+      setIsLoadingPriority(false);
+    }
+  };
+
   const loadFeatureData = async () => {
-    if (activeTab === 'print') {
+    if (activeTab === 'priority') {
+       loadPriorityData();
+    } else if (activeTab === 'print') {
        const [v, r, a, s, hv, pc] = await Promise.all([
           getStudentViolations(),
           getStudentPointReductions(),
@@ -676,6 +742,14 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
             <Smartphone size={16} /> Panggilan Ortu
           </button>
           <button
+            onClick={() => setActiveTab('priority')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition whitespace-nowrap ${
+              activeTab === 'priority' ? 'bg-red-50 text-red-600 ring-1 ring-red-200' : 'text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            <AlertTriangle size={16} /> Monitor Prioritas
+          </button>
+          <button
             onClick={() => setActiveTab('print')}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition whitespace-nowrap ${
               activeTab === 'print' ? 'bg-indigo-50 text-indigo-600 ring-1 ring-indigo-200' : 'text-gray-600 hover:bg-gray-50'
@@ -698,6 +772,7 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
                   activeTab === 'counseling' ? 'Log Konseling' : 
                   activeTab === 'homeVisits' ? 'Input Home Visit' :
                   activeTab === 'parentCalls' ? 'Input Panggilan Ortu' :
+                  activeTab === 'priority' ? 'Analisis Otomatis' :
                   'Filter Data Laporan'}
               </h3>
               
@@ -729,6 +804,27 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
               </div>
 
               {/* Dynamic Forms - Hidden on Print Tab */}
+              {activeTab === 'priority' && (
+                <div className="p-4 bg-red-50 rounded-lg border border-red-100 text-sm">
+                  <p className="text-red-700 font-medium mb-2 flex items-center gap-1">
+                    <AlertTriangle size={14} /> Sistem Deteksi BK
+                  </p>
+                  <p className="text-red-600 text-xs leading-relaxed">
+                    Sistem secara otomatis memindai seluruh data kehadiran bulan ini untuk menemukan pola ketidakhadiran yang mengkhawatirkan.
+                  </p>
+                  <div className="mt-4 pt-4 border-t border-red-200 space-y-2">
+                    <div className="flex items-center gap-2 text-xs text-red-800">
+                      <div className="w-2 h-2 rounded-full bg-red-500" />
+                      3+ Hari Absen Berturut-turut
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-red-800">
+                      <div className="w-2 h-2 rounded-full bg-orange-500" />
+                      5+ Kali Terlambat / Bulan
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {activeTab === 'violations' && (
                  <form onSubmit={handleAddViolation} className="space-y-3">
                     <input type="date" required className="w-full border rounded-lg p-2 text-sm" value={violationForm.date} onChange={e => setViolationForm({...violationForm, date: e.target.value})} />
@@ -842,6 +938,112 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
               </div>
               
               <div className="divide-y divide-gray-100 max-h-[600px] overflow-y-auto">
+                  
+                  {/* MONITOR PRIORITAS TAB */}
+                  {activeTab === 'priority' && (
+                    <div className="p-4 space-y-4">
+                      {isLoadingPriority ? (
+                        <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+                          <RefreshCcw size={32} className="animate-spin mb-4 opacity-50" />
+                          <p>Menganalisis data kehadiran...</p>
+                        </div>
+                      ) : flaggedStudents.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-12 text-emerald-500">
+                          <ShieldAlert size={48} className="mb-4 opacity-20" />
+                          <p className="font-medium text-center">Tidak ada siswa yang memerlukan tindakan prioritas saat ini.</p>
+                          <p className="text-xs text-gray-400 mt-1 uppercase tracking-wider font-bold">Safe Zone</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between px-2">
+                            <h4 className="text-sm font-bold text-red-600 flex items-center gap-2">
+                              <AlertTriangle size={16} /> Siswa Perlu Perhatian Khusus ({flaggedStudents.length})
+                            </h4>
+                            <span className="text-[10px] text-gray-400 font-mono">Last updated: {new Date().toLocaleTimeString()}</span>
+                          </div>
+                          <div className="grid grid-cols-1 gap-4">
+                            {flaggedStudents.map(({ student, tardies, maxConsecutive, reasons }) => {
+                              const stInfo = getStudentDisplay(student.id);
+                              return (
+                                <div key={student.id} className="bg-white border border-red-100 rounded-xl p-4 shadow-sm hover:shadow-md transition-all duration-300 group">
+                                  <div className="flex flex-col md:flex-row justify-between items-start gap-4">
+                                    <div className="flex gap-4">
+                                      <div className="relative">
+                                        <div className="w-12 h-12 bg-red-50 rounded-2xl flex items-center justify-center text-red-500 font-bold text-lg ring-2 ring-red-100">
+                                          {student.name.charAt(0)}
+                                        </div>
+                                        <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-white flex items-center justify-center">
+                                          <AlertTriangle size={8} className="text-white" />
+                                        </div>
+                                      </div>
+                                      <div>
+                                        <h5 className="font-bold text-gray-800 group-hover:text-red-600 transition-colors">{student.name}</h5>
+                                        <p className="text-xs text-gray-500 flex items-center gap-1 font-medium italic">
+                                          <Shield size={12} /> Kelas {stInfo?.className || student.classId}
+                                        </p>
+                                        <div className="mt-3 flex flex-wrap gap-2">
+                                          {reasons.map((reason: string, i: number) => (
+                                            <span key={i} className="px-2.5 py-1 bg-red-50 text-red-700 text-[10px] rounded-lg font-bold border border-red-100">
+                                              {reason}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <div className="flex flex-row md:flex-col gap-2 w-full md:w-auto">
+                                      <button 
+                                        onClick={() => {
+                                          setSelectedClassId(student.classId);
+                                          setSelectedStudentId(student.id);
+                                          setActiveTab('parentCalls');
+                                        }}
+                                        className="flex-1 text-[11px] bg-red-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-black hover:scale-105 transition-all shadow-sm"
+                                      >
+                                        Panggilan Ortu
+                                      </button>
+                                      <button 
+                                        onClick={() => {
+                                          setSelectedClassId(student.classId);
+                                          setSelectedStudentId(student.id);
+                                          setActiveTab('counseling');
+                                        }}
+                                        className="flex-1 text-[11px] bg-white text-gray-700 border border-gray-200 px-4 py-2 rounded-xl font-bold hover:bg-blue-50 hover:text-blue-600 hover:border-blue-100 transition-all shadow-sm"
+                                      >
+                                        Jadwalkan Konseling
+                                      </button>
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="mt-5 pt-4 border-t border-dashed border-gray-100 flex items-center justify-between">
+                                    <div className="flex gap-4">
+                                      <div className="flex items-center gap-1.5 text-[10px] text-gray-500 font-medium">
+                                        <div className="w-1.5 h-1.5 bg-red-400 rounded-full" />
+                                        Pelanggaran: {violations.filter(v => v.studentId === student.id).length}
+                                      </div>
+                                      <div className="flex items-center gap-1.5 text-[10px] text-gray-500 font-medium">
+                                        <div className="w-1.5 h-1.5 bg-blue-400 rounded-full" />
+                                        Konseling: {sessions.filter(s => s.studentId === student.id).length}
+                                      </div>
+                                    </div>
+                                    <button 
+                                      onClick={() => {
+                                        setSelectedClassId(student.classId);
+                                        setSelectedStudentId(student.id);
+                                        setActiveTab('print');
+                                      }}
+                                      className="text-[10px] text-blue-600 font-black tracking-tighter uppercase flex items-center gap-1 hover:text-red-600 transition-colors"
+                                    >
+                                      <Search size={12} strokeWidth={3} /> Buka Folder Digital
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                  
                  {/* PRINT PREVIEW TAB */}
                  {activeTab === 'print' && (

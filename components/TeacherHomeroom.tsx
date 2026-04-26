@@ -5,13 +5,15 @@ import {
   getStudents, getMasterSubjects, getAssessmentScores, getAllClasses, 
   getStudentViolations, getStudentAchievements, getCounselingSessions,
   getClassInventory, saveClassInventory, deleteClassInventory, getSystemSettings,
-  getHomeVisits, getParentCalls
+  getHomeVisits, getParentCalls, getAttendanceRecordsByRange
 } from '../services/database';
 import { 
   UserCheck, Users, GraduationCap, AlertTriangle, FileSpreadsheet, 
   Search, Filter, Printer, ShieldAlert, Trophy, MessageSquareHeart, 
-  ChevronDown, ChevronUp, AlertCircle, MessageCircle, Package, Plus, Save, Trash2, X, FileText
+  ChevronDown, ChevronUp, AlertCircle, MessageCircle, Package, Plus, Save, Trash2, X, FileText,
+  HeartPulse, TrendingUp, Clock, Calendar
 } from './Icons';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import * as XLSX from 'xlsx';
 
 interface TeacherHomeroomProps {
@@ -25,10 +27,14 @@ const DEFAULT_INVENTORY_ITEMS = [
 ];
 
 const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
-  const [activeTab, setActiveTab] = useState<'academic' | 'behavior' | 'inventory'>('academic');
+  const [activeTab, setActiveTab] = useState<'academic' | 'behavior' | 'inventory' | 'health'>('academic');
   const [students, setStudents] = useState<Student[]>([]);
   const [scores, setScores] = useState<AssessmentScore[]>([]);
   const [detectedSubjects, setDetectedSubjects] = useState<string[]>([]);
+  
+  // Health Data State
+  const [todayAttendance, setTodayAttendance] = useState<{ absent: number; late: number; rfidLateDetail: string[] }>({ absent: 0, late: 0, rfidLateDetail: [] });
+  const [disciplineTrend, setDisciplineTrend] = useState<any[]>([]);
   
   // BK Data State
   const [violations, setViolations] = useState<StudentViolation[]>([]);
@@ -91,6 +97,47 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
       const cls = allClasses.find(c => c.id === user.homeroomClassId);
       setClassName(cls ? cls.name : 'Unknown Class');
       setStudents(studentData);
+
+      // --- CALCULATE HEALTH DATA ---
+      const todayString = new Date().toISOString().split('T')[0];
+      const monthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      
+      const attendanceToday = await getAttendanceRecordsByRange(user.homeroomClassId!, todayString, todayString, user.id);
+      const absentCount = attendanceToday.filter(a => a.status === 'A').length;
+      const lateCount = attendanceToday.filter(a => a.status === 'T').length;
+      const lateDetails = attendanceToday
+        .filter(a => a.status === 'T')
+        .map(a => {
+          const s = studentData.find(st => st.id === a.studentId);
+          return `${s?.name || 'Siswa'} (${a.notes || '07.00+'})`;
+        });
+      
+      setTodayAttendance({
+        absent: absentCount,
+        late: lateCount,
+        rfidLateDetail: lateDetails
+      });
+
+      // Calculate Trends (last 30 days)
+      const last30DaysAttendance = await getAttendanceRecordsByRange(user.homeroomClassId!, monthAgo, todayString, user.id);
+      const trendMap: { [date: string]: { date: string; violations: number; absences: number } } = {};
+      
+      // Initialize trend map with dates
+      for (let i = 29; i >= 0; i--) {
+        const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' });
+        const iso = new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        trendMap[iso] = { date: d, violations: 0, absences: 0 };
+      }
+
+      last30DaysAttendance.forEach(a => {
+        if (trendMap[a.date] && (a.status === 'A' || a.status === 'T' || a.status === 'S' || a.status === 'I')) {
+          if (a.status === 'A') trendMap[a.date].absences++;
+          if (a.status === 'T') trendMap[a.date].violations++; // Treating tardy as a minor discipline issue for trend
+        }
+      });
+
+      setDisciplineTrend(Object.values(trendMap));
+
       setScores(scoreData);
       
       // Extract unique subjects from scores
@@ -625,6 +672,14 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
           )}
         </button>
         <button
+          onClick={() => setActiveTab('health')}
+          className={`px-4 py-2.5 rounded-md text-sm font-medium transition flex items-center gap-2 ${
+            activeTab === 'health' ? 'bg-white text-emerald-600 shadow-sm' : 'text-gray-600 hover:text-gray-800'
+          }`}
+        >
+          <HeartPulse size={16} /> Kesehatan Kelas
+        </button>
+        <button
           onClick={() => setActiveTab('inventory')}
           className={`px-4 py-2.5 rounded-md text-sm font-medium transition flex items-center gap-2 ${
             activeTab === 'inventory' ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-600 hover:text-gray-800'
@@ -902,6 +957,186 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                     )}
                 </div>
             </div>
+        </div>
+      )}
+
+      {/* --- TAB: HEALTH & MONITORING --- */}
+      {activeTab === 'health' && (
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
+          {/* Summary Harian Card */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="md:col-span-2 bg-white rounded-2xl p-6 shadow-sm border border-gray-100 relative overflow-hidden">
+               <div className="absolute -right-12 -top-12 w-48 h-48 bg-emerald-50 rounded-full opacity-50 blur-3xl"></div>
+               <div className="relative z-10">
+                  <div className="flex items-center gap-3 mb-4">
+                     <div className="p-3 bg-emerald-100 text-emerald-600 rounded-xl">
+                        <HeartPulse size={24} />
+                     </div>
+                     <div>
+                        <h3 className="text-xl font-bold text-gray-800">Summary Kesehatan Kelas Hari Ini</h3>
+                        <p className="text-sm text-gray-500">Monitor kehadiran dan kedisiplinan harian</p>
+                     </div>
+                  </div>
+
+                  <div className="mt-6 flex flex-col md:flex-row gap-8 items-start">
+                     <div className="space-y-1">
+                        <p className="text-4xl font-black text-gray-800">{todayAttendance.absent + todayAttendance.late}</p>
+                        <p className="text-sm font-medium text-gray-500 uppercase tracking-widest">Anomali Hari Ini</p>
+                     </div>
+                     <div className="flex-1 w-full space-y-3">
+                        <div className="p-4 bg-red-50 rounded-xl border border-red-100 flex items-center justify-between">
+                           <div className="flex items-center gap-3">
+                              <ShieldAlert className="text-red-500" size={18} />
+                              <span className="text-sm font-bold text-red-700">Tidak Hadir (Alpha)</span>
+                           </div>
+                           <span className="text-lg font-black text-red-800">{todayAttendance.absent} Siswa</span>
+                        </div>
+                        <div className="p-4 bg-orange-50 rounded-xl border border-orange-100">
+                           <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-3">
+                                 <Clock className="text-orange-500" size={18} />
+                                 <span className="text-sm font-bold text-orange-700">Terlambat Scan RFID</span>
+                              </div>
+                              <span className="text-lg font-black text-orange-800">{todayAttendance.late} Siswa</span>
+                           </div>
+                           {todayAttendance.rfidLateDetail.length > 0 && (
+                             <div className="text-[11px] text-orange-600 font-medium bg-white/50 p-2 rounded-lg mt-1 border border-orange-200/50">
+                                Detail: {todayAttendance.rfidLateDetail.join(', ')}
+                             </div>
+                           )}
+                        </div>
+                     </div>
+                  </div>
+
+                  <p className="mt-6 text-xs text-gray-400 italic flex items-center gap-1 group">
+                     <AlertCircle size={12} className="group-hover:animate-pulse" /> Tips: Segera lakukan panggilan orang tua bagi siswa yang sering terlambat di pagi hari.
+                  </p>
+               </div>
+            </div>
+
+            <div className="bg-indigo-600 rounded-2xl p-6 text-white shadow-lg flex flex-col justify-between">
+               <div>
+                  <h4 className="text-indigo-100 text-sm font-bold uppercase tracking-wider mb-4">Status Kelas</h4>
+                  <div className="space-y-6">
+                     <div className="flex justify-between items-end border-b border-white/10 pb-4">
+                        <div>
+                           <p className="text-xs text-indigo-200 uppercase">Tingkat Absensi</p>
+                           <p className="text-2xl font-bold">{students.length > 0 ? ((todayAttendance.absent / students.length) * 100).toFixed(1) : 0}%</p>
+                        </div>
+                        <div className={`text-[10px] px-2 py-1 rounded-full ${todayAttendance.absent === 0 ? 'bg-emerald-400 text-emerald-950' : 'bg-red-400 text-red-950 font-bold'}`}>
+                           {todayAttendance.absent === 0 ? 'Optimal' : 'Waspada'}
+                        </div>
+                     </div>
+                     <div className="flex justify-between items-end">
+                        <div>
+                           <p className="text-xs text-indigo-200 uppercase">Input Nilai</p>
+                           <p className="text-2xl font-bold">{detectedSubjects.length} <span className="text-xs font-normal opacity-70">Mapel</span></p>
+                        </div>
+                        <FileText size={24} className="opacity-30" />
+                     </div>
+                  </div>
+               </div>
+               <button 
+                  onClick={() => setActiveTab('behavior')}
+                  className="mt-8 w-full bg-white text-indigo-600 py-3 rounded-xl font-bold text-sm shadow-xl hover:bg-indigo-50 transition-all flex items-center justify-center gap-2"
+               >
+                  Buka Folder BK <Users size={16} />
+               </button>
+            </div>
+          </div>
+
+          {/* Trend Chart */}
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+             <div className="flex items-center justify-between mb-8">
+                <div>
+                   <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                      <TrendingUp className="text-indigo-600" /> Tren Kedisiplinan (30 Hari Terakhir)
+                   </h3>
+                   <p className="text-xs text-gray-500">Grafik fluktuasi ketidakhadiran dan keterlambatan kelas</p>
+                </div>
+                <div className="flex items-center gap-4 text-[10px] font-bold uppercase tracking-widest">
+                   <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-indigo-500"></div> Keterlambatan</div>
+                   <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-red-400"></div> Absensi (A)</div>
+                </div>
+             </div>
+
+             <div className="h-[300px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                   <LineChart data={disciplineTrend}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+                      <XAxis 
+                        dataKey="date" 
+                        axisLine={false} 
+                        tickLine={false} 
+                        tick={{fontSize: 10, fill: '#9ca3af'}} 
+                        dy={10}
+                      />
+                      <YAxis 
+                        axisLine={false} 
+                        tickLine={false} 
+                        tick={{fontSize: 10, fill: '#9ca3af'}} 
+                      />
+                      <Tooltip 
+                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', fontSize: '11px'}}
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="violations" 
+                        stroke="#6366f1" 
+                        strokeWidth={3} 
+                        dot={{ r: 3, fill: '#6366f1' }} 
+                        activeDot={{ r: 5, strokeWidth: 0 }}
+                        name="Keterlambatan"
+                    />
+                      <Line 
+                        type="monotone" 
+                        dataKey="absences" 
+                        stroke="#f87171" 
+                        strokeWidth={3} 
+                        dot={{ r: 3, fill: '#f87171' }} 
+                        activeDot={{ r: 5, strokeWidth: 0 }}
+                        name="Absensi (Alpha)"
+                    />
+                   </LineChart>
+                </ResponsiveContainer>
+             </div>
+             
+             <div className="mt-8 pt-6 border-t border-gray-50 flex flex-wrap gap-6">
+                <div className="flex-1 min-w-[200px] bg-gray-50 p-4 rounded-xl border border-gray-100">
+                   <h5 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Insight Minggu Ini</h5>
+                   <p className="text-xs text-gray-600 leading-relaxed">
+                      {disciplineTrend.length > 7 ? (
+                        (() => {
+                           const thisWeek = disciplineTrend.slice(-7);
+                           const lastWeek = disciplineTrend.slice(-14, -7);
+                           const thisTotal = thisWeek.reduce((s, d) => s + d.violations + d.absences, 0);
+                           const lastTotal = lastWeek.reduce((s, d) => s + d.violations + d.absences, 0);
+                           
+                           if (thisTotal < lastTotal) return "Tren kedisiplinan meningkat! Terjadi penurunan anomali sebesar " + (lastTotal - thisTotal) + " kasus dibanding minggu lalu.";
+                           if (thisTotal > lastTotal) return "Perhatian: Pelanggaran kedisiplinan meningkat " + (thisTotal - lastTotal) + " kasus. Segera bahas saat jam pimpinan kelas.";
+                           return "Data kedisiplinan stabil dibanding minggu lalu.";
+                        })()
+                      ) : "Data belum cukup untuk analisis tren."}
+                   </p>
+                </div>
+                <div className="flex gap-4">
+                  <div className="flex flex-col items-center justify-center p-4 bg-emerald-50 rounded-xl border border-emerald-100 min-w-[100px]">
+                     <Trophy className="text-emerald-500 mb-1" size={20} />
+                     <p className="text-lg font-black text-emerald-800">
+                        {students.filter(s => violations.filter(v => v.studentId === s.id).length === 0).length}
+                     </p>
+                     <p className="text-[9px] font-bold text-emerald-600 uppercase">Siswa Teladan</p>
+                  </div>
+                  <div className="flex flex-col items-center justify-center p-4 bg-orange-50 rounded-xl border border-orange-100 min-w-[100px]">
+                     <Calendar className="text-orange-500 mb-1" size={20} />
+                     <p className="text-lg font-black text-orange-800">
+                        {disciplineTrend.reduce((s, d) => s + d.absences, 0)}
+                     </p>
+                     <p className="text-[9px] font-bold text-orange-600 uppercase">Izin/Alpha Bln Ini</p>
+                  </div>
+                </div>
+             </div>
+          </div>
         </div>
       )}
 

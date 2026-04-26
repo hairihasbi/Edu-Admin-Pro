@@ -95,6 +95,7 @@ import {
   Pencil, // Added Pencil
   RotateCcw, // Added RotateCcw
   Package, // Added Package
+  HeartPulse,
   Bold, // Added
   Italic, // Added
   Heading, // Added
@@ -113,6 +114,7 @@ import {
   Loader2, // Added Loader2
   XCircle, // Added XCircle
   BarChart3, // Added BarChart3
+  LineChart, // Added LineChart
   Home, // Added Home
   Moon,
   Sun,
@@ -216,6 +218,7 @@ export {
   Pencil,
   RotateCcw,
   Package,
+  HeartPulse,
   Bold,
   Italic,
   Heading,
@@ -234,6 +237,7 @@ export {
   Loader2,
   XCircle,
   BarChart3,
+  LineChart,
   Home,
   Moon,
   Sun,

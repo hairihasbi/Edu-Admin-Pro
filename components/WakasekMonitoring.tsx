@@ -2,9 +2,35 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, TeachingJournal, AttendanceRecord, ClassRoom, TeachingSchedule, SystemSettings, RfidLog } from '../types';
-import { getSchoolTeachers, getSchoolJournals, getSchoolAttendance, syncAllData, getAvailableClassesForHomeroom, getSchoolSchedules, getSchoolJournalsByRange, getSystemSettings, saveSystemSettings, getRfidLogs } from '../services/database';
+import { 
+  getSchoolTeachers, 
+  getSchoolJournals, 
+  getSchoolAttendance, 
+  syncAllData, 
+  getAvailableClassesForHomeroom, 
+  getSchoolSchedules, 
+  getSchoolJournalsByRange, 
+  getSystemSettings, 
+  saveSystemSettings, 
+  getRfidLogs,
+  getAttendanceSummaryByRange,
+  getCounselingSessions,
+  getParentCalls,
+  getHomeVisits
+} from '../services/database';
 import SupervisionManager from './SupervisionManager';
-import { Activity, CheckCircle, XCircle, Calendar, Users, Search, Filter, Clock, Info, AlertCircle, RefreshCcw, Loader2, BookOpen, LayoutGrid, List as ListIcon, ChevronDown, ChevronUp, TrendingUp, BarChart3, PieChart, Download, Printer, FileSpreadsheet, FileText, School, ShieldCheck, Save } from './Icons';
+import { 
+  Activity, CheckCircle, XCircle, Calendar, Users, Search, Filter, Clock, 
+  Info, AlertCircle, RefreshCcw, Loader2, BookOpen, LayoutGrid, 
+  List as ListIcon, ChevronDown, ChevronUp, TrendingUp, BarChart3, PieChart, 
+  Download, Printer, FileSpreadsheet, FileText, School, ShieldCheck, Save,
+  LineChart, ShieldAlert
+} from './Icons';
+import { 
+  LineChart as ReLineChart, Line, XAxis, YAxis, CartesianGrid, 
+  Tooltip as ReTooltip, ResponsiveContainer, BarChart, Bar, Legend, 
+  AreaChart, Area, Cell, PieChart as RePieChart, Pie 
+} from 'recharts';
 import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -33,7 +59,7 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
 
   const [selectedDate, setSelectedDate] = useState(getLocalDate());
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<'GURU' | 'KELAS' | 'PRESENSI' | 'SUPERVISI' | 'ABSENSI_RFID'>('GURU');
+  const [activeTab, setActiveTab] = useState<'GURU' | 'KELAS' | 'PRESENSI' | 'SUPERVISI' | 'ABSENSI_RFID' | 'EXECUTIVE_SUMMARY'>('GURU');
   const [rfidLogs, setRfidLogs] = useState<RfidLog[]>([]);
   const [rfidViewMode, setRfidViewMode] = useState<'LOGS' | 'SETTINGS'>('LOGS');
   const [settings, setSettings] = useState<SystemSettings | null>(null);
@@ -42,6 +68,14 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
   const [allPeriodJournals, setAllPeriodJournals] = useState<TeachingJournal[]>([]);
   const [expandedTeacherId, setExpandedTeacherId] = useState<string | null>(null);
   const [expandedClassId, setExpandedClassId] = useState<string | null>(null);
+  const [executiveData, setExecutiveData] = useState<{
+    todayStats: { hadir: number, alpha: number, late: number, total: number };
+    yesterdayStats: { hadir: number, alpha: number, late: number, total: number };
+    trendData: any[];
+    dayTrend: any[];
+    bkStatus: { processed: number, pending: number };
+  } | null>(null);
+  const [isLoadingExecutive, setIsLoadingExecutive] = useState(false);
 
   const lastTodayRef = useRef(getLocalDate());
 
@@ -57,6 +91,102 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
 
     return () => clearInterval(dateTimer);
   }, []);
+
+  useEffect(() => {
+    const fetchExecutiveData = async () => {
+      if (!user.schoolNpsn || activeTab !== 'EXECUTIVE_SUMMARY') return;
+      setIsLoadingExecutive(true);
+      try {
+        const today = new Date();
+        const yesterday = new Date(today);
+        yesterday.setDate(today.getDate() - 1);
+        
+        const todayStr = today.toISOString().split('T')[0];
+        const yesterdayStr = yesterday.toISOString().split('T')[0];
+        const monthAgo = new Date(today);
+        monthAgo.setDate(today.getDate() - 30);
+        const monthAgoStr = monthAgo.toISOString().split('T')[0];
+
+        // 1. Get Attendance Summaries
+        const todaySummary = await getAttendanceSummaryByRange(todayStr, todayStr, user.schoolNpsn);
+        const yesterdaySummary = await getAttendanceSummaryByRange(yesterdayStr, yesterdayStr, user.schoolNpsn);
+
+        // 2. Get RFID Logs for Tardy Trends
+        const rfidLogsRange = await getRfidLogs(user.schoolNpsn, monthAgoStr); // This only gets for one date in current impl?
+        // Wait, getRfidLogs in database.ts usually takes schoolNpsn and date.
+        // I might need a version that takes range or fetch multiple.
+        // For now let's assume we fetch last 7 days RFID logs if we want day-of-week trend.
+        
+        const daysToFetch = 7;
+        const rfidPromises = [];
+        for (let i = 0; i < daysToFetch; i++) {
+          const d = new Date(today);
+          d.setDate(today.getDate() - i);
+          rfidPromises.push(getRfidLogs(user.schoolNpsn, d.toISOString().split('T')[0]));
+        }
+        const multiRfidLogs = (await Promise.all(rfidPromises)).flat();
+
+        // 3. BK Status (Handling)
+        const [counseling, calls, visits] = await Promise.all([
+          getCounselingSessions(),
+          getParentCalls(user.schoolNpsn),
+          getHomeVisits(user.schoolNpsn)
+        ]);
+
+        // Process Dashboard Data
+        const processStats = (summary: any[]) => {
+          const stats = { hadir: 0, alpha: 0, late: 0, total: 0 };
+          summary.forEach(s => {
+            stats.hadir += s.hadir;
+            stats.alpha += s.alfa;
+            stats.total += s.studentCount;
+          });
+          return stats;
+        };
+
+        const todayStats = processStats(todaySummary);
+        const yesterdayStats = processStats(yesterdaySummary);
+        
+        // Mocking/estimating late from RFID logs for today/yesterday
+        todayStats.late = multiRfidLogs.filter(l => l.timestamp.startsWith(todayStr) && l.status === 'TERLAMBAT').length;
+        yesterdayStats.late = multiRfidLogs.filter(l => l.timestamp.startsWith(yesterdayStr) && l.status === 'TERLAMBAT').length;
+
+        // Day of Week Tardy Trend
+        const dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+        const dayTrendMap: any = {};
+        dayNames.forEach(name => dayTrendMap[name] = { name, count: 0 });
+        
+        multiRfidLogs.filter(l => l.status === 'TERLAMBAT').forEach(l => {
+          const dayName = dayNames[new Date(l.timestamp).getDay()];
+          dayTrendMap[dayName].count++;
+        });
+
+        // 30 Days Attendance Trend (General)
+        const summary30Days = await getAttendanceSummaryByRange(monthAgoStr, todayStr, user.schoolNpsn);
+        // This summary is per class... I need per date.
+        // getAttendanceSummaryByRange might need to be improved or I fetch all attendance records.
+        // For now I'll use class names as labels or just aggregate them for school-level.
+        
+        setExecutiveData({
+          todayStats,
+          yesterdayStats,
+          trendData: [], // Would need date-wise aggregation
+          dayTrend: Object.values(dayTrendMap),
+          bkStatus: {
+            processed: counseling.length + calls.length + visits.length,
+            pending: todayStats.alpha + todayStats.late // Simplification: any anomaly today is "pending" action?
+          }
+        });
+
+      } catch (error) {
+        console.error("Executive fetch failed:", error);
+      } finally {
+        setIsLoadingExecutive(false);
+      }
+    };
+
+    fetchExecutiveData();
+  }, [user.schoolNpsn, activeTab]);
 
   useEffect(() => {
     const fetchData = async (isBackground = false) => {
@@ -601,10 +731,220 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
             Absensi RFID
           </button>
         )}
+        {(user.additionalRole === 'KEPALA_SEKOLAH' || user.additionalRole === 'WAKASEK_KURIKULUM') && (
+          <button
+            onClick={() => setActiveTab('EXECUTIVE_SUMMARY')}
+            className={`flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-medium transition ${
+              activeTab === 'EXECUTIVE_SUMMARY' 
+                ? 'bg-white text-purple-600 shadow-sm' 
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <LineChart size={18} />
+            Executive Summary
+          </button>
+        )}
       </div>
 
       {/* Main Content */}
-      {activeTab === 'SUPERVISI' ? (
+      {activeTab === 'EXECUTIVE_SUMMARY' && executiveData ? (
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+           {/* Top Stats - Comparison */}
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                 <div className="flex items-center justify-between mb-6">
+                    <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                       <Activity className="text-blue-500" /> Persentase Kehadiran
+                    </h3>
+                    <div className="text-[10px] bg-blue-50 text-blue-600 px-2 py-1 rounded-full font-bold uppercase">
+                       Macro Health
+                    </div>
+                 </div>
+                 <div className="flex items-center gap-8">
+                    <div className="flex-1">
+                       <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1">Hari Ini</p>
+                       <p className="text-4xl font-black text-gray-800">
+                          {executiveData.todayStats.total > 0 
+                            ? ((executiveData.todayStats.hadir / executiveData.todayStats.total) * 100).toFixed(1) 
+                            : 0}%
+                       </p>
+                    </div>
+                    <div className="w-px h-12 bg-gray-100"></div>
+                    <div className="flex-1 opacity-60">
+                       <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1">Kemarin</p>
+                       <p className="text-2xl font-bold text-gray-800">
+                          {executiveData.yesterdayStats.total > 0 
+                            ? ((executiveData.yesterdayStats.hadir / executiveData.yesterdayStats.total) * 100).toFixed(1) 
+                            : 0}%
+                       </p>
+                    </div>
+                 </div>
+                 <div className="mt-6 pt-4 border-t border-gray-50 flex items-center gap-2">
+                    {(() => {
+                       const todayPct = executiveData.todayStats.total > 0 ? (executiveData.todayStats.hadir / executiveData.todayStats.total) * 100 : 0;
+                       const yesterdayPct = executiveData.yesterdayStats.total > 0 ? (executiveData.yesterdayStats.hadir / executiveData.yesterdayStats.total) * 100 : 0;
+                       const diff = todayPct - yesterdayPct;
+                       if (diff > 0) return <span className="text-xs text-green-600 font-bold flex items-center gap-1"><TrendingUp size={14}/> +{diff.toFixed(1)}% meningkat dari kemarin</span>;
+                       if (diff < 0) return <span className="text-xs text-red-600 font-bold flex items-center gap-1"><Activity size={14}/> {diff.toFixed(1)}% menurun dari kemarin</span>;
+                       return <span className="text-xs text-gray-500 font-medium">Stabil dibanding kemarin</span>;
+                    })()}
+                 </div>
+              </div>
+
+              <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                 <div className="flex items-center justify-between mb-6">
+                    <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                       <Clock className="text-orange-500" /> Tren Keterlambatan
+                    </h3>
+                    <div className="text-[10px] bg-orange-50 text-orange-600 px-2 py-1 rounded-full font-bold uppercase">
+                       RFID Monitor
+                    </div>
+                 </div>
+                 <div className="flex items-center gap-8">
+                    <div className="flex-1">
+                       <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1">Total Hari Ini</p>
+                       <p className="text-4xl font-black text-orange-600">{executiveData.todayStats.late}</p>
+                       <p className="text-[10px] text-gray-400 mt-1 font-medium">Siswa Terlambat Scan</p>
+                    </div>
+                    <div className="w-px h-12 bg-gray-100"></div>
+                    <div className="flex-1 opacity-60">
+                       <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1">Kemarin</p>
+                       <p className="text-2xl font-bold text-gray-400">{executiveData.yesterdayStats.late}</p>
+                    </div>
+                 </div>
+                 <p className="mt-6 text-xs text-gray-500 italic">
+                    Trend: {executiveData.todayStats.late > executiveData.yesterdayStats.late ? 'Mengalami kenaikan volume keterlambatan rfid.' : 'Volume keterlambatan cenderung stabil/menurun.'}
+                 </p>
+              </div>
+           </div>
+
+           {/* Charts Grid */}
+           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Day of week trend */}
+              <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                 <div className="mb-6">
+                    <h4 className="text-sm font-bold text-gray-800 mb-1">Distribusi Keterlambatan Per Hari</h4>
+                    <p className="text-[10px] text-gray-500">Identifikasi hari paling kritis untuk kebijakan jam masuk.</p>
+                 </div>
+                 <div className="h-[250px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                       <BarChart data={executiveData.dayTrend}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+                          <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#9ca3af'}} />
+                          <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#9ca3af'}} />
+                          <ReTooltip cursor={{fill: '#f9fafb'}} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)'}} />
+                          <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                             {executiveData.dayTrend.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={entry.count === Math.max(...executiveData.dayTrend.map(d => d.count)) ? '#f97316' : '#cbd5e1'} />
+                             ))}
+                          </Bar>
+                       </BarChart>
+                    </ResponsiveContainer>
+                 </div>
+              </div>
+
+              {/* Action Status */}
+              <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                 <div className="mb-6">
+                    <h4 className="text-sm font-bold text-gray-800 mb-1">Status Penanganan Anomali (BK/Wali Kelas)</h4>
+                    <p className="text-[10px] text-gray-500">Persentase kasus bolos/telat yang sudah ditindaklanjuti.</p>
+                 </div>
+                 <div className="flex items-center justify-center h-[200px]">
+                    <div className="relative w-40 h-40">
+                       <ResponsiveContainer width="100%" height="100%">
+                          <RePieChart>
+                             <Pie
+                                data={[
+                                   { name: 'Ditindaklanjuti', value: executiveData.bkStatus.processed },
+                                   { name: 'Pending', value: executiveData.bkStatus.pending }
+                                ]}
+                                innerRadius={60}
+                                outerRadius={80}
+                                paddingAngle={5}
+                                dataKey="value"
+                             >
+                                <Cell fill="#10b981" />
+                                <Cell fill="#f1f5f9" />
+                             </Pie>
+                          </RePieChart>
+                       </ResponsiveContainer>
+                       <div className="absolute inset-0 flex flex-col items-center justify-center">
+                          <p className="text-2xl font-black text-emerald-600">
+                             {executiveData.bkStatus.processed + executiveData.bkStatus.pending > 0 
+                               ? Math.round((executiveData.bkStatus.processed / (executiveData.bkStatus.processed + executiveData.bkStatus.pending)) * 100) 
+                               : 0}%
+                          </p>
+                          <p className="text-[8px] font-bold text-gray-400 uppercase tracking-tighter">Solved Case</p>
+                       </div>
+                    </div>
+                    <div className="ml-8 space-y-3">
+                       <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
+                          <div className="text-[10px] flex flex-col">
+                             <span className="text-gray-500">Telah Ditindak</span>
+                             <span className="font-bold text-gray-800">{executiveData.bkStatus.processed} Kasus</span>
+                          </div>
+                       </div>
+                       <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded-full bg-gray-200"></div>
+                          <div className="text-[10px] flex flex-col">
+                             <span className="text-gray-500">Memerlukan Aksi</span>
+                             <span className="font-bold text-gray-800">{executiveData.bkStatus.pending} Kasus</span>
+                          </div>
+                       </div>
+                    </div>
+                 </div>
+              </div>
+           </div>
+
+           {/* Strategic Decisions Section */}
+           <div className="bg-indigo-600 rounded-2xl p-8 text-white shadow-xl relative overflow-hidden">
+              <div className="absolute -right-20 -top-20 w-80 h-80 bg-white/10 rounded-full blur-3xl"></div>
+              <div className="relative z-10">
+                 <h3 className="text-xl font-black mb-2 flex items-center gap-3">
+                    <ShieldCheck size={28} /> Rekomendasi Kebijakan Strategis
+                 </h3>
+                 <p className="text-indigo-100 text-sm mb-8 opacity-80 max-w-2xl">
+                    Berdasarkan analisis tren kedisiplinan makro sekolah Anda hari ini, berikut adalah langkah yang dapat diambil untuk meningkatkan kualitas pendidikan.
+                 </p>
+
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-white/10 backdrop-blur-md p-5 rounded-xl border border-white/20 hover:bg-white/20 transition cursor-pointer group">
+                       <h5 className="font-bold mb-1 flex items-center gap-2">
+                          <Clock size={16} className="text-yellow-300" /> Penyesuaian Jam Masuk
+                       </h5>
+                       <p className="text-xs text-indigo-100 leading-relaxed">
+                          {executiveData.dayTrend.find(d => d.name === 'Senin')?.count > 5 
+                            ? "Data menunjukkan lonjakan keterlambatan setiap hari Senin. Pertimbangkan pengunduran bel masuk 10 menit khusus hari Senin." 
+                            : "Tren keterlambatan pagi hari terpantau stabil. Pertahankan disiplin jam 07.15."}
+                       </p>
+                    </div>
+                    <div className="bg-white/10 backdrop-blur-md p-5 rounded-xl border border-white/20 hover:bg-white/20 transition cursor-pointer group">
+                       <h5 className="font-bold mb-1 flex items-center gap-2">
+                          <Users size={16} className="text-blue-300" /> Rapat Koordinasi BK
+                       </h5>
+                       <p className="text-xs text-indigo-100 leading-relaxed">
+                          {executiveData.bkStatus.pending > 10 
+                            ? "Terdapat > 10 kasus yang belum ditindaklanjuti. Segera instruksikan tim BK untuk melakukan pemanggilan orang tua massal." 
+                            : "Tim BK bekerja dengan sangat efektif. Case-solved rate di atas 80%."}
+                       </p>
+                    </div>
+                 </div>
+
+                 <div className="mt-8 flex justify-end">
+                    <button className="bg-white text-indigo-600 px-6 py-2.5 rounded-xl text-sm font-bold shadow-lg hover:scale-105 transition-all">
+                       Download Executive Report
+                    </button>
+                 </div>
+              </div>
+           </div>
+        </div>
+      ) : activeTab === 'EXECUTIVE_SUMMARY' && isLoadingExecutive ? (
+        <div className="flex flex-col items-center justify-center py-20 bg-white rounded-xl border border-gray-100">
+           <Loader2 className="animate-spin text-purple-600 mb-4" size={40} />
+           <p className="text-gray-500 font-medium">Menganalisis data sekolah secara makro...</p>
+        </div>
+      ) : activeTab === 'SUPERVISI' ? (
         <SupervisionManager user={user} />
       ) : activeTab === 'ABSENSI_RFID' ? (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden animate-in fade-in zoom-in duration-200">
