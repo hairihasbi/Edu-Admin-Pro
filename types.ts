@@ -177,6 +177,7 @@ export interface AttendanceRecord extends Syncable {
   id: string;
   studentId: string;
   classId: string;
+  schoolNpsn: string; // NEW: Multi-tenancy
   userId: string; // NEW: Owner of the record
   date: string; 
   status: 'H' | 'S' | 'I' | 'A' | 'T';
