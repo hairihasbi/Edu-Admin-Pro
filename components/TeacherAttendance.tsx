@@ -393,6 +393,7 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
           recordsToSave.push({
             studentId,
             classId: selectedClassId,
+            schoolNpsn: user.schoolNpsn || '',
             userId: user.id,
             date: localDate,
             status: status as 'H' | 'S' | 'I' | 'A' | 'T',
