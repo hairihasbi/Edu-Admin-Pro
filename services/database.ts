@@ -2416,13 +2416,14 @@ export const saveRfidLog = async (log: Omit<RfidLog, 'id' | 'lastModified' | 'is
               id: uuidv4(),
               studentId: toSave.studentId,
               classId: toSave.classId,
+              schoolNpsn: toSave.schoolNpsn,
               userId: ownerId,
               date: date,
               status: attendanceStatus,
               visibility: 'SHARED',
               lastModified: Date.now(),
               isSynced: false
-          });
+          } as AttendanceRecord);
       } else {
           // Update jika sudah ada (mungkin tadinya Alpha atau mau diupdate jam kedatangannya)
           // Hanya update jika status sebelumnya bukan Sakit/Izin (jangan timpa izin manual guru)
