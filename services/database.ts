@@ -1671,10 +1671,15 @@ export const saveAttendanceRecords = async (records: Omit<AttendanceRecord, 'id'
 export const deleteAttendanceRecords = async (classId: string, month: number, year: number, userId: string, day?: number) => {
     const all = await db.attendanceRecords.where('classId').equals(classId).toArray();
     const toDelete = all.filter(r => {
-        const d = new Date(r.date);
-        const matchMonth = d.getMonth() === month && d.getFullYear() === year;
+        const parts = r.date.split('-');
+        if (parts.length !== 3) return false;
+        const y = parseInt(parts[0]);
+        const m = parseInt(parts[1]) - 1;
+        const d = parseInt(parts[2]);
+        
+        const matchMonth = m === month && y === year;
         const isOwner = r.userId === userId;
-        if (day) return matchMonth && d.getDate() === day && isOwner;
+        if (day) return matchMonth && d === day && isOwner;
         return matchMonth && isOwner;
     });
     const ids = toDelete.map(r => r.id);
@@ -1685,22 +1690,25 @@ export const deleteAttendanceRecords = async (classId: string, month: number, ye
 export const getAttendanceRecords = async (classId: string, month: number, year: number, userId: string) => {
     const all = await db.attendanceRecords.where('classId').equals(classId).toArray();
     return all.filter(r => {
-        const d = new Date(r.date);
+        // Safe parsing: YYYY-MM-DD
+        const parts = r.date.split('-');
+        if (parts.length !== 3) return false;
+        const y = parseInt(parts[0]);
+        const m = parseInt(parts[1]) - 1; // 0-based month comparison
+        
         const isOwner = r.userId === userId;
-        const isShared = r.visibility === 'SHARED';
-        return d.getMonth() === month && d.getFullYear() === year && (isOwner || isShared);
+        const isShared = r.visibility === 'SHARED' || !r.visibility; // Lenient sharing
+        
+        return m === month && y === year && (isOwner || isShared);
     });
 };
 
 export const getAttendanceRecordsByRange = async (classId: string, startDate: string, endDate: string, userId: string) => {
     const all = await db.attendanceRecords.where('classId').equals(classId).toArray();
-    const start = new Date(startDate).getTime();
-    const end = new Date(endDate).getTime();
     return all.filter(r => {
-        const t = new Date(r.date).getTime();
         const isOwner = r.userId === userId;
-        const isShared = r.visibility === 'SHARED';
-        return t >= start && t <= end && (isOwner || isShared);
+        const isShared = r.visibility === 'SHARED' || !r.visibility;
+        return r.date >= startDate && r.date <= endDate && (isOwner || isShared);
     });
 };
 
