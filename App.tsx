@@ -250,7 +250,7 @@ const AppContent: React.FC = () => {
       }
     };
 
-    const profileInterval = setInterval(refreshUserProfile, REFRESH_PROFILE_INTERVAL);
+    // const profileInterval = setInterval(refreshUserProfile, REFRESH_PROFILE_INTERVAL);
 
     // Check PWA Mode
     if (
@@ -343,9 +343,9 @@ const AppContent: React.FC = () => {
       // Prevent alert if user already logged out (manual logout race condition)
       if (!localStorage.getItem("eduadmin_user")) return;
 
-      console.warn("Session expired or invalid (401). Triggering auto-logout.");
-      // alert removed to prevent disruption during reload or temporary 401
-      handleLogout();
+      console.warn("Session expired or invalid (401). Manual logout may be required.");
+      // Auto-logout disabled per user request to allow staying logged in during reload/transient errors
+      // handleLogout();
     };
 
     const handleOnline = () => setIsOnline(true);
@@ -365,7 +365,7 @@ const AppContent: React.FC = () => {
 
     return () => {
       isMounted = false;
-      clearInterval(profileInterval);
+      // clearInterval(profileInterval);
 
       window.removeEventListener("unsaved-changes", handleUnsavedStatus);
       window.removeEventListener("auth-error", handleAuthError);
