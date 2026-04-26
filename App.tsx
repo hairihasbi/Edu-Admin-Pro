@@ -124,7 +124,8 @@ import {
 } from "./components/Icons";
 
 // Konstanta Timeout: 15 Menit
-const SESSION_TIMEOUT_MS = 15 * 60 * 1000;
+const SESSION_TIMEOUT_MS = 24 * 60 * 60 * 1000; // 24 jam inaktif
+const REFRESH_PROFILE_INTERVAL = 30000; // 30 detik refresh profile
 
 const AppContent: React.FC = () => {
   // ... existing state ...
@@ -233,18 +234,23 @@ const AppContent: React.FC = () => {
     // Refresh user profile from DB to catch role/status changes (like isSupervisor)
     const refreshUserProfile = async () => {
       if (currentUser && isMounted) {
-        const updatedUser = await getUserProfile(currentUser.id);
-        if (
-          updatedUser &&
-          JSON.stringify(updatedUser) !== JSON.stringify(currentUser)
-        ) {
-          setCurrentUser(updatedUser);
-          localStorage.setItem("eduadmin_user", JSON.stringify(updatedUser));
+        try {
+          const updatedUser = await getUserProfile(currentUser.id);
+          if (
+            updatedUser &&
+            isMounted &&
+            JSON.stringify(updatedUser) !== JSON.stringify(currentUser)
+          ) {
+            setCurrentUser(updatedUser);
+            localStorage.setItem("eduadmin_user", JSON.stringify(updatedUser));
+          }
+        } catch (e) {
+          // Non-critical background refresh failure
         }
       }
     };
 
-    const profileInterval = setInterval(refreshUserProfile, 5000); // Check every 5s
+    const profileInterval = setInterval(refreshUserProfile, REFRESH_PROFILE_INTERVAL);
 
     // Check PWA Mode
     if (
@@ -338,9 +344,7 @@ const AppContent: React.FC = () => {
       if (!localStorage.getItem("eduadmin_user")) return;
 
       console.warn("Session expired or invalid (401). Triggering auto-logout.");
-      alert(
-        "Sesi Anda telah berakhir atau akun tidak ditemukan di server. Silakan login kembali.",
-      );
+      // alert removed to prevent disruption during reload or temporary 401
       handleLogout();
     };
 
