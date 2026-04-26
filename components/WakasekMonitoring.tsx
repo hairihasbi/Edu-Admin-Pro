@@ -108,7 +108,8 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
 
     fetchData();
 
-    // Background polling for RFID logs only if that tab is active
+    // Background polling for RFID logs disabled per user request to prevent disruption
+    /*
     let pollInterval: any;
     if (activeTab === 'ABSENSI_RFID') {
       pollInterval = setInterval(() => {
@@ -119,6 +120,7 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
     return () => {
       if (pollInterval) clearInterval(pollInterval);
     };
+    */
   }, [user.schoolNpsn, selectedDate, activeTab]);
 
   const handleSync = async () => {

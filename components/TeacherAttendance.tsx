@@ -145,7 +145,10 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
     const attState: AttendanceState = {};
     const notesState: NotesState = {};
     attendanceData.forEach(record => {
-      const day = new Date(record.date).getDate();
+      // Parse day manually from YYYY-MM-DD string to avoid timezone issues with new Date().getDate()
+      const parts = record.date.split('-');
+      const day = parts.length === 3 ? parseInt(parts[2]) : new Date(record.date).getDate();
+      
       if (!attState[record.studentId]) attState[record.studentId] = {};
       attState[record.studentId][day] = record.status as AttendanceStatus;
       
