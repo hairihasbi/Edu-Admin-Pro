@@ -5,13 +5,13 @@ import {
   getStudents, getMasterSubjects, getAssessmentScores, getAllClasses, 
   getStudentViolations, getStudentAchievements, getCounselingSessions,
   getClassInventory, saveClassInventory, deleteClassInventory, getSystemSettings,
-  getHomeVisits, getParentCalls, getAttendanceRecordsByRange
+  getHomeVisits, getParentCalls, getAttendanceRecordsByRange, getRfidLogs
 } from '../services/database';
 import { 
   UserCheck, Users, GraduationCap, AlertTriangle, FileSpreadsheet, 
   Search, Filter, Printer, ShieldAlert, Trophy, MessageSquareHeart, 
   ChevronDown, ChevronUp, AlertCircle, MessageCircle, Package, Plus, Save, Trash2, X, FileText,
-  HeartPulse, TrendingUp, Clock, Calendar
+  HeartPulse, TrendingUp, Clock, Calendar, RefreshCcw
 } from './Icons';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import * as XLSX from 'xlsx';
@@ -35,6 +35,7 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
   // Health Data State
   const [todayAttendance, setTodayAttendance] = useState<{ absent: number; late: number; rfidLateDetail: string[] }>({ absent: 0, late: 0, rfidLateDetail: [] });
   const [disciplineTrend, setDisciplineTrend] = useState<any[]>([]);
+  const [isRefreshingHealth, setIsRefreshingHealth] = useState(false);
   
   // BK Data State
   const [violations, setViolations] = useState<StudentViolation[]>([]);
@@ -97,47 +98,6 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
       const cls = allClasses.find(c => c.id === user.homeroomClassId);
       setClassName(cls ? cls.name : 'Unknown Class');
       setStudents(studentData);
-
-      // --- CALCULATE HEALTH DATA ---
-      const todayString = new Date().toISOString().split('T')[0];
-      const monthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      
-      const attendanceToday = await getAttendanceRecordsByRange(user.homeroomClassId!, todayString, todayString, user.id);
-      const absentCount = attendanceToday.filter(a => a.status === 'A').length;
-      const lateCount = attendanceToday.filter(a => a.status === 'T').length;
-      const lateDetails = attendanceToday
-        .filter(a => a.status === 'T')
-        .map(a => {
-          const s = studentData.find(st => st.id === a.studentId);
-          return `${s?.name || 'Siswa'} (${a.notes || '07.00+'})`;
-        });
-      
-      setTodayAttendance({
-        absent: absentCount,
-        late: lateCount,
-        rfidLateDetail: lateDetails
-      });
-
-      // Calculate Trends (last 30 days)
-      const last30DaysAttendance = await getAttendanceRecordsByRange(user.homeroomClassId!, monthAgo, todayString, user.id);
-      const trendMap: { [date: string]: { date: string; violations: number; absences: number } } = {};
-      
-      // Initialize trend map with dates
-      for (let i = 29; i >= 0; i--) {
-        const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' });
-        const iso = new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-        trendMap[iso] = { date: d, violations: 0, absences: 0 };
-      }
-
-      last30DaysAttendance.forEach(a => {
-        if (trendMap[a.date] && (a.status === 'A' || a.status === 'T' || a.status === 'S' || a.status === 'I')) {
-          if (a.status === 'A') trendMap[a.date].absences++;
-          if (a.status === 'T') trendMap[a.date].violations++; // Treating tardy as a minor discipline issue for trend
-        }
-      });
-
-      setDisciplineTrend(Object.values(trendMap));
-
       setScores(scoreData);
       
       // Extract unique subjects from scores
@@ -182,6 +142,84 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
 
     fetchData();
   }, [user.homeroomClassId, selectedSemester]);
+
+  const loadHealthData = async () => {
+    if (!user.homeroomClassId || !user.schoolNpsn) return;
+    setIsRefreshingHealth(true);
+    try {
+      const todayString = new Date().toISOString().split('T')[0];
+      const monthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      
+      // Fetch latest RFID logs for today
+      const rfidLogsToday = await getRfidLogs(user.schoolNpsn, todayString);
+      const studentData = students.length > 0 ? students : await getStudents(user.homeroomClassId);
+      
+      // reconcile RFID logs
+      const tappedStudentIds = new Set(rfidLogsToday.map(l => l.studentId));
+      const lateLogs = rfidLogsToday.filter(l => l.status === 'TERLAMBAT');
+      const lateStudentIds = new Set(lateLogs.map(l => l.studentId));
+      
+      // Calculate from manual attendance first for absences (I, S, A)
+      const attendanceToday = await getAttendanceRecordsByRange(user.homeroomClassId!, todayString, todayString, user.id);
+      
+      const lateDetails: string[] = [];
+      let lateCount = 0;
+      let absentCount = 0;
+
+      studentData.forEach(s => {
+        const manualAtt = attendanceToday.find(a => a.studentId === s.id);
+        const hasTapped = tappedStudentIds.has(s.id);
+        const isLate = lateStudentIds.has(s.id);
+
+        if (isLate) {
+          lateCount++;
+          const log = lateLogs.find(l => l.studentId === s.id);
+          lateDetails.push(`${s.name} (${log?.timestamp.split('T')[1].substring(0, 5) || 'Telat'})`);
+        } else if (!hasTapped) {
+          // If not tapped, check if they have a manual "H" (Hadir) status. 
+          // If manual says "A" or nothing and no tap -> Absent
+          if (!manualAtt || manualAtt.status === 'A') {
+            absentCount++;
+          }
+        }
+      });
+      
+      setTodayAttendance({
+        absent: absentCount,
+        late: lateCount,
+        rfidLateDetail: lateDetails
+      });
+
+      // Update Trends
+      const last30DaysAttendance = await getAttendanceRecordsByRange(user.homeroomClassId!, monthAgo, todayString, user.id);
+      const trendMap: { [date: string]: { date: string; violations: number; absences: number } } = {};
+      
+      for (let i = 29; i >= 0; i--) {
+        const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' });
+        const iso = new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        trendMap[iso] = { date: d, violations: 0, absences: 0 };
+      }
+
+      last30DaysAttendance.forEach(a => {
+        if (trendMap[a.date] && (a.status === 'A' || a.status === 'T' || a.status === 'S' || a.status === 'I')) {
+          if (a.status === 'A') trendMap[a.date].absences++;
+          if (a.status === 'T') trendMap[a.date].violations++;
+        }
+      });
+      setDisciplineTrend(Object.values(trendMap));
+      
+    } catch (error) {
+      console.error("Error loading health data:", error);
+    } finally {
+      setIsRefreshingHealth(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'health') {
+      loadHealthData();
+    }
+  }, [activeTab, students]);
 
   // --- ACADEMIC CALCULATION LOGIC ---
   
@@ -968,14 +1006,28 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
             <div className="md:col-span-2 bg-white rounded-2xl p-6 shadow-sm border border-gray-100 relative overflow-hidden">
                <div className="absolute -right-12 -top-12 w-48 h-48 bg-emerald-50 rounded-full opacity-50 blur-3xl"></div>
                <div className="relative z-10">
-                  <div className="flex items-center gap-3 mb-4">
-                     <div className="p-3 bg-emerald-100 text-emerald-600 rounded-xl">
-                        <HeartPulse size={24} />
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                     <div className="flex items-center gap-3">
+                        <div className="p-3 bg-emerald-100 text-emerald-600 rounded-xl">
+                           <HeartPulse size={24} />
+                        </div>
+                        <div>
+                           <h3 className="text-xl font-bold text-gray-800">Summary Kesehatan Kelas Hari Ini</h3>
+                           <p className="text-sm text-gray-500">Monitor kehadiran dan kedisiplinan harian</p>
+                        </div>
                      </div>
-                     <div>
-                        <h3 className="text-xl font-bold text-gray-800">Summary Kesehatan Kelas Hari Ini</h3>
-                        <p className="text-sm text-gray-500">Monitor kehadiran dan kedisiplinan harian</p>
-                     </div>
+                     <button 
+                       onClick={loadHealthData}
+                       disabled={isRefreshingHealth}
+                       className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm ${
+                         isRefreshingHealth 
+                           ? 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200' 
+                           : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border border-emerald-100'
+                       }`}
+                     >
+                       <RefreshCcw size={14} className={isRefreshingHealth ? 'animate-spin' : ''} />
+                       {isRefreshingHealth ? 'Sinkronisasi...' : 'Refresh Data RFID'}
+                     </button>
                   </div>
 
                   <div className="mt-6 flex flex-col md:flex-row gap-8 items-start">

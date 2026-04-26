@@ -92,100 +92,94 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
     return () => clearInterval(dateTimer);
   }, []);
 
-  useEffect(() => {
-    const fetchExecutiveData = async () => {
-      if (!user.schoolNpsn || activeTab !== 'EXECUTIVE_SUMMARY') return;
-      setIsLoadingExecutive(true);
-      try {
-        const today = new Date();
-        const yesterday = new Date(today);
-        yesterday.setDate(today.getDate() - 1);
-        
-        const todayStr = today.toISOString().split('T')[0];
-        const yesterdayStr = yesterday.toISOString().split('T')[0];
-        const monthAgo = new Date(today);
-        monthAgo.setDate(today.getDate() - 30);
-        const monthAgoStr = monthAgo.toISOString().split('T')[0];
+  const refreshExecutiveData = async () => {
+    if (!user.schoolNpsn) return;
+    setIsLoadingExecutive(true);
+    try {
+      const today = new Date();
+      const yesterday = new Date(today);
+      yesterday.setDate(today.getDate() - 1);
+      
+      const todayStr = today.toISOString().split('T')[0];
+      const yesterdayStr = yesterday.toISOString().split('T')[0];
+      const monthAgo = new Date(today);
+      monthAgo.setDate(today.getDate() - 30);
+      const monthAgoStr = monthAgo.toISOString().split('T')[0];
 
-        // 1. Get Attendance Summaries
-        const todaySummary = await getAttendanceSummaryByRange(todayStr, todayStr, user.schoolNpsn);
-        const yesterdaySummary = await getAttendanceSummaryByRange(yesterdayStr, yesterdayStr, user.schoolNpsn);
+      // 1. Get Attendance Summaries
+      const todaySummary = await getAttendanceSummaryByRange(todayStr, todayStr, user.schoolNpsn);
+      const yesterdaySummary = await getAttendanceSummaryByRange(yesterdayStr, yesterdayStr, user.schoolNpsn);
 
-        // 2. Get RFID Logs for Tardy Trends
-        const rfidLogsRange = await getRfidLogs(user.schoolNpsn, monthAgoStr); // This only gets for one date in current impl?
-        // Wait, getRfidLogs in database.ts usually takes schoolNpsn and date.
-        // I might need a version that takes range or fetch multiple.
-        // For now let's assume we fetch last 7 days RFID logs if we want day-of-week trend.
-        
-        const daysToFetch = 7;
-        const rfidPromises = [];
-        for (let i = 0; i < daysToFetch; i++) {
-          const d = new Date(today);
-          d.setDate(today.getDate() - i);
-          rfidPromises.push(getRfidLogs(user.schoolNpsn, d.toISOString().split('T')[0]));
-        }
-        const multiRfidLogs = (await Promise.all(rfidPromises)).flat();
-
-        // 3. BK Status (Handling)
-        const [counseling, calls, visits] = await Promise.all([
-          getCounselingSessions(),
-          getParentCalls(user.schoolNpsn),
-          getHomeVisits(user.schoolNpsn)
-        ]);
-
-        // Process Dashboard Data
-        const processStats = (summary: any[]) => {
-          const stats = { hadir: 0, alpha: 0, late: 0, total: 0 };
-          summary.forEach(s => {
-            stats.hadir += s.hadir;
-            stats.alpha += s.alfa;
-            stats.total += s.studentCount;
-          });
-          return stats;
-        };
-
-        const todayStats = processStats(todaySummary);
-        const yesterdayStats = processStats(yesterdaySummary);
-        
-        // Mocking/estimating late from RFID logs for today/yesterday
-        todayStats.late = multiRfidLogs.filter(l => l.timestamp.startsWith(todayStr) && l.status === 'TERLAMBAT').length;
-        yesterdayStats.late = multiRfidLogs.filter(l => l.timestamp.startsWith(yesterdayStr) && l.status === 'TERLAMBAT').length;
-
-        // Day of Week Tardy Trend
-        const dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
-        const dayTrendMap: any = {};
-        dayNames.forEach(name => dayTrendMap[name] = { name, count: 0 });
-        
-        multiRfidLogs.filter(l => l.status === 'TERLAMBAT').forEach(l => {
-          const dayName = dayNames[new Date(l.timestamp).getDay()];
-          dayTrendMap[dayName].count++;
-        });
-
-        // 30 Days Attendance Trend (General)
-        const summary30Days = await getAttendanceSummaryByRange(monthAgoStr, todayStr, user.schoolNpsn);
-        // This summary is per class... I need per date.
-        // getAttendanceSummaryByRange might need to be improved or I fetch all attendance records.
-        // For now I'll use class names as labels or just aggregate them for school-level.
-        
-        setExecutiveData({
-          todayStats,
-          yesterdayStats,
-          trendData: [], // Would need date-wise aggregation
-          dayTrend: Object.values(dayTrendMap),
-          bkStatus: {
-            processed: counseling.length + calls.length + visits.length,
-            pending: todayStats.alpha + todayStats.late // Simplification: any anomaly today is "pending" action?
-          }
-        });
-
-      } catch (error) {
-        console.error("Executive fetch failed:", error);
-      } finally {
-        setIsLoadingExecutive(false);
+      // 2. Get RFID Logs for Tardy Trends
+      const daysToFetch = 7;
+      const rfidPromises = [];
+      for (let i = 0; i < daysToFetch; i++) {
+        const d = new Date(today);
+        d.setDate(today.getDate() - i);
+        rfidPromises.push(getRfidLogs(user.schoolNpsn, d.toISOString().split('T')[0]));
       }
-    };
+      const multiRfidLogs = (await Promise.all(rfidPromises)).flat();
 
-    fetchExecutiveData();
+      // 3. BK Status (Handling)
+      const [counseling, calls, visits] = await Promise.all([
+        getCounselingSessions(),
+        getParentCalls(user.schoolNpsn),
+        getHomeVisits(user.schoolNpsn)
+      ]);
+
+      // Process Dashboard Data
+      const processStats = (summary: any[]) => {
+        const stats = { hadir: 0, alpha: 0, late: 0, total: 0 };
+        summary.forEach(s => {
+          stats.hadir += s.hadir;
+          stats.alpha += s.alfa;
+          stats.total += s.studentCount;
+        });
+        return stats;
+      };
+
+      const todayStats = processStats(todaySummary);
+      const yesterdayStats = processStats(yesterdaySummary);
+      
+      // Calculate late from RFID logs for today/yesterday using studentId
+      const todayLateCount = multiRfidLogs.filter(l => l.timestamp.startsWith(todayStr) && l.status === 'TERLAMBAT').length;
+      const yesterdayLateCount = multiRfidLogs.filter(l => l.timestamp.startsWith(yesterdayStr) && l.status === 'TERLAMBAT').length;
+      
+      todayStats.late = todayLateCount;
+      yesterdayStats.late = yesterdayLateCount;
+
+      // Day of Week Tardy Trend
+      const dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+      const dayTrendMap: any = {};
+      dayNames.forEach(name => dayTrendMap[name] = { name, count: 0 });
+      
+      multiRfidLogs.filter(l => l.status === 'TERLAMBAT').forEach(l => {
+        const dayName = dayNames[new Date(l.timestamp).getDay()];
+        dayTrendMap[dayName].count++;
+      });
+
+      setExecutiveData({
+        todayStats,
+        yesterdayStats,
+        trendData: [], 
+        dayTrend: Object.values(dayTrendMap),
+        bkStatus: {
+          processed: counseling.length + calls.length + visits.length,
+          pending: todayStats.alpha + todayStats.late
+        }
+      });
+
+    } catch (error) {
+      console.error("Executive fetch failed:", error);
+    } finally {
+      setIsLoadingExecutive(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'EXECUTIVE_SUMMARY') {
+      refreshExecutiveData();
+    }
   }, [user.schoolNpsn, activeTab]);
 
   useEffect(() => {
@@ -749,6 +743,28 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
       {/* Main Content */}
       {activeTab === 'EXECUTIVE_SUMMARY' && executiveData ? (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+           {/* Header with Refresh */}
+           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-gray-100 shadow-sm mb-2">
+              <div>
+                <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                  <BarChart3 className="text-purple-600" size={20} /> Dashboard Executive Analyst
+                </h3>
+                <p className="text-[10px] text-gray-500">Data real-time disinkronkan dengan log mesin RFID gerbang sekolah.</p>
+              </div>
+              <button 
+                onClick={refreshExecutiveData}
+                disabled={isLoadingExecutive}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm ${
+                  isLoadingExecutive 
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200' 
+                    : 'bg-purple-50 text-purple-600 hover:bg-purple-100 border border-purple-100'
+                }`}
+              >
+                <RefreshCcw size={14} className={isLoadingExecutive ? 'animate-spin' : ''} />
+                {isLoadingExecutive ? 'Menganalisis...' : 'Refresh Analisis Makro'}
+              </button>
+           </div>
+
            {/* Top Stats - Comparison */}
            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
