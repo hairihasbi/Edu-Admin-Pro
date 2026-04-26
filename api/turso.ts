@@ -1682,10 +1682,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     }
                 }
                 else if (tableConfig.table === 'attendance') {
-                    // Wakasek & Kepsek see all attendance in school
-                    if ((isWakasek || isKepsek) && userNpsn && userNpsn !== 'DEFAULT') {
-                        // Scope to school
-                        whereClauses.push("class_id IN (SELECT id FROM classes WHERE school_npsn = ?)"); args = [userNpsn];
+                    // Pull logic for Attendance: Owner sees all, others see SHARED in same school.
+                    // Wakasek & Kepsek see everything in their school.
+                    if (userNpsn && userNpsn !== 'DEFAULT') {
+                        if (isWakasek || isKepsek) {
+                            whereClauses.push("school_npsn = ?"); args = [userNpsn];
+                        } else {
+                            whereClauses.push("(user_id = ? OR (school_npsn = ? AND (visibility = 'SHARED' OR visibility IS NULL)))"); 
+                            args = [userId, userNpsn];
+                        }
                     } else {
                         whereClauses.push("user_id = ?"); args = [userId];
                     }
@@ -1739,15 +1744,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                         args = [userId];
                     }
                 }
-                else if (tableConfig.table === 'attendance') { 
-                    // All teachers in same school should see attendance for picket/shared features
-                    if (userNpsn && userNpsn !== 'DEFAULT') {
-                        whereClauses.push("(user_id IN (SELECT id FROM users WHERE school_npsn = ?) OR class_id IN (SELECT id FROM classes WHERE school_npsn = ?))"); 
-                        args = [userNpsn, userNpsn];
-                    } else {
-                        whereClauses.push("user_id = ?"); args = [userId];
-                    }
-                }
+
                 else if (tableConfig.table === 'daily_pickets') {
                     if (userNpsn) {
                         whereClauses.push("school_npsn = ?"); args = [userNpsn];
