@@ -477,7 +477,7 @@ export const getSyncStats = async (user: User) => {
         'achievements', 'counselingSessions', 'whatsappConfigs', 'notifications', 'apiKeys', 'systemSettings',
         'teacherCalendar', 'dailyPickets', 'studentIncidents', 'donations', 'passwordResets',
         'classInventory', 'homeVisits', 'parentCalls', 'learningStyleAssessments',
-        'supervisionAssignments', 'supervisionResults', 'cbtExams', 'cbtQuestions', 'cbtAttempts'
+        'supervisionAssignments', 'supervisionResults', 'cbtExams', 'cbtQuestions', 'cbtAttempts', 'rfidLogs'
     ];
     
     let totalUnsynced = 0;
@@ -2351,14 +2351,37 @@ export const getStudentByRfid = async (rfidTag: string, schoolNpsn: string) => {
     .first();
 };
 
+export const getLocalDate = () => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
+export const getLocalISOString = () => {
+    const now = new Date();
+    const tzo = -now.getTimezoneOffset();
+    const dif = tzo >= 0 ? '+' : '-';
+    const pad = (num: number) => String(Math.floor(Math.abs(num))).padStart(2, '0');
+    return now.getFullYear() +
+        '-' + pad(now.getMonth() + 1) +
+        '-' + pad(now.getDate()) +
+        'T' + pad(now.getHours()) +
+        ':' + pad(now.getMinutes()) +
+        ':' + pad(now.getSeconds()) +
+        dif + pad(tzo / 60) +
+        ':' + pad(tzo % 60);
+};
+
 export const saveRfidLog = async (log: Omit<RfidLog, 'id' | 'lastModified' | 'isSynced' | 'version' | 'deleted' | 'createdAt' | 'updatedAt'>) => {
   const toSave: RfidLog = {
     ...log,
     id: uuidv4(),
     lastModified: Date.now(),
     isSynced: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
+    createdAt: getLocalISOString(),
+    updatedAt: getLocalISOString()
   };
   await db.rfidLogs.put(toSave);
   
@@ -2410,12 +2433,10 @@ export const saveRfidLog = async (log: Omit<RfidLog, 'id' | 'lastModified' | 'is
 };
 
 export const getRfidLogs = async (schoolNpsn: string, date?: string) => {
+  const targetDate = date || getLocalDate();
   let query = db.rfidLogs.where('schoolNpsn').equals(schoolNpsn);
   const logs = await query.toArray();
-  if (date) {
-    return logs.filter(l => l.timestamp.startsWith(date)).sort((a, b) => b.timestamp.localeCompare(a.timestamp));
-  }
-  return logs.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+  return logs.filter(l => l.timestamp.startsWith(targetDate)).sort((a, b) => b.timestamp.localeCompare(a.timestamp));
 };
 
 export const getRfidLogsByRange = async (schoolNpsn: string, startDate: string, endDate: string) => {
