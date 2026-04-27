@@ -61,10 +61,19 @@ const QrScanner: React.FC<QrScannerProps> = ({ onScan, onClose }) => {
           );
         } catch (err) {
           console.warn("Failed to start with facingMode, trying first available device", err);
-          const devices = await Html5Qrcode.getCameras();
+          // Use any cast to bypass the missing static type definition if needed
+          const devices = await (Html5Qrcode as any).getCameras();
           if (devices && devices.length > 0) {
+            // Find the back camera if possible for mobile devices
+            const backCamera = devices.find((device: any) => 
+               device.label.toLowerCase().includes('back') || 
+               device.label.toLowerCase().includes('rear') ||
+               device.label.toLowerCase().includes('environment')
+            );
+            const cameraToUse = backCamera ? backCamera.id : devices[0].id;
+
             await html5QrCode.start(
-              devices[0].id,
+              cameraToUse,
               config,
               (decodedText: string) => {
                 const now = Date.now();
