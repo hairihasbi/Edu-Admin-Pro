@@ -10,10 +10,11 @@ interface QrScannerProps {
 const QrScanner: React.FC<QrScannerProps> = ({ onScan, onClose }) => {
   const [error, setError] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
-  const [lastScanTime, setLastScanTime] = useState(0);
-  const [lastScanData, setLastScanData] = useState<string | null>(null);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [currentScanData, setCurrentScanData] = useState<string | null>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
+  const lastScanTimeRef = useRef<number>(0);
+  const lastScanDataRef = useRef<string | null>(null);
   const scannerId = "qr-reader";
 
   useEffect(() => {
@@ -22,45 +23,84 @@ const QrScanner: React.FC<QrScannerProps> = ({ onScan, onClose }) => {
 
     const startScanner = async () => {
       try {
-        await html5QrCode.start(
-          { facingMode: "environment" }, // Prioritize back camera
-          {
-            fps: 10,
-            qrbox: { width: 250, height: 250 },
+        // Use environment facing mode for back camera
+        const config = {
+          fps: 20,
+          qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
+            const minEdgeSize = Math.min(viewfinderWidth, viewfinderHeight);
+            const qrboxSize = Math.floor(minEdgeSize * 0.7);
+            return {
+              width: qrboxSize,
+              height: qrboxSize
+            };
           },
-          (decodedText: string) => {
-            // Success - Process with throttling
-            const now = Date.now();
-            if (decodedText === lastScanData && now - lastScanTime < 3000) {
-              // Ignore same code within 3 seconds
-              return;
-            }
+          aspectRatio: 1.0,
+          showTorchButtonIfSupported: true
+        };
 
-            onScan(decodedText);
-            setLastScanData(decodedText);
-            setLastScanTime(now);
-            
-            // Visual Feedback
-            setShowSuccess(true);
-            setTimeout(() => setShowSuccess(false), 2000);
-          },
-          (errorMessage: string) => {
-            // parse error, ignore it
+        try {
+          // Attempt to start with environment facing mode
+          await html5QrCode.start(
+            { facingMode: "environment" },
+            config,
+            (decodedText: string) => {
+              const now = Date.now();
+              if (decodedText === lastScanDataRef.current && now - lastScanTimeRef.current < 3000) {
+                return;
+              }
+
+              onScan(decodedText);
+              lastScanDataRef.current = decodedText;
+              lastScanTimeRef.current = now;
+              setCurrentScanData(decodedText);
+              
+              setShowSuccess(true);
+              setTimeout(() => setShowSuccess(false), 2000);
+            },
+            () => {} // Ignore parse errors
+          );
+        } catch (err) {
+          console.warn("Failed to start with facingMode, trying first available device", err);
+          const devices = await Html5Qrcode.getCameras();
+          if (devices && devices.length > 0) {
+            await html5QrCode.start(
+              devices[0].id,
+              config,
+              (decodedText: string) => {
+                const now = Date.now();
+                if (decodedText === lastScanDataRef.current && now - lastScanTimeRef.current < 3000) {
+                  return;
+                }
+
+                onScan(decodedText);
+                lastScanDataRef.current = decodedText;
+                lastScanTimeRef.current = now;
+                setCurrentScanData(decodedText);
+                
+                setShowSuccess(true);
+                setTimeout(() => setShowSuccess(false), 2000);
+              },
+              () => {}
+            );
+          } else {
+            throw new Error("No cameras found.");
           }
-        );
+        }
         setIsScanning(true);
       } catch (err: any) {
         console.error("Camera error:", err);
-        setError("Gagal mengakses kamera. Pastikan izin kamera telah diberikan.");
+        setError("Gagal mengakses kamera. Pastikan izin kamera telah diberikan dan gunakan browser modern.");
       }
     };
 
     startScanner();
 
     return () => {
-      stopScanner();
+      if (scannerRef.current && scannerRef.current.isScanning) {
+        scannerRef.current.stop().catch(e => console.error("Stoppage error", e));
+      }
     };
-  }, [lastScanData, lastScanTime]);
+  }, []); // Only run once on mount
 
   const stopScanner = async () => {
     if (scannerRef.current && scannerRef.current.isScanning) {
@@ -98,7 +138,7 @@ const QrScanner: React.FC<QrScannerProps> = ({ onScan, onClose }) => {
                  <CheckCircle size={48} className="text-green-500" />
                </div>
                <p className="text-xl font-black uppercase tracking-tighter">SCAN BERHASIL</p>
-               <p className="text-[10px] mt-1 font-bold opacity-80 uppercase tracking-widest">{lastScanData}</p>
+               <p className="text-[10px] mt-1 font-bold opacity-80 uppercase tracking-widest">{currentScanData}</p>
             </div>
           )}
 
