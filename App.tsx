@@ -70,6 +70,7 @@ import {
   updateUserProfile,
   getUserProfile,
   verifyStudentByNis,
+  cleanupOldPhotos,
 } from "./services/database";
 import { db } from "./services/db";
 import {
@@ -270,6 +271,7 @@ const AppContent: React.FC = () => {
 
       try {
         await initDatabase();
+        await cleanupOldPhotos(); // Cleans up RFID photos from previous days to save space
 
         // Load System Settings and Apply
         const settings = await getSystemSettings();
