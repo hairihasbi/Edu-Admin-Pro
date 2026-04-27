@@ -496,9 +496,9 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
       else if (recapFilter === 'genap') periodLabel = `Semester Genap ${recapYear}/${recapYear+1}`;
       else periodLabel = `Tahun Ajaran ${recapYear}/${recapYear+1}`;
 
-      const header = ['No', 'Nama Siswa', 'Sakit', 'Izin', 'Alpha', 'Hadir', 'Total Pertemuan', 'Persentase'];
+      const header = ['No', 'Nama Siswa', 'Sakit', 'Izin', 'Alpha', 'Terlambat', 'Hadir', 'Total Pertemuan', 'Persentase'];
       const data = recapData.map((d, i) => [
-          i + 1, d.name, d.s, d.i, d.a, d.h, d.total, `${d.percent}%`
+          i + 1, d.name, d.s, d.i, d.a, d.t, d.h, d.total, `${d.percent}%`
       ]);
 
       const ws = XLSX.utils.aoa_to_sheet([
@@ -510,7 +510,7 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
           ...data
       ]);
 
-      const wscols = [{ wch: 5 }, { wch: 30 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 15 }, { wch: 10 }];
+      const wscols = [{ wch: 5 }, { wch: 30 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 9 }, { wch: 8 }, { wch: 15 }, { wch: 10 }];
       ws['!cols'] = wscols;
 
       const wb = XLSX.utils.book_new();

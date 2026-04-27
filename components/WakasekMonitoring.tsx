@@ -24,7 +24,7 @@ import {
   Info, AlertCircle, RefreshCcw, Loader2, BookOpen, LayoutGrid, 
   List as ListIcon, ChevronDown, ChevronUp, TrendingUp, BarChart3, PieChart, 
   Download, Printer, FileSpreadsheet, FileText, School, ShieldCheck, Save,
-  LineChart, ShieldAlert, X
+  LineChart, ShieldAlert
 } from './Icons';
 import { 
   LineChart as ReLineChart, Line, XAxis, YAxis, CartesianGrid, 
@@ -58,7 +58,6 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
   };
 
   const [selectedDate, setSelectedDate] = useState(getLocalDate());
-  const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'GURU' | 'KELAS' | 'PRESENSI' | 'SUPERVISI' | 'ABSENSI_RFID' | 'EXECUTIVE_SUMMARY'>('GURU');
   const [rfidLogs, setRfidLogs] = useState<RfidLog[]>([]);
@@ -1244,7 +1243,6 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
               <table className="w-full text-left border-collapse">
                 <thead className="bg-gray-50 text-gray-600 font-semibold text-xs uppercase tracking-wider">
                   <tr>
-                    <th className="px-6 py-4">Foto</th>
                     <th className="px-6 py-4">Siswa</th>
                     <th className="px-6 py-4">Kelas</th>
                     <th className="px-6 py-4">Waktu Tap</th>
@@ -1255,7 +1253,7 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
                 <tbody className="divide-y divide-gray-100">
                   {rfidLogs.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
+                      <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
                         <div className="flex flex-col items-center gap-2">
                           <Clock size={32} className="text-gray-300" />
                           <p className="font-medium">Belum ada data tap RFID pada tanggal ini.</p>
@@ -1268,20 +1266,6 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
                       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
                       .map(log => (
                       <tr key={log.id} className="hover:bg-gray-50 transition">
-                        <td className="px-6 py-4">
-                           {log.photoBase64 ? (
-                             <img 
-                               src={log.photoBase64} 
-                               alt="Tap Foto" 
-                               className="w-10 h-10 rounded-full object-cover cursor-pointer border border-gray-200 shadow-sm"
-                               onClick={() => setSelectedPhoto(log.photoBase64 || null)}
-                             />
-                           ) : (
-                             <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center border border-gray-200">
-                                <span className="text-[10px] text-gray-400 font-medium">Usang</span>
-                             </div>
-                           )}
-                        </td>
                         <td className="px-6 py-4">
                           <div className="font-medium text-gray-800">{log.studentName}</div>
                           <div className="text-[10px] text-gray-400">ID: {log.studentId}</div>
@@ -1317,24 +1301,6 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
               </table>
             </div>
           </div>
-        
-          {/* Modal for viewing photo */}
-          {selectedPhoto && (
-            <div className="fixed inset-0 bg-black/80 z-[100] flex justify-center items-center p-4">
-              <div className="relative bg-white rounded-2xl shadow-xl overflow-hidden max-w-lg w-full">
-                 <button 
-                    onClick={() => setSelectedPhoto(null)}
-                    className="absolute top-4 right-4 p-2 bg-gray-100 hover:bg-gray-200 rounded-full text-gray-600"
-                 >
-                   <X size={20} />
-                 </button>
-                 <img src={selectedPhoto} alt="Full Foto" className="w-full h-auto block" />
-                 <div className="p-4 bg-gray-50 border-t border-gray-100">
-                   <p className="text-sm text-gray-500 text-center">Rekaman Kamera RFID</p>
-                 </div>
-              </div>
-            </div>
-          )}
         </div>
       )}
     </div>
