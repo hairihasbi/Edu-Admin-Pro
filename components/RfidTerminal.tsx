@@ -386,9 +386,9 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
              <div className="flex items-center gap-4">
                 <button
                   onClick={() => setShowCamera(!showCamera)}
-                  className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition flex items-center gap-1.5 ${showCamera ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-gray-500 border border-gray-200 hover:border-indigo-300'}`}
+                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 ${showCamera ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30' : 'bg-white text-gray-700 border border-gray-200 hover:border-indigo-400 hover:text-indigo-700'}`}
                 >
-                  <Camera size={14} /> {showCamera ? 'Sembunyikan Kamera' : 'Tampilkan Kamera'}
+                  <Camera size={18} /> {showCamera ? 'Sembunyikan Kamera' : 'Tampilkan Kamera'}
                 </button>
                 <div className="hidden sm:flex items-center gap-2">
                   <div className={`w-2 h-2 rounded-full ${serialConnected || method === 'KEYBOARD' || method === 'QR' ? 'bg-green-500' : 'bg-red-500 animate-pulse'}`} />
@@ -550,7 +550,7 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
       <CameraCapture 
         ref={cameraRef} 
         hidden={!showCamera} 
-        className="fixed bottom-6 right-6 w-48 h-48 md:w-64 md:h-64 rounded-3xl overflow-hidden shadow-2xl border-4 border-white/40 ring-4 ring-black/5 backdrop-blur-xl z-[100]" 
+        className="fixed bottom-8 right-8 w-64 h-48 md:w-80 md:h-60 rounded-3xl overflow-hidden shadow-2xl border-[6px] border-white ring-1 ring-black/10 z-[100]" 
       />
 
       {showQrScanner && (
