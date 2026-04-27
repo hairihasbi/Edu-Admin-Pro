@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { User, Student, RfidLog, SystemSettings } from '../types';
 import { getStudentByRfid, saveRfidLog, getSystemSettings, normalizeRfid, getClassById, getRfidLogs } from '../services/database';
 import QrScanner from './QrScanner';
+import CameraCapture, { CameraCaptureRef } from './CameraCapture';
 import { 
   Wifi, WifiOff, Smartphone, IdCard, 
   CheckCircle, AlertCircle, Clock, ArrowLeftRight,
@@ -29,6 +30,7 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
   const [terminalId] = useState(`Terminal-${Math.random().toString(36).substring(2, 7).toUpperCase()}`);
   const terminalRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<CameraCaptureRef>(null);
 
   useEffect(() => {
     const loadRecentLogs = async () => {
@@ -269,6 +271,8 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
           return;
         }
 
+        const photoBase64 = cameraRef.current ? cameraRef.current.capturePhoto() || undefined : undefined;
+
         const newLog = await saveRfidLog({
           studentId: student.id,
           studentName: student.name,
@@ -278,7 +282,8 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
           timestamp: getLocalISOString(),
           status: attendanceStatus,
           method: method,
-          deviceId: terminalId
+          deviceId: terminalId,
+          photoBase64: photoBase64
         });
 
         setLastStudent(student);
@@ -534,6 +539,8 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
            </div>
         </div>
       </div>
+
+      <CameraCapture ref={cameraRef} hidden={true} />
 
       {showQrScanner && (
         <QrScanner 

@@ -7,7 +7,7 @@ import {
   Download, Printer, CheckCircle, Clock, 
   Smartphone, Wifi, User as UserIcon, Trash2,
   ChevronLeft, ChevronRight, AlertCircle, Info,
-  BookOpen, LayoutGrid
+  BookOpen, LayoutGrid, X
 } from './Icons';
 import * as XLSX from 'xlsx';
 
@@ -26,6 +26,7 @@ interface AggregatedAttendance {
   lateCount?: number;
   earlyLeaveCount?: number;
   status: 'HADIR' | 'TERLAMBAT' | 'PULANG CEPAT' | 'TERLAMBAT & PULANG CEPAT' | 'ALFA' | 'TANPA TAP';
+  photoBase64?: string;
 }
 
 const AttendanceMonitoring: React.FC<AttendanceMonitoringProps> = ({ user }) => {
@@ -51,6 +52,7 @@ const AttendanceMonitoring: React.FC<AttendanceMonitoringProps> = ({ user }) => 
   const [activeClassId, setActiveClassId] = useState<string>('ALL');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'HADIR' | 'TERLAMBAT' | 'PULANG CEPAT' | 'ALFA'>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -117,18 +119,23 @@ const AttendanceMonitoring: React.FC<AttendanceMonitoringProps> = ({ user }) => 
             let checkIn: string | null = null;
             let checkOut: string | null = null;
             let status: AggregatedAttendance['status'] = 'ALFA';
+            let photoBase64: string | undefined = undefined;
 
             if (studentLogs.length > 0) {
                 const inLogs = studentLogs.filter(l => l.status === 'HADIR' || l.status === 'TERLAMBAT');
                 if (inLogs.length > 0) {
-                    checkIn = inLogs.sort((a, b) => a.timestamp.localeCompare(b.timestamp))[0].timestamp;
+                    const sortedIn = inLogs.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+                    checkIn = sortedIn[0].timestamp;
+                    if (sortedIn[0].photoBase64) photoBase64 = sortedIn[0].photoBase64;
                     const checkInTime = new Date(checkIn).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false });
                     status = checkInTime > checkInLate ? 'TERLAMBAT' : 'HADIR';
                 }
 
                 const outLogs = studentLogs.filter(l => l.status === 'PULANG');
                 if (outLogs.length > 0) {
-                    checkOut = outLogs.sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0].timestamp;
+                    const sortedOut = outLogs.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+                    checkOut = sortedOut[0].timestamp;
+                    if (!photoBase64 && sortedOut[0].photoBase64) photoBase64 = sortedOut[0].photoBase64;
                     const checkOutTime = new Date(checkOut).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false });
                     if (checkOutTime < checkOutStart) {
                         status = status === 'TERLAMBAT' ? 'TERLAMBAT & PULANG CEPAT' : 'PULANG CEPAT';
@@ -144,7 +151,8 @@ const AttendanceMonitoring: React.FC<AttendanceMonitoringProps> = ({ user }) => 
                 className,
                 checkIn,
                 checkOut,
-                status: status as any
+                status: status as any,
+                photoBase64
             });
         } else {
             // Group logs by date to count days
@@ -448,6 +456,7 @@ const AttendanceMonitoring: React.FC<AttendanceMonitoringProps> = ({ user }) => 
           <table className="w-full text-sm text-left">
             <thead>
               <tr className="bg-gray-50 text-gray-600 font-bold border-b border-gray-100 uppercase text-[10px] tracking-widest">
+                {filterMode === 'DAILY' && <th className="p-4 w-16 text-center">Foto</th>}
                 <th className="p-4">Identitas Siswa</th>
                 <th className="p-4 text-center">{filterMode === 'DAILY' ? 'Jam Datang' : 'Hari Hadir'}</th>
                 <th className="p-4 text-center">{filterMode === 'DAILY' ? 'Jam Pulang' : 'Total Terlambat'}</th>
@@ -458,6 +467,7 @@ const AttendanceMonitoring: React.FC<AttendanceMonitoringProps> = ({ user }) => 
               {loading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <tr key={i} className="animate-pulse">
+                    {filterMode === 'DAILY' && <td className="p-4"><div className="w-10 h-10 bg-gray-100 rounded-full mx-auto"></div></td>}
                     <td className="p-4"><div className="h-5 bg-gray-100 rounded w-48 mb-1"></div><div className="h-3 bg-gray-50 rounded w-24"></div></td>
                     <td className="p-4"><div className="h-5 bg-gray-100 rounded w-16 mx-auto"></div></td>
                     <td className="p-4"><div className="h-5 bg-gray-100 rounded w-16 mx-auto"></div></td>
@@ -466,7 +476,7 @@ const AttendanceMonitoring: React.FC<AttendanceMonitoringProps> = ({ user }) => 
                 ))
               ) : filteredData.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="p-16 text-center">
+                  <td colSpan={filterMode === 'DAILY' ? 5 : 4} className="p-16 text-center">
                     <div className="flex flex-col items-center gap-3 text-gray-400">
                         <AlertCircle size={48} className="opacity-20" />
                         <p className="font-medium">Tidak ada data siswa ditemukan untuk kriteria ini.</p>
@@ -476,6 +486,22 @@ const AttendanceMonitoring: React.FC<AttendanceMonitoringProps> = ({ user }) => 
               ) : (
                 filteredData.map(item => (
                   <tr key={item.studentId} className="hover:bg-gray-50/80 transition-colors group">
+                    {filterMode === 'DAILY' && (
+                      <td className="p-4 text-center">
+                        {item.photoBase64 ? (
+                          <img 
+                            src={item.photoBase64} 
+                            alt="Tap Foto" 
+                            className="w-10 h-10 rounded-full object-cover cursor-pointer hover:ring-2 hover:ring-blue-400 hover:ring-offset-2 transition mx-auto border border-gray-200"
+                            onClick={() => setSelectedPhoto(item.photoBase64 || null)}
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center border border-gray-200 mx-auto" title="Foto Otomatis Dihapus (Usang)">
+                             <span className="text-[9px] text-gray-400 font-medium">Usang</span>
+                          </div>
+                        )}
+                      </td>
+                    )}
                     <td className="p-4">
                       <div className="flex items-center gap-4">
                         <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 items-center justify-center hidden sm:flex font-black text-sm shrink-0 shadow-sm border border-blue-100">
@@ -561,6 +587,24 @@ const AttendanceMonitoring: React.FC<AttendanceMonitoringProps> = ({ user }) => 
             </p>
         </div>
       </div>
+
+      {/* Modal for viewing photo */}
+      {selectedPhoto && (
+        <div className="fixed inset-0 bg-black/80 z-[100] flex justify-center items-center p-4">
+          <div className="relative bg-white rounded-2xl shadow-xl overflow-hidden max-w-lg w-full">
+              <button 
+                onClick={() => setSelectedPhoto(null)}
+                className="absolute top-4 right-4 p-2 bg-gray-100/80 hover:bg-gray-200 rounded-full text-gray-800 transition backdrop-blur-sm"
+              >
+                <X size={20} />
+              </button>
+              <img src={selectedPhoto} alt="Full Foto" className="w-full h-auto block" />
+              <div className="p-4 bg-gray-50 border-t border-gray-100">
+                <p className="text-sm text-gray-500 text-center font-medium">Rekaman Kamera RFID</p>
+              </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
