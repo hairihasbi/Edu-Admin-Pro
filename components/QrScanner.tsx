@@ -12,104 +12,118 @@ const QrScanner: React.FC<QrScannerProps> = ({ onScan, onClose }) => {
   const [isScanning, setIsScanning] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [currentScanData, setCurrentScanData] = useState<string | null>(null);
+  const [cameras, setCameras] = useState<any[]>([]);
+  const [currentCameraId, setCurrentCameraId] = useState<string | null>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const lastScanTimeRef = useRef<number>(0);
   const lastScanDataRef = useRef<string | null>(null);
   const scannerId = "qr-reader";
 
+  const getAvailableCameras = async () => {
+    try {
+      const devices = await (Html5Qrcode as any).getCameras();
+      if (devices && devices.length > 0) {
+        setCameras(devices);
+        // Default to back camera
+        const backCamera = devices.find((device: any) => 
+          device.label.toLowerCase().includes('back') || 
+          device.label.toLowerCase().includes('rear') ||
+          device.label.toLowerCase().includes('environment')
+        );
+        return backCamera ? backCamera.id : devices[0].id;
+      }
+      return null;
+    } catch (err) {
+      console.error("Error getting cameras:", err);
+      return null;
+    }
+  };
+
+  const startScanner = async (cameraId: string | { facingMode: string }) => {
+    if (!scannerRef.current) return;
+    
+    // Stop current scanner if active
+    if (scannerRef.current.isScanning) {
+      await scannerRef.current.stop();
+    }
+
+    try {
+      const config = {
+        fps: 20,
+        qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
+          const minEdgeSize = Math.min(viewfinderWidth, viewfinderHeight);
+          const qrboxSize = Math.floor(minEdgeSize * 0.7);
+          return {
+            width: qrboxSize,
+            height: qrboxSize
+          };
+        },
+        aspectRatio: 1.0,
+        showTorchButtonIfSupported: true
+      };
+
+      await scannerRef.current.start(
+        cameraId,
+        config,
+        (decodedText: string) => {
+          const now = Date.now();
+          if (decodedText === lastScanDataRef.current && now - lastScanTimeRef.current < 3000) {
+            return;
+          }
+
+          onScan(decodedText);
+          lastScanDataRef.current = decodedText;
+          lastScanTimeRef.current = now;
+          setCurrentScanData(decodedText);
+          
+          setShowSuccess(true);
+          setTimeout(() => setShowSuccess(false), 2000);
+        },
+        () => {} // Ignore parse errors
+      );
+      
+      setIsScanning(true);
+      if (typeof cameraId === 'string') {
+        setCurrentCameraId(cameraId);
+      }
+    } catch (err: any) {
+      console.error("Camera error:", err);
+      setError("Gagal mengakses kamera. Pastikan izin kamera telah diberikan.");
+    }
+  };
+
   useEffect(() => {
     const html5QrCode = new Html5Qrcode(scannerId);
     scannerRef.current = html5QrCode;
 
-    const startScanner = async () => {
-      try {
-        // Use environment facing mode for back camera
-        const config = {
-          fps: 20,
-          qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
-            const minEdgeSize = Math.min(viewfinderWidth, viewfinderHeight);
-            const qrboxSize = Math.floor(minEdgeSize * 0.7);
-            return {
-              width: qrboxSize,
-              height: qrboxSize
-            };
-          },
-          aspectRatio: 1.0,
-          showTorchButtonIfSupported: true
-        };
-
-        try {
-          // Attempt to start with environment facing mode
-          await html5QrCode.start(
-            { facingMode: "environment" },
-            config,
-            (decodedText: string) => {
-              const now = Date.now();
-              if (decodedText === lastScanDataRef.current && now - lastScanTimeRef.current < 3000) {
-                return;
-              }
-
-              onScan(decodedText);
-              lastScanDataRef.current = decodedText;
-              lastScanTimeRef.current = now;
-              setCurrentScanData(decodedText);
-              
-              setShowSuccess(true);
-              setTimeout(() => setShowSuccess(false), 2000);
-            },
-            () => {} // Ignore parse errors
-          );
-        } catch (err) {
-          console.warn("Failed to start with facingMode, trying first available device", err);
-          // Use any cast to bypass the missing static type definition if needed
-          const devices = await (Html5Qrcode as any).getCameras();
-          if (devices && devices.length > 0) {
-            // Find the back camera if possible for mobile devices
-            const backCamera = devices.find((device: any) => 
-               device.label.toLowerCase().includes('back') || 
-               device.label.toLowerCase().includes('rear') ||
-               device.label.toLowerCase().includes('environment')
-            );
-            const cameraToUse = backCamera ? backCamera.id : devices[0].id;
-
-            await html5QrCode.start(
-              cameraToUse,
-              config,
-              (decodedText: string) => {
-                const now = Date.now();
-                if (decodedText === lastScanDataRef.current && now - lastScanTimeRef.current < 3000) {
-                  return;
-                }
-
-                onScan(decodedText);
-                lastScanDataRef.current = decodedText;
-                lastScanTimeRef.current = now;
-                setCurrentScanData(decodedText);
-                
-                setShowSuccess(true);
-                setTimeout(() => setShowSuccess(false), 2000);
-              },
-              () => {}
-            );
-          } else {
-            throw new Error("No cameras found.");
-          }
-        }
-        setIsScanning(true);
-      } catch (err: any) {
-        console.error("Camera error:", err);
-        setError("Gagal mengakses kamera. Pastikan izin kamera telah diberikan dan gunakan browser modern.");
+    const init = async () => {
+      const initialId = await getAvailableCameras();
+      if (initialId) {
+        await startScanner(initialId);
+      } else {
+        // Fallback to environment facing mode if getCameras fails
+        await startScanner({ facingMode: "environment" });
       }
     };
 
-    startScanner();
+    init();
 
     return () => {
       if (scannerRef.current && scannerRef.current.isScanning) {
         scannerRef.current.stop().catch(e => console.error("Stoppage error", e));
       }
     };
-  }, []); // Only run once on mount
+  }, []);
+
+  const switchCamera = async () => {
+    if (cameras.length < 2 || !currentCameraId) return;
+    
+    const currentIndex = cameras.findIndex(c => c.id === currentCameraId);
+    const nextIndex = (currentIndex + 1) % cameras.length;
+    const nextCameraId = cameras[nextIndex].id;
+    
+    await startScanner(nextCameraId);
+  };
 
   const stopScanner = async () => {
     if (scannerRef.current && scannerRef.current.isScanning) {
@@ -126,10 +140,21 @@ const QrScanner: React.FC<QrScannerProps> = ({ onScan, onClose }) => {
     <div className="fixed inset-0 bg-black/95 backdrop-blur-xl z-[200] flex flex-col items-center justify-center p-6">
       <button 
         onClick={onClose}
-        className="absolute top-6 right-6 p-4 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all hover:rotate-90"
+        className="absolute top-6 right-6 p-4 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all hover:rotate-90 z-[210]"
       >
         <X size={24} />
       </button>
+
+      {cameras.length > 1 && (
+        <button 
+          onClick={switchCamera}
+          className="absolute top-6 left-6 p-4 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all z-[210] flex items-center gap-2"
+          title="Switch Camera"
+        >
+          <Smartphone size={24} />
+          <span className="text-[10px] font-bold uppercase hidden md:inline">Switch</span>
+        </button>
+      )}
 
       <div className="max-w-md w-full text-center space-y-8">
         <div className="relative aspect-square w-full max-w-[340px] mx-auto overflow-hidden rounded-[40px] border-4 border-white/10 bg-black shadow-2xl">
