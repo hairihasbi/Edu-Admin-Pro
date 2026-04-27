@@ -7,7 +7,7 @@ import CameraCapture, { CameraCaptureRef } from './CameraCapture';
 import { 
   Wifi, WifiOff, Smartphone, IdCard, 
   CheckCircle, AlertCircle, Clock, ArrowLeftRight,
-  Activity, Layout, X, QrCode, RefreshCcw
+  Activity, Layout, X, QrCode, RefreshCcw, Camera
 } from './Icons';
 
 interface RfidTerminalProps {
@@ -26,6 +26,7 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showQrScanner, setShowQrScanner] = useState(false);
+  const [showCamera, setShowCamera] = useState(false);
   const [scanBuffer, setScanBuffer] = useState('');
   const [terminalId] = useState(`Terminal-${Math.random().toString(36).substring(2, 7).toUpperCase()}`);
   const terminalRef = useRef<HTMLDivElement>(null);
@@ -383,6 +384,12 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
              </div>
              
              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => setShowCamera(!showCamera)}
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition flex items-center gap-1.5 ${showCamera ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-gray-500 border border-gray-200 hover:border-indigo-300'}`}
+                >
+                  <Camera size={14} /> {showCamera ? 'Sembunyikan Kamera' : 'Tampilkan Kamera'}
+                </button>
                 <div className="hidden sm:flex items-center gap-2">
                   <div className={`w-2 h-2 rounded-full ${serialConnected || method === 'KEYBOARD' || method === 'QR' ? 'bg-green-500' : 'bg-red-500 animate-pulse'}`} />
                   <span className="text-[10px] font-bold text-gray-400 uppercase">Hardware Status</span>
@@ -540,7 +547,11 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
         </div>
       </div>
 
-      <CameraCapture ref={cameraRef} hidden={true} />
+      <CameraCapture 
+        ref={cameraRef} 
+        hidden={!showCamera} 
+        className="fixed bottom-6 right-6 w-48 h-48 md:w-64 md:h-64 rounded-3xl overflow-hidden shadow-2xl border-4 border-white/40 ring-4 ring-black/5 backdrop-blur-xl z-[100]" 
+      />
 
       {showQrScanner && (
         <QrScanner 
