@@ -172,6 +172,7 @@ export interface RfidLog extends Syncable {
   status: 'HADIR' | 'PULANG' | 'TERLAMBAT' | 'IZIN' | 'PULANG CEPAT';
   method: 'KEYBOARD' | 'SERIAL' | 'QR';
   deviceId?: string; // NEW: To track which pos/device sent the log
+  photoBase64?: string;
 }
 export interface AttendanceRecord extends Syncable {
   id: string;
