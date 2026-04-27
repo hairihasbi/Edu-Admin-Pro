@@ -30,6 +30,7 @@ interface RecapData {
     s: number;
     i: number;
     a: number;
+    t: number;
     h: number;
     total: number;
     percent: number;
@@ -202,8 +203,9 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
           const iCount = myRecords.filter(r => r.status === 'I').length;
           const aCount = myRecords.filter(r => r.status === 'A').length;
           const hCount = myRecords.filter(r => r.status === 'H').length;
-          const total = sCount + iCount + aCount + hCount;
-          const percent = total > 0 ? Math.round((hCount / total) * 100) : 0;
+          const tCount = myRecords.filter(r => r.status === 'T').length;
+          const total = sCount + iCount + aCount + hCount + tCount;
+          const percent = total > 0 ? Math.round(((hCount + tCount) / total) * 100) : 0;
 
           return {
               id: s.id,
@@ -212,6 +214,7 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
               i: iCount,
               a: aCount,
               h: hCount,
+              t: tCount,
               total,
               percent
           };
@@ -250,6 +253,7 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
       else if (currentStatus === 'H') nextStatus = 'S';
       else if (currentStatus === 'S') nextStatus = 'I';
       else if (currentStatus === 'I') nextStatus = 'A';
+      else if (currentStatus === 'A') nextStatus = 'T';
       else nextStatus = '';
 
       return {
@@ -765,6 +769,7 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
                                 <th className="p-2 border-r border-gray-200 bg-yellow-50 min-w-[30px] text-center font-bold text-yellow-700">S</th>
                                 <th className="p-2 border-r border-gray-200 bg-blue-50 min-w-[30px] text-center font-bold text-blue-700">I</th>
                                 <th className="p-2 border-r border-gray-200 bg-red-50 min-w-[30px] text-center font-bold text-red-700">A</th>
+                                <th className="p-2 border-r border-gray-200 bg-orange-50 min-w-[30px] text-center font-bold text-orange-700">T</th>
                                 <th className="p-2 border-r border-gray-200 bg-green-50 min-w-[30px] text-center font-bold text-green-700">H</th>
                                 <th className="p-2 bg-gray-50 min-w-[40px] text-center font-bold text-gray-700">%</th>
                             </tr>
@@ -812,6 +817,7 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
                                         <td className="p-2 text-center border-r border-gray-100 bg-yellow-50/50 font-medium">{summary.s}</td>
                                         <td className="p-2 text-center border-r border-gray-100 bg-blue-50/50 font-medium">{summary.i}</td>
                                         <td className="p-2 text-center border-r border-gray-100 bg-red-50/50 font-medium">{summary.a}</td>
+                                        <td className="p-2 text-center border-r border-gray-100 bg-orange-50/50 font-medium">{summary.t}</td>
                                         <td className="p-2 text-center border-r border-gray-100 bg-green-50/50 font-bold">{summary.h}</td>
                                         <td className="p-2 text-center bg-gray-50/50 font-bold text-gray-800">{summary.percentage}%</td>
                                     </tr>
@@ -872,6 +878,7 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
                                   <th className="p-4 text-center bg-yellow-50 text-yellow-800">Sakit (S)</th>
                                   <th className="p-4 text-center bg-blue-50 text-blue-800">Izin (I)</th>
                                   <th className="p-4 text-center bg-red-50 text-red-800">Alpha (A)</th>
+                                  <th className="p-4 text-center bg-orange-50 text-orange-800">Terlambat (T)</th>
                                   <th className="p-4 text-center bg-green-50 text-green-800">Hadir (H)</th>
                                   <th className="p-4 text-center bg-gray-200">Total Pertemuan</th>
                                   <th className="p-4 text-center bg-gray-200">Persentase (%)</th>
@@ -885,6 +892,7 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
                                       <td className="p-4 text-center font-medium bg-yellow-50/30">{d.s}</td>
                                       <td className="p-4 text-center font-medium bg-blue-50/30">{d.i}</td>
                                       <td className="p-4 text-center font-medium bg-red-50/30">{d.a}</td>
+                                      <td className="p-4 text-center font-medium bg-orange-50/30 text-orange-700">{d.t}</td>
                                       <td className="p-4 text-center font-bold bg-green-50/30 text-green-700">{d.h}</td>
                                       <td className="p-4 text-center font-bold text-gray-600">{d.total}</td>
                                       <td className="p-4 text-center font-bold text-gray-800 bg-gray-50">
