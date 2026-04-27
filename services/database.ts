@@ -1965,7 +1965,7 @@ export const getDashboardStats = async (user: User): Promise<DashboardStatsData>
     const journals = await db.teachingJournals.where('userId').equals(user.id).count();
     
     const attendance = await db.attendanceRecords.where('classId').anyOf(classIds).toArray();
-    const present = attendance.filter(a => a.status === 'H').length;
+    const present = attendance.filter(a => a.status === 'H' || a.status === 'T').length;
     const rate = attendance.length > 0 ? Math.round((present / attendance.length) * 100) : 0;
 
     const males = students.filter(s => s.gender === 'L').length;
