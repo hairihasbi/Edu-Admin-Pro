@@ -2509,3 +2509,23 @@ export const getRfidOfficers = async (schoolNpsn: string) => {
     .filter(u => !!u.isRfidOfficer)
     .toArray();
 };
+
+export const cleanupOldPhotos = async () => {
+  const today = getLocalDate();
+  const oldLogs = await db.rfidLogs.filter(log => {
+      // timestamp format is usually ISO like 2024-05-18T...
+      const logDate = log.timestamp.split('T')[0];
+      return logDate < today && !!log.photoBase64;
+  }).toArray();
+  
+  if (oldLogs.length > 0) {
+      const updates = oldLogs.map(log => ({
+          ...log,
+          photoBase64: undefined,
+          lastModified: Date.now(),
+          isSynced: false
+      }));
+      await db.rfidLogs.bulkPut(updates);
+      console.log(`[RfidPhotos] Cleaned up ${oldLogs.length} old photos.`);
+  }
+};
