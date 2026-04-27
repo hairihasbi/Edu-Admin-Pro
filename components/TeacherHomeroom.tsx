@@ -150,9 +150,12 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
       const todayString = new Date().toISOString().split('T')[0];
       const monthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
       
+      // ALWAYS fetch fresh student list to match class management perfectly
+      const studentData = await getStudents(user.homeroomClassId);
+      setStudents(studentData); 
+      
       // Fetch latest RFID logs for today
       const rfidLogsToday = await getRfidLogs(user.schoolNpsn, todayString);
-      const studentData = students.length > 0 ? students : await getStudents(user.homeroomClassId);
       
       // reconcile RFID logs
       const tappedStudentIds = new Set(rfidLogsToday.map(l => l.studentId));
@@ -176,9 +179,14 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
           const log = lateLogs.find(l => l.studentId === s.id);
           lateDetails.push(`${s.name} (${log?.timestamp.split('T')[1].substring(0, 5) || 'Telat'})`);
         } else if (!hasTapped) {
-          // If not tapped, check if they have a manual "H" (Hadir) status. 
-          // If manual says "A" or nothing and no tap -> Absent
-          if (!manualAtt || manualAtt.status === 'A') {
+          // If not tapped, check if they have a manual status
+          if (manualAtt) {
+            // If manual says non-H (Alpha, Ijin, Sakit), count as "absent" for today's health summary
+            if (['A', 'I', 'S'].includes(manualAtt.status)) {
+              absentCount++;
+            }
+          } else {
+            // No tap AND no manual record -> Assume Alpha/Waiting
             absentCount++;
           }
         }
@@ -218,8 +226,15 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
   useEffect(() => {
     if (activeTab === 'health') {
       loadHealthData();
+      
+      // Auto-refresh every 30 seconds for "realtime" feel
+      const timer = setInterval(() => {
+        loadHealthData();
+      }, 30000);
+      
+      return () => clearInterval(timer);
     }
-  }, [activeTab, students]);
+  }, [activeTab]);
 
   // --- ACADEMIC CALCULATION LOGIC ---
   
