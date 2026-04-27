@@ -385,10 +385,15 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
              
              <div className="flex items-center gap-4">
                 <button
-                  onClick={() => setShowCamera(!showCamera)}
-                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 ${showCamera ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30' : 'bg-white text-gray-700 border border-gray-200 hover:border-indigo-400 hover:text-indigo-700'}`}
+                  type="button"
+                  onClick={(e) => {
+                     e.preventDefault();
+                     e.stopPropagation();
+                     setShowCamera(!showCamera);
+                  }}
+                  className={`relative z-50 px-5 py-3 rounded-xl text-sm font-bold transition flex items-center gap-2 cursor-pointer ${showCamera ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 ring-2 ring-indigo-400' : 'bg-white text-gray-800 border-2 border-gray-200 hover:border-indigo-500 hover:text-indigo-700 hover:shadow-md'}`}
                 >
-                  <Camera size={18} /> {showCamera ? 'Sembunyikan Kamera' : 'Tampilkan Kamera'}
+                  <Camera size={20} /> {showCamera ? 'Sembunyikan Kamera' : 'Tampilkan Kamera'}
                 </button>
                 <div className="hidden sm:flex items-center gap-2">
                   <div className={`w-2 h-2 rounded-full ${serialConnected || method === 'KEYBOARD' || method === 'QR' ? 'bg-green-500' : 'bg-red-500 animate-pulse'}`} />
@@ -550,7 +555,7 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
       <CameraCapture 
         ref={cameraRef} 
         hidden={!showCamera} 
-        className="fixed bottom-8 right-8 w-64 h-48 md:w-80 md:h-60 rounded-3xl overflow-hidden shadow-2xl border-[6px] border-white ring-1 ring-black/10 z-[100]" 
+        className="fixed top-28 right-6 w-56 h-40 md:w-80 md:h-60 rounded-3xl overflow-hidden shadow-2xl border-[6px] border-white ring-1 ring-black/10 z-[100] transition-opacity duration-300" 
       />
 
       {showQrScanner && (
