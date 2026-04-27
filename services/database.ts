@@ -2351,12 +2351,22 @@ export const updateStudentRfid = async (studentId: string, rfidTag: string) => {
   return true;
 };
 
-export const getStudentByRfid = async (rfidTag: string, schoolNpsn: string) => {
-  const normalizedTag = normalizeRfid(rfidTag);
-  return await db.students
+export const getStudentByRfid = async (tagOrNis: string, schoolNpsn: string) => {
+  const normalizedTag = normalizeRfid(tagOrNis);
+  // Try finding by RFID tag first
+  let student = await db.students
     .where('rfidTag').equals(normalizedTag)
     .filter(s => s.schoolNpsn === schoolNpsn)
     .first();
+  
+  // If not found, try finding by NIS
+  if (!student) {
+    student = await db.students
+      .filter(s => s.nis === tagOrNis && s.schoolNpsn === schoolNpsn)
+      .first();
+  }
+  
+  return student;
 };
 
 export const getLocalDate = () => {
