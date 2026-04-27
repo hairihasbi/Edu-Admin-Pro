@@ -21,6 +21,14 @@ const QrScanner: React.FC<QrScannerProps> = ({ onScan, onClose }) => {
 
   const getAvailableCameras = async () => {
     try {
+      // Prompt for camera permission first if not granted, which helps getting labels on mobile iOS/Android
+      try {
+         const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+         stream.getTracks().forEach(track => track.stop());
+      } catch (e) {
+         console.warn("Could not pre-request camera permissions:", e);
+      }
+
       const devices = await (Html5Qrcode as any).getCameras();
       if (devices && devices.length > 0) {
         setCameras(devices);

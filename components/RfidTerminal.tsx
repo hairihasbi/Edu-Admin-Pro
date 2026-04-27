@@ -39,7 +39,25 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
       const localToday = `${year}-${month}-${day}`;
       
       const recentLogs = await getRfidLogs(user.schoolNpsn || '', localToday);
-      setLogs(recentLogs.slice(0, 10));
+      
+      const uniqueLogsMap = new Map();
+      recentLogs.forEach(log => {
+        const type = log.status === 'PULANG' ? 'OUT' : 'IN';
+        const key = `${log.studentId}_${type}`;
+        if (!uniqueLogsMap.has(key)) {
+          uniqueLogsMap.set(key, log);
+        } else {
+          const existing = uniqueLogsMap.get(key);
+          if (log.timestamp < existing.timestamp) {
+             uniqueLogsMap.set(key, log);
+          }
+        }
+      });
+      
+      const filteredLogs = Array.from(uniqueLogsMap.values())
+            .sort((a: any, b: any) => b.timestamp.localeCompare(a.timestamp));
+            
+      setLogs(filteredLogs.slice(0, 10));
     };
     loadRecentLogs();
   }, [user.schoolNpsn, currentTime.toDateString()]);
@@ -223,6 +241,33 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
                 dif + pad(tzo / 60) +
                 ':' + pad(tzo % 60);
         };
+
+        const todayStr = getLocalISOString().split('T')[0];
+        const todaysLogs = await getRfidLogs(user.schoolNpsn || '', todayStr);
+        
+        // Prevent double scanning
+        const hasScannedIn = todaysLogs.some(
+          l => l.studentId === student.id && (l.status === 'HADIR' || l.status === 'TERLAMBAT')
+        );
+        const hasScannedOut = todaysLogs.some(
+          l => l.studentId === student.id && l.status === 'PULANG'
+        );
+
+        if ((attendanceStatus === 'HADIR' || attendanceStatus === 'TERLAMBAT') && hasScannedIn) {
+          setStatus('READING');
+          setMessage(`Batal: Sudah Absen Masuk Hari Ini`);
+          playErrorSound();
+          setScanning(false);
+          return;
+        }
+
+        if (attendanceStatus === 'PULANG' && hasScannedOut) {
+          setStatus('READING');
+          setMessage(`Batal: Sudah Absen Pulang Hari Ini`);
+          playErrorSound();
+          setScanning(false);
+          return;
+        }
 
         const newLog = await saveRfidLog({
           studentId: student.id,

@@ -196,7 +196,31 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
         ]);
         
         setSettings(systemSettings || null);
-        setRfidLogs(schoolRfidLogs || []);
+        const uniqueLogsMap = new Map();
+        (schoolRfidLogs || []).forEach(log => {
+          // Group HADIR and TERLAMBAT as 'IN', and PULANG as 'OUT'
+          const type = log.status === 'PULANG' ? 'OUT' : 'IN';
+          const key = `${log.studentId}_${type}`;
+          // Keep the earliest log for 'IN', or just keep the first one encountered (latest since sorted desc?)
+          // Wait, schoolRfidLogs is already sorted descending by timestamp.
+          // By keeping the FIRST one we encounter, we keep the LATEST scan.
+          // If we want the EARLIEST tap to be the one shown, we should only set if not present?
+          // Actually, we want to only show one log. Showing the first one encountered is fine.
+          if (!uniqueLogsMap.has(key)) {
+            uniqueLogsMap.set(key, log);
+          } else {
+            // If we want the earliest log (first tap in the morning):
+            const existing = uniqueLogsMap.get(key);
+            if (log.timestamp < existing.timestamp) {
+               uniqueLogsMap.set(key, log);
+            }
+          }
+        });
+        
+        const filteredLogs = Array.from(uniqueLogsMap.values())
+              .sort((a: any, b: any) => b.timestamp.localeCompare(a.timestamp));
+
+        setRfidLogs(filteredLogs);
         
         if (!isBackground) {
           const teacherIds = schoolTeachers.map(t => t.id);
