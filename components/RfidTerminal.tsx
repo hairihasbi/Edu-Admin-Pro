@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { User, Student, RfidLog, SystemSettings } from '../types';
-import { getStudentByRfid, saveRfidLog, getSystemSettings, normalizeRfid, getClassById, getRfidLogs } from '../services/database';
+import { getStudentByRfid, saveRfidLog, getSystemSettings, normalizeRfid, getClassById, getRfidLogs, getStudentManualAttendanceByDate } from '../services/database';
 import QrScanner from './QrScanner';
 import CameraCapture, { CameraCaptureRef } from './CameraCapture';
 import { 
@@ -229,6 +229,19 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
         };
 
         const todayStr = getLocalISOString().split('T')[0];
+        
+        // Deteksi kecurangan (Titip Absen): Cek apakah siswa sudah di-input manual SAKIT/IZIN/ALPHA
+        const manualAttendance = await getStudentManualAttendanceByDate(student.id, todayStr);
+        if (manualAttendance && (manualAttendance.status === 'S' || manualAttendance.status === 'I' || manualAttendance.status === 'A')) {
+          const statusLabels: Record<string, string> = { 'S': 'SAKIT', 'I': 'IZIN', 'A': 'ALPHA' };
+          const label = statusLabels[manualAttendance.status] || manualAttendance.status;
+          setStatus('ERROR');
+          setMessage(`Error: Siswa ini tercatat ${label} hari ini oleh Guru Mata Pelajaran`);
+          playErrorSound();
+          setScanning(false);
+          return;
+        }
+
         const todaysLogs = await getRfidLogs(user.schoolNpsn || '', todayStr);
         
         // Prevent double scanning
