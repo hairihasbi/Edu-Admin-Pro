@@ -60,6 +60,10 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
+  if (url.protocol === 'chrome-extension:') {
+    return;
+  }
+
   // 1. API Requests & Non-GET requests -> Network Only
   if (url.pathname.startsWith('/api/') || event.request.method !== 'GET') {
     return;
