@@ -448,7 +448,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
                                               </p>
                                               <span className="text-[10px] text-gray-400 whitespace-nowrap flex items-center gap-1 bg-gray-50 px-1.5 py-0.5 rounded">
                                                   <Clock size={10} />
-                                                  {new Date(log.timestamp).toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'})}
+                                                  {new Date(log.timestamp).toLocaleTimeString('en-GB', {hour: '2-digit', minute:'2-digit'})}
                                               </span>
                                           </div>
                                           <p className="text-xs text-gray-500 truncate mt-0.5">

@@ -1046,7 +1046,7 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
                             onChange={(e) => {
                               const mins = (settings?.rfidCheckInStart || '06:00').split(':')[1];
                               const newVal = `${e.target.value}:${mins}`;
-                              setSettings(prev => prev ? ({ ...prev, rfidCheckInStart: newVal }) : null);
+                              setSettings(prev => prev ? ({ ...prev, rfidCheckInStart: newVal}) : { rfidCheckInStart: newVal, rfidCheckInLate: '08:30', rfidCheckOutStart: '14:00' } as any);
                             }}
                           >
                             {Array.from({ length: 24 }).map((_, i) => (
@@ -1060,7 +1060,7 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
                             onChange={(e) => {
                               const hours = (settings?.rfidCheckInStart || '06:00').split(':')[0];
                               const newVal = `${hours}:${e.target.value}`;
-                              setSettings(prev => prev ? ({ ...prev, rfidCheckInStart: newVal }) : null);
+                              setSettings(prev => prev ? ({ ...prev, rfidCheckInStart: newVal}) : { rfidCheckInStart: newVal, rfidCheckInLate: '08:30', rfidCheckOutStart: '14:00' } as any);
                             }}
                           >
                             {Array.from({ length: 60 }).map((_, i) => (
@@ -1083,7 +1083,7 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
                             onChange={(e) => {
                               const mins = (settings?.rfidCheckInLate || '08:30').split(':')[1];
                               const newVal = `${e.target.value}:${mins}`;
-                              setSettings(prev => prev ? ({ ...prev, rfidCheckInLate: newVal }) : null);
+                              setSettings(prev => prev ? ({ ...prev, rfidCheckInLate: newVal}) : { rfidCheckInStart: '06:00', rfidCheckInLate: newVal, rfidCheckOutStart: '14:00' } as any);
                             }}
                           >
                             {Array.from({ length: 24 }).map((_, i) => (
@@ -1097,7 +1097,7 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
                             onChange={(e) => {
                               const hours = (settings?.rfidCheckInLate || '08:30').split(':')[0];
                               const newVal = `${hours}:${e.target.value}`;
-                              setSettings(prev => prev ? ({ ...prev, rfidCheckInLate: newVal }) : null);
+                              setSettings(prev => prev ? ({ ...prev, rfidCheckInLate: newVal}) : { rfidCheckInStart: '06:00', rfidCheckInLate: newVal, rfidCheckOutStart: '14:00' } as any);
                             }}
                           >
                             {Array.from({ length: 60 }).map((_, i) => (
@@ -1121,7 +1121,7 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
                           onChange={(e) => {
                             const mins = (settings?.rfidCheckOutStart || '14:00').split(':')[1];
                             const newVal = `${e.target.value}:${mins}`;
-                            setSettings(prev => prev ? ({ ...prev, rfidCheckOutStart: newVal }) : null);
+                            setSettings(prev => prev ? ({ ...prev, rfidCheckOutStart: newVal}) : { rfidCheckInStart: '06:00', rfidCheckInLate: '08:30', rfidCheckOutStart: newVal } as any);
                           }}
                         >
                           {Array.from({ length: 24 }).map((_, i) => (
@@ -1135,7 +1135,7 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
                           onChange={(e) => {
                             const hours = (settings?.rfidCheckOutStart || '14:00').split(':')[0];
                             const newVal = `${hours}:${e.target.value}`;
-                            setSettings(prev => prev ? ({ ...prev, rfidCheckOutStart: newVal }) : null);
+                            setSettings(prev => prev ? ({ ...prev, rfidCheckOutStart: newVal}) : { rfidCheckInStart: '06:00', rfidCheckInLate: '08:30', rfidCheckOutStart: newVal } as any);
                           }}
                         >
                           {Array.from({ length: 60 }).map((_, i) => (
@@ -1225,7 +1225,7 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
                           </div>
                           <div className="text-[10px] text-gray-500 mb-1">
                             Terakhir Sinyal: <span className="text-gray-800 font-medium">
-                              {new Date(device.lastSeen).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                              {new Date(device.lastSeen).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                             </span>
                           </div>
                           <div className="text-[10px] text-gray-500">
@@ -1275,7 +1275,7 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
                         </td>
                         <td className="px-6 py-4">
                           <div className="text-xs font-bold text-gray-800">
-                            {new Date(log.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
+                            {new Date(log.timestamp).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
                           </div>
                         </td>
                         <td className="px-6 py-4">
@@ -1460,7 +1460,7 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
                                             <div className="text-xs font-bold text-gray-800 mb-1">{journal.learningObjective}</div>
                                             <div className="text-[10px] text-gray-600 line-clamp-2 mb-2">{journal.activities}</div>
                                             <div className="pt-2 border-t border-gray-50 flex justify-between items-center">
-                                              <span className="text-[9px] text-gray-400 italic">Input: {journal.lastModified ? new Date(journal.lastModified).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'}</span>
+                                              <span className="text-[9px] text-gray-400 italic">Input: {journal.lastModified ? new Date(journal.lastModified).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '-'}</span>
                                               <span className="text-[9px] font-medium text-green-600">Tersimpan</span>
                                             </div>
                                           </div>
@@ -1607,7 +1607,7 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
                                             <div className="text-xs font-bold text-gray-800 mb-1">{journal.subject}</div>
                                             <div className="text-[10px] text-gray-600 line-clamp-2 mb-2">{journal.learningObjective}</div>
                                             <div className="pt-2 border-t border-gray-50 flex justify-between items-center">
-                                              <span className="text-[9px] text-gray-400 italic">Input: {journal.lastModified ? new Date(journal.lastModified).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'}</span>
+                                              <span className="text-[9px] text-gray-400 italic">Input: {journal.lastModified ? new Date(journal.lastModified).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '-'}</span>
                                               <span className="text-[9px] font-medium text-blue-600">Terverifikasi</span>
                                             </div>
                                           </div>

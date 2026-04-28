@@ -127,7 +127,7 @@ const AttendanceMonitoring: React.FC<AttendanceMonitoringProps> = ({ user }) => 
                     const sortedIn = inLogs.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
                     checkIn = sortedIn[0].timestamp;
                     if (sortedIn[0].photoBase64) photoBase64 = sortedIn[0].photoBase64;
-                    const checkInTime = new Date(checkIn).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false });
+                    const checkInTime = new Date(checkIn).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
                     status = checkInTime > checkInLate ? 'TERLAMBAT' : 'HADIR';
                 }
 
@@ -136,7 +136,7 @@ const AttendanceMonitoring: React.FC<AttendanceMonitoringProps> = ({ user }) => 
                     const sortedOut = outLogs.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
                     checkOut = sortedOut[0].timestamp;
                     if (!photoBase64 && sortedOut[0].photoBase64) photoBase64 = sortedOut[0].photoBase64;
-                    const checkOutTime = new Date(checkOut).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false });
+                    const checkOutTime = new Date(checkOut).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
                     if (checkOutTime < checkOutStart) {
                         status = status === 'TERLAMBAT' ? 'TERLAMBAT & PULANG CEPAT' : 'PULANG CEPAT';
                     }
@@ -176,13 +176,13 @@ const AttendanceMonitoring: React.FC<AttendanceMonitoringProps> = ({ user }) => 
                     
                     const firstIn = dayInLogs.sort((a, b) => a.timestamp.localeCompare(b.timestamp))[0];
                     if (firstIn) {
-                        const inTime = new Date(firstIn.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false });
+                        const inTime = new Date(firstIn.timestamp).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
                         if (inTime > checkInLate) lateCount++;
                     }
 
                     const lastOut = dayOutLogs.sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0];
                     if (lastOut) {
-                        const outTime = new Date(lastOut.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false });
+                        const outTime = new Date(lastOut.timestamp).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
                         if (outTime < checkOutStart) earlyLeaveCount++;
                     }
                 }
@@ -244,8 +244,8 @@ const AttendanceMonitoring: React.FC<AttendanceMonitoringProps> = ({ user }) => 
                 'NIS': d.nis,
                 'Nama Siswa': d.studentName,
                 'Kelas': d.className,
-                'Jam Datang': d.checkIn ? new Date(d.checkIn).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false }) : '-',
-                'Jam Pulang': d.checkOut ? new Date(d.checkOut).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false }) : '-',
+                'Jam Datang': d.checkIn ? new Date(d.checkIn).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false }) : '-',
+                'Jam Pulang': d.checkOut ? new Date(d.checkOut).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false }) : '-',
                 'Status': d.status
             };
         } else {
@@ -522,7 +522,7 @@ const AttendanceMonitoring: React.FC<AttendanceMonitoringProps> = ({ user }) => 
                         item.checkIn ? (
                             <div className="flex flex-col items-center">
                               <span className="font-black text-gray-800 text-sm font-mono">
-                                {new Date(item.checkIn).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                                {new Date(item.checkIn).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
                               </span>
                             </div>
                         ) : (
@@ -537,7 +537,7 @@ const AttendanceMonitoring: React.FC<AttendanceMonitoringProps> = ({ user }) => 
                         item.checkOut ? (
                             <div className="flex flex-col items-center">
                               <span className="font-black text-gray-800 text-sm font-mono">
-                                {new Date(item.checkOut).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                                {new Date(item.checkOut).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
                               </span>
                             </div>
                         ) : (

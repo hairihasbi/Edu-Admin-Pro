@@ -126,7 +126,7 @@ const HelpCenter: React.FC<HelpCenterProps> = ({ user }) => {
   // Helper: Format Time
   const formatTime = (isoString: string) => {
     try {
-        return new Date(isoString).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+        return new Date(isoString).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
     } catch {
         return '-';
     }

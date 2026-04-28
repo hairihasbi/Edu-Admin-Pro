@@ -188,9 +188,10 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
         const timeStr = `${h}:${m}`;
         
         // Defaults if no settings
-        const checkInStart = settings?.rfidCheckInStart || '06:00';
-        const checkInLate = settings?.rfidCheckInLate || '08:30';
-        const checkOutStart = settings?.rfidCheckOutStart || '14:00';
+        const currentSettings = await getSystemSettings() || settings;
+        const checkInStart = currentSettings?.rfidCheckInStart || '06:00';
+        const checkInLate = currentSettings?.rfidCheckInLate || '07:30';
+        const checkOutStart = currentSettings?.rfidCheckOutStart || '14:00';
 
         let attendanceStatus: 'HADIR' | 'PULANG' | 'PULANG CEPAT' | 'TERLAMBAT' = 'HADIR';
         
@@ -201,25 +202,7 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
           return;
         }
 
-        if (timeStr >= checkOutStart) {
-          attendanceStatus = 'PULANG';
-        } else if (timeStr > checkInLate) {
-          // If after late but before checkout, it's late
-          attendanceStatus = 'TERLAMBAT';
-        } else if (timeStr >= checkInStart && timeStr <= checkInLate) {
-          attendanceStatus = 'HADIR';
-        }
-
-        // Logic check: if someone taps again later in the day but before checkout start
-        // maybe they are leaving early? 
-        // For simplicity, if they tap after late limit, it's just TERLAMBAT unless it's PULANG time.
-        // If the school wants to track PULANG CEPAT, we can use a separate range if needed.
-        // For now, let's stick to the user's manual logic:
-        // H: checkInStart <= T <= checkInLate
-        // T: checkInLate < T < checkOutStart
-        // P: T >= checkOutStart
-        
-        // Actually, let's keep it simple as per user request:
+        // Logic check as per user request:
         if (timeStr >= checkOutStart) {
             attendanceStatus = 'PULANG';
         } else if (timeStr > checkInLate) {
@@ -313,6 +296,14 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
     }
   };
 
+  const formatTime = (date: Date, showSeconds = true) => {
+    const h = date.getHours().toString().padStart(2, '0');
+    const m = date.getMinutes().toString().padStart(2, '0');
+    if (!showSeconds) return `${h}:${m}`;
+    const s = date.getSeconds().toString().padStart(2, '0');
+    return `${h}:${m}:${s}`;
+  };
+
   return (
     <div 
       ref={terminalRef}
@@ -344,7 +335,7 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
           </div>
           <div className="bg-black/20 backdrop-blur-md px-6 py-2 rounded-2xl border border-white/10 text-center">
             <p className="text-4xl md:text-5xl font-mono font-black tracking-tighter">
-              {currentTime.toLocaleTimeString('id-ID', { hour12: false })}
+              {formatTime(currentTime)}
             </p>
             <p className="text-[10px] uppercase font-bold opacity-70 tracking-widest">
               {currentTime.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
@@ -514,7 +505,7 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
                             </div>
                             <div className="overflow-hidden">
                                <h4 className={`text-sm truncate ${i === 0 ? 'text-white' : 'text-gray-900'}`}>{log.studentName}</h4>
-                               <p className={`text-[10px] ${i === 0 ? 'text-blue-100' : 'text-gray-500'}`}>{new Date(log.timestamp).toLocaleTimeString('id-ID')}</p>
+                               <p className={`text-[10px] ${i === 0 ? 'text-blue-100' : 'text-gray-500'}`}>{formatTime(new Date(log.timestamp))}</p>
                             </div>
                          </div>
                          <div className="text-right shrink-0">
