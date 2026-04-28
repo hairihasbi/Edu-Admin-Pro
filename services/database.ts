@@ -224,6 +224,14 @@ export const getSchoolAttendance = async (teacherIds: string[], date: string): P
         .toArray();
 };
 
+export const getStudentManualAttendanceByDate = async (studentId: string, date: string): Promise<AttendanceRecord | null> => {
+    const records = await db.attendanceRecords
+        .where('studentId').equals(studentId)
+        .and(a => a.date === date)
+        .toArray();
+    return records.length > 0 ? records[0] : null;
+};
+
 export const approveTeacher = async (id: string) => {
     await db.users.update(id, { status: 'ACTIVE', lastModified: Date.now(), isSynced: false });
     const user = await db.users.get(id);
