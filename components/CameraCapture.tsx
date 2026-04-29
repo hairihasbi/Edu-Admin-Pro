@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useImperativeHandle, forwardRef } f
 
 export interface CameraCaptureRef {
   capturePhoto: () => string | null;
+  hasPermission: boolean | null;
 }
 
 interface CameraCaptureProps {
@@ -86,11 +87,12 @@ const CameraCapture = forwardRef<CameraCaptureRef, CameraCaptureProps>(({ classN
 
       // Compress deeply for local storage constraints
       return canvas.toDataURL('image/jpeg', 0.5); 
-    }
+    },
+    hasPermission
   }));
 
   return (
-    <div className={`${hidden ? 'hidden' : ''} ${className}`}>
+    <div className={`${hidden ? 'opacity-0 pointer-events-none absolute -z-50' : ''} ${className}`}>
       <video
         ref={videoRef}
         autoPlay

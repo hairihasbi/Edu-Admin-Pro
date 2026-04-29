@@ -268,7 +268,16 @@ const RfidTerminal: React.FC<RfidTerminalProps> = ({ user }) => {
           return;
         }
 
-        const photoBase64 = cameraRef.current ? cameraRef.current.capturePhoto() || undefined : undefined;
+        let photoBase64 = undefined;
+        if (cameraRef.current) {
+          photoBase64 = cameraRef.current.capturePhoto() || undefined;
+          
+          // Re-try once more if first capture fails (camera might be initializing)
+          if (!photoBase64) {
+            await new Promise(resolve => setTimeout(resolve, 200));
+            photoBase64 = cameraRef.current.capturePhoto() || undefined;
+          }
+        }
 
         const newLog = await saveRfidLog({
           studentId: student.id,
