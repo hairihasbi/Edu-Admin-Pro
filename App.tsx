@@ -35,6 +35,7 @@ import BroadcastPage from "./components/BroadcastPage";
 import SyncPage from "./components/SyncPage"; // Import SyncPage
 import DailyPicket from "./components/DailyPicket"; // Import DailyPicket
 import WakasekMonitoring from "./components/WakasekMonitoring"; // Import WakasekMonitoring
+import WakasekAcademicManagement from "./components/WakasekAcademicManagement"; // Import WakasekAcademicManagement
 import SupervisionAssessment from "./components/SupervisionAssessment";
 import SupervisionResults from "./components/SupervisionResults";
 import WakasekScheduleManager from "./components/WakasekScheduleManager"; // Import WakasekScheduleManager
@@ -1346,6 +1347,13 @@ const AppContent: React.FC = () => {
                     )}
                     {currentUser.additionalRole === "WAKASEK_KURIKULUM" && (
                       <NavLink
+                        to="/academic-management"
+                        icon={GraduationCap}
+                        label="Kenaikan & Kelulusan"
+                      />
+                    )}
+                    {currentUser.additionalRole === "WAKASEK_KURIKULUM" && (
+                      <NavLink
                         to="/manage-schedules"
                         icon={Calendar}
                         label="Manajemen Jadwal"
@@ -1881,6 +1889,12 @@ const AppContent: React.FC = () => {
                   <Route
                     path="/monitoring-kurikulum"
                     element={<WakasekMonitoring user={currentUser} />}
+                  />
+                )}
+                {currentUser.additionalRole === "WAKASEK_KURIKULUM" && (
+                  <Route
+                    path="/academic-management"
+                    element={<WakasekAcademicManagement user={currentUser} />}
                   />
                 )}
                 {currentUser.additionalRole === "WAKASEK_KURIKULUM" && (
