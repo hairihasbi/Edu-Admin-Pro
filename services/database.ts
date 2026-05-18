@@ -2537,3 +2537,132 @@ export const cleanupOldPhotos = async () => {
       console.log(`[RfidPhotos] Cleaned up ${oldLogs.length} old photos.`);
   }
 };
+
+/**
+ * ACADEMIC MANAGEMENT (PROMOTION & GRADUATION)
+ */
+
+export const processGraduation = async (schoolNpsn: string) => {
+  // 1. Get all classes for the school
+  const classes = await db.classes.where('schoolNpsn').equals(schoolNpsn).toArray();
+  // 2. Identify Grade 12 classes (starts with 12 or XII)
+  const grade12Classes = classes.filter(c => 
+    c.name.startsWith('12') || 
+    c.name.toUpperCase().startsWith('XII ') || 
+    c.name.toUpperCase() === 'XII' ||
+    c.name.toUpperCase().startsWith('XII-')
+  );
+  const grade12ClassIds = grade12Classes.map(c => c.id);
+
+  if (grade12ClassIds.length === 0) {
+    return { success: false, message: "Tidak ada kelas tingkat 12 ditemukan." };
+  }
+
+  // 3. Get students in these classes
+  const students = await db.students.where('classId').anyOf(grade12ClassIds).toArray();
+  const studentIds = students.map(s => s.id);
+
+  if (studentIds.length === 0) {
+    return { success: true, count: 0, message: "Tidak ada siswa di kelas tingkat 12." };
+  }
+
+  try {
+    // 4. Delete students and all their portfolio data PERMANENTLY
+    await db.transaction('rw', [
+      db.students, db.attendanceRecords, db.violations, db.pointReductions,
+      db.achievements, db.counselingSessions, db.homeVisits, db.parentCalls,
+      db.rfidLogs, db.assessmentScores, db.cbtAttempts, db.learningStyleAssessments
+    ], async () => {
+      await db.students.bulkDelete(studentIds);
+      await db.attendanceRecords.where('studentId').anyOf(studentIds).delete();
+      await db.violations.where('studentId').anyOf(studentIds).delete();
+      await db.pointReductions.where('studentId').anyOf(studentIds).delete();
+      await db.achievements.where('studentId').anyOf(studentIds).delete();
+      await db.counselingSessions.where('studentId').anyOf(studentIds).delete();
+      await db.homeVisits.where('studentId').anyOf(studentIds).delete();
+      await db.parentCalls.where('studentId').anyOf(studentIds).delete();
+      await db.rfidLogs.where('studentId').anyOf(studentIds).delete();
+      await db.assessmentScores.where('studentId').anyOf(studentIds).delete();
+      await db.cbtAttempts.where('studentId').anyOf(studentIds).delete();
+      await db.learningStyleAssessments.where('studentId').anyOf(studentIds).delete();
+    });
+
+    // Log activity
+    addSystemLog('WARNING', 'Wakasek Kurikulum', 'ACADEMIC', 'Graduation', `Processed graduation for ${studentIds.length} students in grade 12.`);
+    
+    triggerDebouncedSync();
+    
+    return { success: true, count: studentIds.length };
+  } catch (error) {
+    console.error("Graduation process failed:", error);
+    return { success: false, message: "Terjadi kesalahan sistem saat memproses kelulusan." };
+  }
+};
+
+export const processPromotionReset = async (schoolNpsn: string) => {
+  // 1. Get all classes for the school
+  const classes = await db.classes.where('schoolNpsn').equals(schoolNpsn).toArray();
+  // 2. Identify Grade 10 & 11 classes
+  const targetClasses = classes.filter(c => 
+    c.name.startsWith('10') || c.name.toUpperCase().startsWith('X ') || c.name.toUpperCase() === 'X' || c.name.toUpperCase().startsWith('X-') ||
+    c.name.startsWith('11') || c.name.toUpperCase().startsWith('XI ') || c.name.toUpperCase() === 'XI' || c.name.toUpperCase().startsWith('XI-')
+  );
+  const targetClassIds = targetClasses.map(c => c.id);
+
+  if (targetClassIds.length === 0) {
+    return { success: false, message: "Tidak ada kelas tingkat 10 atau 11 ditemukan." };
+  }
+
+  // 3. Get students in these classes
+  const students = await db.students.where('classId').anyOf(targetClassIds).toArray();
+
+  if (students.length === 0) {
+    return { success: true, count: 0, message: "Tidak ada siswa di kelas tingkat 10 atau 11." };
+  }
+
+  try {
+    // 4. Update classId to 'UNASSIGNED'
+    const updates = students.map(s => ({
+      ...s,
+      classId: 'UNASSIGNED',
+      lastModified: Date.now(),
+      isSynced: false
+    }));
+
+    await db.students.bulkPut(updates);
+
+    // Log activity
+    addSystemLog('INFO', 'Wakasek Kurikulum', 'ACADEMIC', 'Promotion Reset', `Reset class assignment for ${students.length} students (Grade 10/11).`);
+    
+    triggerDebouncedSync();
+    
+    return { success: true, count: students.length };
+  } catch (error) {
+    console.error("Promotion reset failed:", error);
+    return { success: false, message: "Terjadi kesalahan sistem saat meriset kelas." };
+  }
+};
+
+export const getUnassignedStudents = async (schoolNpsn: string) => {
+  return await db.students
+    .where('schoolNpsn').equals(schoolNpsn)
+    .filter(s => s.classId === 'UNASSIGNED' || !s.classId)
+    .toArray();
+};
+
+export const assignStudentsByBatch = async (studentIds: string[], targetClassId: string) => {
+  const students = await db.students.bulkGet(studentIds);
+  const updates = students.filter((s): s is Student => !!s).map(s => ({
+    ...s,
+    classId: targetClassId,
+    lastModified: Date.now(),
+    isSynced: false
+  }));
+
+  if (updates.length > 0) {
+    await db.students.bulkPut(updates);
+    triggerDebouncedSync();
+    return { success: true, count: updates.length };
+  }
+  return { success: false, message: "Tidak ada siswa yang dipilih." };
+};
