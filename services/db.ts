@@ -9,7 +9,7 @@ import {
   TeacherCalendarEvent, PasswordReset, ClassInventory, HomeVisit, ParentCall, LearningStyleAssessment,
   SupervisionAssignment, SupervisionResult,
   CbtExam, CbtQuestion, CbtAttempt,
-  RfidLog
+  RfidLog, MentoringJournal, GraduateProfileAssessment
 } from '../types';
 
 export class EduAdminDatabase extends Dexie {
@@ -50,6 +50,8 @@ export class EduAdminDatabase extends Dexie {
   cbtQuestions!: Table<CbtQuestion>;
   cbtAttempts!: Table<CbtAttempt>;
   rfidLogs!: Table<RfidLog>;
+  mentoringJournals!: Table<MentoringJournal>;
+  graduateProfileAssessments!: Table<GraduateProfileAssessment>;
 
   constructor() {
     super('EduAdminDB');
@@ -60,10 +62,10 @@ export class EduAdminDatabase extends Dexie {
     // [field] = Indexed field for searching
     // Added schoolNpsn indexes for multi-tenancy filtering
     // Bumped to version 34 to include RfidLog support and student rfid fields
-    (this as any).version(37).stores({
+    (this as any).version(38).stores({
       users: '&id, username, role, status, schoolNpsn, isRfidOfficer, isSynced',
       classes: '&id, userId, schoolNpsn, name, homeroomTeacherId, isSynced', 
-      students: '&id, classId, schoolNpsn, name, nis, gender, rfidTag, isSynced', 
+      students: '&id, classId, schoolNpsn, name, nis, gender, rfidTag, guruWaliId, isSynced', 
       attendanceRecords: '&id, userId, studentId, classId, date, status, isSynced, [studentId+date], studentId', // Added studentId index
       scopeMaterials: '&id, classId, semester, userId, isSynced', 
       assessmentScores: '&id, userId, studentId, classId, semester, category, materialId, subject, isSynced',
@@ -95,7 +97,9 @@ export class EduAdminDatabase extends Dexie {
       cbtExams: '&id, userId, schoolNpsn, status, isSynced',
       cbtQuestions: '&id, examId, sortOrder, isSynced',
       cbtAttempts: '&id, examId, studentId, schoolNpsn, status, isSynced',
-      rfidLogs: '&id, studentId, classId, schoolNpsn, timestamp, status, isSynced'
+      rfidLogs: '&id, studentId, classId, schoolNpsn, timestamp, status, isSynced',
+      mentoringJournals: '&id, guruWaliId, studentId, date, topic, schoolNpsn, isSynced',
+      graduateProfileAssessments: '&id, studentId, guruWaliId, date, schoolNpsn, isSynced'
     });
   }
 }

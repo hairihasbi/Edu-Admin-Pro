@@ -8,7 +8,8 @@ import {
   StudentViolation, StudentPointReduction, StudentAchievement, CounselingSession, 
   EmailConfig, WhatsAppConfig, Notification, ApiKey, SystemSettings,
   BackupData, StudentWithDetails, LessonPlanRequest, DashboardStatsData, TeacherCalendarEvent, PasswordReset, ClassInventory, HomeVisit, ParentCall, LearningStyleAssessment,
-  SupervisionAssignment, SupervisionResult, CbtExam, CbtQuestion, CbtAttempt, RfidLog
+  SupervisionAssignment, SupervisionResult, CbtExam, CbtQuestion, CbtAttempt, RfidLog,
+  MentoringJournal, GraduateProfileAssessment
 } from '../types';
 import { initTurso, pushToTurso, pullFromTurso, deleteFromTurso, clearRemoteTable, requestPasswordResetApi, verifyResetTokenApi, completePasswordResetApi } from './tursoService';
 import bcrypt from 'bcryptjs';
@@ -485,7 +486,8 @@ export const getSyncStats = async (user: User) => {
         'achievements', 'counselingSessions', 'whatsappConfigs', 'notifications', 'apiKeys', 'systemSettings',
         'teacherCalendar', 'dailyPickets', 'studentIncidents', 'donations', 'passwordResets',
         'classInventory', 'homeVisits', 'parentCalls', 'learningStyleAssessments',
-        'supervisionAssignments', 'supervisionResults', 'cbtExams', 'cbtQuestions', 'cbtAttempts', 'rfidLogs'
+        'supervisionAssignments', 'supervisionResults', 'cbtExams', 'cbtQuestions', 'cbtAttempts', 'rfidLogs',
+        'mentoringJournals', 'graduateProfileAssessments'
     ];
     
     let totalUnsynced = 0;
@@ -552,7 +554,8 @@ export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', logCall
             'eduadmin_pickets', 'eduadmin_incidents', 'eduadmin_donations', 'eduadmin_teacher_calendar',
             'eduadmin_password_resets', 'eduadmin_inventory', 'eduadmin_home_visits', 'eduadmin_parent_calls', 
             'eduadmin_learning_style_assessments', 'eduadmin_supervision_assignments', 'eduadmin_supervision_results',
-            'eduadmin_cbt_exams', 'eduadmin_cbt_questions', 'eduadmin_cbt_attempts', 'eduadmin_rfid_logs'
+            'eduadmin_cbt_exams', 'eduadmin_cbt_questions', 'eduadmin_cbt_attempts', 'eduadmin_rfid_logs',
+            'eduadmin_mentoring_journals', 'eduadmin_graduate_assessments'
         ];
 
         const collections = targetCollections || allCollections;
@@ -592,7 +595,9 @@ export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', logCall
             'eduadmin_cbt_exams': db.cbtExams,
             'eduadmin_cbt_questions': db.cbtQuestions,
             'eduadmin_cbt_attempts': db.cbtAttempts,
-            'eduadmin_rfid_logs': db.rfidLogs
+            'eduadmin_rfid_logs': db.rfidLogs,
+            'eduadmin_mentoring_journals': db.mentoringJournals,
+            'eduadmin_graduate_assessments': db.graduateProfileAssessments
         };
 
         if (direction === 'PUSH' || direction === 'FULL') {
@@ -2665,4 +2670,135 @@ export const assignStudentsByBatch = async (studentIds: string[], targetClassId:
     return { success: true, count: updates.length };
   }
   return { success: false, message: "Tidak ada siswa yang dipilih." };
+};
+
+// --- GURU WALI (MENTORING) ---
+
+export const getStudentsWithoutGuruWali = async (schoolNpsn: string) => {
+    return await db.students
+        .where('schoolNpsn').equals(schoolNpsn)
+        .filter(s => !s.guruWaliId)
+        .toArray();
+};
+
+export const distributeGuruWaliFairly = async (schoolNpsn: string) => {
+    try {
+        const students = await db.students.where('schoolNpsn').equals(schoolNpsn).toArray();
+        const teachers = await db.users
+            .where('schoolNpsn').equals(schoolNpsn)
+            .filter(u => u.role === 'GURU' && u.status === 'ACTIVE')
+            .toArray();
+
+        if (teachers.length === 0) throw new Error("Tidak ada guru aktif untuk penugasan.");
+        
+        // Shuffle students for randomness
+        const shuffledStudents = [...students].sort(() => Math.random() - 0.5);
+        
+        // Fair share logic
+        const updates: Student[] = [];
+        shuffledStudents.forEach((student, index) => {
+            const teacher = teachers[index % teachers.length];
+            updates.push({
+                ...student,
+                guruWaliId: teacher.id,
+                guruWaliName: teacher.fullName,
+                lastModified: Date.now(),
+                isSynced: false
+            });
+        });
+
+        if (updates.length > 0) {
+            await db.students.bulkPut(updates);
+            
+            // Add system log
+            addSystemLog('AUDIT', 'Wakasek Kurikulum', 'GURU_WALI', 'Distribusi', 
+                `Membagikan ${updates.length} siswa kepada ${teachers.length} guru.`);
+            
+            triggerDebouncedSync();
+            return { success: true, studentCount: updates.length, teacherCount: teachers.length };
+        }
+        return { success: false, message: "Tidak ada data siswa untuk dibagikan." };
+    } catch (e: any) {
+        return { success: false, message: e.message };
+    }
+};
+
+export const getMenteesByGuruWali = async (guruWaliId: string) => {
+    return await db.students.where('guruWaliId').equals(guruWaliId).toArray();
+};
+
+export const saveMentoringJournal = async (data: Omit<MentoringJournal, 'id' | 'lastModified' | 'isSynced'>) => {
+    const item: MentoringJournal = {
+        ...data,
+        id: uuidv4(),
+        lastModified: Date.now(),
+        isSynced: false
+    };
+    await db.mentoringJournals.add(item);
+    triggerDebouncedSync();
+    return item;
+};
+
+export const getMentoringJournals = async (studentId: string, currentUser: User) => {
+    const journals = await db.mentoringJournals.where('studentId').equals(studentId).toArray();
+    
+    // Privacy check
+    return journals.filter(j => {
+        if (!j.isPrivate) return true;
+        // Private records are only visible to the Guru Wali who wrote it, or Admin/Wakasek/Principal/BK
+        if (j.guruWaliId === currentUser.id) return true;
+        if (currentUser.role === 'ADMIN') return true;
+        
+        const superRoles = ['KEPALA_SEKOLAH', 'WAKASEK_KURIKULUM', 'WAKASEK_KESISWAAN', 'WAKASEK_SARPRAS', 'WAKASEK_HUMAS'];
+        if (currentUser.additionalRole && superRoles.includes(currentUser.additionalRole)) return true;
+        if (currentUser.subject === 'Bimbingan Konseling') return true;
+        
+        return false; 
+    });
+};
+
+export const updateMentoringActionStatus = async (id: string, status: 'OPEN' | 'RESOLVED') => {
+    await db.mentoringJournals.update(id, { 
+        actionStatus: status, 
+        lastModified: Date.now(), 
+        isSynced: false 
+    });
+    triggerDebouncedSync();
+    return true;
+};
+
+export const saveGraduateProfileAssessment = async (data: Omit<GraduateProfileAssessment, 'id' | 'lastModified' | 'isSynced'>) => {
+    const item: GraduateProfileAssessment = {
+        ...data,
+        id: uuidv4(),
+        lastModified: Date.now(),
+        isSynced: false
+    };
+    await db.graduateProfileAssessments.add(item);
+    triggerDebouncedSync();
+    return item;
+};
+
+export const getGraduateProfileAssessments = async (studentId: string) => {
+    return await db.graduateProfileAssessments.where('studentId').equals(studentId).sortBy('date');
+};
+
+export const getStudent360Data = async (studentId: string) => {
+    const student = await db.students.get(studentId);
+    if (!student) return null;
+
+    const [attendance, violations, achievements, mentoring] = await Promise.all([
+        db.rfidLogs.where('studentId').equals(studentId).toArray(),
+        db.violations.where('studentId').equals(studentId).toArray(),
+        db.achievements.where('studentId').equals(studentId).toArray(),
+        db.mentoringJournals.where('studentId').equals(studentId).toArray()
+    ]);
+
+    return {
+        student,
+        attendance,
+        violations,
+        achievements,
+        mentoring
+    };
 };
