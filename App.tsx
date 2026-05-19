@@ -1933,7 +1933,7 @@ const AppContent: React.FC = () => {
                 />
                 <Route
                   path="/student-360/:studentId"
-                  element={<Student360View studentId={window.location.hash.split('/').pop() || ''} currentUserId={currentUser.id} currentUserRole={currentUser.role} />}
+                  element={<Student360View studentId="" currentUserId={currentUser.id} currentUserRole={currentUser.role} />}
                 />
                 <Route path="/gen-quiz" element={<TeacherGenQuiz />} />
                 <Route
