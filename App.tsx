@@ -34,6 +34,9 @@ import HelpCenter from "./components/HelpCenter";
 import BroadcastPage from "./components/BroadcastPage";
 import SyncPage from "./components/SyncPage"; // Import SyncPage
 import DailyPicket from "./components/DailyPicket"; // Import DailyPicket
+import { GuruWaliManager } from "./components/GuruWaliManager";
+import { GuruWaliMentoring } from "./components/GuruWaliMentoring";
+import { Student360View } from "./components/Student360View";
 import WakasekMonitoring from "./components/WakasekMonitoring"; // Import WakasekMonitoring
 import WakasekAcademicManagement from "./components/WakasekAcademicManagement"; // Import WakasekAcademicManagement
 import SupervisionAssessment from "./components/SupervisionAssessment";
@@ -719,6 +722,9 @@ const AppContent: React.FC = () => {
     if (path.includes("sync")) return "Sinkronisasi Data"; // NEW
     if (path.includes("supervision-assessment")) return "Penilaian Supervisi";
     if (path.includes("monitoring-kurikulum")) return "Monitoring Kurikulum"; // NEW
+    if (path.includes("guru-wali-manager")) return "Manajemen Guru Wali";
+    if (path.includes("guru-wali-mentoring")) return "Bimbingan Guru Wali";
+    if (path.includes("student-360")) return "Profil 360 Siswa";
     if (path.includes("learning-style")) return "Asesmen Gaya Belajar";
     return appConfig.name || "EduAdmin";
   };
@@ -1414,6 +1420,18 @@ const AppContent: React.FC = () => {
                         label="Hasil Supervisi"
                       />
                     )}
+                    {currentUser.additionalRole === "WAKASEK_KURIKULUM" && (
+                      <NavLink
+                        to="/guru-wali-manager"
+                        icon={Users}
+                        label="Manajemen Guru Wali"
+                      />
+                    )}
+                    <NavLink
+                      to="/guru-wali-mentoring"
+                      icon={UserCheck}
+                      label="Bimbingan Guru Wali"
+                    />
                     {currentUser.isSupervisor && (
                       <NavLink
                         to="/supervision-assessment"
@@ -1903,6 +1921,20 @@ const AppContent: React.FC = () => {
                     element={<WakasekScheduleManager user={currentUser} />}
                   />
                 )}
+                {currentUser.additionalRole === "WAKASEK_KURIKULUM" && (
+                   <Route
+                     path="/guru-wali-manager"
+                     element={<GuruWaliManager user={currentUser} />}
+                   />
+                )}
+                <Route
+                  path="/guru-wali-mentoring"
+                  element={<GuruWaliMentoring user={currentUser} />}
+                />
+                <Route
+                  path="/student-360/:studentId"
+                  element={<Student360View studentId={window.location.hash.split('/').pop() || ''} currentUserId={currentUser.id} currentUserRole={currentUser.role} />}
+                />
                 <Route path="/gen-quiz" element={<TeacherGenQuiz />} />
                 <Route
                   path="/rpp-generator"

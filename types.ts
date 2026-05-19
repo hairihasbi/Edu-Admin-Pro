@@ -153,6 +153,8 @@ export interface Student extends Syncable {
   averageScore?: number;
   phone?: string; // Added phone number for WhatsApp
   rfidTag?: string;
+  guruWaliId?: string | null;
+  guruWaliName?: string | null;
 }
 
 export interface StudentWithDetails extends Student {
@@ -427,6 +429,42 @@ export interface DailyPicket extends Syncable {
   schoolNpsn: string;
   officers: string[]; // Array of teacher names
   notes?: string;
+}
+
+// --- GURU WALI (MENTORING) TYPES ---
+export type MentoringTopic = 'AKADEMIK' | 'PRIBADI' | 'SOSIAL' | 'KARIER';
+
+export interface MentoringJournal extends Syncable {
+  id: string;
+  guruWaliId: string;
+  studentId: string;
+  studentName?: string;
+  date: string;
+  topic: MentoringTopic;
+  notes: string;
+  actionPlan: string;
+  actionStatus: 'OPEN' | 'RESOLVED';
+  isPrivate: boolean; // For 'PRIBADI' and 'SOSIAL' privacy
+  schoolNpsn: string;
+}
+
+export interface GraduateProfileAssessment extends Syncable {
+  id: string;
+  studentId: string;
+  guruWaliId: string;
+  date: string;
+  scores: {
+    imanTaqwa: number;      // Beriman, Bertakwa kepada Tuhan YME, dan Berakhlak Mulia
+    kebinekaanGlobal: number;
+    gotongRoyong: number;
+    mandiri: number;
+    nalarKritis: number;
+    kreatif: number;
+    integritas: number;      // Integritas (Kejujuran & Etika)
+    leadershipResilience: number; // Kepemimpinan & Resiliensi
+  };
+  notes?: string;
+  schoolNpsn: string;
 }
 
 export interface StudentIncident extends Syncable {
