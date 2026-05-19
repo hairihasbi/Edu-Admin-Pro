@@ -19,6 +19,7 @@ import {
   UserCheck
 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { id } from 'date-fns/locale';
 import {
@@ -43,7 +44,10 @@ interface Student360ViewProps {
   currentUserRole: string;
 }
 
-export const Student360View: React.FC<Student360ViewProps> = ({ studentId, currentUserId, currentUserRole }) => {
+export const Student360View: React.FC<Student360ViewProps> = ({ studentId: propStudentId, currentUserId, currentUserRole }) => {
+  const { studentId: paramStudentId } = useParams<{ studentId: string }>();
+  const studentId = propStudentId || paramStudentId || '';
+  
   const [data, setData] = useState<{
     student: Student;
     attendance: RfidLog[];
