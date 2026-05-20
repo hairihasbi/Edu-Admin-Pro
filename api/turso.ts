@@ -1644,8 +1644,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
             const userRes = await client.execute({ sql: "SELECT school_npsn, additional_role, role FROM users WHERE id = ?", args: [userId] });
             let userNpsn = userRes.rows[0]?.school_npsn || null; 
-            const userRole = userRes.rows[0]?.role || null;
-            const additionalRole = userRes.rows[0]?.additional_role || null;
+            const userRole = userRes.rows[0]?.role ? String(userRes.rows[0].role).toUpperCase() : null;
+            const additionalRole = userRes.rows[0]?.additional_role ? String(userRes.rows[0].additional_role).toUpperCase() : null;
             const isWakasek = additionalRole === 'WAKASEK_KURIKULUM';
             const isKepsek = additionalRole === 'KEPALA_SEKOLAH';
             const isStaff = userRole === 'GURU' || userRole === 'TENDIK' || userRole === 'ADMIN';
