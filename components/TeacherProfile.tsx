@@ -27,7 +27,7 @@ const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onUpdateUser }) =
     teacherType: user.teacherType || 'SUBJECT',
     isMultiSubject: user.isMultiSubject || false,
     subjects: user.subjects || [],
-    additionalRole: user.additionalRole || undefined
+    additionalRole: user.additionalRole || null
   });
 
   // Master Data State
@@ -61,7 +61,7 @@ const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onUpdateUser }) =
       teacherType: user.teacherType || 'SUBJECT',
       isMultiSubject: user.isMultiSubject || false,
       subjects: user.subjects || [],
-      additionalRole: user.additionalRole || undefined
+      additionalRole: user.additionalRole || null
     });
   }, [user]);
 
@@ -158,8 +158,7 @@ const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onUpdateUser }) =
       }
 
       const dataToSave = { ...formData };
-      const isRoleChanging = (formData.additionalRole === 'WAKASEK_KURIKULUM' && user.additionalRole !== 'WAKASEK_KURIKULUM') || 
-                             (formData.additionalRole === 'KEPALA_SEKOLAH' && user.additionalRole !== 'KEPALA_SEKOLAH');
+      const isRoleChanging = user.additionalRole !== dataToSave.additionalRole;
       const success = await updateUserProfile(user.id, dataToSave as any, isRoleChanging);
 
       if (success) {
@@ -444,7 +443,7 @@ const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onUpdateUser }) =
                                             const isChecked = e.target.checked;
                                             setFormData({ 
                                                 ...formData, 
-                                                additionalRole: isChecked ? 'WAKASEK_KURIKULUM' : (user.additionalRole === 'WALI_KELAS' ? 'WALI_KELAS' : undefined)
+                                                additionalRole: isChecked ? 'WAKASEK_KURIKULUM' : (user.additionalRole === 'WALI_KELAS' ? 'WALI_KELAS' : null)
                                             });
                                         }}
                                     />
@@ -484,7 +483,7 @@ const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onUpdateUser }) =
                                             const isChecked = e.target.checked;
                                             setFormData({ 
                                                 ...formData, 
-                                                additionalRole: isChecked ? 'KEPALA_SEKOLAH' : (user.additionalRole === 'WALI_KELAS' ? 'WALI_KELAS' : undefined)
+                                                additionalRole: isChecked ? 'KEPALA_SEKOLAH' : (user.additionalRole === 'WALI_KELAS' ? 'WALI_KELAS' : null)
                                             });
                                         }}
                                     />
