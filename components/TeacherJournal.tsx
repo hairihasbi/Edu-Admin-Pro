@@ -128,31 +128,21 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
   
   // Initialize Subject based on Teacher Type
   useEffect(() => {
+    // We default selectedSubject filter to 'ALL' for maximum visibility of saved journals
+    setSelectedSubject('ALL');
+    
     if (user.isMultiSubject && user.subjects && user.subjects.length > 0) {
-      // For Multi-Subject, filter defaults to ALL
-      setSelectedSubject('ALL');
-      // Form defaults to first subject in list
       setFormSubject(user.subjects[0]);
     } else if (user.teacherType === 'CLASS') {
       const subjects = (user.phase === 'B' || user.phase === 'C') ? SD_SUBJECTS_PHASE_BC : SD_SUBJECTS_PHASE_A;
-      // Default to first subject if not set or invalid
-      if (!selectedSubject || !subjects.includes(selectedSubject)) {
-         setSelectedSubject(subjects[0]);
-      }
       if (!formSubject || !subjects.includes(formSubject)) {
          setFormSubject(subjects[0]);
       }
     } else if (user.subject === 'Matematika' || user.secondarySubject) {
-      // Filter defaults to ALL if has multiple subjects
-      if (selectedSubject !== 'ALL') {
-         setSelectedSubject('ALL');
-      }
-      // Form defaults to first subject
       if (!formSubject) {
          setFormSubject(user.subject === 'Matematika' ? MATH_SUBJECT_OPTIONS[0] : (user.subject || ''));
       }
     } else {
-      setSelectedSubject(user.subject || '');
       setFormSubject(user.subject || '');
     }
   }, [user, user.teacherType, user.phase, user.isMultiSubject, user.subjects, user.secondarySubject]);
@@ -326,26 +316,32 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
 
   // --- FILTER & PAGINATION LOGIC ---
   const filteredJournals = journals.filter(j => {
-    const d = new Date(j.date);
-    const matchClass = filterClassId ? j.classId === filterClassId : true;
-    const matchMonth = d.getMonth() === filterMonth;
-    const matchYear = d.getFullYear() === filterYear;
+    // Robust, timezone-safe date parsing of "YYYY-MM-DD"
+    let journalYear = 0;
+    let journalMonth = 0;
     
-    // NEW: Subject Filter Logic
-    let matchSubject = true;
-    if (user.teacherType === 'CLASS') {
-        // Strict match for Class Teacher
-        matchSubject = j.subject === selectedSubject;
-    } else {
-        // Subject Teacher: Match if not ALL
-        if (selectedSubject && selectedSubject !== 'ALL') {
-             // Handle legacy data (missing subject) or case-insensitive
-             const s = (j.subject || '').trim().toLowerCase();
-             const filter = selectedSubject.trim().toLowerCase();
-             // If legacy data has no subject, we might want to include it if it matches user's default subject?
-             // But here we just match the filter.
-             matchSubject = s === filter;
+    if (j.date && j.date.includes('-')) {
+        const parts = j.date.split('-');
+        if (parts.length >= 2) {
+            journalYear = parseInt(parts[0], 10);
+            journalMonth = parseInt(parts[1], 10) - 1; // 0-indexed month
         }
+    } else {
+        const d = new Date(j.date);
+        journalYear = d.getFullYear();
+        journalMonth = d.getMonth();
+    }
+
+    const matchClass = filterClassId ? j.classId === filterClassId : true;
+    const matchMonth = journalMonth === filterMonth;
+    const matchYear = journalYear === filterYear;
+    
+    // NEW: Subject Filter Logic (Unified and robust)
+    let matchSubject = true;
+    if (selectedSubject && selectedSubject !== 'ALL') {
+         const s = (j.subject || '').trim().toLowerCase();
+         const filter = selectedSubject.trim().toLowerCase();
+         matchSubject = s === filter;
     }
 
     return matchClass && matchMonth && matchYear && matchSubject;
@@ -797,7 +793,7 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
                           onChange={(e) => setSelectedSubject(e.target.value)}
                           className="w-full sm:w-48 pl-3 pr-10 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none appearance-none bg-white text-sm font-medium"
                        >
-                          {(user.isMultiSubject || user.subject === 'Matematika' || user.secondarySubject) && <option value="ALL">Semua Mapel</option>}
+                          <option value="ALL">Semua Mapel</option>
                           {user.isMultiSubject ? (
                              (user.subjects || []).map(s => <option key={s} value={s}>{s}</option>)
                           ) : user.teacherType === 'CLASS' ? (

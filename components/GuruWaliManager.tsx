@@ -6,7 +6,8 @@ import {
   getSchoolTeachers, 
   updateUserProfile,
   addSystemLog,
-  triggerDebouncedSync
+  triggerDebouncedSync,
+  runManualSync
 } from '../services/database';
 import { Student, User, UserRole } from '../types';
 import { 
@@ -17,7 +18,8 @@ import {
   AlertCircle,
   Search,
   ArrowRightLeft,
-  Filter
+  Filter,
+  Save
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { db } from '../services/db';
@@ -34,6 +36,7 @@ export const GuruWaliManager: React.FC<GuruWaliManagerProps> = ({ user }) => {
   const [filterMode, setFilterMode] = useState<'ALL' | 'UNASSIGNED' | 'ASSIGNED'>('ALL');
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [processing, setProcessing] = useState(false);
+  const [savingChanges, setSavingChanges] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -75,49 +78,44 @@ export const GuruWaliManager: React.FC<GuruWaliManagerProps> = ({ user }) => {
     }
   };
 
+  const handleSaveAndSync = async () => {
+    setSavingChanges(true);
+    try {
+      // Direct push for assignments
+      await runManualSync('PUSH', (msg) => console.log(msg), ['eduadmin_students']);
+      setMessage({ type: 'success', text: 'Perubahan penugasan mentor berhasil disimpan dan disinkronkan ke server cloud.' });
+    } catch (e) {
+      console.error(e);
+      setMessage({ type: 'error', text: 'Gagal melakukan sinkronisasi dengan server.' });
+    } finally {
+      setSavingChanges(false);
+    }
+  };
+
   const handleManualReassign = async (studentId: string, teacherId: string) => {
     try {
-      if (teacherId === '') {
-        await db.students.update(studentId, {
-          guruWaliId: null,
-          guruWaliName: null,
-          lastModified: Date.now(),
-          isSynced: false
-        });
-
-        setStudents(prev => prev.map(s => s.id === studentId ? { 
-          ...s, 
-          guruWaliId: null, 
-          guruWaliName: null 
-        } : s));
-
-        addSystemLog('AUDIT', user.fullName, 'GURU_WALI', 'Manual Adjustment', 
-          `Menghapus Guru Wali dari siswa ID: ${studentId}`);
-
-        triggerDebouncedSync();
-        return;
-      }
-
       const teacher = teachers.find(t => t.id === teacherId);
-      if (!teacher) return;
-
-      await db.students.update(studentId, {
-        guruWaliId: teacherId,
-        guruWaliName: teacher.fullName,
+      
+      const updateData = {
+        guruWaliId: teacherId || null,
+        guruWaliName: teacher ? teacher.fullName : null,
         lastModified: Date.now(),
         isSynced: false
-      });
+      };
+
+      await db.students.update(studentId, updateData);
 
       setStudents(prev => prev.map(s => s.id === studentId ? { 
         ...s, 
-        guruWaliId: teacherId, 
-        guruWaliName: teacher.fullName 
+        guruWaliId: teacherId || null, 
+        guruWaliName: teacher ? teacher.fullName : null 
       } : s));
 
       // Log manual adjustment
       addSystemLog('AUDIT', user.fullName, 'GURU_WALI', 'Manual Adjustment', 
-        `Memindahkan siswa ${studentId} ke Guru Wali ${teacher.fullName}`);
+        teacher ? `Memindahkan siswa ${studentId} ke Guru Wali ${teacher.fullName}` : `Melepas Guru Wali untuk siswa ${studentId}`);
 
+      // Auto trigger background sync
       triggerDebouncedSync();
 
     } catch (e) {
@@ -145,14 +143,25 @@ export const GuruWaliManager: React.FC<GuruWaliManagerProps> = ({ user }) => {
           <p className="text-sm text-gray-500">Distribusi mentor personal siswa berdasarkan Permendikdasmen No. 11/2025</p>
         </div>
         
-        <button
-          onClick={handleAutoDistribute}
-          disabled={processing || teachers.length === 0}
-          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
-        >
-          {processing ? <RefreshCcw className="w-4 h-4 animate-spin" /> : <ArrowRightLeft className="w-4 h-4" />}
-          <span>Distribusi Merata Otomatis</span>
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={handleSaveAndSync}
+            disabled={processing || savingChanges}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition shadow-sm disabled:opacity-50 text-sm font-medium"
+          >
+            {savingChanges ? <RefreshCcw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            <span>Simpan Perubahan Mentor</span>
+          </button>
+          
+          <button
+            onClick={handleAutoDistribute}
+            disabled={processing || teachers.length === 0}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition disabled:opacity-50 text-sm font-medium whitespace-nowrap"
+          >
+            {processing ? <RefreshCcw className="w-4 h-4 animate-spin" /> : <ArrowRightLeft className="w-4 h-4" />}
+            <span>Distribusi Merata Otomatis</span>
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

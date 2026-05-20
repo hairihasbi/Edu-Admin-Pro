@@ -41,17 +41,26 @@ const AdminTeachers: React.FC = () => {
   const fetchData = async () => {
     setIsLoading(true);
     
-    if (activeTab === 'active') {
-      const data = await getTeachers();
-      setActiveTeachers(data);
-    } else if (activeTab === 'tendik') {
-      const data = await getTendik();
-      setActiveTendik(data);
-    } else {
-      const data = await getPendingTeachers();
-      setPendingTeachers(data);
+    try {
+      const savedUser = localStorage.getItem('eduadmin_user');
+      const currentUser = savedUser ? JSON.parse(savedUser) : null;
+      const schoolNpsn = currentUser?.schoolNpsn;
+
+      // Parallelize to make loading efficient
+      const [teachers, tendik, pending] = await Promise.all([
+        getTeachers(schoolNpsn),
+        getTendik(schoolNpsn),
+        getPendingTeachers(schoolNpsn)
+      ]);
+
+      setActiveTeachers(teachers);
+      setActiveTendik(tendik);
+      setPendingTeachers(pending);
+    } catch (e) {
+      console.error("Error fetching admin teachers data:", e);
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   const handleSyncData = async () => {
