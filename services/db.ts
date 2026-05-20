@@ -62,11 +62,11 @@ export class EduAdminDatabase extends Dexie {
     // [field] = Indexed field for searching
     // Added schoolNpsn indexes for multi-tenancy filtering
     // Bumped to version 34 to include RfidLog support and student rfid fields
-    (this as any).version(38).stores({
+    (this as any).version(39).stores({
       users: '&id, username, role, status, schoolNpsn, isRfidOfficer, isSynced',
       classes: '&id, userId, schoolNpsn, name, homeroomTeacherId, isSynced', 
       students: '&id, classId, schoolNpsn, name, nis, gender, rfidTag, guruWaliId, isSynced', 
-      attendanceRecords: '&id, userId, studentId, classId, date, status, isSynced, [studentId+date], studentId', // Added studentId index
+      attendanceRecords: '&id, userId, studentId, classId, date, status, isSynced, [studentId+date]', // Added studentId index (removed duplicate)
       scopeMaterials: '&id, classId, semester, userId, isSynced', 
       assessmentScores: '&id, userId, studentId, classId, semester, category, materialId, subject, isSynced',
       teachingJournals: '&id, userId, classId, date, isSynced',
