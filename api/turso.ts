@@ -1631,7 +1631,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // --- PULL LOGIC ---
     if (action === 'pull') {
-        const isStaff = currentUser?.role === 'GURU' || currentUser?.role === 'TENDIK';
+        const isStaff = currentUser?.role === 'GURU' || currentUser?.role === 'TENDIK' || currentUser?.role === 'ADMIN';
         const userId = currentUser?.userId || null; 
         
         const tableConfig = getTableConfig(collection);
