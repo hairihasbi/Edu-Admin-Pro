@@ -1667,10 +1667,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 }
                 else if (tableConfig.table === 'users') { 
                     // All teachers in same school should see each other for picket/shared features
-                    if (userNpsn && userNpsn !== 'DEFAULT') {
-                        whereClauses.push("school_npsn = ?"); args = [userNpsn];
+                    if (userRole === 'ADMIN') {
+                        if (userNpsn && userNpsn !== 'DEFAULT') {
+                            whereClauses.push("school_npsn = ?"); args = [userNpsn];
+                        } else {
+                            // Root admin with DEFAULT/null school_npsn can pull ALL users!
+                            whereClauses.push("1 = 1"); args = [];
+                        }
                     } else {
-                        whereClauses.push("id = ?"); args = [userId]; 
+                        if (userNpsn && userNpsn !== 'DEFAULT') {
+                            whereClauses.push("school_npsn = ?"); args = [userNpsn];
+                        } else {
+                            whereClauses.push("id = ?"); args = [userId]; 
+                        }
                     }
                 }
                 else if (tableConfig.table === 'journals') {
