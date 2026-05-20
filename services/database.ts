@@ -163,7 +163,13 @@ export const getTeachers = async (schoolNpsn?: string) => {
     return await db.users.where('role').equals('GURU').and(u => u.status === 'ACTIVE').toArray();
 };
 
-export const getTendik = async () => {
+export const getTendik = async (schoolNpsn?: string) => {
+    if (schoolNpsn && schoolNpsn !== 'DEFAULT') {
+        return await db.users
+            .where('schoolNpsn').equals(schoolNpsn)
+            .and(u => u.role === 'TENDIK' && u.status === 'ACTIVE')
+            .toArray();
+    }
     return await db.users.where('role').equals('TENDIK').and(u => u.status === 'ACTIVE').toArray();
 };
 
@@ -171,7 +177,13 @@ export const getAllUsers = async () => {
     return await db.users.toArray();
 };
 
-export const getPendingTeachers = async () => {
+export const getPendingTeachers = async (schoolNpsn?: string) => {
+    if (schoolNpsn && schoolNpsn !== 'DEFAULT') {
+        return await db.users
+            .where('schoolNpsn').equals(schoolNpsn)
+            .and(u => u.status === 'PENDING')
+            .toArray();
+    }
     return await db.users.where('status').equals('PENDING').toArray();
 };
 
@@ -771,17 +783,11 @@ export const resetSystemData = async (scope: 'SEMESTER' | 'ALL', semester?: stri
         if (semester === 'FULL_YEAR') {
             // Comprehensive Year Reset
             const yearResetTables = [
-                'attendanceRecords',
-                'teachingJournals',
-                'assessmentScores',
-                'scopeMaterials',
-                'cbtExams',
-                'cbtQuestions',
-                'cbtAttempts',
-                'studentIncidents',
-                'classInventory',
-                'dailyPickets',
-                'rfidLogs'
+                'students', 'classes', 'attendanceRecords', 'scopeMaterials', 
+                'assessmentScores', 'teachingJournals', 'violations', 'pointReductions', 
+                'achievements', 'counselingSessions', 'cbtExams', 'cbtQuestions', 
+                'cbtAttempts', 'rfidLogs', 'dailyPickets', 'studentIncidents',
+                'homeVisits', 'parentCalls', 'classInventory'
             ];
             
             await Promise.all(yearResetTables.map(tableName => {
