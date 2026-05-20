@@ -154,23 +154,40 @@ export const completePasswordReset = async (token: string, newPass: string) => {
 };
 
 export const getTeachers = async (schoolNpsn?: string) => {
-    if (schoolNpsn && schoolNpsn !== 'DEFAULT') {
-        return await db.users
-            .where('schoolNpsn').equals(schoolNpsn)
-            .and(u => u.role === 'GURU' && u.status === 'ACTIVE')
-            .toArray();
+    try {
+        if (schoolNpsn && schoolNpsn !== 'DEFAULT') {
+            return await db.users
+                .where('schoolNpsn').equals(schoolNpsn)
+                .and(u => u.role === 'GURU' && u.status === 'ACTIVE')
+                .toArray();
+        }
+    } catch (err) {
+        console.warn("Index query failed for schoolNpsn, falling back to in-memory filter:", err);
     }
-    return await db.users.where('role').equals('GURU').and(u => u.status === 'ACTIVE').toArray();
+    // Fallback: fetch all and filter in-memory to prevent empty lists due to schema changes/index issues
+    const all = await db.users.toArray();
+    return all.filter(u => {
+        const matchesSchool = !schoolNpsn || schoolNpsn === 'DEFAULT' || u.schoolNpsn === schoolNpsn;
+        return matchesSchool && u.role === 'GURU' && u.status === 'ACTIVE';
+    });
 };
 
 export const getTendik = async (schoolNpsn?: string) => {
-    if (schoolNpsn && schoolNpsn !== 'DEFAULT') {
-        return await db.users
-            .where('schoolNpsn').equals(schoolNpsn)
-            .and(u => u.role === 'TENDIK' && u.status === 'ACTIVE')
-            .toArray();
+    try {
+        if (schoolNpsn && schoolNpsn !== 'DEFAULT') {
+            return await db.users
+                .where('schoolNpsn').equals(schoolNpsn)
+                .and(u => u.role === 'TENDIK' && u.status === 'ACTIVE')
+                .toArray();
+        }
+    } catch (err) {
+        console.warn("Index query failed for schoolNpsn, falling back to in-memory filter:", err);
     }
-    return await db.users.where('role').equals('TENDIK').and(u => u.status === 'ACTIVE').toArray();
+    const all = await db.users.toArray();
+    return all.filter(u => {
+        const matchesSchool = !schoolNpsn || schoolNpsn === 'DEFAULT' || u.schoolNpsn === schoolNpsn;
+        return matchesSchool && u.role === 'TENDIK' && u.status === 'ACTIVE';
+    });
 };
 
 export const getAllUsers = async () => {
@@ -178,13 +195,21 @@ export const getAllUsers = async () => {
 };
 
 export const getPendingTeachers = async (schoolNpsn?: string) => {
-    if (schoolNpsn && schoolNpsn !== 'DEFAULT') {
-        return await db.users
-            .where('schoolNpsn').equals(schoolNpsn)
-            .and(u => u.status === 'PENDING')
-            .toArray();
+    try {
+        if (schoolNpsn && schoolNpsn !== 'DEFAULT') {
+            return await db.users
+                .where('schoolNpsn').equals(schoolNpsn)
+                .and(u => u.status === 'PENDING')
+                .toArray();
+        }
+    } catch (err) {
+        console.warn("Index query failed for schoolNpsn/status, falling back to in-memory filter:", err);
     }
-    return await db.users.where('status').equals('PENDING').toArray();
+    const all = await db.users.toArray();
+    return all.filter(u => {
+        const matchesSchool = !schoolNpsn || schoolNpsn === 'DEFAULT' || u.schoolNpsn === schoolNpsn;
+        return matchesSchool && u.status === 'PENDING';
+    });
 };
 
 export const checkWakasekExists = async (schoolNpsn: string, forceSync = false): Promise<{ exists: boolean; name?: string; userId?: string }> => {
@@ -1752,6 +1777,36 @@ export const updateScopeMaterial = async (id: string, data: Partial<ScopeMateria
     return item;
 };
 
+export const isSubjectMatching = (subjectFilter: string, itemSubject: string) => {
+    if (!subjectFilter || subjectFilter === 'ALL') return true;
+    if (!itemSubject) return true; // Accept empty/legacy
+
+    const filter = subjectFilter.trim().toLowerCase();
+    const itemSub = itemSubject.trim().toLowerCase();
+
+    if (filter === itemSub) return true;
+
+    // Check if one has math/umum/lanjut and the other has math/umum/lanjut
+    const isFilterMath = filter.includes('matematika') || filter === 'umum' || filter === 'tingkat lanjut';
+    const isItemMath = itemSub.includes('matematika') || itemSub === 'umum' || itemSub === 'tingkat lanjut';
+
+    if (isFilterMath && isItemMath) {
+        // "matematika umum", "matematika", "umum" match each other
+        const isFilterUmum = filter.includes('umum') || filter === 'matematika';
+        const isItemUmum = itemSub.includes('umum') || itemSub === 'matematika';
+        if (isFilterUmum && isItemUmum) return true;
+
+        // "matematika tingkat lanjut", "tingkat lanjut" match each other
+        const isFilterLanjut = filter.includes('lanjut') || filter.includes('tingkat');
+        const isItemLanjut = itemSub.includes('lanjut') || itemSub.includes('tingkat');
+        if (isFilterLanjut && isItemLanjut) return true;
+    }
+
+    if (filter.includes(itemSub) || itemSub.includes(filter)) return true;
+
+    return false;
+};
+
 export const getScopeMaterials = async (classId: string, semester: string, userId: string, subject?: string) => {
     let collection;
     if (classId) {
@@ -1765,20 +1820,9 @@ export const getScopeMaterials = async (classId: string, semester: string, userI
     
     if (semester) collection = collection.filter(m => m.semester === semester);
     
-    // FIX: Robust filtering (Case-insensitive + Allow legacy/empty + Math Loose Matching)
+    // FIX: Robust filtering using shared matching logic
     if (subject && subject !== 'ALL') {
-        const normSubject = subject.trim().toLowerCase();
-        collection = collection.filter(m => {
-            if (!m.subject) return true; // Keep legacy
-            const s = m.subject.trim().toLowerCase();
-            if (s === normSubject) return true;
-            
-            // Math Loose Matching
-            if (normSubject === 'matematika umum' && (s === 'umum' || s === 'matematika')) return true;
-            if (normSubject === 'matematika tingkat lanjut' && s === 'tingkat lanjut') return true;
-            
-            return false;
-        });
+        collection = collection.filter(m => isSubjectMatching(subject, m.subject || ''));
     }
     return await collection.toArray();
 };
@@ -1853,20 +1897,9 @@ export const saveBulkAssessmentScores = async (scores: Omit<AssessmentScore, 'id
 export const getAssessmentScores = async (classId: string, semester: string, subject?: string) => {
     let collection = db.assessmentScores.where({ classId, semester });
     
-    // FIX: Robust filtering (Case-insensitive + Allow legacy/empty + Math Loose Matching)
+    // FIX: Robust filtering using shared matching logic
     if (subject && subject !== 'ALL') {
-        const normSubject = subject.trim().toLowerCase();
-        collection = collection.filter(s => {
-            if (!s.subject) return true;
-            const sub = s.subject.trim().toLowerCase();
-            if (sub === normSubject) return true;
-
-            // Math Loose Matching
-            if (normSubject === 'matematika umum' && (sub === 'umum' || sub === 'matematika')) return true;
-            if (normSubject === 'matematika tingkat lanjut' && sub === 'tingkat lanjut') return true;
-
-            return false;
-        });
+        collection = collection.filter(s => isSubjectMatching(subject, s.subject || ''));
     }
     return await collection.toArray();
 };
@@ -1875,20 +1908,9 @@ export const getAssessmentScores = async (classId: string, semester: string, sub
 export const getTeachingJournals = async (userId: string, subject?: string) => {
     let collection = db.teachingJournals.where('userId').equals(userId);
     
-    // FIX: Robust filtering (Case-insensitive + Allow legacy/empty + Math Loose Matching)
+    // FIX: Robust filtering using shared matching logic
     if (subject && subject !== 'ALL') {
-        const normSubject = subject.trim().toLowerCase();
-        collection = collection.filter(j => {
-            if (!j.subject) return true;
-            const s = j.subject.trim().toLowerCase();
-            if (s === normSubject) return true;
-
-            // Math Loose Matching
-            if (normSubject === 'matematika umum' && (s === 'umum' || s === 'matematika')) return true;
-            if (normSubject === 'matematika tingkat lanjut' && s === 'tingkat lanjut') return true;
-
-            return false;
-        });
+        collection = collection.filter(j => isSubjectMatching(subject, j.subject || ''));
     }
     return await collection.reverse().sortBy('date');
 };
@@ -2736,7 +2758,13 @@ export const distributeGuruWaliFairly = async (schoolNpsn: string) => {
 };
 
 export const getMenteesByGuruWali = async (guruWaliId: string) => {
-    return await db.students.where('guruWaliId').equals(guruWaliId).toArray();
+    try {
+        return await db.students.where('guruWaliId').equals(guruWaliId).toArray();
+    } catch (err) {
+        console.warn("Index query failed for guruWaliId, falling back to in-memory filter:", err);
+    }
+    const all = await db.students.toArray();
+    return all.filter(s => s.guruWaliId === guruWaliId);
 };
 
 export const saveMentoringJournal = async (data: Omit<MentoringJournal, 'id' | 'lastModified' | 'isSynced'>) => {
