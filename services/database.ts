@@ -771,11 +771,17 @@ export const resetSystemData = async (scope: 'SEMESTER' | 'ALL', semester?: stri
         if (semester === 'FULL_YEAR') {
             // Comprehensive Year Reset
             const yearResetTables = [
-                'students', 'classes', 'attendanceRecords', 'scopeMaterials', 
-                'assessmentScores', 'teachingJournals', 'violations', 'pointReductions', 
-                'achievements', 'counselingSessions', 'cbtExams', 'cbtQuestions', 
-                'cbtAttempts', 'rfidLogs', 'dailyPickets', 'studentIncidents',
-                'homeVisits', 'parentCalls', 'classInventory'
+                'attendanceRecords',
+                'teachingJournals',
+                'assessmentScores',
+                'scopeMaterials',
+                'cbtExams',
+                'cbtQuestions',
+                'cbtAttempts',
+                'studentIncidents',
+                'classInventory',
+                'dailyPickets',
+                'rfidLogs'
             ];
             
             await Promise.all(yearResetTables.map(tableName => {
