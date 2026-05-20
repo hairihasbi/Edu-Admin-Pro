@@ -5,7 +5,8 @@ import {
   distributeGuruWaliFairly, 
   getSchoolTeachers, 
   updateUserProfile,
-  addSystemLog
+  addSystemLog,
+  triggerDebouncedSync
 } from '../services/database';
 import { Student, User, UserRole } from '../types';
 import { 
@@ -76,6 +77,27 @@ export const GuruWaliManager: React.FC<GuruWaliManagerProps> = ({ user }) => {
 
   const handleManualReassign = async (studentId: string, teacherId: string) => {
     try {
+      if (teacherId === '') {
+        await db.students.update(studentId, {
+          guruWaliId: null,
+          guruWaliName: null,
+          lastModified: Date.now(),
+          isSynced: false
+        });
+
+        setStudents(prev => prev.map(s => s.id === studentId ? { 
+          ...s, 
+          guruWaliId: null, 
+          guruWaliName: null 
+        } : s));
+
+        addSystemLog('AUDIT', user.fullName, 'GURU_WALI', 'Manual Adjustment', 
+          `Menghapus Guru Wali dari siswa ID: ${studentId}`);
+
+        triggerDebouncedSync();
+        return;
+      }
+
       const teacher = teachers.find(t => t.id === teacherId);
       if (!teacher) return;
 
@@ -95,6 +117,8 @@ export const GuruWaliManager: React.FC<GuruWaliManagerProps> = ({ user }) => {
       // Log manual adjustment
       addSystemLog('AUDIT', user.fullName, 'GURU_WALI', 'Manual Adjustment', 
         `Memindahkan siswa ${studentId} ke Guru Wali ${teacher.fullName}`);
+
+      triggerDebouncedSync();
 
     } catch (e) {
       console.error(e);
