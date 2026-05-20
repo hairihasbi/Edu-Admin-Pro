@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { User, ClassRoom, ScopeMaterial, TeachingJournal, SD_SUBJECTS_PHASE_A, SD_SUBJECTS_PHASE_BC, MATH_SUBJECT_OPTIONS, AbsentStudent, TeachingSchedule, Student } from '../types';
-import { getClasses, getScopeMaterials, getTeachingJournals, addTeachingJournal, deleteTeachingJournal, bulkDeleteTeachingJournals, getStudents, getTeachingSchedules, getLocalDate } from '../services/database';
+import { getClasses, getScopeMaterials, getTeachingJournals, addTeachingJournal, deleteTeachingJournal, bulkDeleteTeachingJournals, getStudents, getTeachingSchedules, getLocalDate, isSubjectMatching } from '../services/database';
 import { Plus, Save, Trash2, Filter, Printer, FileSpreadsheet, NotebookPen, CalendarDays, ChevronLeft, ChevronRight, UserMinus } from './Icons';
 import Skeleton from './Skeleton';
 import * as XLSX from 'xlsx';
@@ -337,12 +337,7 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
     const matchYear = journalYear === filterYear;
     
     // NEW: Subject Filter Logic (Unified and robust)
-    let matchSubject = true;
-    if (selectedSubject && selectedSubject !== 'ALL') {
-         const s = (j.subject || '').trim().toLowerCase();
-         const filter = selectedSubject.trim().toLowerCase();
-         matchSubject = s === filter;
-    }
+    const matchSubject = isSubjectMatching(selectedSubject, j.subject || '');
 
     return matchClass && matchMonth && matchYear && matchSubject;
   });
