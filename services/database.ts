@@ -2839,3 +2839,19 @@ export const getStudent360Data = async (studentId: string) => {
         mentoring
     };
 };
+
+export const isSubjectMatching = (filterSubject: string | undefined, itemSubject: string | undefined): boolean => {
+    if (!filterSubject || filterSubject === 'ALL') return true;
+    if (!itemSubject) return true;
+
+    const normFilter = filterSubject.trim().toLowerCase();
+    const normItem = itemSubject.trim().toLowerCase();
+
+    if (normItem === normFilter) return true;
+
+    // Math Loose Matching
+    if (normFilter === 'matematika umum' && (normItem === 'umum' || normItem === 'matematika')) return true;
+    if (normFilter === 'matematika tingkat lanjut' && normItem === 'tingkat lanjut') return true;
+
+    return false;
+};
