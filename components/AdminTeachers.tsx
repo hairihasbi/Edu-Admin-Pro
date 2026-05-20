@@ -47,11 +47,25 @@ const AdminTeachers: React.FC = () => {
       const schoolNpsn = currentUser?.schoolNpsn;
 
       // Parallelize to make loading efficient
-      const [teachers, tendik, pending] = await Promise.all([
+      let [teachers, tendik, pending] = await Promise.all([
         getTeachers(schoolNpsn),
         getTendik(schoolNpsn),
         getPendingTeachers(schoolNpsn)
       ]);
+
+      // Self-healing: if local is empty and user is online, silently pull latest list from cloud, then reload
+      if (teachers.length === 0 && tendik.length === 0 && pending.length === 0 && typeof navigator !== 'undefined' && navigator.onLine) {
+        try {
+          await runManualSync('PULL', () => {}, ['eduadmin_users']);
+          [teachers, tendik, pending] = await Promise.all([
+            getTeachers(schoolNpsn),
+            getTendik(schoolNpsn),
+            getPendingTeachers(schoolNpsn)
+          ]);
+        } catch (syncError) {
+          console.warn("Silent pull of users failed during empty local state:", syncError);
+        }
+      }
 
       setActiveTeachers(teachers);
       setActiveTendik(tendik);
