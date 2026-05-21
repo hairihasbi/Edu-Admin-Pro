@@ -2840,18 +2840,8 @@ export const getStudent360Data = async (studentId: string) => {
     };
 };
 
-export const isSubjectMatching = (filterSubject: string | undefined, itemSubject: string | undefined): boolean => {
-    if (!filterSubject || filterSubject === 'ALL') return true;
-    if (!itemSubject) return true;
-
-    const normFilter = filterSubject.trim().toLowerCase();
-    const normItem = itemSubject.trim().toLowerCase();
-
-    if (normItem === normFilter) return true;
-
-    // Math Loose Matching
-    if (normFilter === 'matematika umum' && (normItem === 'umum' || normItem === 'matematika')) return true;
-    if (normFilter === 'matematika tingkat lanjut' && normItem === 'tingkat lanjut') return true;
-
-    return false;
+export const isSubjectMatching = (selectedSubject: string | null | undefined, journalSubject: string | null | undefined): boolean => {
+    if (!selectedSubject || selectedSubject === 'ALL' || selectedSubject === '') return true;
+    if (!journalSubject) return false;
+    return selectedSubject.toLowerCase().trim() === journalSubject.toLowerCase().trim();
 };
