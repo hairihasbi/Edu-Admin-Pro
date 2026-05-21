@@ -44,7 +44,8 @@ const AdminTeachers: React.FC = () => {
     try {
       const savedUser = localStorage.getItem('eduadmin_user');
       const currentUser = savedUser ? JSON.parse(savedUser) : null;
-      const schoolNpsn = currentUser?.schoolNpsn;
+      const isAdmin = currentUser?.role === 'ADMIN';
+      const schoolNpsn = isAdmin ? undefined : currentUser?.schoolNpsn;
 
       // Parallelize to make loading efficient
       let [teachers, tendik, pending] = await Promise.all([
