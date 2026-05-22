@@ -2840,8 +2840,10 @@ export const getStudent360Data = async (studentId: string) => {
     };
 };
 
-export const isSubjectMatching = (selectedSubject: string | null | undefined, journalSubject: string | null | undefined): boolean => {
-    if (!selectedSubject || selectedSubject === 'ALL' || selectedSubject === '') return true;
-    if (!journalSubject) return false;
-    return selectedSubject.toLowerCase().trim() === journalSubject.toLowerCase().trim();
+export const isSubjectMatching = (selectedSubject: string | undefined, journalSubject: string | undefined): boolean => {
+    if (!selectedSubject || selectedSubject === '' || selectedSubject.toUpperCase() === 'ALL') {
+        return true;
+    }
+    return (journalSubject || '').toLowerCase() === selectedSubject.toLowerCase();
 };
+
