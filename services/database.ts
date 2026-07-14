@@ -2632,6 +2632,29 @@ export const processGraduation = async (schoolNpsn: string) => {
     // Log activity
     addSystemLog('WARNING', 'Wakasek Kurikulum', 'ACADEMIC', 'Graduation', `Processed graduation for ${studentIds.length} students in grade 12.`);
     
+    // Sync to remote Turso database if online to prevent pull restoring deleted data
+    if (typeof navigator !== 'undefined' && navigator.onLine) {
+      try {
+        const savedUser = localStorage.getItem('eduadmin_user');
+        const currentUser = savedUser ? JSON.parse(savedUser) : null;
+        const userId = currentUser?.id || '';
+        const headers: any = { 'Content-Type': 'application/json' };
+        if (userId) {
+          headers['Authorization'] = `Bearer ${userId}`;
+        }
+        await fetch('/api/turso', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            action: 'execute_graduation',
+            schoolNpsn
+          })
+        });
+      } catch (remoteError) {
+        console.error("Remote graduation sync failed:", remoteError);
+      }
+    }
+
     triggerDebouncedSync();
     
     return { success: true, count: studentIds.length };
@@ -2707,6 +2730,28 @@ export const assignStudentsByBatch = async (studentIds: string[], targetClassId:
     return { success: true, count: updates.length };
   }
   return { success: false, message: "Tidak ada siswa yang dipilih." };
+};
+
+export const getStudentCountByClass = async (classId: string): Promise<number> => {
+  return await db.students.where('classId').equals(classId).count();
+};
+
+export const promoteStudentsClassToClass = async (originClassId: string, targetClassId: string) => {
+  const students = await db.students.where('classId').equals(originClassId).toArray();
+  if (students.length === 0) {
+    return { success: false, message: "Tidak ada siswa di kelas asal." };
+  }
+  
+  const updates = students.map(s => ({
+    ...s,
+    classId: targetClassId,
+    lastModified: Date.now(),
+    isSynced: false
+  }));
+  
+  await db.students.bulkPut(updates);
+  triggerDebouncedSync();
+  return { success: true, count: updates.length };
 };
 
 // --- GURU WALI (MENTORING) ---
