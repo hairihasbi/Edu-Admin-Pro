@@ -1448,6 +1448,72 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(200).json({ success: true, message: "Database Initialized & Migrated.", details: results });
     }
 
+    // --- GRADUATION LOGIC ---
+    if (action === 'execute_graduation') {
+        const { schoolNpsn } = body;
+        if (!schoolNpsn) return res.status(400).json({ error: 'schoolNpsn is required' });
+
+        try {
+            // 1. Get all classes for the school
+            const classesRes = await client.execute({
+                sql: "SELECT id, name FROM classes WHERE school_npsn = ?",
+                args: [schoolNpsn]
+            });
+            
+            // 2. Filter grade 12 classes
+            const grade12ClassIds = classesRes.rows
+                .filter((c: any) => 
+                    c.name && (
+                        c.name.startsWith('12') || 
+                        c.name.toUpperCase().startsWith('XII ') || 
+                        c.name.toUpperCase() === 'XII' ||
+                        c.name.toUpperCase().startsWith('XII-')
+                    )
+                )
+                .map((c: any) => c.id);
+
+            if (grade12ClassIds.length === 0) {
+                return res.status(200).json({ success: true, count: 0, message: "Tidak ada kelas tingkat 12 ditemukan di remote." });
+            }
+
+            // 3. Get students in these classes
+            const classPlaceholders = grade12ClassIds.map(() => '?').join(', ');
+            const studentsRes = await client.execute({
+                sql: `SELECT id FROM students WHERE class_id IN (${classPlaceholders})`,
+                args: grade12ClassIds
+            });
+            const studentIds = studentsRes.rows.map((s: any) => s.id);
+
+            if (studentIds.length === 0) {
+                return res.status(200).json({ success: true, count: 0, message: "Tidak ada siswa di kelas tingkat 12 di remote." });
+            }
+
+            // 4. Run delete statements in remote database
+            const studentPlaceholders = studentIds.map(() => '?').join(', ');
+            const tablesToClear = [
+                'students', 'attendance', 'bk_violations', 'bk_reductions', 
+                'bk_achievements', 'bk_counseling', 'home_visits', 'parent_calls', 
+                'learning_style_assessments', 'cbt_attempts', 'rfid_logs', 'scores'
+            ];
+
+            const statements = [];
+            for (const table of tablesToClear) {
+                const idCol = table === 'students' ? 'id' : 'student_id';
+                statements.push({
+                    sql: `DELETE FROM ${table} WHERE ${idCol} IN (${studentPlaceholders})`,
+                    args: studentIds
+                });
+            }
+
+            await client.batch(statements);
+
+            return res.status(200).json({ success: true, count: studentIds.length });
+        } catch (e: any) {
+            console.error("Graduation remote execution failed:", e);
+            return res.status(500).json({ error: e.message });
+        }
+    }
+
     // --- DELETE LOGIC ---
     if (action === 'delete') {
         const { id } = body;
