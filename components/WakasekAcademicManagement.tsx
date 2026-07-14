@@ -7,7 +7,9 @@ import {
   getUnassignedStudents, 
   assignStudentsByBatch,
   getAvailableClassesForHomeroom,
-  addSystemLog
+  addSystemLog,
+  getStudentCountByClass,
+  promoteStudentsClassToClass
 } from '../services/database';
 import { 
   GraduationCap, 
@@ -40,6 +42,35 @@ const WakasekAcademicManagement: React.FC<WakasekAcademicManagementProps> = ({ u
   const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(new Set());
   const [mappingSearch, setMappingSearch] = useState('');
 
+  // Mass Promotion State
+  const [originClassId, setOriginClassId] = useState<string>('');
+  const [targetClassId, setTargetClassId] = useState<string>('');
+  const [originStudentCount, setOriginStudentCount] = useState<number | null>(null);
+
+  // Fetch classes on mount
+  useEffect(() => {
+    if (user.schoolNpsn) {
+      getAvailableClassesForHomeroom(user.schoolNpsn).then(schoolClasses => {
+        setClasses(schoolClasses.sort((a, b) => a.name.localeCompare(b.name)));
+      }).catch(err => {
+        console.error("Failed to load classes:", err);
+      });
+    }
+  }, [user.schoolNpsn]);
+
+  // Handle origin class change to fetch student count
+  useEffect(() => {
+    if (originClassId) {
+      getStudentCountByClass(originClassId).then(count => {
+        setOriginStudentCount(count);
+      }).catch(() => {
+        setOriginStudentCount(0);
+      });
+    } else {
+      setOriginStudentCount(null);
+    }
+  }, [originClassId]);
+
   useEffect(() => {
     if (activeTab === 'MAPPING') {
       fetchMappingData();
@@ -50,12 +81,8 @@ const WakasekAcademicManagement: React.FC<WakasekAcademicManagementProps> = ({ u
     if (!user.schoolNpsn) return;
     setLoading(true);
     try {
-      const [students, schoolClasses] = await Promise.all([
-        getUnassignedStudents(user.schoolNpsn),
-        getAvailableClassesForHomeroom(user.schoolNpsn)
-      ]);
+      const students = await getUnassignedStudents(user.schoolNpsn);
       setUnassignedStudents(students);
-      setClasses(schoolClasses.sort((a, b) => a.name.localeCompare(b.name)));
     } catch (error) {
       console.error("Failed to fetch mapping data:", error);
     } finally {
@@ -102,6 +129,47 @@ const WakasekAcademicManagement: React.FC<WakasekAcademicManagementProps> = ({ u
       }
     } catch (error) {
       setMessage({ type: 'error', text: 'Terjadi kesalahan sistem.' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMassPromotion = async () => {
+    if (!originClassId || !targetClassId) {
+      alert("Pilih kelas asal dan kelas tujuan terlebih dahulu.");
+      return;
+    }
+    if (originClassId === targetClassId) {
+      alert("Kelas asal dan kelas tujuan tidak boleh sama.");
+      return;
+    }
+
+    const originClassName = classes.find(c => c.id === originClassId)?.name || 'Kelas Asal';
+    const targetClassName = classes.find(c => c.id === targetClassId)?.name || 'Kelas Tujuan';
+
+    if (!window.confirm(`Apakah Anda yakin ingin memindahkan SELURUH siswa dari ${originClassName} ke ${targetClassName}? Semua data prestasi, absensi, dan pelanggaran siswa akan tetap aman.`)) {
+      return;
+    }
+
+    setLoading(true);
+    setMessage(null);
+    try {
+      const result = await promoteStudentsClassToClass(originClassId, targetClassId);
+      if (result.success) {
+        setMessage({ type: 'success', text: `Berhasil memindahkan ${result.count} siswa dari ${originClassName} ke ${targetClassName}.` });
+        addSystemLog('INFO', user.fullName, 'ACADEMIC', 'Promotion', `Promoted ${result.count} students from class ${originClassName} to ${targetClassName}.`);
+        setOriginClassId('');
+        setTargetClassId('');
+        setOriginStudentCount(null);
+        if (user.schoolNpsn) {
+          getUnassignedStudents(user.schoolNpsn).then(setUnassignedStudents);
+        }
+      } else {
+        setMessage({ type: 'error', text: result.message || 'Gagal memproses kenaikan kelas.' });
+      }
+    } catch (error) {
+      console.error("Mass promotion failed:", error);
+      setMessage({ type: 'error', text: 'Terjadi kesalahan sistem saat memproses kenaikan kelas.' });
     } finally {
       setLoading(false);
     }
@@ -255,22 +323,87 @@ const WakasekAcademicManagement: React.FC<WakasekAcademicManagementProps> = ({ u
 
         {/* TAB 2: PROMOTION RESET */}
         {activeTab === 'PROMOTION' && (
-          <div className="p-8 space-y-6">
+          <div className="p-8 space-y-8">
+            {/* CARD 1: MASS PROMOTION (KENAIKAN KELAS MASAL) */}
+            <div className="bg-white border border-gray-200 p-6 rounded-2xl shadow-sm dark:bg-gray-800 dark:border-gray-700 space-y-6">
+              <div className="flex items-start gap-4">
+                <div className="p-3 bg-green-100 text-green-600 rounded-full dark:bg-green-900/30 dark:text-green-400">
+                  <ArrowUpCircle size={24} />
+                </div>
+                <div className="space-y-1 flex-1">
+                  <h3 className="text-lg font-bold text-gray-800 dark:text-white">Proses Kenaikan Kelas Masal</h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Pindahkan seluruh siswa dari satu kelas asal langsung ke kelas tujuan baru (misal: XI IPA 1 naik ke XII IPA 1).
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-gray-500 flex items-center gap-1">
+                    <Filter size={14} /> Kelas Asal
+                  </label>
+                  <select 
+                    value={originClassId}
+                    onChange={(e) => setOriginClassId(e.target.value)}
+                    className="w-full p-3 bg-white border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none dark:bg-gray-800 dark:border-gray-600 dark:text-white"
+                  >
+                    <option value="">-- Pilih Kelas Asal --</option>
+                    {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-gray-500 flex items-center gap-1">
+                    <Filter size={14} /> Kelas Tujuan Baru
+                  </label>
+                  <select 
+                    value={targetClassId}
+                    onChange={(e) => setTargetClassId(e.target.value)}
+                    className="w-full p-3 bg-white border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none dark:bg-gray-800 dark:border-gray-600 dark:text-white"
+                  >
+                    <option value="">-- Pilih Kelas Tujuan --</option>
+                    {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              {originStudentCount !== null && (
+                <div className="bg-green-50 border border-green-100 p-4 rounded-xl flex items-center gap-3 dark:bg-green-900/10 dark:border-green-900/20">
+                  <Info className="text-green-600 shrink-0" size={18} />
+                  <p className="text-sm text-green-800 dark:text-green-300">
+                    Ditemukan <span className="font-bold">{originStudentCount} siswa</span> di kelas asal yang siap dipindahkan.
+                  </p>
+                </div>
+              )}
+
+              <div className="flex justify-end">
+                <button 
+                  onClick={handleMassPromotion}
+                  disabled={loading || !originClassId || !targetClassId || originClassId === targetClassId || originStudentCount === 0}
+                  className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-xl font-bold transition shadow-lg shadow-green-500/20 disabled:opacity-50"
+                >
+                  {loading ? <Users className="animate-spin" /> : <ArrowUpCircle />}
+                  {loading ? 'Sedang Memproses...' : 'Proses Kenaikan Kelas Masal'}
+                </button>
+              </div>
+            </div>
+
+            {/* CARD 2: RESET ALL PENEMPATAN */}
             <div className="bg-blue-50 border border-blue-100 p-6 rounded-2xl dark:bg-blue-900/10 dark:border-blue-900/20">
                <div className="flex items-start gap-4">
                   <div className="p-3 bg-blue-100 text-blue-600 rounded-full dark:bg-blue-900/30">
                     <ArrowUpCircle size={24} />
                   </div>
                   <div className="space-y-3">
-                    <h3 className="text-lg font-bold text-blue-800 dark:text-blue-400">Reset Penempatan & Kenaikan Kelas</h3>
+                    <h3 className="text-lg font-bold text-blue-800 dark:text-blue-400">Reset Penempatan & Kenaikan Kelas (Alternatif Masal)</h3>
                     <p className="text-sm text-blue-700 leading-relaxed dark:text-blue-300">
-                      Siswa di Kelas 10 & 11 akan dilepaskan dari kelas lamanya. Biodata dan Portofolio (Poin/BK/RFID) tidak akan dihapus.
+                      Siswa di Kelas 10 & 11 akan dilepaskan dari kelas lamanya secara masal (menjadi status "Belum Masuk Kelas"). Biodata dan Portofolio tetap aman.
                     </p>
                     <ul className="text-xs text-blue-600 space-y-1 list-disc pl-5 dark:text-blue-400/80">
-                      <li>Status siswa berubah menjadi "Belum Masuk Kelas".</li>
-                      <li>Poin Pelanggaran & Prestasi tetap tersimpan (Kumulatif).</li>
-                      <li>RFID tetap menempel pada NIS siswa (Otomatis Aktif).</li>
-                      <li>Setelah reset, Anda harus melakukan pemetaan manual ke kelas baru.</li>
+                      <li>Status seluruh siswa berubah menjadi "Belum Masuk Kelas".</li>
+                      <li>Catatan pelanggaran & prestasi kumulatif tetap utuh.</li>
+                      <li>Setelah reset, Anda dapat menggunakan tab "Pemetaan Kelas Baru" untuk menata kelas baru secara bertahap.</li>
                     </ul>
                     <div className="pt-4">
                        <button 
