@@ -8,6 +8,25 @@ const cleanEnv = (val: string | undefined) => {
     return val.replace(/^["']|["']$/g, '').trim();
 };
 
+const getCurrentAcademicYearRange = (now: Date = new Date()): { startDate: string, endDate: string } => {
+    const month = now.getMonth(); // 0-indexed: 0 = Jan, 6 = Jul
+    const year = now.getFullYear();
+    let startYear = year;
+    let endYear = year;
+
+    if (month >= 6) { // July (6) to December (11)
+      startYear = year;
+      endYear = year + 1;
+    } else { // January (0) to June (5)
+      startYear = year - 1;
+      endYear = year;
+    }
+
+    const startStr = `${startYear}-07-01`;
+    const endStr = `${endYear}-06-30`;
+    return { startDate: startStr, endDate: endStr };
+};
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method Not Allowed' });
@@ -61,25 +80,58 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
     };
 
+    const { startDate, endDate } = getCurrentAcademicYearRange();
+
     // 2. Aggregate Queries
-    const [totalClasses, totalStudents, filledJournals, totalAttendance] = await Promise.all([
+    const [totalClasses, totalStudents] = await Promise.all([
         safeCount('classes', 'eduadmin_classes'),
-        safeCount('students', 'eduadmin_students'),
-        safeCount('journals', 'eduadmin_journals'),
-        safeCount('attendance', 'eduadmin_attendance')
+        safeCount('students', 'eduadmin_students')
     ]);
 
-    // Hitung Kehadiran (Try specific table first, then sync_store fallback)
+    // Query Journals within the current academic year range (resets on new academic year)
+    let filledJournals = 0;
+    try {
+        const res = await client.execute({
+            sql: "SELECT COUNT(*) as count FROM journals WHERE (deleted = 0 OR deleted IS NULL) AND date >= ? AND date <= ?",
+            args: [startDate, endDate]
+        });
+        filledJournals = res.rows[0].count as number;
+    } catch (e) {
+        console.warn("Failed to query journals by academic year:", e);
+        filledJournals = await safeCount('journals', 'eduadmin_journals');
+    }
+
+    // Query Attendance within the current academic year range (resets on new academic year)
+    let totalAttendance = 0;
+    try {
+        const res = await client.execute({
+            sql: "SELECT COUNT(*) as count FROM attendance WHERE (deleted = 0 OR deleted IS NULL) AND date >= ? AND date <= ?",
+            args: [startDate, endDate]
+        });
+        totalAttendance = res.rows[0].count as number;
+    } catch (e) {
+        console.warn("Failed to query total attendance by academic year:", e);
+        totalAttendance = await safeCount('attendance', 'eduadmin_attendance');
+    }
+
     let presentAttendance = 0;
     try {
-        const res = await client.execute("SELECT COUNT(*) as count FROM attendance WHERE status = 'H' AND (deleted = 0 OR deleted IS NULL)");
+        const res = await client.execute({
+            sql: "SELECT COUNT(*) as count FROM attendance WHERE status IN ('H', 'T') AND (deleted = 0 OR deleted IS NULL) AND date >= ? AND date <= ?",
+            args: [startDate, endDate]
+        });
         presentAttendance = res.rows[0].count as number;
     } catch {
-        // Fallback to sync_store JSON parsing (slow but works if table missing)
+        // Fallback to sync_store or simpler queries if table missing or schema mismatch
         try {
-            const res = await client.execute("SELECT COUNT(*) as count FROM sync_store WHERE collection = 'eduadmin_attendance' AND (deleted = 0 OR deleted IS NULL) AND data LIKE '%\"status\":\"H\"%'");
+            const res = await client.execute("SELECT COUNT(*) as count FROM attendance WHERE status IN ('H', 'T') AND (deleted = 0 OR deleted IS NULL)");
             presentAttendance = res.rows[0].count as number;
-        } catch {}
+        } catch {
+            try {
+                const res = await client.execute("SELECT COUNT(*) as count FROM sync_store WHERE collection = 'eduadmin_attendance' AND (deleted = 0 OR deleted IS NULL) AND (data LIKE '%\"status\":\"H\"%' OR data LIKE '%\"status\":\"T\"%')");
+                presentAttendance = res.rows[0].count as number;
+            } catch {}
+        }
     }
     
     const attendanceRate = totalAttendance > 0 
