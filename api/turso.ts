@@ -1460,16 +1460,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 args: [schoolNpsn]
             });
             
-            // 2. Filter grade 12 classes
+            // 2. Filter grade 12 classes (with robust regex parsing)
             const grade12ClassIds = classesRes.rows
-                .filter((c: any) => 
-                    c.name && (
-                        c.name.startsWith('12') || 
-                        c.name.toUpperCase().startsWith('XII ') || 
-                        c.name.toUpperCase() === 'XII' ||
-                        c.name.toUpperCase().startsWith('XII-')
-                    )
-                )
+                .filter((c: any) => {
+                    if (!c.name) return false;
+                    const clean = c.name.trim().toUpperCase();
+                    return /^12\b|^12[^0-9]|^XII\b|^XII[^A-Z]/i.test(clean);
+                })
                 .map((c: any) => c.id);
 
             if (grade12ClassIds.length === 0) {
@@ -1488,7 +1485,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 return res.status(200).json({ success: true, count: 0, message: "Tidak ada siswa di kelas tingkat 12 di remote." });
             }
 
-            // 4. Run delete statements in remote database
+            // 4. Run soft delete updates in remote database
             const studentPlaceholders = studentIds.map(() => '?').join(', ');
             const tablesToClear = [
                 'students', 'attendance', 'bk_violations', 'bk_reductions', 
@@ -1496,12 +1493,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 'learning_style_assessments', 'cbt_attempts', 'rfid_logs', 'scores'
             ];
 
+            const now = Date.now();
             const statements = [];
             for (const table of tablesToClear) {
                 const idCol = table === 'students' ? 'id' : 'student_id';
                 statements.push({
-                    sql: `DELETE FROM ${table} WHERE ${idCol} IN (${studentPlaceholders})`,
-                    args: studentIds
+                    sql: `UPDATE ${table} SET deleted = 1, last_modified = ? WHERE ${idCol} IN (${studentPlaceholders})`,
+                    args: [now, ...studentIds]
                 });
             }
 
