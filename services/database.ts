@@ -2011,6 +2011,25 @@ export const clearSchoolSchedules = async (schoolNpsn: string) => {
 };
 
 // --- LOGS & STATS ---
+export const getCurrentAcademicYearRange = (now: Date = new Date()): { startDate: string, endDate: string } => {
+    const month = now.getMonth(); // 0-indexed: 0 = Jan, 6 = Jul
+    const year = now.getFullYear();
+    let startYear = year;
+    let endYear = year;
+
+    if (month >= 6) { // July (6) to December (11)
+      startYear = year;
+      endYear = year + 1;
+    } else { // January (0) to June (5)
+      startYear = year - 1;
+      endYear = year;
+    }
+
+    const startStr = `${startYear}-07-01`;
+    const endStr = `${endYear}-06-30`;
+    return { startDate: startStr, endDate: endStr };
+};
+
 export const getSystemLogs = async () => {
     return await db.logs.toArray();
 };
@@ -2042,9 +2061,20 @@ export const getDashboardStats = async (user: User): Promise<DashboardStatsData>
     const classes = await getClasses(user.id, user.schoolNpsn);
     const classIds = classes.map(c => c.id);
     const students = await db.students.where('classId').anyOf(classIds).toArray();
-    const journals = await db.teachingJournals.where('userId').equals(user.id).count();
     
-    const attendance = await db.attendanceRecords.where('classId').anyOf(classIds).toArray();
+    // Filter statistics based on current academic year to reset every year (2 semesters)
+    const { startDate, endDate } = getCurrentAcademicYearRange();
+
+    const journals = await db.teachingJournals
+        .where('userId').equals(user.id)
+        .and(j => j.date >= startDate && j.date <= endDate)
+        .count();
+    
+    const attendance = await db.attendanceRecords
+        .where('classId').anyOf(classIds)
+        .and(a => a.date >= startDate && a.date <= endDate)
+        .toArray();
+        
     const present = attendance.filter(a => a.status === 'H' || a.status === 'T').length;
     const rate = attendance.length > 0 ? Math.round((present / attendance.length) * 100) : 0;
 
