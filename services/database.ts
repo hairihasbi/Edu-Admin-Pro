@@ -498,8 +498,9 @@ export const addClass = async (userId: string, name: string, description: string
 };
 
 export const deleteClass = async (id: string) => {
+    const cls = await db.classes.get(id);
     await db.classes.delete(id);
-    pushToTurso('eduadmin_classes', [{id, deleted: true}]);
+    pushToTurso('eduadmin_classes', [cls ? { ...cls, deleted: true } : { id, deleted: true }]);
 };
 
 // --- SYSTEM ---
@@ -1098,8 +1099,9 @@ export const addStudentViolation = async (data: Omit<StudentViolation, 'id'|'las
     return item;
 };
 export const deleteStudentViolation = async (id: string) => {
+    const item = await db.violations.get(id);
     await db.violations.delete(id);
-    pushToTurso('eduadmin_bk_violations', [{id, deleted: true}]);
+    pushToTurso('eduadmin_bk_violations', [item ? { ...item, deleted: true } : { id, deleted: true }]);
 };
 
 export const getStudentPointReductions = async () => await db.pointReductions.toArray();
@@ -1110,8 +1112,9 @@ export const addStudentPointReduction = async (data: Omit<StudentPointReduction,
     return item;
 };
 export const deleteStudentPointReduction = async (id: string) => {
+    const item = await db.pointReductions.get(id);
     await db.pointReductions.delete(id);
-    pushToTurso('eduadmin_bk_reductions', [{id, deleted: true}]);
+    pushToTurso('eduadmin_bk_reductions', [item ? { ...item, deleted: true } : { id, deleted: true }]);
 };
 
 export const getStudentAchievements = async () => await db.achievements.toArray();
@@ -1122,8 +1125,9 @@ export const addStudentAchievement = async (data: Omit<StudentAchievement, 'id'|
     return item;
 };
 export const deleteStudentAchievement = async (id: string) => {
+    const item = await db.achievements.get(id);
     await db.achievements.delete(id);
-    pushToTurso('eduadmin_bk_achievements', [{id, deleted: true}]);
+    pushToTurso('eduadmin_bk_achievements', [item ? { ...item, deleted: true } : { id, deleted: true }]);
 };
 
 export const getCounselingSessions = async () => await db.counselingSessions.toArray();
@@ -1134,8 +1138,9 @@ export const addCounselingSession = async (data: Omit<CounselingSession, 'id'|'l
     return item;
 };
 export const deleteCounselingSession = async (id: string) => {
+    const item = await db.counselingSessions.get(id);
     await db.counselingSessions.delete(id);
-    pushToTurso('eduadmin_bk_counseling', [{id, deleted: true}]);
+    pushToTurso('eduadmin_bk_counseling', [item ? { ...item, deleted: true } : { id, deleted: true }]);
 };
 
 // --- DAILY PICKET ---
@@ -1415,10 +1420,19 @@ export const deleteStudent = async (id: string) => {
         const cls = await db.classes.get(s.classId);
         if (cls) {
             const actualCount = await db.students.where('classId').equals(s.classId).count();
-            await db.classes.update(s.classId, { studentCount: actualCount });
+            await db.classes.update(s.classId, { 
+                studentCount: actualCount,
+                lastModified: Date.now(),
+                isSynced: false
+            });
+            const updatedCls = await db.classes.get(s.classId);
+            if (updatedCls) {
+                await pushToTurso('eduadmin_classes', [updatedCls]);
+            }
         }
-        // Push deletion to Turso
-        pushToTurso('eduadmin_students', [{id, deleted: true}]);
+        // Push deletion to Turso with full metadata preserved
+        await pushToTurso('eduadmin_students', [{ ...s, deleted: true }]);
+        triggerDebouncedSync();
     }
 };
 
@@ -1432,14 +1446,25 @@ export const bulkDeleteStudents = async (ids: string[]) => {
     // Delete locally
     await db.students.bulkDelete(ids);
     
-    // Update class counts
+    // Update class counts and push to Turso
+    const classUpdates = [];
     for (const classId of classIds) {
         const actualCount = await db.students.where('classId').equals(classId).count();
-        await db.classes.update(classId, { studentCount: actualCount });
+        await db.classes.update(classId, { 
+            studentCount: actualCount,
+            lastModified: Date.now(),
+            isSynced: false
+        });
+        const updatedCls = await db.classes.get(classId);
+        if (updatedCls) classUpdates.push(updatedCls);
+    }
+    
+    if (classUpdates.length > 0) {
+        await pushToTurso('eduadmin_classes', classUpdates);
     }
 
-    // Push all deletions to Turso in one batch
-    const deletePayload = ids.map(id => ({ id, deleted: true }));
+    // Push all deletions to Turso in one batch with full metadata preserved
+    const deletePayload = studentsToDelete.map(s => ({ ...s, deleted: true }));
     await pushToTurso('eduadmin_students', deletePayload);
     
     triggerDebouncedSync();
@@ -1734,7 +1759,7 @@ export const deleteAttendanceRecords = async (classId: string, month: number, ye
     });
     const ids = toDelete.map(r => r.id);
     await db.attendanceRecords.bulkDelete(ids);
-    pushToTurso('eduadmin_attendance', ids.map(id => ({id, deleted: true})));
+    pushToTurso('eduadmin_attendance', toDelete.map(item => ({ ...item, deleted: true })));
 };
 
 export const getAttendanceRecords = async (classId: string, month: number, year: number, userId: string) => {
@@ -1809,13 +1834,15 @@ export const getScopeMaterials = async (classId: string, semester: string, userI
 };
 
 export const deleteScopeMaterial = async (id: string) => {
+    const item = await db.scopeMaterials.get(id);
     await db.scopeMaterials.delete(id);
-    pushToTurso('eduadmin_materials', [{id, deleted: true}]);
+    pushToTurso('eduadmin_materials', [item ? { ...item, deleted: true } : { id, deleted: true }]);
 };
 
 export const bulkDeleteScopeMaterials = async (ids: string[]) => {
+    const items = await db.scopeMaterials.where('id').anyOf(ids).toArray();
     await db.scopeMaterials.bulkDelete(ids);
-    pushToTurso('eduadmin_materials', ids.map(id => ({id, deleted: true})));
+    pushToTurso('eduadmin_materials', items.map(item => ({ ...item, deleted: true })));
 };
 
 export const copyScopeMaterials = async (sourceClassId: string, targetClassId: string, sourceSem: string, targetSem: string, userId: string, subject: string) => {
@@ -1926,13 +1953,15 @@ export const addTeachingJournal = async (data: Omit<TeachingJournal, 'id'|'lastM
 };
 
 export const deleteTeachingJournal = async (id: string) => {
+    const item = await db.teachingJournals.get(id);
     await db.teachingJournals.delete(id);
-    pushToTurso('eduadmin_journals', [{id, deleted: true}]);
+    pushToTurso('eduadmin_journals', [item ? { ...item, deleted: true } : { id, deleted: true }]);
 };
 
 export const bulkDeleteTeachingJournals = async (ids: string[]) => {
+    const items = await db.teachingJournals.where('id').anyOf(ids).toArray();
     await db.teachingJournals.bulkDelete(ids);
-    pushToTurso('eduadmin_journals', ids.map(id => ({id, deleted: true})));
+    pushToTurso('eduadmin_journals', items.map(item => ({ ...item, deleted: true })));
 };
 
 // --- SCHEDULES ---
@@ -1969,15 +1998,16 @@ export const saveBulkSchedules = async (schedules: Omit<TeachingSchedule, 'id'|'
 };
 
 export const deleteTeachingSchedule = async (id: string) => {
+    const item = await db.teachingSchedules.get(id);
     await db.teachingSchedules.delete(id);
-    pushToTurso('eduadmin_schedules', [{id, deleted: true}]);
+    pushToTurso('eduadmin_schedules', [item ? { ...item, deleted: true } : { id, deleted: true }]);
 };
 
 export const clearSchoolSchedules = async (schoolNpsn: string) => {
     const schedules = await getSchoolSchedules(schoolNpsn);
     const ids = schedules.map(s => s.id);
     await db.teachingSchedules.bulkDelete(ids);
-    pushToTurso('eduadmin_schedules', ids.map(id => ({id, deleted: true})));
+    pushToTurso('eduadmin_schedules', schedules.map(s => ({ ...s, deleted: true })));
 };
 
 // --- LOGS & STATS ---
@@ -2587,13 +2617,12 @@ export const cleanupOldPhotos = async () => {
 export const processGraduation = async (schoolNpsn: string) => {
   // 1. Get all classes for the school
   const classes = await db.classes.where('schoolNpsn').equals(schoolNpsn).toArray();
-  // 2. Identify Grade 12 classes (starts with 12 or XII)
-  const grade12Classes = classes.filter(c => 
-    c.name.startsWith('12') || 
-    c.name.toUpperCase().startsWith('XII ') || 
-    c.name.toUpperCase() === 'XII' ||
-    c.name.toUpperCase().startsWith('XII-')
-  );
+  // 2. Identify Grade 12 classes (starts with 12 or XII with robust regex parsing)
+  const grade12Classes = classes.filter(c => {
+    if (!c.name) return false;
+    const clean = c.name.trim().toUpperCase();
+    return /^12\b|^12[^0-9]|^XII\b|^XII[^A-Z]/i.test(clean);
+  });
   const grade12ClassIds = grade12Classes.map(c => c.id);
 
   if (grade12ClassIds.length === 0) {
@@ -2628,6 +2657,21 @@ export const processGraduation = async (schoolNpsn: string) => {
       await db.cbtAttempts.where('studentId').anyOf(studentIds).delete();
       await db.learningStyleAssessments.where('studentId').anyOf(studentIds).delete();
     });
+
+    // Update studentCount of grade 12 classes to 0 locally, mark as unsynced, and push to Turso
+    const classUpdates = [];
+    for (const cls of grade12Classes) {
+      await db.classes.update(cls.id, {
+        studentCount: 0,
+        lastModified: Date.now(),
+        isSynced: false
+      });
+      const updated = await db.classes.get(cls.id);
+      if (updated) classUpdates.push(updated);
+    }
+    if (classUpdates.length > 0) {
+      await pushToTurso('eduadmin_classes', classUpdates);
+    }
 
     // Log activity
     addSystemLog('WARNING', 'Wakasek Kurikulum', 'ACADEMIC', 'Graduation', `Processed graduation for ${studentIds.length} students in grade 12.`);
@@ -2667,11 +2711,14 @@ export const processGraduation = async (schoolNpsn: string) => {
 export const processPromotionReset = async (schoolNpsn: string) => {
   // 1. Get all classes for the school
   const classes = await db.classes.where('schoolNpsn').equals(schoolNpsn).toArray();
-  // 2. Identify Grade 10 & 11 classes
-  const targetClasses = classes.filter(c => 
-    c.name.startsWith('10') || c.name.toUpperCase().startsWith('X ') || c.name.toUpperCase() === 'X' || c.name.toUpperCase().startsWith('X-') ||
-    c.name.startsWith('11') || c.name.toUpperCase().startsWith('XI ') || c.name.toUpperCase() === 'XI' || c.name.toUpperCase().startsWith('XI-')
-  );
+  // 2. Identify Grade 10 & 11 classes (with robust regex parsing)
+  const targetClasses = classes.filter(c => {
+    if (!c.name) return false;
+    const clean = c.name.trim().toUpperCase();
+    const isGrade10 = /^10\b|^10[^0-9]|^X\b|^X[^A-Z]/i.test(clean);
+    const isGrade11 = /^11\b|^11[^0-9]|^XI\b|^XI[^A-Z]/i.test(clean);
+    return isGrade10 || isGrade11;
+  });
   const targetClassIds = targetClasses.map(c => c.id);
 
   if (targetClassIds.length === 0) {
@@ -2695,6 +2742,24 @@ export const processPromotionReset = async (schoolNpsn: string) => {
     }));
 
     await db.students.bulkPut(updates);
+
+    // Update studentCount of target classes to 0 locally, mark as unsynced, and push to Turso
+    const classUpdates = [];
+    for (const cls of targetClasses) {
+      await db.classes.update(cls.id, {
+        studentCount: 0,
+        lastModified: Date.now(),
+        isSynced: false
+      });
+      const updated = await db.classes.get(cls.id);
+      if (updated) classUpdates.push(updated);
+    }
+    if (classUpdates.length > 0) {
+      await pushToTurso('eduadmin_classes', classUpdates);
+    }
+
+    // Push updated student records to Turso
+    await pushToTurso('eduadmin_students', updates);
 
     // Log activity
     addSystemLog('INFO', 'Wakasek Kurikulum', 'ACADEMIC', 'Promotion Reset', `Reset class assignment for ${students.length} students (Grade 10/11).`);
@@ -2726,6 +2791,23 @@ export const assignStudentsByBatch = async (studentIds: string[], targetClassId:
 
   if (updates.length > 0) {
     await db.students.bulkPut(updates);
+
+    // Update target class count and push to Turso
+    const targetClass = await db.classes.get(targetClassId);
+    if (targetClass) {
+      const actualCount = await db.students.where('classId').equals(targetClassId).count();
+      await db.classes.update(targetClassId, {
+        studentCount: actualCount,
+        lastModified: Date.now(),
+        isSynced: false
+      });
+      const updated = await db.classes.get(targetClassId);
+      if (updated) await pushToTurso('eduadmin_classes', [updated]);
+    }
+
+    // Push updated student records to Turso
+    await pushToTurso('eduadmin_students', updates);
+
     triggerDebouncedSync();
     return { success: true, count: updates.length };
   }
@@ -2750,6 +2832,34 @@ export const promoteStudentsClassToClass = async (originClassId: string, targetC
   }));
   
   await db.students.bulkPut(updates);
+
+  // Update classes student count locally, mark as unsynced, and push to Turso
+  const originClass = await db.classes.get(originClassId);
+  if (originClass) {
+    await db.classes.update(originClassId, {
+      studentCount: 0,
+      lastModified: Date.now(),
+      isSynced: false
+    });
+    const updatedOrigin = await db.classes.get(originClassId);
+    if (updatedOrigin) await pushToTurso('eduadmin_classes', [updatedOrigin]);
+  }
+
+  const targetClass = await db.classes.get(targetClassId);
+  if (targetClass) {
+    const actualCount = await db.students.where('classId').equals(targetClassId).count();
+    await db.classes.update(targetClassId, {
+      studentCount: actualCount,
+      lastModified: Date.now(),
+      isSynced: false
+    });
+    const updatedTarget = await db.classes.get(targetClassId);
+    if (updatedTarget) await pushToTurso('eduadmin_classes', [updatedTarget]);
+  }
+
+  // Push updated student records to Turso
+  await pushToTurso('eduadmin_students', updates);
+
   triggerDebouncedSync();
   return { success: true, count: updates.length };
 };
