@@ -9,7 +9,8 @@ import {
   getAvailableClassesForHomeroom,
   addSystemLog,
   getStudentCountByClass,
-  promoteStudentsClassToClass
+  promoteStudentsClassToClass,
+  syncAllData
 } from '../services/database';
 import { 
   GraduationCap, 
@@ -47,14 +48,30 @@ const WakasekAcademicManagement: React.FC<WakasekAcademicManagementProps> = ({ u
   const [targetClassId, setTargetClassId] = useState<string>('');
   const [originStudentCount, setOriginStudentCount] = useState<number | null>(null);
 
-  // Fetch classes on mount
+  // Fetch classes on mount and sync in background
   useEffect(() => {
     if (user.schoolNpsn) {
+      // 1. Load from local database immediately for instant UI response
       getAvailableClassesForHomeroom(user.schoolNpsn).then(schoolClasses => {
         setClasses(schoolClasses.sort((a, b) => a.name.localeCompare(b.name)));
       }).catch(err => {
-        console.error("Failed to load classes:", err);
+        console.error("Failed to load classes locally:", err);
       });
+
+      // 2. Sync from Turso in background and reload data
+      syncAllData(true)
+        .catch(err => console.error("Background sync on mount failed:", err))
+        .finally(() => {
+          getAvailableClassesForHomeroom(user.schoolNpsn!).then(schoolClasses => {
+            setClasses(schoolClasses.sort((a, b) => a.name.localeCompare(b.name)));
+          }).catch(err => {
+            console.error("Failed to reload classes after sync:", err);
+          });
+          // Also refresh mapping list if active
+          if (activeTab === 'MAPPING') {
+            fetchMappingData();
+          }
+        });
     }
   }, [user.schoolNpsn]);
 
@@ -102,6 +119,12 @@ const WakasekAcademicManagement: React.FC<WakasekAcademicManagementProps> = ({ u
       if (result.success) {
         setMessage({ type: 'success', text: `Berhasil meluluskan ${result.count} siswa. Data telah dibersihkan.` });
         addSystemLog('WARNING', user.fullName, 'ACADEMIC', 'Graduation', `Processed graduation for ${result.count} students.`);
+        
+        // Reload all local lists
+        fetchMappingData();
+        getAvailableClassesForHomeroom(user.schoolNpsn!).then(schoolClasses => {
+          setClasses(schoolClasses.sort((a, b) => a.name.localeCompare(b.name)));
+        });
       } else {
         setMessage({ type: 'error', text: result.message || 'Gagal memproses kelulusan.' });
       }
@@ -124,6 +147,12 @@ const WakasekAcademicManagement: React.FC<WakasekAcademicManagementProps> = ({ u
       if (result.success) {
         setMessage({ type: 'success', text: `Berhasil meriset penempatan ${result.count} siswa. Silakan lakukan pemetaan kelas baru.` });
         addSystemLog('INFO', user.fullName, 'ACADEMIC', 'Promotion Reset', `Reset class assignment for ${result.count} students.`);
+        
+        // Reload all local lists
+        fetchMappingData();
+        getAvailableClassesForHomeroom(user.schoolNpsn!).then(schoolClasses => {
+          setClasses(schoolClasses.sort((a, b) => a.name.localeCompare(b.name)));
+        });
       } else {
         setMessage({ type: 'error', text: result.message || 'Gagal meriset kenaikan kelas.' });
       }
@@ -161,9 +190,12 @@ const WakasekAcademicManagement: React.FC<WakasekAcademicManagementProps> = ({ u
         setOriginClassId('');
         setTargetClassId('');
         setOriginStudentCount(null);
-        if (user.schoolNpsn) {
-          getUnassignedStudents(user.schoolNpsn).then(setUnassignedStudents);
-        }
+        
+        // Reload all local lists
+        fetchMappingData();
+        getAvailableClassesForHomeroom(user.schoolNpsn!).then(schoolClasses => {
+          setClasses(schoolClasses.sort((a, b) => a.name.localeCompare(b.name)));
+        });
       } else {
         setMessage({ type: 'error', text: result.message || 'Gagal memproses kenaikan kelas.' });
       }
