@@ -421,6 +421,69 @@ export const pullFromTurso = async (collection: string, localItems: any[]): Prom
       }
     });
 
+    // --- HARD-DELETE RECONCILIATION ---
+    // If an item in the local DB was previously successfully synchronized (isSynced === true or not isSynced === false),
+    // but is completely absent from the remote pull results (remoteMap), it means it has been hard-deleted
+    // from the Turso database. We must remove it locally to ensure consistency with the remote source of truth.
+    const remoteKeys = new Set(Array.from(remoteMap.keys()).map(k => String(k)));
+    const filteredMergedItems = mergedItems.filter(localItem => {
+        const localIdStr = String(localItem.id || localItem.userId);
+        if (!localIdStr || remoteKeys.has(localIdStr)) {
+            return true; // Exists on remote, keep it
+        }
+        
+        // If the item is newly created or modified locally and pending push (isSynced === false), keep it!
+        if (localItem.isSynced === false || localItem.isSynced === 0) {
+            return true;
+        }
+        
+        // Synced item is missing from remote. Remove it from local database.
+        console.log(`[Sync Hard-Delete] Removing local item of collection ${collection} since it was hard-deleted from remote:`, localIdStr);
+        hasChanges = true;
+        return false;
+    });
+
+    mergedItems.length = 0;
+    mergedItems.push(...filteredMergedItems);
+
+    // --- DEDUPLICATION PASS FOR STUDENTS (BY NIS) ---
+    // If multiple local records have the same NIS, we only keep the newest or the synced one.
+    if (collection === 'eduadmin_students') {
+        const nisMap = new Map<string, any>();
+        const uniqueMerged: any[] = [];
+        
+        for (const item of mergedItems) {
+            if (!item.nis) {
+                uniqueMerged.push(item);
+                continue;
+            }
+            
+            const existing = nisMap.get(item.nis);
+            if (!existing) {
+                nisMap.set(item.nis, item);
+                uniqueMerged.push(item);
+            } else {
+                hasChanges = true;
+                const existingTime = existing.lastModified || 0;
+                const itemTime = item.lastModified || 0;
+                
+                // Keep the one with the latest lastModified, or the one that is synced
+                if (itemTime > existingTime || (item.isSynced && !existing.isSynced)) {
+                    const idx = uniqueMerged.indexOf(existing);
+                    if (idx !== -1) {
+                        uniqueMerged[idx] = item;
+                    }
+                    nisMap.set(item.nis, item);
+                    console.log(`[Sync Deduplicate] Kept student ${item.name} (NIS: ${item.nis}) with newer timestamp`);
+                } else {
+                    console.log(`[Sync Deduplicate] Removed older/duplicate student ${item.name} (NIS: ${item.nis})`);
+                }
+            }
+        }
+        mergedItems.length = 0;
+        mergedItems.push(...uniqueMerged);
+    }
+
     return { items: mergedItems, hasChanges };
   } catch (e) {
     console.error(`Pull Error (${collection}):`, e);
