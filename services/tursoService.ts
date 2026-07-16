@@ -186,7 +186,7 @@ export const pushToTurso = async (collection: string, items: any[], force: boole
   }
 
   // 1. Filter items needing sync
-  const itemsToPush = force ? items : items.filter(item => !item.isSynced || !item.lastModified);
+  const itemsToPush = force ? items : items.filter(item => item.deleted || !item.isSynced || !item.lastModified);
   
   if (itemsToPush.length === 0) return;
 

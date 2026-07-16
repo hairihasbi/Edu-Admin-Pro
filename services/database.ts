@@ -1431,7 +1431,7 @@ export const deleteStudent = async (id: string) => {
             }
         }
         // Push deletion to Turso with full metadata preserved
-        await pushToTurso('eduadmin_students', [{ ...s, deleted: true }]);
+        await pushToTurso('eduadmin_students', [{ ...s, deleted: true, isSynced: false, lastModified: Date.now() }]);
         triggerDebouncedSync();
     }
 };
@@ -1464,7 +1464,7 @@ export const bulkDeleteStudents = async (ids: string[]) => {
     }
 
     // Push all deletions to Turso in one batch with full metadata preserved
-    const deletePayload = studentsToDelete.map(s => ({ ...s, deleted: true }));
+    const deletePayload = studentsToDelete.map(s => ({ ...s, deleted: true, isSynced: false, lastModified: Date.now() }));
     await pushToTurso('eduadmin_students', deletePayload);
     
     triggerDebouncedSync();
