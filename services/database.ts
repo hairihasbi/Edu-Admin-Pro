@@ -1098,10 +1098,19 @@ export const addStudentViolation = async (data: Omit<StudentViolation, 'id'|'las
     triggerDebouncedSync();
     return item;
 };
+export const updateStudentViolation = async (id: string, data: Partial<StudentViolation>) => {
+    const item = await db.violations.get(id);
+    if (!item) return null;
+    const updated = { ...item, ...data, lastModified: Date.now(), isSynced: false };
+    await db.violations.put(updated);
+    pushToTurso('eduadmin_bk_violations', [updated]);
+    triggerDebouncedSync();
+    return updated;
+};
 export const deleteStudentViolation = async (id: string) => {
     const item = await db.violations.get(id);
     await db.violations.delete(id);
-    pushToTurso('eduadmin_bk_violations', [item ? { ...item, deleted: true } : { id, deleted: true }]);
+    pushToTurso('eduadmin_bk_violations', [item ? { ...item, deleted: true, isSynced: false, lastModified: Date.now() } : { id, deleted: true, isSynced: false, lastModified: Date.now() }]);
 };
 
 export const getStudentPointReductions = async () => await db.pointReductions.toArray();
@@ -1111,10 +1120,19 @@ export const addStudentPointReduction = async (data: Omit<StudentPointReduction,
     triggerDebouncedSync();
     return item;
 };
+export const updateStudentPointReduction = async (id: string, data: Partial<StudentPointReduction>) => {
+    const item = await db.pointReductions.get(id);
+    if (!item) return null;
+    const updated = { ...item, ...data, lastModified: Date.now(), isSynced: false };
+    await db.pointReductions.put(updated);
+    pushToTurso('eduadmin_bk_reductions', [updated]);
+    triggerDebouncedSync();
+    return updated;
+};
 export const deleteStudentPointReduction = async (id: string) => {
     const item = await db.pointReductions.get(id);
     await db.pointReductions.delete(id);
-    pushToTurso('eduadmin_bk_reductions', [item ? { ...item, deleted: true } : { id, deleted: true }]);
+    pushToTurso('eduadmin_bk_reductions', [item ? { ...item, deleted: true, isSynced: false, lastModified: Date.now() } : { id, deleted: true, isSynced: false, lastModified: Date.now() }]);
 };
 
 export const getStudentAchievements = async () => await db.achievements.toArray();
