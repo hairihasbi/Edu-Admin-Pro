@@ -1,11 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, Student, MasterSubject, AssessmentScore, ClassRoom, StudentViolation, StudentAchievement, CounselingSession, ClassInventory, HomeVisit, ParentCall } from '../types';
+import { User, Student, MasterSubject, AssessmentScore, ClassRoom, StudentViolation, StudentAchievement, CounselingSession, ClassInventory, HomeVisit, ParentCall, StudentPointReduction } from '../types';
 import { 
   getStudents, getMasterSubjects, getAssessmentScores, getAllClasses, 
   getStudentViolations, getStudentAchievements, getCounselingSessions,
   getClassInventory, saveClassInventory, deleteClassInventory, getSystemSettings,
-  getHomeVisits, getParentCalls, getAttendanceRecordsByRange, getRfidLogs
+  getHomeVisits, getParentCalls, getAttendanceRecordsByRange, getRfidLogs,
+  getStudentPointReductions, addStudentViolation, addStudentPointReduction
 } from '../services/database';
 import { 
   UserCheck, Users, GraduationCap, AlertTriangle, FileSpreadsheet, 
@@ -39,10 +40,23 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
   
   // BK Data State
   const [violations, setViolations] = useState<StudentViolation[]>([]);
+  const [pointReductions, setPointReductions] = useState<StudentPointReduction[]>([]);
   const [achievements, setAchievements] = useState<StudentAchievement[]>([]);
   const [sessions, setSessions] = useState<CounselingSession[]>([]);
   const [homeVisits, setHomeVisits] = useState<HomeVisit[]>([]);
   const [parentCalls, setParentCalls] = useState<ParentCall[]>([]);
+
+  // Simple Form Modal for Wali Kelas (Point Recording)
+  const [showViolationModal, setShowViolationModal] = useState(false);
+  const [selectedStudentForForm, setSelectedStudentForForm] = useState<Student | null>(null);
+  const [violationFormType, setViolationFormType] = useState<'VIOLATION' | 'REDUCTION'>('VIOLATION');
+  const [formInput, setFormInput] = useState({
+    category: 'Terlambat',
+    customCategory: '',
+    points: 5,
+    description: '',
+    date: new Date().toISOString().split('T')[0]
+  });
 
   // Inventory State
   const [inventoryItems, setInventoryItems] = useState<ClassInventory[]>([]);
@@ -82,11 +96,12 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
       if (!user.homeroomClassId) return;
       setIsLoading(true);
 
-      const [allClasses, studentData, scoreData, violationData, achievementData, sessionData, inventoryData, settings, homeVisitData, parentCallData] = await Promise.all([
+      const [allClasses, studentData, scoreData, violationData, reductionData, achievementData, sessionData, inventoryData, settings, homeVisitData, parentCallData] = await Promise.all([
         getAllClasses(),
         getStudents(user.homeroomClassId),
         getAssessmentScores(user.homeroomClassId, selectedSemester),
         getStudentViolations(), 
+        getStudentPointReductions(),
         getStudentAchievements(),
         getCounselingSessions(),
         getClassInventory(user.homeroomClassId),
@@ -107,6 +122,7 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
       // Filter BK Data for current students
       const studentIds = new Set(studentData.map(s => s.id));
       setViolations(violationData.filter(v => studentIds.has(v.studentId)));
+      setPointReductions(reductionData.filter(r => studentIds.has(r.studentId)));
       setAchievements(achievementData.filter(a => studentIds.has(a.studentId)));
       setSessions(sessionData.filter(s => studentIds.has(s.studentId)));
       setHomeVisits(homeVisitData.filter(hv => studentIds.has(hv.studentId)));
@@ -279,14 +295,18 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
   // --- BEHAVIOR LOGIC ---
   const getStudentBehaviorStats = (studentId: string) => {
     const studentViolations = violations.filter(v => v.studentId === studentId);
-    const totalPoints = studentViolations.reduce((sum, v) => sum + v.points, 0);
+    const studentReductions = pointReductions.filter(r => r.studentId === studentId);
+    
+    const violationPoints = studentViolations.reduce((sum, v) => sum + v.points, 0);
+    const reductionPoints = studentReductions.reduce((sum, r) => sum + r.pointsRemoved, 0);
+    const totalPoints = Math.max(0, violationPoints - reductionPoints);
     
     let recommendation = "Pantau";
     let statusColor = "bg-green-100 text-green-700";
 
     if (totalPoints > 100) {
         recommendation = "PANGGILAN ORANG TUA 3";
-        statusColor = "bg-red-100 text-red-800 font-bold border border-red-200";
+        statusColor = "bg-red-100 text-red-800 font-bold border border-red-200 animate-pulse";
     } else if (totalPoints > 50) {
         recommendation = "PANGGILAN ORANG TUA 2";
         statusColor = "bg-orange-100 text-orange-800 font-bold";
@@ -312,6 +332,7 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
         stats: getStudentBehaviorStats(s.id),
         details: {
             violations: violations.filter(v => v.studentId === s.id),
+            reductions: pointReductions.filter(r => r.studentId === s.id),
             achievements: achievements.filter(a => a.studentId === s.id),
             sessions: sessions.filter(sess => sess.studentId === s.id),
             homeVisits: homeVisits.filter(hv => hv.studentId === s.id),
@@ -341,6 +362,61 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Leger Bayangan");
     XLSX.writeFile(wb, `Leger_Bayangan_${className}.xlsx`);
+  };
+
+  const handleSaveDisciplinePoint = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedStudentForForm) return;
+
+    try {
+      const finalCategory = formInput.category === 'Lainnya' ? formInput.customCategory : formInput.category;
+      if (!finalCategory.trim()) {
+        alert('Kategori tidak boleh kosong!');
+        return;
+      }
+
+      if (violationFormType === 'VIOLATION') {
+        await addStudentViolation({
+          studentId: selectedStudentForForm.id,
+          date: formInput.date,
+          violationName: finalCategory,
+          points: Number(formInput.points),
+          description: formInput.description || 'Dicatat oleh Wali Kelas',
+          reportedBy: user.fullName || 'Wali Kelas'
+        });
+      } else {
+        await addStudentPointReduction({
+          studentId: selectedStudentForForm.id,
+          date: formInput.date,
+          activityName: finalCategory,
+          pointsRemoved: Number(formInput.points),
+          description: formInput.description || 'Pemulihan oleh Wali Kelas'
+        });
+      }
+
+      // Refresh data
+      const [vData, rData] = await Promise.all([
+        getStudentViolations(),
+        getStudentPointReductions()
+      ]);
+      const studentIds = new Set(students.map(s => s.id));
+      setViolations(vData.filter(v => studentIds.has(v.studentId)));
+      setPointReductions(rData.filter(r => studentIds.has(r.studentId)));
+
+      // Close modal & reset
+      setShowViolationModal(false);
+      setSelectedStudentForForm(null);
+      setFormInput({
+        category: 'Terlambat',
+        customCategory: '',
+        points: 5,
+        description: '',
+        date: new Date().toISOString().split('T')[0]
+      });
+
+    } catch (err) {
+      console.error('Error saving discipline record:', err);
+    }
   };
 
   const handlePrintBKReport = (student: any) => {
@@ -881,135 +957,368 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
       {/* --- TAB: BEHAVIOR & COUNSELING (Same as before) --- */}
       {activeTab === 'behavior' && (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
-            <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg flex items-start gap-3">
+            
+            {/* Header / Announcement */}
+            <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg flex items-start gap-3 text-left">
                <ShieldAlert className="text-red-600 shrink-0 mt-1" />
                <div>
-                  <h3 className="font-bold text-red-800">Monitoring Siswa Bermasalah</h3>
+                  <h3 className="font-bold text-red-800">Manajemen Kedisiplinan & Bimbingan</h3>
                   <p className="text-sm text-red-700 mt-1">
-                     Data bersumber dari input Guru Bimbingan Konseling (BK). Hanya menampilkan siswa dengan poin pelanggaran.
+                     Wali Kelas dapat mencatatkan pelanggaran (+) maupun pengurangan poin pelanggaran (-) untuk siswa walinya secara langsung. Data disinkronkan secara real-time dengan Guru BK.
                   </p>
                </div>
             </div>
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                <div className="p-6 border-b border-gray-100">
-                    <h3 className="text-lg font-bold text-gray-800">Daftar Peringkat Poin Pelanggaran</h3>
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                
+                {/* COLUMN 1: ALL HOMEROOM STUDENTS (Fast recording list) */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex flex-col h-full text-left">
+                    <div className="flex justify-between items-center mb-4 pb-2 border-b">
+                        <h3 className="font-bold text-gray-800 text-base">Pencatatan Poin Siswa Walian</h3>
+                        <div className="text-xs bg-gray-100 text-gray-600 font-bold px-2 py-1 rounded-lg">Kelas {className}</div>
+                    </div>
+                    <p className="text-xs text-gray-500 mb-4">Klik tombol di samping nama siswa untuk mencatat pelanggaran atau memulihkan poin.</p>
+                    
+                    <div className="space-y-2 overflow-y-auto max-h-[600px] pr-2">
+                        {filteredStudents.map((student) => {
+                            const bStats = getStudentBehaviorStats(student.id);
+                            return (
+                                <div key={student.id} className="flex items-center justify-between p-3 border border-gray-100 hover:border-red-100 rounded-xl hover:bg-gray-50/50 transition duration-150 group">
+                                    <div className="min-w-0 flex-1 pr-4">
+                                        <div className="font-extrabold text-gray-800 truncate text-sm group-hover:text-red-600 transition-colors">{student.name}</div>
+                                        <div className="text-[11px] text-gray-500">NIS: {student.nis} • {student.gender === 'L' ? 'Laki-laki' : 'Perempuan'}</div>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <div className="text-right">
+                                            <span className={`px-2 py-0.5 rounded-lg text-xs font-bold ${
+                                                bStats.totalPoints > 50 
+                                                ? 'bg-red-100 text-red-700' 
+                                                : bStats.totalPoints > 20 
+                                                ? 'bg-yellow-100 text-yellow-800' 
+                                                : bStats.totalPoints > 0 
+                                                ? 'bg-blue-50 text-blue-700' 
+                                                : 'bg-green-50 text-green-700'
+                                            }`}>
+                                                {bStats.totalPoints} Poin
+                                            </span>
+                                        </div>
+                                        <button
+                                            onClick={() => {
+                                                setSelectedStudentForForm(student);
+                                                setViolationFormType('VIOLATION');
+                                                setShowViolationModal(true);
+                                            }}
+                                            className="bg-red-50 text-red-600 hover:bg-red-600 hover:text-white px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-all duration-200"
+                                            title="Catat Pelanggaran / Pengurangan Poin"
+                                        >
+                                            <Plus size={14} /> Catat Poin
+                                        </button>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
                 </div>
 
-                <div className="overflow-x-auto">
-                    {problemStudents.length === 0 ? (
-                        <div className="p-16 text-center">
-                            <ShieldAlert size={48} className="mx-auto text-green-200 mb-4" />
-                            <h4 className="text-lg font-bold text-gray-800">Kelas Aman & Kondusif!</h4>
-                            <p className="text-gray-500">Tidak ada siswa yang tercatat memiliki poin pelanggaran saat ini.</p>
-                        </div>
-                    ) : (
-                        <table className="w-full text-sm text-left">
-                            <thead className="bg-gray-50 text-gray-600 font-semibold border-b border-gray-200">
-                                <tr>
-                                    <th className="p-4 w-12 text-center">No</th>
-                                    <th className="p-4">Identitas Siswa</th>
-                                    <th className="p-4 text-center">Total Poin</th>
-                                    <th className="p-4">Rekomendasi Tindakan</th>
-                                    <th className="p-4 w-10"></th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100">
-                                {problemStudents.map((s, idx) => (
-                                    <React.Fragment key={s.id}>
-                                        <tr 
-                                            className={`hover:bg-gray-50 transition cursor-pointer ${expandedStudentId === s.id ? 'bg-blue-50/50' : ''}`}
-                                            onClick={() => setExpandedStudentId(expandedStudentId === s.id ? null : s.id)}
-                                        >
-                                            <td className="p-4 text-center font-bold text-gray-500">{idx + 1}</td>
-                                            <td className="p-4">
-                                                <div className="font-bold text-gray-800 text-base">{s.name}</div>
-                                                <div className="text-xs text-gray-500">NIS: {s.nis}</div>
-                                            </td>
-                                            <td className="p-4 text-center">
-                                                <span className="text-lg font-bold text-red-600 bg-red-50 px-3 py-1 rounded">{s.stats.totalPoints}</span>
-                                            </td>
-                                            <td className="p-4">
-                                                <span className={`px-3 py-1.5 rounded text-xs uppercase tracking-wide ${s.stats.statusColor}`}>
-                                                    {s.stats.recommendation}
-                                                </span>
-                                            </td>
-                                            <td className="p-4 text-center text-gray-400">
-                                                {expandedStudentId === s.id ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-                                            </td>
-                                        </tr>
-                                        {expandedStudentId === s.id && (
-                                            <tr className="bg-gray-50 border-b border-gray-200">
-                                                <td colSpan={5} className="p-6 cursor-default">
-                                                    <div className="space-y-4">
-                                                        <div>
-                                                            <h4 className="font-bold text-gray-800 flex items-center gap-2 mb-2 text-sm">
-                                                                <AlertCircle size={16} className="text-red-600" /> Rincian Pelanggaran
-                                                            </h4>
-                                                            <ul className="list-disc pl-5 text-xs text-gray-600 space-y-1">
-                                                                {s.details.violations.map(v => (
-                                                                    <li key={v.id}>
-                                                                        <span className="font-bold">{v.date}:</span> {v.violationName} ({v.points} pts) - {v.description}
-                                                                    </li>
-                                                                ))}
-                                                            </ul>
-                                                        </div>
+                {/* COLUMN 2: PROBLEM STUDENTS LIST (Leaderboard) */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden h-full text-left">
+                    <div className="p-6 border-b border-gray-100">
+                        <h3 className="font-bold text-gray-800 text-base">Peringkat Poin Pelanggaran Aktif</h3>
+                        <p className="text-xs text-gray-500 mt-1">Siswa yang memiliki akumulasi poin aktif saat ini.</p>
+                    </div>
 
-                                                        {s.details.homeVisits.length > 0 && (
-                                                            <div>
-                                                                <h4 className="font-bold text-gray-800 flex items-center gap-2 mb-2 text-sm">
-                                                                    <Package size={16} className="text-blue-600" /> Daftar Home Visit
-                                                                </h4>
-                                                                <ul className="list-disc pl-5 text-xs text-gray-600 space-y-1">
-                                                                    {s.details.homeVisits.map(hv => (
-                                                                        <li key={hv.id}>
-                                                                            <span className="font-bold">{hv.date}:</span> {hv.address} - {hv.reason} (Hasil: {hv.result})
-                                                                        </li>
-                                                                    ))}
-                                                                </ul>
-                                                            </div>
-                                                        )}
-
-                                                        {s.details.parentCalls.length > 0 && (
-                                                            <div>
-                                                                <h4 className="font-bold text-gray-800 flex items-center gap-2 mb-2 text-sm">
-                                                                    <MessageCircle size={16} className="text-purple-600" /> Panggilan Orang Tua
-                                                                </h4>
-                                                                <ul className="list-disc pl-5 text-xs text-gray-600 space-y-1">
-                                                                    {s.details.parentCalls.map(pc => (
-                                                                        <li key={pc.id}>
-                                                                            <span className="font-bold">{pc.date}:</span> {pc.parentName} ({pc.parentPhone}) - Masalah: {pc.problem} (Solusi: {pc.solution})
-                                                                        </li>
-                                                                    ))}
-                                                                </ul>
-                                                            </div>
-                                                        )}
-
-                                                        <div className="flex gap-2 pt-4 border-t border-gray-200">
-                                                            <button 
-                                                                onClick={() => handlePrintBKReport(s)}
-                                                                className="flex items-center gap-2 bg-blue-600 text-white px-3 py-1.5 rounded text-xs font-medium hover:bg-blue-700 transition"
-                                                            >
-                                                                <Printer size={14} /> Cetak Laporan BK
-                                                            </button>
-                                                            <button 
-                                                                onClick={() => handleExcelBKReport(s)}
-                                                                className="flex items-center gap-2 bg-green-600 text-white px-3 py-1.5 rounded text-xs font-medium hover:bg-green-700 transition"
-                                                            >
-                                                                <FileSpreadsheet size={14} /> Export Excel
-                                                            </button>
-                                                        </div>
-                                                    </div>
+                    <div className="overflow-x-auto">
+                        {problemStudents.length === 0 ? (
+                            <div className="p-16 text-center">
+                                <ShieldAlert size={48} className="mx-auto text-green-200 mb-4 animate-bounce" />
+                                <h4 className="text-base font-bold text-gray-800">Kelas Aman & Kondusif!</h4>
+                                <p className="text-xs text-gray-500 mt-1">Tidak ada siswa yang tercatat memiliki poin aktif saat ini.</p>
+                            </div>
+                        ) : (
+                            <table className="w-full text-xs text-left">
+                                <thead className="bg-gray-50 text-gray-600 font-semibold border-b border-gray-200">
+                                    <tr>
+                                        <th className="p-3 w-10 text-center">No</th>
+                                        <th className="p-3">Siswa</th>
+                                        <th className="p-3 text-center">Poin</th>
+                                        <th className="p-3">Rekomendasi</th>
+                                        <th className="p-3 w-10"></th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                    {problemStudents.map((s, idx) => (
+                                        <React.Fragment key={s.id}>
+                                            <tr 
+                                                className={`hover:bg-gray-50 transition cursor-pointer ${expandedStudentId === s.id ? 'bg-blue-50/30' : ''}`}
+                                                onClick={() => setExpandedStudentId(expandedStudentId === s.id ? null : s.id)}
+                                            >
+                                                <td className="p-3 text-center font-bold text-gray-500">{idx + 1}</td>
+                                                <td className="p-3">
+                                                    <div className="font-bold text-gray-800">{s.name}</div>
+                                                    <div className="text-[10px] text-gray-500">NIS: {s.nis}</div>
+                                                </td>
+                                                <td className="p-3 text-center">
+                                                    <span className="font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded">{s.stats.totalPoints}</span>
+                                                </td>
+                                                <td className="p-3">
+                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${s.stats.statusColor}`}>
+                                                        {s.stats.recommendation}
+                                                    </span>
+                                                </td>
+                                                <td className="p-3 text-center text-gray-400">
+                                                    {expandedStudentId === s.id ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                                                 </td>
                                             </tr>
-                                        )}
-                                    </React.Fragment>
-                                ))}
-                            </tbody>
-                        </table>
-                    )}
+                                            {expandedStudentId === s.id && (
+                                                <tr className="bg-gray-50 border-b border-gray-200">
+                                                    <td colSpan={5} className="p-4 cursor-default">
+                                                        <div className="space-y-4">
+                                                            <div>
+                                                                <h4 className="font-bold text-gray-800 flex items-center gap-2 mb-2 text-xs">
+                                                                    <AlertCircle size={14} className="text-red-600" /> Rincian Pelanggaran
+                                                                </h4>
+                                                                {s.details.violations.length === 0 ? (
+                                                                    <p className="text-[11px] text-gray-400 italic pl-5">Tidak ada catatan pelanggaran.</p>
+                                                                ) : (
+                                                                    <ul className="list-disc pl-5 text-[11px] text-gray-600 space-y-1">
+                                                                        {s.details.violations.map(v => (
+                                                                            <li key={v.id}>
+                                                                                <span className="font-bold">{v.date}:</span> {v.violationName} (+{v.points} pts) - {v.description}
+                                                                            </li>
+                                                                        ))}
+                                                                    </ul>
+                                                                )}
+                                                            </div>
+
+                                                            {s.details.reductions && s.details.reductions.length > 0 && (
+                                                                <div>
+                                                                    <h4 className="font-bold text-gray-800 flex items-center gap-2 mb-2 text-xs">
+                                                                        <RefreshCcw size={14} className="text-green-600 animate-spin-slow" /> Rincian Pemulihan Poin
+                                                                    </h4>
+                                                                    <ul className="list-disc pl-5 text-[11px] text-gray-600 space-y-1">
+                                                                        {s.details.reductions.map(r => (
+                                                                            <li key={r.id}>
+                                                                                <span className="font-bold">{r.date}:</span> {r.activityName} (-{r.pointsRemoved} pts) - {r.description}
+                                                                            </li>
+                                                                        ))}
+                                                                    </ul>
+                                                                </div>
+                                                            )}
+
+                                                            {s.details.homeVisits.length > 0 && (
+                                                                <div>
+                                                                    <h4 className="font-bold text-gray-800 flex items-center gap-2 mb-2 text-xs">
+                                                                        <Package size={14} className="text-blue-600" /> Daftar Home Visit
+                                                                    </h4>
+                                                                    <ul className="list-disc pl-5 text-[11px] text-gray-600 space-y-1">
+                                                                        {s.details.homeVisits.map(hv => (
+                                                                            <li key={hv.id}>
+                                                                                <span className="font-bold">{hv.date}:</span> {hv.address} - {hv.reason} (Hasil: {hv.result})
+                                                                            </li>
+                                                                        ))}
+                                                                    </ul>
+                                                                </div>
+                                                            )}
+
+                                                            {s.details.parentCalls.length > 0 && (
+                                                                <div>
+                                                                    <h4 className="font-bold text-gray-800 flex items-center gap-2 mb-2 text-xs">
+                                                                        <MessageCircle size={14} className="text-purple-600" /> Panggilan Orang Tua
+                                                                    </h4>
+                                                                    <ul className="list-disc pl-5 text-[11px] text-gray-600 space-y-1">
+                                                                        {s.details.parentCalls.map(pc => (
+                                                                            <li key={pc.id}>
+                                                                                <span className="font-bold">{pc.date}:</span> {pc.parentName} ({pc.parentPhone}) - Masalah: {pc.problem} (Solusi: {pc.solution})
+                                                                            </li>
+                                                                        ))}
+                                                                    </ul>
+                                                                </div>
+                                                            )}
+
+                                                            <div className="flex gap-2 pt-3 border-t border-gray-200">
+                                                                <button 
+                                                                    onClick={() => handlePrintBKReport(s)}
+                                                                    className="flex items-center gap-1.5 bg-blue-600 text-white px-2.5 py-1.5 rounded text-[11px] font-bold hover:bg-blue-700 transition"
+                                                                >
+                                                                    <Printer size={12} /> Cetak Laporan
+                                                                </button>
+                                                                <button 
+                                                                    onClick={() => handleExcelBKReport(s)}
+                                                                    className="flex items-center gap-1.5 bg-green-600 text-white px-2.5 py-1.5 rounded text-[11px] font-bold hover:bg-green-700 transition"
+                                                                >
+                                                                    <FileSpreadsheet size={12} /> Export Excel
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </React.Fragment>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
+                    </div>
                 </div>
             </div>
+
+            {/* POPUP FORM MODAL FOR WALI KELAS POIN RECORDING */}
+            {showViolationModal && selectedStudentForForm && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white rounded-2xl shadow-xl border border-gray-100 max-w-lg w-full overflow-hidden animate-in zoom-in-95 duration-200">
+                        <div className="p-6 bg-gradient-to-r from-red-600 to-red-700 text-white flex justify-between items-center">
+                            <div>
+                                <h3 className="text-lg font-extrabold flex items-center gap-2">
+                                    <AlertTriangle size={20} /> Catat Pelanggaran / Poin
+                                </h3>
+                                <p className="text-xs text-red-100 mt-1 font-medium">Siswa: {selectedStudentForForm.name} (NIS: {selectedStudentForForm.nis})</p>
+                            </div>
+                            <button 
+                                type="button"
+                                onClick={() => {
+                                    setShowViolationModal(false);
+                                    setSelectedStudentForForm(null);
+                                }}
+                                className="p-1.5 hover:bg-white/20 rounded-lg transition"
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <form onSubmit={handleSaveDisciplinePoint} className="p-6 space-y-4 text-left">
+                            <div className="grid grid-cols-2 gap-2 bg-gray-100 p-1.5 rounded-xl border border-gray-200">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setViolationFormType('VIOLATION');
+                                        setFormInput(prev => ({ ...prev, category: 'Terlambat', points: 5 }));
+                                    }}
+                                    className={`py-2 px-3 text-xs font-bold rounded-lg transition-all ${
+                                        violationFormType === 'VIOLATION' 
+                                        ? 'bg-red-600 text-white shadow' 
+                                        : 'text-gray-600 hover:bg-gray-200'
+                                    }`}
+                                >
+                                    Catat Pelanggaran
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setViolationFormType('REDUCTION');
+                                        setFormInput(prev => ({ ...prev, category: 'Kerja Bakti', points: 5 }));
+                                    }}
+                                    className={`py-2 px-3 text-xs font-bold rounded-lg transition-all ${
+                                        violationFormType === 'REDUCTION' 
+                                        ? 'bg-green-600 text-white shadow' 
+                                        : 'text-gray-600 hover:bg-gray-200'
+                                    }`}
+                                >
+                                    Pengurangan Poin (Pemulihan)
+                                </button>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 mb-1">Tanggal</label>
+                                    <input 
+                                        type="date" 
+                                        required 
+                                        className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-red-500" 
+                                        value={formInput.date} 
+                                        onChange={e => setFormInput({ ...formInput, date: e.target.value })} 
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 mb-1">Poin</label>
+                                    <input 
+                                        type="number" 
+                                        required 
+                                        min="1" 
+                                        className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-red-500 text-gray-800" 
+                                        value={formInput.points} 
+                                        onChange={e => setFormInput({ ...formInput, points: parseInt(e.target.value) || 0 })} 
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 mb-1">Kategori / Kegiatan</label>
+                                <select 
+                                    className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-red-500 text-gray-800"
+                                    value={formInput.category}
+                                    onChange={e => setFormInput({ ...formInput, category: e.target.value })}
+                                >
+                                    {violationFormType === 'VIOLATION' ? (
+                                        <>
+                                            <option value="Terlambat">Terlambat masuk kelas</option>
+                                            <option value="Atribut tidak lengkap">Atribut seragam tidak lengkap</option>
+                                            <option value="Membolos">Membolos / Keluar kelas tanpa izin</option>
+                                            <option value="Kerapian rambut/seragam">Kerapian rambut / kuku / pakaian</option>
+                                            <option value="Sikap kurang sopan">Sikap kurang sopan kepada guru/teman</option>
+                                            <option value="Bermain HP saat pelajaran">Bermain HP saat jam pelajaran</option>
+                                            <option value="Lainnya">Lainnya (Ketik sendiri)</option>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <option value="Kerja Bakti">Mengikuti Kerja Bakti sekolah</option>
+                                            <option value="Merapikan Fasilitas">Membantu merapikan fasilitas kelas/sekolah</option>
+                                            <option value="Keaktifan Kegiatan">Sangat aktif dalam kegiatan sekolah / OSIS</option>
+                                            <option value="Sikap Sangat Baik">Menunjukkan kemajuan sikap / perilaku terpuji</option>
+                                            <option value="Lainnya">Lainnya (Ketik sendiri)</option>
+                                        </>
+                                    )}
+                                </select>
+                            </div>
+
+                            {formInput.category === 'Lainnya' && (
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 mb-1">Ketik Kategori Kustom</label>
+                                    <input 
+                                        type="text" 
+                                        required 
+                                        placeholder="Misal: Berkelahi di kantin"
+                                        className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-red-500 text-gray-800" 
+                                        value={formInput.customCategory} 
+                                        onChange={e => setFormInput({ ...formInput, customCategory: e.target.value })} 
+                                    />
+                                </div>
+                            )}
+
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 mb-1">Catatan Detail (Kejadian / Kegiatan)</label>
+                                <textarea 
+                                    required 
+                                    rows={3}
+                                    placeholder={violationFormType === 'VIOLATION' ? "Misal: Terlambat masuk kelas 15 menit tanpa keterangan" : "Misal: Membantu membersihkan ruang perpustakaan sekolah"}
+                                    className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-red-500 text-gray-800" 
+                                    value={formInput.description} 
+                                    onChange={e => setFormInput({ ...formInput, description: e.target.value })} 
+                                />
+                            </div>
+
+                            <div className="flex justify-end gap-2 pt-4 border-t border-gray-100">
+                                <button 
+                                    type="button" 
+                                    onClick={() => {
+                                        setShowViolationModal(false);
+                                        setSelectedStudentForForm(null);
+                                    }}
+                                    className="px-4 py-2 text-xs font-bold text-gray-500 hover:bg-gray-100 rounded-lg transition"
+                                >
+                                    Batal
+                                </button>
+                                <button 
+                                    type="submit" 
+                                    className={`px-4 py-2 text-xs font-bold text-white rounded-lg transition shadow-md ${
+                                        violationFormType === 'VIOLATION' ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'
+                                    }`}
+                                >
+                                    Simpan Catatan
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
       )}
 

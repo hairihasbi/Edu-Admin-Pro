@@ -4,7 +4,7 @@ import {
   getStudent360Data, 
   getGraduateProfileAssessments 
 } from '../services/database';
-import { Student, RfidLog, StudentViolation, StudentAchievement, MentoringJournal, GraduateProfileAssessment } from '../types';
+import { Student, RfidLog, StudentViolation, StudentAchievement, MentoringJournal, GraduateProfileAssessment, StudentPointReduction } from '../types';
 import { 
   User, 
   Calendar, 
@@ -52,6 +52,7 @@ export const Student360View: React.FC<Student360ViewProps> = ({ studentId: propS
     student: Student;
     attendance: RfidLog[];
     violations: StudentViolation[];
+    pointReductions?: StudentPointReduction[];
     achievements: StudentAchievement[];
     mentoring: MentoringJournal[];
   } | null>(null);
@@ -81,7 +82,7 @@ export const Student360View: React.FC<Student360ViewProps> = ({ studentId: propS
   if (loading) return <div className="p-8 text-center animate-pulse">Memuat profil 360...</div>;
   if (!data) return <div className="p-8 text-center text-red-500">Data siswa tidak ditemukan.</div>;
 
-  const { student, attendance, violations, achievements, mentoring } = data;
+  const { student, attendance, violations, achievements, mentoring, pointReductions = [] } = data;
 
   // Radar Data for latest assessment
   const latestEval = assessments.length > 0 ? assessments[assessments.length - 1] : null;
@@ -103,6 +104,8 @@ export const Student360View: React.FC<Student360ViewProps> = ({ studentId: propS
 
   // Total points
   const totalViolationPoints = violations.reduce((acc, v) => acc + v.points, 0);
+  const totalReductionPoints = pointReductions.reduce((acc, r) => acc + r.pointsRemoved, 0);
+  const netDisciplinePoints = Math.max(0, totalViolationPoints - totalReductionPoints);
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
@@ -119,9 +122,9 @@ export const Student360View: React.FC<Student360ViewProps> = ({ studentId: propS
               <UserCheck className="w-3 h-3" /> Mentor: {student.guruWaliName || 'Belum ditugaskan'}
             </span>
             <span className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 ${
-              totalViolationPoints > 50 ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'
+              netDisciplinePoints > 50 ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'
             }`}>
-              <AlertTriangle className="w-3 h-3" /> Poin Pelanggaran: {totalViolationPoints}
+              <AlertTriangle className="w-3 h-3" /> Poin Pelanggaran Aktif: {netDisciplinePoints} ({totalViolationPoints} Sanksi, -{totalReductionPoints} Pemulihan)
             </span>
           </div>
         </div>
@@ -249,13 +252,41 @@ export const Student360View: React.FC<Student360ViewProps> = ({ studentId: propS
               Kedisiplinan & Pelanggaran
             </h3>
             <div className="space-y-4">
-              {violations.map(v => (
-                <div key={v.id} className="border-l-4 border-orange-500 pl-3 py-1">
-                  <p className="text-sm font-bold text-gray-800">{v.violationName}</p>
-                  <p className="text-[10px] text-gray-500">{format(new Date(v.date), 'dd MMM yyyy')} • {v.points} Poin</p>
-                </div>
-              ))}
-              {violations.length === 0 && <p className="text-center py-4 text-gray-400 text-xs">Siswa sangat disiplin.</p>}
+              {[
+                ...violations.map(v => ({
+                  id: v.id,
+                  type: 'VIOLATION',
+                  title: v.violationName,
+                  date: v.date,
+                  points: v.points,
+                  color: 'border-orange-500'
+                })),
+                ...pointReductions.map(r => ({
+                  id: r.id,
+                  type: 'REDUCTION',
+                  title: r.activityName,
+                  date: r.date,
+                  points: -r.pointsRemoved,
+                  color: 'border-green-500 bg-green-50/10'
+                }))
+              ]
+                .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                .map(item => (
+                  <div key={item.id} className={`border-l-4 ${item.color} pl-3 py-1`}>
+                    <p className="text-sm font-bold text-gray-800 flex items-center justify-between">
+                      <span>{item.title}</span>
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                        item.type === 'VIOLATION' ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'
+                      }`}>
+                        {item.points > 0 ? `+${item.points}` : item.points} Pts
+                      </span>
+                    </p>
+                    <p className="text-[10px] text-gray-500">{format(new Date(item.date), 'dd MMM yyyy')}</p>
+                  </div>
+                ))}
+              {violations.length === 0 && pointReductions.length === 0 && (
+                <p className="text-center py-4 text-gray-400 text-xs">Siswa sangat disiplin.</p>
+              )}
             </div>
           </div>
 
