@@ -3009,11 +3009,12 @@ export const getStudent360Data = async (studentId: string) => {
     const student = await db.students.get(studentId);
     if (!student) return null;
 
-    const [attendance, violations, achievements, mentoring] = await Promise.all([
+    const [attendance, violations, achievements, mentoring, pointReductions] = await Promise.all([
         db.rfidLogs.where('studentId').equals(studentId).toArray(),
         db.violations.where('studentId').equals(studentId).toArray(),
         db.achievements.where('studentId').equals(studentId).toArray(),
-        db.mentoringJournals.where('studentId').equals(studentId).toArray()
+        db.mentoringJournals.where('studentId').equals(studentId).toArray(),
+        db.pointReductions.where('studentId').equals(studentId).toArray()
     ]);
 
     return {
@@ -3021,7 +3022,8 @@ export const getStudent360Data = async (studentId: string) => {
         attendance,
         violations,
         achievements,
-        mentoring
+        mentoring,
+        pointReductions: pointReductions || []
     };
 };
 
