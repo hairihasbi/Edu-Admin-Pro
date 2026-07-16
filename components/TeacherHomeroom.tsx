@@ -6,13 +6,14 @@ import {
   getStudentViolations, getStudentAchievements, getCounselingSessions,
   getClassInventory, saveClassInventory, deleteClassInventory, getSystemSettings,
   getHomeVisits, getParentCalls, getAttendanceRecordsByRange, getRfidLogs,
-  getStudentPointReductions, addStudentViolation, addStudentPointReduction
+  getStudentPointReductions, addStudentViolation, addStudentPointReduction,
+  deleteStudentViolation, deleteStudentPointReduction, updateStudentViolation, updateStudentPointReduction
 } from '../services/database';
 import { 
   UserCheck, Users, GraduationCap, AlertTriangle, FileSpreadsheet, 
   Search, Filter, Printer, ShieldAlert, Trophy, MessageSquareHeart, 
   ChevronDown, ChevronUp, AlertCircle, MessageCircle, Package, Plus, Save, Trash2, X, FileText,
-  HeartPulse, TrendingUp, Clock, Calendar, RefreshCcw
+  HeartPulse, TrendingUp, Clock, Calendar, RefreshCcw, Pencil
 } from './Icons';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import * as XLSX from 'xlsx';
@@ -50,6 +51,7 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
   const [showViolationModal, setShowViolationModal] = useState(false);
   const [selectedStudentForForm, setSelectedStudentForForm] = useState<Student | null>(null);
   const [violationFormType, setViolationFormType] = useState<'VIOLATION' | 'REDUCTION'>('VIOLATION');
+  const [editingRecord, setEditingRecord] = useState<{ type: 'VIOLATION' | 'REDUCTION', id: string } | null>(null);
   const [formInput, setFormInput] = useState({
     category: 'Terlambat',
     customCategory: '',
@@ -364,6 +366,54 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
     XLSX.writeFile(wb, `Leger_Bayangan_${className}.xlsx`);
   };
 
+  const handleEditRecord = (type: 'VIOLATION' | 'REDUCTION', record: any, student: Student) => {
+    setEditingRecord({ type, id: record.id });
+    setSelectedStudentForForm(student);
+    setViolationFormType(type);
+    
+    const recordName = type === 'VIOLATION' ? record.violationName : record.activityName;
+    const pointsVal = type === 'VIOLATION' ? record.points : record.pointsRemoved;
+    
+    const standardOptions = type === 'VIOLATION' 
+      ? ['Terlambat', 'Atribut tidak lengkap', 'Membolos', 'Kerapian rambut/seragam', 'Sikap kurang sopan', 'Bermain HP saat pelajaran']
+      : ['Kerja Bakti', 'Merapikan Fasilitas', 'Keaktifan Kegiatan', 'Sikap Sangat Baik'];
+      
+    const isStandard = standardOptions.includes(recordName);
+    
+    setFormInput({
+      category: isStandard ? recordName : 'Lainnya',
+      customCategory: isStandard ? '' : recordName,
+      points: pointsVal,
+      description: record.description || '',
+      date: record.date || new Date().toISOString().split('T')[0]
+    });
+    
+    setShowViolationModal(true);
+  };
+
+  const handleDeleteRecord = async (type: 'VIOLATION' | 'REDUCTION', id: string) => {
+    if (!window.confirm(`Apakah Anda yakin ingin menghapus catatan ${type === 'VIOLATION' ? 'pelanggaran' : 'pemulihan'} ini?`)) return;
+    
+    try {
+      if (type === 'VIOLATION') {
+        await deleteStudentViolation(id);
+      } else {
+        await deleteStudentPointReduction(id);
+      }
+      
+      // Refresh data
+      const [vData, rData] = await Promise.all([
+        getStudentViolations(),
+        getStudentPointReductions()
+      ]);
+      const studentIds = new Set(students.map(s => s.id));
+      setViolations(vData.filter(v => studentIds.has(v.studentId)));
+      setPointReductions(rData.filter(r => studentIds.has(r.studentId)));
+    } catch (err) {
+      console.error('Error deleting record:', err);
+    }
+  };
+
   const handleSaveDisciplinePoint = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedStudentForForm) return;
@@ -375,23 +425,41 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
         return;
       }
 
-      if (violationFormType === 'VIOLATION') {
-        await addStudentViolation({
-          studentId: selectedStudentForForm.id,
-          date: formInput.date,
-          violationName: finalCategory,
-          points: Number(formInput.points),
-          description: formInput.description || 'Dicatat oleh Wali Kelas',
-          reportedBy: user.fullName || 'Wali Kelas'
-        });
+      if (editingRecord) {
+        if (editingRecord.type === 'VIOLATION') {
+          await updateStudentViolation(editingRecord.id, {
+            date: formInput.date,
+            violationName: finalCategory,
+            points: Number(formInput.points),
+            description: formInput.description || 'Dicatat oleh Wali Kelas',
+          });
+        } else {
+          await updateStudentPointReduction(editingRecord.id, {
+            date: formInput.date,
+            activityName: finalCategory,
+            pointsRemoved: Number(formInput.points),
+            description: formInput.description || 'Pemulihan oleh Wali Kelas',
+          });
+        }
       } else {
-        await addStudentPointReduction({
-          studentId: selectedStudentForForm.id,
-          date: formInput.date,
-          activityName: finalCategory,
-          pointsRemoved: Number(formInput.points),
-          description: formInput.description || 'Pemulihan oleh Wali Kelas'
-        });
+        if (violationFormType === 'VIOLATION') {
+          await addStudentViolation({
+            studentId: selectedStudentForForm.id,
+            date: formInput.date,
+            violationName: finalCategory,
+            points: Number(formInput.points),
+            description: formInput.description || 'Dicatat oleh Wali Kelas',
+            reportedBy: user.fullName || 'Wali Kelas'
+          });
+        } else {
+          await addStudentPointReduction({
+            studentId: selectedStudentForForm.id,
+            date: formInput.date,
+            activityName: finalCategory,
+            pointsRemoved: Number(formInput.points),
+            description: formInput.description || 'Pemulihan oleh Wali Kelas'
+          });
+        }
       }
 
       // Refresh data
@@ -406,6 +474,7 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
       // Close modal & reset
       setShowViolationModal(false);
       setSelectedStudentForForm(null);
+      setEditingRecord(null);
       setFormInput({
         category: 'Terlambat',
         customCategory: '',
@@ -1080,13 +1149,34 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                                                                 {s.details.violations.length === 0 ? (
                                                                     <p className="text-[11px] text-gray-400 italic pl-5">Tidak ada catatan pelanggaran.</p>
                                                                 ) : (
-                                                                    <ul className="list-disc pl-5 text-[11px] text-gray-600 space-y-1">
+                                                                    <div className="space-y-1.5 pl-2 border-l-2 border-red-200">
                                                                         {s.details.violations.map(v => (
-                                                                            <li key={v.id}>
-                                                                                <span className="font-bold">{v.date}:</span> {v.violationName} (+{v.points} pts) - {v.description}
-                                                                            </li>
+                                                                            <div key={v.id} className="group flex justify-between items-center p-2 rounded-lg hover:bg-red-50/50 transition">
+                                                                                <div className="text-[11px] text-gray-700">
+                                                                                    <span className="font-bold text-red-600 bg-red-50 px-1 py-0.5 rounded text-[10px] mr-1.5">{v.date}</span>
+                                                                                    <span className="font-semibold text-gray-900">{v.violationName}</span>
+                                                                                    <span className="ml-1 text-red-600 font-bold">(+{v.points} pts)</span>
+                                                                                    {v.description && <span className="text-gray-500 block mt-0.5 ml-2.5">— {v.description}</span>}
+                                                                                </div>
+                                                                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                                    <button
+                                                                                        onClick={() => handleEditRecord('VIOLATION', v, s)}
+                                                                                        className="p-1 text-blue-600 hover:bg-blue-100 rounded transition"
+                                                                                        title="Edit Catatan"
+                                                                                    >
+                                                                                        <Pencil size={12} />
+                                                                                    </button>
+                                                                                    <button
+                                                                                        onClick={() => handleDeleteRecord('VIOLATION', v.id)}
+                                                                                        className="p-1 text-red-600 hover:bg-red-100 rounded transition"
+                                                                                        title="Hapus Catatan"
+                                                                                    >
+                                                                                        <Trash2 size={12} />
+                                                                                    </button>
+                                                                                </div>
+                                                                            </div>
                                                                         ))}
-                                                                    </ul>
+                                                                    </div>
                                                                 )}
                                                             </div>
 
@@ -1095,13 +1185,34 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                                                                     <h4 className="font-bold text-gray-800 flex items-center gap-2 mb-2 text-xs">
                                                                         <RefreshCcw size={14} className="text-green-600 animate-spin-slow" /> Rincian Pemulihan Poin
                                                                     </h4>
-                                                                    <ul className="list-disc pl-5 text-[11px] text-gray-600 space-y-1">
+                                                                    <div className="space-y-1.5 pl-2 border-l-2 border-green-200">
                                                                         {s.details.reductions.map(r => (
-                                                                            <li key={r.id}>
-                                                                                <span className="font-bold">{r.date}:</span> {r.activityName} (-{r.pointsRemoved} pts) - {r.description}
-                                                                            </li>
+                                                                            <div key={r.id} className="group flex justify-between items-center p-2 rounded-lg hover:bg-green-50/50 transition">
+                                                                                <div className="text-[11px] text-gray-700">
+                                                                                    <span className="font-bold text-green-600 bg-green-50 px-1 py-0.5 rounded text-[10px] mr-1.5">{r.date}</span>
+                                                                                    <span className="font-semibold text-gray-900">{r.activityName}</span>
+                                                                                    <span className="ml-1 text-green-600 font-bold">(-{r.pointsRemoved} pts)</span>
+                                                                                    {r.description && <span className="text-gray-500 block mt-0.5 ml-2.5">— {r.description}</span>}
+                                                                                </div>
+                                                                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                                    <button
+                                                                                        onClick={() => handleEditRecord('REDUCTION', r, s)}
+                                                                                        className="p-1 text-blue-600 hover:bg-blue-100 rounded transition"
+                                                                                        title="Edit Catatan"
+                                                                                    >
+                                                                                        <Pencil size={12} />
+                                                                                    </button>
+                                                                                    <button
+                                                                                        onClick={() => handleDeleteRecord('REDUCTION', r.id)}
+                                                                                        className="p-1 text-red-600 hover:bg-red-100 rounded transition"
+                                                                                        title="Hapus Catatan"
+                                                                                    >
+                                                                                        <Trash2 size={12} />
+                                                                                    </button>
+                                                                                </div>
+                                                                            </div>
                                                                         ))}
-                                                                    </ul>
+                                                                    </div>
                                                                 </div>
                                                             )}
 
@@ -1166,10 +1277,12 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
             {showViolationModal && selectedStudentForForm && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white rounded-2xl shadow-xl border border-gray-100 max-w-lg w-full overflow-hidden animate-in zoom-in-95 duration-200">
-                        <div className="p-6 bg-gradient-to-r from-red-600 to-red-700 text-white flex justify-between items-center">
+                        <div className={`p-6 bg-gradient-to-r text-white flex justify-between items-center ${
+                            violationFormType === 'VIOLATION' ? 'from-red-600 to-red-700' : 'from-green-600 to-green-700'
+                        }`}>
                             <div>
                                 <h3 className="text-lg font-extrabold flex items-center gap-2">
-                                    <AlertTriangle size={20} /> Catat Pelanggaran / Poin
+                                    <AlertTriangle size={20} /> {editingRecord ? 'Edit Catatan Poin' : 'Catat Pelanggaran / Poin'}
                                 </h3>
                                 <p className="text-xs text-red-100 mt-1 font-medium">Siswa: {selectedStudentForForm.name} (NIS: {selectedStudentForForm.nis})</p>
                             </div>
@@ -1178,6 +1291,7 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                                 onClick={() => {
                                     setShowViolationModal(false);
                                     setSelectedStudentForForm(null);
+                                    setEditingRecord(null);
                                 }}
                                 className="p-1.5 hover:bg-white/20 rounded-lg transition"
                             >
@@ -1185,36 +1299,48 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                             </button>
                         </div>
                         <form onSubmit={handleSaveDisciplinePoint} className="p-6 space-y-4 text-left">
-                            <div className="grid grid-cols-2 gap-2 bg-gray-100 p-1.5 rounded-xl border border-gray-200">
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setViolationFormType('VIOLATION');
-                                        setFormInput(prev => ({ ...prev, category: 'Terlambat', points: 5 }));
-                                    }}
-                                    className={`py-2 px-3 text-xs font-bold rounded-lg transition-all ${
-                                        violationFormType === 'VIOLATION' 
-                                        ? 'bg-red-600 text-white shadow' 
-                                        : 'text-gray-600 hover:bg-gray-200'
-                                    }`}
-                                >
-                                    Catat Pelanggaran
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setViolationFormType('REDUCTION');
-                                        setFormInput(prev => ({ ...prev, category: 'Kerja Bakti', points: 5 }));
-                                    }}
-                                    className={`py-2 px-3 text-xs font-bold rounded-lg transition-all ${
-                                        violationFormType === 'REDUCTION' 
-                                        ? 'bg-green-600 text-white shadow' 
-                                        : 'text-gray-600 hover:bg-gray-200'
-                                    }`}
-                                >
-                                    Pengurangan Poin (Pemulihan)
-                                </button>
-                            </div>
+                            {!editingRecord && (
+                                <div className="grid grid-cols-2 gap-2 bg-gray-100 p-1.5 rounded-xl border border-gray-200">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setViolationFormType('VIOLATION');
+                                            setFormInput(prev => ({ ...prev, category: 'Terlambat', points: 5 }));
+                                        }}
+                                        className={`py-2 px-3 text-xs font-bold rounded-lg transition-all ${
+                                            violationFormType === 'VIOLATION' 
+                                            ? 'bg-red-600 text-white shadow' 
+                                            : 'text-gray-600 hover:bg-gray-200'
+                                        }`}
+                                    >
+                                        Catat Pelanggaran
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setViolationFormType('REDUCTION');
+                                            setFormInput(prev => ({ ...prev, category: 'Kerja Bakti', points: 5 }));
+                                        }}
+                                        className={`py-2 px-3 text-xs font-bold rounded-lg transition-all ${
+                                            violationFormType === 'REDUCTION' 
+                                            ? 'bg-green-600 text-white shadow' 
+                                            : 'text-gray-600 hover:bg-gray-200'
+                                        }`}
+                                    >
+                                        Pengurangan Poin (Pemulihan)
+                                    </button>
+                                </div>
+                            )}
+
+                            {editingRecord && (
+                                <div className={`p-3 rounded-xl border text-xs font-bold ${
+                                    editingRecord.type === 'VIOLATION' 
+                                        ? 'bg-red-50 text-red-700 border-red-100' 
+                                        : 'bg-green-50 text-green-700 border-green-100'
+                                }`}>
+                                    Tipe Catatan: {editingRecord.type === 'VIOLATION' ? 'Pelanggaran Siswa' : 'Pemulihan / Pengurangan Poin'}
+                                </div>
+                            )}
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
@@ -1301,6 +1427,7 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                                     onClick={() => {
                                         setShowViolationModal(false);
                                         setSelectedStudentForForm(null);
+                                        setEditingRecord(null);
                                     }}
                                     className="px-4 py-2 text-xs font-bold text-gray-500 hover:bg-gray-100 rounded-lg transition"
                                 >
@@ -1312,7 +1439,7 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                                         violationFormType === 'VIOLATION' ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'
                                     }`}
                                 >
-                                    Simpan Catatan
+                                    {editingRecord ? 'Update Catatan' : 'Simpan Catatan'}
                                 </button>
                             </div>
                         </form>
