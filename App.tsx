@@ -426,6 +426,23 @@ const AppContent: React.FC = () => {
 
     const syncInterval = setInterval(() => {
       if (navigator.onLine) {
+        // Cek apakah guru sedang aktif mengisi formulir atau mengetik
+        const activeEl = document.activeElement;
+        if (activeEl) {
+          const tagName = activeEl.tagName.toUpperCase();
+          const isInputting = 
+            tagName === "INPUT" || 
+            tagName === "TEXTAREA" || 
+            tagName === "SELECT" || 
+            activeEl.hasAttribute("contenteditable") || 
+            activeEl.closest("form") !== null;
+            
+          if (isInputting) {
+            console.log("Auto-Sync ditunda karena pengguna sedang mengisi formulir.");
+            return;
+          }
+        }
+
         console.log("Auto-Sync Triggered");
         syncAllData(false).catch(() => {}); // Silent sync
         refreshNotifications(currentUser.role);
