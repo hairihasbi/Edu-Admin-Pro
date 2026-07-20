@@ -2711,7 +2711,8 @@ export const processGraduation = async (schoolNpsn: string) => {
     await db.transaction('rw', [
       db.students, db.attendanceRecords, db.violations, db.pointReductions,
       db.achievements, db.counselingSessions, db.homeVisits, db.parentCalls,
-      db.rfidLogs, db.assessmentScores, db.cbtAttempts, db.learningStyleAssessments
+      db.rfidLogs, db.assessmentScores, db.cbtAttempts, db.learningStyleAssessments,
+      db.scopeMaterials, db.teachingJournals
     ], async () => {
       await db.students.bulkDelete(studentIds);
       await db.attendanceRecords.where('studentId').anyOf(studentIds).delete();
@@ -2725,6 +2726,10 @@ export const processGraduation = async (schoolNpsn: string) => {
       await db.assessmentScores.where('studentId').anyOf(studentIds).delete();
       await db.cbtAttempts.where('studentId').anyOf(studentIds).delete();
       await db.learningStyleAssessments.where('studentId').anyOf(studentIds).delete();
+
+      // Clear materials and journals for grade 12 classes
+      await db.scopeMaterials.where('classId').anyOf(grade12ClassIds).delete();
+      await db.teachingJournals.where('classId').anyOf(grade12ClassIds).delete();
     });
 
     // Update studentCount of grade 12 classes to 0 locally, mark as unsynced, and push to Turso
@@ -2810,7 +2815,17 @@ export const processPromotionReset = async (schoolNpsn: string) => {
       isSynced: false
     }));
 
-    await db.students.bulkPut(updates);
+    await db.transaction('rw', [
+      db.students, db.scopeMaterials, db.teachingJournals, db.attendanceRecords, db.assessmentScores
+    ], async () => {
+      await db.students.bulkPut(updates);
+      
+      // Clear materials, journals, attendance, and scores for grade 10/11 classes
+      await db.scopeMaterials.where('classId').anyOf(targetClassIds).delete();
+      await db.teachingJournals.where('classId').anyOf(targetClassIds).delete();
+      await db.attendanceRecords.where('classId').anyOf(targetClassIds).delete();
+      await db.assessmentScores.where('classId').anyOf(targetClassIds).delete();
+    });
 
     // Update studentCount of target classes to 0 locally, mark as unsynced, and push to Turso
     const classUpdates = [];
@@ -2833,6 +2848,29 @@ export const processPromotionReset = async (schoolNpsn: string) => {
     // Log activity
     addSystemLog('INFO', 'Wakasek Kurikulum', 'ACADEMIC', 'Promotion Reset', `Reset class assignment for ${students.length} students (Grade 10/11).`);
     
+    // Sync to remote Turso database if online to prevent pull restoring deleted data
+    if (typeof navigator !== 'undefined' && navigator.onLine) {
+      try {
+        const savedUser = localStorage.getItem('eduadmin_user');
+        const currentUser = savedUser ? JSON.parse(savedUser) : null;
+        const userId = currentUser?.id || '';
+        const headers: any = { 'Content-Type': 'application/json' };
+        if (userId) {
+          headers['Authorization'] = `Bearer ${userId}`;
+        }
+        await fetch('/api/turso', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            action: 'execute_promotion_reset',
+            schoolNpsn
+          })
+        });
+      } catch (remoteError) {
+        console.error("Remote promotion reset sync failed:", remoteError);
+      }
+    }
+
     triggerDebouncedSync();
     
     return { success: true, count: students.length };
@@ -2900,7 +2938,18 @@ export const promoteStudentsClassToClass = async (originClassId: string, targetC
     isSynced: false
   }));
   
-  await db.students.bulkPut(updates);
+  await db.transaction('rw', [
+    db.students, db.scopeMaterials, db.teachingJournals, db.attendanceRecords, db.assessmentScores
+  ], async () => {
+    await db.students.bulkPut(updates);
+    
+    // Clear materials, journals, attendance, and scores for origin and target classes
+    const classIdsToClear = [originClassId, targetClassId];
+    await db.scopeMaterials.where('classId').anyOf(classIdsToClear).delete();
+    await db.teachingJournals.where('classId').anyOf(classIdsToClear).delete();
+    await db.attendanceRecords.where('classId').anyOf(classIdsToClear).delete();
+    await db.assessmentScores.where('classId').anyOf(classIdsToClear).delete();
+  });
 
   // Update classes student count locally, mark as unsynced, and push to Turso
   const originClass = await db.classes.get(originClassId);
@@ -2928,6 +2977,30 @@ export const promoteStudentsClassToClass = async (originClassId: string, targetC
 
   // Push updated student records to Turso
   await pushToTurso('eduadmin_students', updates);
+
+  // Sync to remote Turso database if online to prevent pull restoring deleted data
+  if (typeof navigator !== 'undefined' && navigator.onLine) {
+    try {
+      const savedUser = localStorage.getItem('eduadmin_user');
+      const currentUser = savedUser ? JSON.parse(savedUser) : null;
+      const userId = currentUser?.id || '';
+      const headers: any = { 'Content-Type': 'application/json' };
+      if (userId) {
+        headers['Authorization'] = `Bearer ${userId}`;
+      }
+      await fetch('/api/turso', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          action: 'execute_class_promotion_clear',
+          originClassId,
+          targetClassId
+        })
+      });
+    } catch (remoteError) {
+      console.error("Remote class promotion clear sync failed:", remoteError);
+    }
+  }
 
   triggerDebouncedSync();
   return { success: true, count: updates.length };
