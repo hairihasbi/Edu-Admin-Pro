@@ -59,6 +59,14 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [calendarEvents, setCalendarEvents] = useState<TeacherCalendarEvent[]>([]);
+  const [workDayOption, setWorkDayOption] = useState<'5' | '6'>(() => {
+    return (localStorage.getItem('eduadmin_workday_option') as '5' | '6') || '5';
+  });
+
+  const handleWorkDayOptionChange = (val: '5' | '6') => {
+    setWorkDayOption(val);
+    localStorage.setItem('eduadmin_workday_option', val);
+  };
 
   // Recap Mode State
   const [recapFilter, setRecapFilter] = useState<'ganjil' | 'genap' | 'full'>(new Date().getMonth() >= 6 ? 'ganjil' : 'genap');
@@ -243,7 +251,11 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
   const isWeekend = (day: number) => {
     const date = new Date(selectedYear, selectedMonth, day);
     const dayOfWeek = date.getDay();
-    return dayOfWeek === 0 || dayOfWeek === 6; // Sunday or Saturday
+    if (workDayOption === '5') {
+      return dayOfWeek === 0 || dayOfWeek === 6; // Sunday or Saturday
+    } else {
+      return dayOfWeek === 0; // Only Sunday
+    }
   };
   
   const getEventForDay = (day: number) => {
@@ -634,12 +646,30 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
                             <Filter size={16} className="absolute right-3 top-2.5 text-gray-400 pointer-events-none" />
                         </div>
                         <div className={`flex gap-2 w-full sm:w-auto ${mobileView === 'daily' ? 'hidden md:flex' : 'flex'}`}>
-                            <select className="flex-1 sm:w-32 py-2 border border-gray-300 rounded-lg bg-white text-sm px-2" value={selectedMonth} onChange={(e) => setSelectedMonth(Number(e.target.value))}>
-                                {monthNames.map((m, i) => <option key={i} value={i}>{m}</option>)}
-                            </select>
-                            <select className="w-24 py-2 border border-gray-300 rounded-lg bg-white text-sm px-2" value={selectedYear} onChange={(e) => setSelectedYear(Number(e.target.value))}>
-                                {yearsList.map(y => <option key={y} value={y}>{y}</option>)}
-                            </select>
+                            <div className="flex flex-col gap-1">
+                                <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Bulan</label>
+                                <select className="flex-1 sm:w-32 py-2 border border-gray-300 rounded-lg bg-white text-sm px-2" value={selectedMonth} onChange={(e) => setSelectedMonth(Number(e.target.value))}>
+                                    {monthNames.map((m, i) => <option key={i} value={i}>{m}</option>)}
+                                </select>
+                            </div>
+                            <div className="flex flex-col gap-1">
+                                <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Tahun</label>
+                                <select className="w-24 py-2 border border-gray-300 rounded-lg bg-white text-sm px-2" value={selectedYear} onChange={(e) => setSelectedYear(Number(e.target.value))}>
+                                    {yearsList.map(y => <option key={y} value={y}>{y}</option>)}
+                                </select>
+                            </div>
+                            <div className="flex flex-col gap-1">
+                                <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Hari Kerja</label>
+                                <select 
+                                    className="w-32 py-2 border border-gray-300 rounded-lg bg-white text-sm px-2 font-semibold text-blue-700 bg-blue-50/50" 
+                                    value={workDayOption} 
+                                    onChange={(e) => handleWorkDayOptionChange(e.target.value as '5' | '6')}
+                                    title="Pilih sistem hari kerja mingguan untuk otomatis menentukan tanggal merah akhir pekan"
+                                >
+                                    <option value="5">5 Hari Kerja</option>
+                                    <option value="6">6 Hari Kerja</option>
+                                </select>
+                            </div>
                         </div>
                         <div className={`flex gap-2 w-full items-center justify-between ${mobileView === 'daily' ? 'flex md:hidden' : 'hidden'}`}>
                             <button onClick={() => setDailyDay(d => Math.max(1, d - 1))} className="p-2 bg-gray-100 rounded-full"><ChevronLeft size={20}/></button>
@@ -785,21 +815,21 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
                     <table className="w-full text-xs border-separate border-spacing-0 min-w-max">
                         <thead>
                             <tr className="bg-gray-100 text-gray-700">
-                                <th className="p-3 border-r border-b border-gray-200 w-10 sticky left-0 top-0 bg-gray-100 z-30 shadow-[2px_2px_5px_rgba(0,0,0,0.05)] text-center">No</th>
-                                <th className="p-3 border-r border-b border-gray-200 min-w-[220px] max-w-[220px] text-left sticky left-10 top-0 bg-gray-100 z-30 shadow-[2px_2px_5px_rgba(0,0,0,0.05)]">Nama Siswa</th>
+                                <th className="p-3 border-r border-b border-gray-300 w-10 sticky left-0 top-0 bg-gray-100 z-30 shadow-[2px_2px_5px_rgba(0,0,0,0.05)] text-center font-bold">No</th>
+                                <th className="p-3 border-r border-b border-gray-300 min-w-[220px] max-w-[220px] text-left sticky left-10 top-0 bg-gray-100 z-30 shadow-[2px_2px_5px_rgba(0,0,0,0.05)] font-bold">Nama Siswa</th>
                                 {days.map(d => {
                                     const event = getEventForDay(d);
                                     const isHoliday = (event && (event.type === 'HOLIDAY' || event.type === 'LEAVE')) || isWeekend(d);
                                     return (
-                                        <th key={d} title={event?.description} className={`p-1 border-r border-b border-gray-200 min-w-[32px] text-center font-normal sticky top-0 bg-gray-100 z-20 ${d === dailyDay && mobileView === 'monthly' ? 'bg-blue-200 font-bold' : ''} ${isHoliday ? 'bg-red-50 text-red-500' : ''}`}>{d}</th>
+                                        <th key={d} title={event?.description} className={`p-1 border-r border-b border-gray-300 min-w-[32px] text-center font-bold sticky top-0 bg-gray-100 z-20 ${d === dailyDay && mobileView === 'monthly' ? 'bg-blue-200 font-extrabold text-blue-900' : ''} ${isHoliday ? 'bg-red-50 text-red-500' : ''}`}>{d}</th>
                                     );
                                 })}
-                                <th className="p-2 border-r border-b border-gray-200 bg-yellow-50 min-w-[32px] text-center font-bold text-yellow-700 sticky top-0 z-20">S</th>
-                                <th className="p-2 border-r border-b border-gray-200 bg-blue-50 min-w-[32px] text-center font-bold text-blue-700 sticky top-0 z-20">I</th>
-                                <th className="p-2 border-r border-b border-gray-200 bg-red-50 min-w-[32px] text-center font-bold text-red-700 sticky top-0 z-20">A</th>
-                                <th className="p-2 border-r border-b border-gray-200 bg-orange-50 min-w-[32px] text-center font-bold text-orange-700 sticky top-0 z-20">T</th>
-                                <th className="p-2 border-r border-b border-gray-200 bg-green-50 min-w-[32px] text-center font-bold text-green-700 sticky top-0 z-20">H</th>
-                                <th className="p-2 bg-gray-50 min-w-[44px] text-center font-bold text-gray-700 sticky top-0 z-20 border-b border-gray-200">%</th>
+                                <th className="p-2 border-r border-b border-gray-300 bg-yellow-50 min-w-[32px] text-center font-bold text-yellow-700 sticky top-0 z-20">S</th>
+                                <th className="p-2 border-r border-b border-gray-300 bg-blue-50 min-w-[32px] text-center font-bold text-blue-700 sticky top-0 z-20">I</th>
+                                <th className="p-2 border-r border-b border-gray-300 bg-red-50 min-w-[32px] text-center font-bold text-red-700 sticky top-0 z-20">A</th>
+                                <th className="p-2 border-r border-b border-gray-300 bg-orange-50 min-w-[32px] text-center font-bold text-orange-700 sticky top-0 z-20">T</th>
+                                <th className="p-2 border-r border-b border-gray-300 bg-green-50 min-w-[32px] text-center font-bold text-green-700 sticky top-0 z-20">H</th>
+                                <th className="p-2 border-r border-b border-gray-300 bg-gray-55 min-w-[44px] text-center font-bold text-gray-700 sticky top-0 z-20">%</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
@@ -807,22 +837,22 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
                                 const summary = calculateSummary(student.id);
                                 return (
                                     <tr key={student.id} className="hover:bg-gray-50 transition-colors group">
-                                        <td className="p-3 text-center border-r border-b border-gray-100 sticky left-0 bg-white group-hover:bg-gray-50 z-10 shadow-[2px_0_5px_rgba(0,0,0,0.02)]">{idx + 1}</td>
-                                        <td className="p-3 border-r border-b border-gray-100 font-bold text-gray-950 sticky left-10 bg-white group-hover:bg-gray-50 z-10 whitespace-normal min-w-[220px] max-w-[220px] shadow-[2px_0_5px_rgba(0,0,0,0.02)] leading-tight">{student.name}</td>
+                                        <td className="p-3 text-center border-r border-b border-gray-300 sticky left-0 bg-white group-hover:bg-gray-50 z-10 shadow-[2px_0_5px_rgba(0,0,0,0.02)]">{idx + 1}</td>
+                                        <td className="p-3 border-r border-b border-gray-300 font-bold text-gray-950 sticky left-10 bg-white group-hover:bg-gray-50 z-10 whitespace-normal min-w-[220px] max-w-[220px] shadow-[2px_0_5px_rgba(0,0,0,0.02)] leading-tight">{student.name}</td>
                                         {days.map(d => {
                                             const event = getEventForDay(d);
                                             const isHoliday = (event && (event.type === 'HOLIDAY' || event.type === 'LEAVE')) || isWeekend(d);
                                             
-                                            let cellClass = `p-1 border-r border-gray-100 text-center cursor-pointer select-none transition-colors ${getStatusColor(attendance[student.id]?.[d] || '')}`;
+                                            let cellClass = `w-full h-8 flex items-center justify-center font-bold text-center cursor-pointer select-none transition-colors ${getStatusColor(attendance[student.id]?.[d] || '')}`;
                                             let cellContent = attendance[student.id]?.[d] || '';
                                             
                                             if (isHoliday) {
-                                                cellClass = `p-1 border-r border-gray-100 text-center bg-red-50 text-red-300 cursor-not-allowed`;
+                                                cellClass = `w-full h-8 flex items-center justify-center text-center bg-red-100 text-red-500 font-bold cursor-not-allowed select-none`;
                                                 cellContent = '-';
                                             }
-
+ 
                                             return (
-                                                <td key={d} className="relative group/cell border-b border-gray-100">
+                                                <td key={d} className="relative group/cell border-r border-b border-gray-300 p-0 text-center bg-white">
                                                     <div 
                                                         onClick={() => !isHoliday && handleCellClick(student.id, d)} 
                                                         className={cellClass} 
@@ -842,12 +872,12 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
                                                 </td>
                                             );
                                         })}
-                                        <td className="p-2 text-center border-r border-b border-gray-100 bg-yellow-50/50 font-medium">{summary.s}</td>
-                                        <td className="p-2 text-center border-r border-b border-gray-100 bg-blue-50/50 font-medium">{summary.i}</td>
-                                        <td className="p-2 text-center border-r border-b border-gray-100 bg-red-50/50 font-medium">{summary.a}</td>
-                                        <td className="p-2 text-center border-r border-b border-gray-100 bg-orange-50/50 font-medium">{summary.t}</td>
-                                        <td className="p-2 text-center border-r border-b border-gray-100 bg-green-50/50 font-bold">{summary.h}</td>
-                                        <td className="p-2 text-center border-b border-gray-100 bg-gray-50/50 font-bold text-gray-800">{summary.percentage}%</td>
+                                        <td className="p-2 text-center border-r border-b border-gray-300 bg-yellow-50/50 font-bold text-yellow-900">{summary.s > 0 ? summary.s : ''}</td>
+                                        <td className="p-2 text-center border-r border-b border-gray-300 bg-blue-50/50 font-bold text-blue-900">{summary.i > 0 ? summary.i : ''}</td>
+                                        <td className="p-2 text-center border-r border-b border-gray-300 bg-red-50/50 font-bold text-red-900">{summary.a > 0 ? summary.a : ''}</td>
+                                        <td className="p-2 text-center border-r border-b border-gray-300 bg-orange-50/50 font-bold text-orange-900">{summary.t > 0 ? summary.t : ''}</td>
+                                        <td className="p-2 text-center border-r border-b border-gray-300 bg-green-50/50 font-extrabold text-green-700">{summary.h > 0 ? summary.h : ''}</td>
+                                        <td className="p-2 text-center border-r border-b border-gray-300 bg-gray-100 font-extrabold text-gray-900">{summary.percentage}%</td>
                                     </tr>
                                 );
                             })}
