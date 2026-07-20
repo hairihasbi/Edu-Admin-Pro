@@ -13,7 +13,7 @@ import {
 import { 
   ShieldAlert, Trophy, MessageSquareHeart, Search, Plus, Trash2, 
   CalendarDays, FileWarning, User as UserIcon, AlertTriangle, Printer, FileSpreadsheet, FileText,
-  Heart, RefreshCcw, Home, Smartphone, Shield, PieChart, Activity, BarChart3, Clock, CheckCircle, AlertCircle
+  Heart, RefreshCcw, Home, Smartphone, Shield
 } from './Icons';
 import { db } from '../services/db';
 import * as XLSX from 'xlsx';
@@ -23,11 +23,9 @@ interface TeacherGuidanceProps {
 }
 
 const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
-  const [activeTab, setActiveTab] = useState<'violations' | 'reductions' | 'achievements' | 'counseling' | 'homeVisits' | 'parentCalls' | 'priority' | 'print' | 'dashboard'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'violations' | 'reductions' | 'achievements' | 'counseling' | 'homeVisits' | 'parentCalls' | 'priority' | 'print'>('violations');
   
-  // New State for Priority Monitor & Dashboard
-  const [dashboardSearch, setDashboardSearch] = useState('');
-  const [riskFilter, setRiskFilter] = useState('ALL');
+  // New State for Priority Monitor
   const [flaggedStudents, setFlaggedStudents] = useState<any[]>([]);
   const [isLoadingPriority, setIsLoadingPriority] = useState(false);
   const [classes, setClasses] = useState<ClassRoom[]>([]);
@@ -65,13 +63,7 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
       const allCls = await getClasses('', user.schoolNpsn); // Passing empty string for userId to get all school classes
       setAllSchoolClasses(allCls);
 
-      if (cls.length > 0) {
-        setSelectedClassId(prev => {
-          const classExists = cls.some(c => c.id === prev);
-          if (prev && classExists) return prev;
-          return cls[0].id;
-        });
-      }
+      if (cls.length > 0) setSelectedClassId(cls[0].id);
 
       // 2. Load Students ONLY from these classes to populate the display map
       const map: Record<string, {name: string, className: string}> = {};
@@ -168,66 +160,10 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
     }
   };
 
-  const getSiswaDashboardData = () => {
-    const studentIds = Object.keys(studentMap);
-    
-    return studentIds.map(sid => {
-      const info = studentMap[sid];
-      const sViolations = violations.filter(v => v.studentId === sid);
-      const sReductions = reductions.filter(r => r.studentId === sid);
-      const sSessions = sessions.filter(s => s.studentId === sid);
-      const sHomeVisits = homeVisits.filter(hv => hv.studentId === sid);
-      const sParentCalls = parentCalls.filter(pc => pc.studentId === sid);
-      
-      const totalVPoints = sViolations.reduce((acc, v) => acc + v.points, 0);
-      const totalRPoints = sReductions.reduce((acc, r) => acc + r.pointsRemoved, 0);
-      const netPoints = Math.max(0, totalVPoints - totalRPoints);
-      
-      let riskLevel: 'AMAN' | 'RENDAH' | 'SEDANG' | 'TINGGI' | 'KRITIS' = 'AMAN';
-      let riskColor = 'bg-green-50 text-green-700 border-green-100';
-      let recommendation = 'Aman / Tidak ada tindakan';
-      
-      if (netPoints > 100) {
-        riskLevel = 'KRITIS';
-        riskColor = 'bg-red-200 text-red-900 border-red-300 font-extrabold animate-pulse';
-        recommendation = 'Sidang Akademik / Skorsing / Drop Out';
-      } else if (netPoints > 50) {
-        riskLevel = 'TINGGI';
-        riskColor = 'bg-red-50 text-red-700 border-red-100';
-        recommendation = 'Panggilan Orang Tua & SP-2';
-      } else if (netPoints > 20) {
-        riskLevel = 'SEDANG';
-        riskColor = 'bg-yellow-50 text-yellow-800 border-yellow-100';
-        recommendation = 'Konseling BK Intensif & SP-1';
-      } else if (netPoints > 0) {
-        riskLevel = 'RENDAH';
-        riskColor = 'bg-blue-50 text-blue-700 border-blue-100';
-        recommendation = 'Teguran Wali Kelas & Pembinaan';
-      }
-      
-      return {
-        id: sid,
-        name: info?.name || 'Unknown',
-        className: info?.className || 'Unknown',
-        totalVPoints,
-        totalRPoints,
-        netPoints,
-        riskLevel,
-        riskColor,
-        recommendation,
-        violations: sViolations,
-        reductions: sReductions,
-        sessions: sSessions,
-        homeVisits: sHomeVisits,
-        parentCalls: sParentCalls
-      };
-    });
-  };
-
   const loadFeatureData = async () => {
     if (activeTab === 'priority') {
        loadPriorityData();
-    } else if (activeTab === 'print' || activeTab === 'dashboard') {
+    } else if (activeTab === 'print') {
        const [v, r, a, s, hv, pc] = await Promise.all([
           getStudentViolations(),
           getStudentPointReductions(),
@@ -758,14 +694,6 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
         </h2>
         <div className="flex space-x-2 overflow-x-auto pb-2">
           <button
-            onClick={() => setActiveTab('dashboard')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition whitespace-nowrap ${
-              activeTab === 'dashboard' ? 'bg-purple-50 text-purple-600 ring-1 ring-purple-200' : 'text-gray-600 hover:bg-gray-50'
-            }`}
-          >
-            <PieChart size={16} /> Dashboard BK
-          </button>
-          <button
             onClick={() => setActiveTab('violations')}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition whitespace-nowrap ${
               activeTab === 'violations' ? 'bg-red-50 text-red-600 ring-1 ring-red-200' : 'text-gray-600 hover:bg-gray-50'
@@ -845,7 +773,6 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
                   activeTab === 'homeVisits' ? 'Input Home Visit' :
                   activeTab === 'parentCalls' ? 'Input Panggilan Ortu' :
                   activeTab === 'priority' ? 'Analisis Otomatis' :
-                  activeTab === 'dashboard' ? 'Navigasi & Analisis' :
                   'Filter Data Laporan'}
               </h3>
               
@@ -856,72 +783,27 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
                     <select 
                       className="w-full border border-gray-300 rounded-lg p-2 text-sm"
                       value={selectedClassId}
-                      onChange={(e) => {
-                         setSelectedClassId(e.target.value);
-                         setSelectedStudentId('');
-                      }}
+                      onChange={(e) => setSelectedClassId(e.target.value)}
                     >
-                       <option value="">-- Semua Kelas --</option>
+                       <option value="">-- Pilih Kelas --</option>
                        {(activeTab === 'homeVisits' || activeTab === 'parentCalls' ? allSchoolClasses : classes).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                  </div>
-                 {activeTab !== 'dashboard' && (
-                    <div>
-                       <label className="block text-xs font-semibold text-gray-500 mb-1">Pilih Siswa</label>
-                       <select 
-                         className="w-full border border-gray-300 rounded-lg p-2 text-sm"
-                         value={selectedStudentId}
-                         onChange={(e) => setSelectedStudentId(e.target.value)}
-                         disabled={classes.length === 0}
-                       >
-                          <option value="">-- Pilih Siswa --</option>
-                          {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                       </select>
-                    </div>
-                 )}
+                 <div>
+                    <label className="block text-xs font-semibold text-gray-500 mb-1">Pilih Siswa</label>
+                    <select 
+                      className="w-full border border-gray-300 rounded-lg p-2 text-sm"
+                      value={selectedStudentId}
+                      onChange={(e) => setSelectedStudentId(e.target.value)}
+                      disabled={classes.length === 0}
+                    >
+                       <option value="">-- Pilih Siswa --</option>
+                       {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
+                 </div>
               </div>
 
               {/* Dynamic Forms - Hidden on Print Tab */}
-              {activeTab === 'dashboard' && (
-                 <div className="space-y-4">
-                    <div className="p-3 bg-purple-50 rounded-lg text-xs text-purple-800 leading-relaxed border border-purple-100">
-                       <p className="font-bold flex items-center gap-1 mb-1">
-                          <ShieldAlert size={14} /> Sinkronisasi Real-Time
-                       </p>
-                       Data kedisiplinan wali kelas dan guru BK terintegrasi secara langsung. Gunakan filter di bawah untuk melakukan analisis taktis.
-                    </div>
-                    <div>
-                       <label className="block text-xs font-semibold text-gray-500 mb-1">Pencarian Siswa Cepat</label>
-                       <div className="relative">
-                          <input 
-                            type="text" 
-                            placeholder="Ketik nama siswa..." 
-                            className="w-full border border-gray-300 rounded-lg p-2 pl-8 text-xs focus:ring-2 focus:ring-purple-500"
-                            value={dashboardSearch}
-                            onChange={(e) => setDashboardSearch(e.target.value)}
-                          />
-                          <div className="absolute left-2.5 top-3.5 text-gray-400">
-                             <Search size={12} />
-                          </div>
-                       </div>
-                    </div>
-                    <div>
-                       <label className="block text-xs font-semibold text-gray-500 mb-1">Filter Tingkat Risiko</label>
-                       <select
-                         className="w-full border border-gray-300 rounded-lg p-2 text-xs text-gray-700"
-                         value={riskFilter}
-                         onChange={(e) => setRiskFilter(e.target.value)}
-                       >
-                          <option value="ALL">Semua Risiko</option>
-                          <option value="KRITIS">Kritis (&gt; 100 Poin)</option>
-                          <option value="TINGGI">Tinggi (51 - 100 Poin)</option>
-                          <option value="SEDANG">Sedang (21 - 50 Poin)</option>
-                          <option value="RENDAH">Rendah (1 - 20 Poin)</option>
-                       </select>
-                    </div>
-                 </div>
-              )}
-
               {activeTab === 'priority' && (
                 <div className="p-4 bg-red-50 rounded-lg border border-red-100 text-sm">
                   <p className="text-red-700 font-medium mb-2 flex items-center gap-1">
@@ -1047,302 +929,15 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
 
         {/* LIST DATA / PREVIEW (Right Column) */}
         <div className="lg:col-span-2">
-           {activeTab === 'dashboard' ? (() => {
-              const allSiswaData = getSiswaDashboardData();
-              const selectedClassName = allSchoolClasses.find(c => c.id === selectedClassId)?.name;
+           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden min-h-[400px]">
+              <div className="bg-gray-50 px-4 py-3 border-b border-gray-100 flex justify-between items-center">
+                 <h3 className="font-bold text-gray-700">
+                    {activeTab === 'print' ? 'Preview Laporan Siswa' : `Riwayat Data (${activeTab})`}
+                 </h3>
+                 {selectedStudentId && getStudentDisplay(selectedStudentId) && <span className="text-xs bg-white px-2 py-1 rounded border text-blue-600 font-medium">Filter: {getStudentDisplay(selectedStudentId)?.name}</span>}
+              </div>
               
-              // Filter based on search & class & risk
-              const filteredDashboardData = allSiswaData.filter(item => {
-                 const matchesClass = selectedClassId ? (item.className === selectedClassName) : true;
-                 const matchesSearch = dashboardSearch 
-                    ? (item.name.toLowerCase().includes(dashboardSearch.toLowerCase()) || item.id.includes(dashboardSearch))
-                    : true;
-                 const matchesRisk = riskFilter === 'ALL' ? true : item.riskLevel === riskFilter;
-                 return matchesClass && matchesSearch && matchesRisk;
-              });
-
-              // Stats Calculations
-              const totalViolationsCount = violations.length;
-              const totalReductionsCount = reductions.length;
-              const totalViolationsPoints = violations.reduce((acc, v) => acc + v.points, 0);
-              const totalReductionsPoints = reductions.reduce((acc, r) => acc + r.pointsRemoved, 0);
-              const highRiskSiswaCount = allSiswaData.filter(s => s.netPoints > 50).length;
-              const recoveryRate = totalViolationsPoints > 0 ? Math.round((totalReductionsPoints / totalViolationsPoints) * 100) : 0;
-
-              // Recent Activity Logs (Violations & Reductions merged and sorted)
-              const recentActivityLogs = [
-                 ...violations.map(v => ({
-                    id: v.id,
-                    studentId: v.studentId,
-                    date: v.date,
-                    type: 'VIOLATION' as const,
-                    title: v.violationName,
-                    points: v.points,
-                    desc: v.description,
-                    by: v.reportedBy || 'Guru BK'
-                 })),
-                 ...reductions.map(r => ({
-                    id: r.id,
-                    studentId: r.studentId,
-                    date: r.date,
-                    type: 'REDUCTION' as const,
-                    title: r.activityName,
-                    points: -r.pointsRemoved,
-                    desc: r.description,
-                    by: 'Wali Kelas / BK'
-                 }))
-              ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 8);
-
-              // Top Violations Category aggregation
-              const categoriesCount: Record<string, number> = {};
-              violations.forEach(v => {
-                 const cat = v.violationName || 'Lainnya';
-                 categoriesCount[cat] = (categoriesCount[cat] || 0) + 1;
-              });
-              const topCategories = Object.entries(categoriesCount)
-                 .map(([name, count]) => ({ name, count }))
-                 .sort((a, b) => b.count - a.count)
-                 .slice(0, 5);
-
-              return (
-                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-6 text-left">
-                    
-                    {/* Header */}
-                    <div className="flex justify-between items-center border-b pb-4">
-                       <div>
-                          <h3 className="font-bold text-gray-800 text-lg">Dashboard Pemantauan & Kolaborasi</h3>
-                          <p className="text-xs text-gray-500">Rekapitulasi kedisiplinan siswa real-time tersinkronisasi</p>
-                       </div>
-                       <span className="text-[10px] bg-purple-50 text-purple-600 font-extrabold px-2.5 py-1 rounded-full uppercase tracking-wider animate-pulse">Live Sync</span>
-                    </div>
-
-                    {/* Quick Stats Grid */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                       <div className="bg-gradient-to-br from-red-50 to-red-100/30 p-4 rounded-xl border border-red-100 relative overflow-hidden">
-                          <div className="absolute right-2 top-2 bg-red-100/50 p-1.5 rounded-lg text-red-600">
-                             <FileWarning size={14} />
-                          </div>
-                          <span className="text-[10px] text-red-600 font-bold uppercase tracking-wider">Total Sanksi</span>
-                          <div className="text-xl font-black text-red-900 mt-1">{totalViolationsPoints} <span className="text-xs font-semibold">pts</span></div>
-                          <div className="text-[9px] text-red-500 font-medium mt-1">{totalViolationsCount} kejadian terekam</div>
-                       </div>
-
-                       <div className="bg-gradient-to-br from-green-50 to-green-100/30 p-4 rounded-xl border border-green-100 relative overflow-hidden">
-                          <div className="absolute right-2 top-2 bg-green-100/50 p-1.5 rounded-lg text-green-600">
-                             <RefreshCcw size={14} />
-                          </div>
-                          <span className="text-[10px] text-green-700 font-bold uppercase tracking-wider">Pemulihan</span>
-                          <div className="text-xl font-black text-green-900 mt-1">{totalReductionsPoints} <span className="text-xs font-semibold">pts</span></div>
-                          <div className="text-[9px] text-green-600 font-medium mt-1">{totalReductionsCount} kegiatan mandiri</div>
-                       </div>
-
-                       <div className="bg-gradient-to-br from-yellow-50 to-yellow-100/30 p-4 rounded-xl border border-yellow-100 relative overflow-hidden">
-                          <div className="absolute right-2 top-2 bg-yellow-100/50 p-1.5 rounded-lg text-yellow-600">
-                             <ShieldAlert size={14} />
-                          </div>
-                          <span className="text-[10px] text-yellow-700 font-bold uppercase tracking-wider">Risiko Tinggi</span>
-                          <div className="text-xl font-black text-yellow-900 mt-1">{highRiskSiswaCount} <span className="text-xs font-semibold">anak</span></div>
-                          <div className="text-[9px] text-yellow-600 font-medium mt-1">Akumulasi &gt; 50 poin</div>
-                       </div>
-
-                       <div className="bg-gradient-to-br from-purple-50 to-purple-100/30 p-4 rounded-xl border border-purple-100 relative overflow-hidden">
-                          <div className="absolute right-2 top-2 bg-purple-100/50 p-1.5 rounded-lg text-purple-600">
-                             <Activity size={14} />
-                          </div>
-                          <span className="text-[10px] text-purple-700 font-bold uppercase tracking-wider">Rasio Pemulihan</span>
-                          <div className="text-xl font-black text-purple-900 mt-1">{recoveryRate}%</div>
-                          <div className="text-[9px] text-purple-600 font-medium mt-1">Kedisiplinan membaik</div>
-                       </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-                       
-                       {/* Left Stats Section: Active Point Rankings (Deteksi Threshold) */}
-                       <div className="xl:col-span-2 space-y-4">
-                          <div className="flex justify-between items-center">
-                             <h4 className="font-bold text-gray-800 text-sm flex items-center gap-2">
-                                <AlertCircle size={16} className="text-purple-600" /> Deteksi Sanksi & Ambang Batas (Threshold)
-                             </h4>
-                             {selectedClassId && (
-                                <span className="text-[10px] bg-purple-50 text-purple-600 font-bold px-2 py-0.5 rounded">
-                                   Kelas: {selectedClassName}
-                                </span>
-                             )}
-                          </div>
-
-                          <div className="border border-gray-100 rounded-xl overflow-hidden shadow-sm">
-                             <div className="max-h-[300px] overflow-y-auto">
-                                {filteredDashboardData.filter(x => x.netPoints > 0).length === 0 ? (
-                                   <div className="p-12 text-center text-gray-400">
-                                      <CheckCircle size={32} className="mx-auto text-green-400 mb-2" />
-                                      <p className="text-xs font-bold text-gray-700">Tidak ada siswa dengan poin pelanggaran aktif.</p>
-                                   </div>
-                                ) : (
-                                   <table className="w-full text-xs text-left">
-                                      <thead className="bg-gray-50 text-gray-600 font-semibold border-b border-gray-100 sticky top-0">
-                                         <tr>
-                                            <th className="p-3">Siswa</th>
-                                            <th className="p-3 text-center">Net Poin</th>
-                                            <th className="p-3">Risiko</th>
-                                            <th className="p-3">Rekomendasi / Tindakan</th>
-                                         </tr>
-                                      </thead>
-                                      <tbody className="divide-y divide-gray-100">
-                                         {filteredDashboardData.filter(x => x.netPoints > 0).map((item) => (
-                                            <tr key={item.id} className="hover:bg-gray-50 transition">
-                                               <td className="p-3 font-bold text-gray-800">
-                                                  <div>{item.name}</div>
-                                                  <div className="text-[9px] text-gray-400 font-mono">NIS: {item.id} • Kelas {item.className}</div>
-                                               </td>
-                                               <td className="p-3 text-center">
-                                                  <span className={`px-2 py-0.5 rounded-lg text-xs font-bold ${
-                                                     item.netPoints > 100 
-                                                     ? 'bg-red-200 text-red-900' 
-                                                     : item.netPoints > 50 
-                                                     ? 'bg-red-100 text-red-700' 
-                                                     : item.netPoints > 20 
-                                                     ? 'bg-yellow-100 text-yellow-800' 
-                                                     : 'bg-blue-50 text-blue-700'
-                                                  }`}>
-                                                     {item.netPoints} pts
-                                                  </span>
-                                               </td>
-                                               <td className="p-3">
-                                                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${item.riskColor}`}>
-                                                     {item.riskLevel}
-                                                  </span>
-                                               </td>
-                                               <td className="p-3">
-                                                  <div className="flex items-center justify-between gap-2">
-                                                     <span className="text-[10px] text-gray-500 font-semibold truncate max-w-[150px]" title={item.recommendation}>
-                                                        {item.recommendation}
-                                                     </span>
-                                                     <button
-                                                        onClick={() => {
-                                                           setSelectedStudentId(item.id);
-                                                           setActiveTab('print');
-                                                        }}
-                                                        className="bg-purple-50 text-purple-600 hover:bg-purple-600 hover:text-white p-1 rounded transition"
-                                                        title="Buka Folder Rekam Jejak"
-                                                     >
-                                                        <Search size={12} />
-                                                     </button>
-                                                  </div>
-                                               </td>
-                                            </tr>
-                                         ))}
-                                      </tbody>
-                                   </table>
-                                )}
-                             </div>
-                          </div>
-                       </div>
-
-                       {/* Right Column: Mini Statistics & Category breakdown */}
-                       <div className="space-y-4">
-                          <h4 className="font-bold text-gray-800 text-sm flex items-center gap-2">
-                             <BarChart3 size={16} className="text-purple-600" /> Kategori Terbanyak
-                          </h4>
-                          <div className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm space-y-3">
-                             {topCategories.length === 0 ? (
-                                <p className="text-xs text-gray-400 italic text-center py-6">Belum ada data statistik sanksi.</p>
-                             ) : (
-                                topCategories.map((cat, idx) => {
-                                   const maxCount = Math.max(...topCategories.map(c => c.count));
-                                   const percentage = maxCount > 0 ? Math.round((cat.count / maxCount) * 100) : 0;
-                                   return (
-                                      <div key={cat.name} className="space-y-1">
-                                         <div className="flex justify-between text-xs font-semibold text-gray-700">
-                                            <span className="truncate max-w-[130px]" title={cat.name}>{cat.name}</span>
-                                            <span className="text-purple-600">{cat.count} sanksi</span>
-                                         </div>
-                                         <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden">
-                                            <div 
-                                               className="bg-gradient-to-r from-purple-500 to-indigo-500 h-full rounded-full transition-all duration-500"
-                                               style={{ width: `${percentage}%` }}
-                                            />
-                                         </div>
-                                      </div>
-                                   );
-                                })
-                             )}
-                          </div>
-
-                          <div className="p-3 bg-purple-50 border border-purple-100 rounded-xl">
-                             <h5 className="font-extrabold text-purple-800 text-xs flex items-center gap-1.5 mb-1.5">
-                                <ShieldAlert size={12} /> Aturan Poin & Tindakan
-                             </h5>
-                             <ul className="text-[10px] text-purple-700 space-y-1 pl-3.5 list-disc font-semibold">
-                                <li><strong>1 - 20 Pts:</strong> Teguran & Pembinaan Wali Kelas</li>
-                                <li><strong>21 - 50 Pts:</strong> Konseling BK SP-1</li>
-                                <li><strong>51 - 100 Pts:</strong> Panggilan Ortu SP-2</li>
-                                <li><strong>&gt; 100 Pts:</strong> Sidang Skorsing / DO</li>
-                             </ul>
-                          </div>
-                       </div>
-                    </div>
-
-                    {/* Real-time Collaboration Feed: Recent Activity Logs */}
-                    <div className="space-y-4 pt-2">
-                       <h4 className="font-bold text-gray-800 text-sm flex items-center gap-2">
-                          <Clock size={16} className="text-purple-600" /> Kolaborasi Harian Terakhir (Saling Terintegrasi)
-                       </h4>
-                       <div className="border border-gray-100 rounded-xl overflow-hidden shadow-sm divide-y divide-gray-100">
-                          <div className="max-h-[250px] overflow-y-auto">
-                             {recentActivityLogs.length === 0 ? (
-                                <p className="p-8 text-center text-gray-400 text-xs">Belum ada aktivitas terekam hari ini.</p>
-                             ) : (
-                                recentActivityLogs.map((log) => {
-                                   const stInfo = getStudentDisplay(log.studentId);
-                                   return (
-                                      <div key={log.id} className="p-3 flex items-start justify-between gap-4 hover:bg-gray-50/50 transition text-xs">
-                                         <div className="flex gap-3 items-start text-left">
-                                            <div className={`p-1.5 rounded-lg mt-0.5 shrink-0 ${
-                                               log.type === 'VIOLATION' 
-                                               ? 'bg-red-50 text-red-600' 
-                                               : 'bg-green-50 text-green-600'
-                                            }`}>
-                                               {log.type === 'VIOLATION' ? <FileWarning size={14} /> : <RefreshCcw size={14} />}
-                                            </div>
-                                            <div>
-                                               <div className="font-bold text-gray-800">
-                                                  {stInfo?.name || 'Siswa'} <span className="text-gray-400 font-medium">({stInfo?.className})</span>
-                                               </div>
-                                               <div className="text-gray-700 mt-0.5 flex items-center gap-1.5">
-                                                  <span className="font-semibold">{log.title}</span>
-                                                  <span className={`px-1 rounded font-mono text-[9px] font-bold ${
-                                                     log.type === 'VIOLATION' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
-                                                  }`}>
-                                                     {log.points > 0 ? `+${log.points}` : log.points} pts
-                                                  </span>
-                                               </div>
-                                               {log.desc && <p className="text-[11px] text-gray-500 mt-1 italic leading-relaxed">"{log.desc}"</p>}
-                                               <div className="text-[9px] text-gray-400 mt-1 flex items-center gap-2 font-semibold">
-                                                  <span>Dicatat oleh: <strong className="text-purple-600">{log.by}</strong></span>
-                                                  <span>•</span>
-                                                  <span>{log.date}</span>
-                                               </div>
-                                            </div>
-                                         </div>
-                                      </div>
-                                   );
-                                })
-                             )}
-                          </div>
-                       </div>
-                    </div>
-                 </div>
-              );
-           })() : (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden min-h-[400px]">
-                 <div className="bg-gray-50 px-4 py-3 border-b border-gray-100 flex justify-between items-center">
-                    <h3 className="font-bold text-gray-700">
-                       {activeTab === 'print' ? 'Preview Laporan Siswa' : `Riwayat Data (${activeTab})`}
-                    </h3>
-                    {selectedStudentId && getStudentDisplay(selectedStudentId) && <span className="text-xs bg-white px-2 py-1 rounded border text-blue-600 font-medium">Filter: {getStudentDisplay(selectedStudentId)?.name}</span>}
-                 </div>
-                 
-                 <div className="divide-y divide-gray-100 max-h-[600px] overflow-y-auto">
+              <div className="divide-y divide-gray-100 max-h-[600px] overflow-y-auto">
                   
                   {/* MONITOR PRIORITAS TAB */}
                   {activeTab === 'priority' && (
@@ -1677,7 +1272,6 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
                  )}
               </div>
            </div>
-          )}
         </div>
 
       </div>

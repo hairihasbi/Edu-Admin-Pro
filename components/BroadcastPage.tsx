@@ -63,13 +63,7 @@ const BroadcastPage: React.FC<BroadcastPageProps> = ({ user }) => {
 
         const cls = await getClasses(user.id, user.schoolNpsn);
         setClasses(cls);
-        if (cls.length > 0) {
-            setSelectedClassId(prev => {
-                const classExists = cls.some(c => c.id === prev);
-                if (prev && classExists) return prev;
-                return cls[0].id;
-            });
-        }
+        if (cls.length > 0) setSelectedClassId(cls[0].id);
     };
     init();
   }, [user.id, user.schoolNpsn]);

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { User, ClassRoom, ScopeMaterial, TeachingJournal, SD_SUBJECTS_PHASE_A, SD_SUBJECTS_PHASE_BC, MATH_SUBJECT_OPTIONS, AbsentStudent, TeachingSchedule, Student } from '../types';
-import { getClasses, getScopeMaterials, getTeachingJournals, addTeachingJournal, deleteTeachingJournal, bulkDeleteTeachingJournals, getStudents, getTeachingSchedules, getLocalDate, isSubjectMatching } from '../services/database';
+import { getClasses, getScopeMaterials, getTeachingJournals, addTeachingJournal, deleteTeachingJournal, bulkDeleteTeachingJournals, getStudents, getTeachingSchedules, getLocalDate, isSubjectMatching } from '../services/database'; // Updated to refresh compiler state
 import { Plus, Save, Trash2, Filter, Printer, FileSpreadsheet, NotebookPen, CalendarDays, ChevronLeft, ChevronRight, UserMinus } from './Icons';
 import Skeleton from './Skeleton';
 import * as XLSX from 'xlsx';
@@ -175,13 +175,7 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
       setClasses(cls);
       if (cls.length > 0) {
         // Default form class to first available, BUT FILTER defaults to All ('')
-        setFormData(prev => {
-          const classExists = cls.some(c => c.id === prev.classId);
-          if (prev.classId && classExists) {
-            return prev;
-          }
-          return { ...prev, classId: cls[0].id };
-        });
+        setFormData(prev => ({ ...prev, classId: cls[0].id }));
       }
       
       // Fetch ALL Materials for Lookup Map (for Print/Export)
