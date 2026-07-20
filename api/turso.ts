@@ -1505,11 +1505,113 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 });
             }
 
+            // Also delete materials and journals for grade 12 classes in remote database!
+            statements.push({
+                sql: `UPDATE materials SET deleted = 1, last_modified = ? WHERE class_id IN (${classPlaceholders})`,
+                args: [now, ...grade12ClassIds]
+            });
+            statements.push({
+                sql: `UPDATE journals SET deleted = 1, last_modified = ? WHERE class_id IN (${classPlaceholders})`,
+                args: [now, ...grade12ClassIds]
+            });
+
             await client.batch(statements);
 
             return res.status(200).json({ success: true, count: studentIds.length });
         } catch (e: any) {
             console.error("Graduation remote execution failed:", e);
+            return res.status(500).json({ error: e.message });
+        }
+    }
+
+    // --- PROMOTION RESET LOGIC (GRADE 10 & 11) ---
+    if (action === 'execute_promotion_reset') {
+        const { schoolNpsn } = body;
+        if (!schoolNpsn) return res.status(400).json({ error: 'schoolNpsn is required' });
+
+        try {
+            // 1. Get all classes for the school
+            const classesRes = await client.execute({
+                sql: "SELECT id, name FROM classes WHERE school_npsn = ?",
+                args: [schoolNpsn]
+            });
+            
+            // 2. Identify Grade 10 & 11 classes (with robust regex parsing)
+            const targetClassIds = classesRes.rows
+                .filter((c: any) => {
+                    if (!c.name) return false;
+                    const clean = c.name.trim().toUpperCase();
+                    const isGrade10 = /^10\b|^10[^0-9]|^X\b|^X[^A-Z]/i.test(clean);
+                    const isGrade11 = /^11\b|^11[^0-9]|^XI\b|^XI[^A-Z]/i.test(clean);
+                    return isGrade10 || isGrade11;
+                })
+                .map((c: any) => c.id);
+
+            if (targetClassIds.length === 0) {
+                return res.status(200).json({ success: true, count: 0, message: "Tidak ada kelas tingkat 10 atau 11 ditemukan di remote." });
+            }
+
+            const classPlaceholders = targetClassIds.map(() => '?').join(', ');
+            const now = Date.now();
+            const statements = [
+                {
+                    sql: `UPDATE materials SET deleted = 1, last_modified = ? WHERE class_id IN (${classPlaceholders})`,
+                    args: [now, ...targetClassIds]
+                },
+                {
+                    sql: `UPDATE journals SET deleted = 1, last_modified = ? WHERE class_id IN (${classPlaceholders})`,
+                    args: [now, ...targetClassIds]
+                },
+                {
+                    sql: `UPDATE attendance SET deleted = 1, last_modified = ? WHERE class_id IN (${classPlaceholders})`,
+                    args: [now, ...targetClassIds]
+                },
+                {
+                    sql: `UPDATE scores SET deleted = 1, last_modified = ? WHERE class_id IN (${classPlaceholders})`,
+                    args: [now, ...targetClassIds]
+                }
+            ];
+
+            await client.batch(statements);
+            return res.status(200).json({ success: true, count: targetClassIds.length });
+        } catch (e: any) {
+            console.error("Promotion reset remote execution failed:", e);
+            return res.status(500).json({ error: e.message });
+        }
+    }
+
+    // --- CLASS PROMOTION CLEAR LOGIC (ORIGIN & TARGET CLASSES) ---
+    if (action === 'execute_class_promotion_clear') {
+        const { originClassId, targetClassId } = body;
+        if (!originClassId || !targetClassId) return res.status(400).json({ error: 'originClassId and targetClassId are required' });
+
+        try {
+            const classIds = [originClassId, targetClassId];
+            const placeholders = classIds.map(() => '?').join(', ');
+            const now = Date.now();
+            const statements = [
+                {
+                    sql: `UPDATE materials SET deleted = 1, last_modified = ? WHERE class_id IN (${placeholders})`,
+                    args: [now, ...classIds]
+                },
+                {
+                    sql: `UPDATE journals SET deleted = 1, last_modified = ? WHERE class_id IN (${placeholders})`,
+                    args: [now, ...classIds]
+                },
+                {
+                    sql: `UPDATE attendance SET deleted = 1, last_modified = ? WHERE class_id IN (${placeholders})`,
+                    args: [now, ...classIds]
+                },
+                {
+                    sql: `UPDATE scores SET deleted = 1, last_modified = ? WHERE class_id IN (${placeholders})`,
+                    args: [now, ...classIds]
+                }
+            ];
+
+            await client.batch(statements);
+            return res.status(200).json({ success: true });
+        } catch (e: any) {
+            console.error("Class promotion clear remote execution failed:", e);
             return res.status(500).json({ error: e.message });
         }
     }
