@@ -8,8 +8,16 @@ interface TeacherCalendarManagerProps {
 }
 
 const TeacherCalendarManager: React.FC<TeacherCalendarManagerProps> = ({ user }) => {
+    const getTodayLocalDateString = () => {
+        const today = new Date();
+        const y = today.getFullYear();
+        const m = String(today.getMonth() + 1).padStart(2, '0');
+        const d = String(today.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    };
+
     const [events, setEvents] = useState<TeacherCalendarEvent[]>([]);
-    const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
+    const [selectedDate, setSelectedDate] = useState<string>(getTodayLocalDateString());
     const [eventType, setEventType] = useState<'HOLIDAY' | 'LEAVE' | 'SCHOOL_EVENT' | 'OTHER'>('HOLIDAY');
     const [description, setDescription] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -31,7 +39,17 @@ const TeacherCalendarManager: React.FC<TeacherCalendarManagerProps> = ({ user })
         end.setMonth(end.getMonth() + 1);
         end.setDate(0); // Last day of month
 
-        const data = await getCalendarEvents(user.id, start.toISOString().split('T')[0], end.toISOString().split('T')[0]);
+        const formatDateLocal = (date: Date) => {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        };
+        
+        const startStr = formatDateLocal(start);
+        const endStr = formatDateLocal(end);
+
+        const data = await getCalendarEvents(user.id, startStr, endStr);
         setEvents(data);
     };
 
