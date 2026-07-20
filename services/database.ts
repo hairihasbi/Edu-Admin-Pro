@@ -1821,48 +1821,29 @@ export const updateScopeMaterial = async (id: string, data: Partial<ScopeMateria
 };
 
 export const getScopeMaterials = async (classId: string, semester: string, userId: string, subject?: string) => {
-    let collection;
+    let list: ScopeMaterial[] = [];
     if (classId) {
-        // If classId is provided, we can see all materials for that class 
-        // (since classes are already NPSN-scoped)
-        collection = db.scopeMaterials.where('classId').equals(classId);
+        list = await db.scopeMaterials.where('classId').equals(classId).toArray();
+    } else if (userId) {
+        list = await db.scopeMaterials.where('userId').equals(userId).toArray();
     } else {
-        // Fallback to user's own materials if no class specified
-        collection = db.scopeMaterials.where('userId').equals(userId);
+        list = await db.scopeMaterials.toArray();
     }
     
-    if (semester) collection = collection.filter(m => m.semester === semester);
-
-    // Apply teacher privacy rules (keep Matematika/Umum/Tingkat Lanjut subjects strictly private to the creator)
+    // 1. Strictly filter by userId to ensure complete privacy across all teachers and subjects
     if (userId) {
-        collection = collection.filter(m => {
-            if (m.userId === userId) return true;
-            if (m.subject) {
-                const s = m.subject.trim().toLowerCase();
-                const isPrivateMath = 
-                    s === 'matematika umum' || 
-                    s === 'matematika tingkat lanjut' ||
-                    s === 'umum' ||
-                    s === 'matematika' ||
-                    s === 'tingkat lanjut' ||
-                    s.includes('matematika umum') ||
-                    s.includes('matematika tingkat lanjut') ||
-                    s.includes('matematika') ||
-                    s.includes('umum') ||
-                    s.includes('tingkat lanjut');
-                
-                if (isPrivateMath) {
-                    return false; // Do not show to other teachers
-                }
-            }
-            return false;
-        });
+        list = list.filter(m => m.userId === userId);
+    }
+
+    // 2. Filter by semester
+    if (semester) {
+        list = list.filter(m => m.semester === semester);
     }
     
-    // FIX: Robust filtering (Case-insensitive + Allow legacy/empty + Math Loose Matching)
+    // 3. Filter by subject
     if (subject && subject !== 'ALL') {
         const normSubject = subject.trim().toLowerCase();
-        collection = collection.filter(m => {
+        list = list.filter(m => {
             if (!m.subject) return true; // Keep legacy
             const s = m.subject.trim().toLowerCase();
             if (s === normSubject) return true;
@@ -1874,7 +1855,8 @@ export const getScopeMaterials = async (classId: string, semester: string, userI
             return false;
         });
     }
-    return await collection.toArray();
+
+    return list;
 };
 
 export const deleteScopeMaterial = async (id: string) => {
@@ -1893,32 +1875,8 @@ export const copyScopeMaterials = async (sourceClassId: string, targetClassId: s
     const sources = await db.scopeMaterials.where({ classId: sourceClassId, semester: sourceSem }).toArray();
     if (sources.length === 0) return false;
 
-    // Filter source materials based on teacher privacy and subject relevance
-    const filteredSources = sources.filter(s => {
-        // If it belongs to this teacher, they can copy it
-        if (s.userId === userId) return true;
-        
-        // If it belongs to another teacher, check if it's a private math subject (which are not copyable by others)
-        if (s.subject) {
-            const normS = s.subject.trim().toLowerCase();
-            const isPrivateMath = 
-                normS === 'matematika umum' || 
-                normS === 'matematika tingkat lanjut' || 
-                normS === 'umum' || 
-                normS === 'matematika' || 
-                normS === 'tingkat lanjut' ||
-                normS.includes('matematika umum') ||
-                normS.includes('matematika tingkat lanjut') ||
-                normS.includes('matematika') ||
-                normS.includes('umum') ||
-                normS.includes('tingkat lanjut');
-
-            if (isPrivateMath) {
-                return false; // Cannot copy another teacher's private math materials
-            }
-        }
-        return false;
-    });
+    // Filter source materials so they are strictly private to this teacher
+    const filteredSources = sources.filter(s => s.userId === userId);
 
     if (filteredSources.length === 0) return false;
 
