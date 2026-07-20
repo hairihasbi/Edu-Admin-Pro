@@ -77,7 +77,11 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
       
       // Default Form Class to First Available
       if (cls.length > 0) {
-        setFormData(prev => ({ ...prev, classId: cls[0].id }));
+        setFormData(prev => {
+          const classExists = cls.some(c => c.id === prev.classId);
+          if (prev.classId && classExists) return prev;
+          return { ...prev, classId: cls[0].id };
+        });
       }
       
       setLoading(false);
@@ -88,7 +92,7 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
   // Fetch Materials when Filter Class or Semester changes
   useEffect(() => {
     fetchMaterials();
-  }, [filterClassId, filterSemester, selectedSubject]);
+  }, [filterClassId, filterSemester, selectedSubject, user.id]);
 
   // Sync Form Class with Filter Class if user selects a specific class
   useEffect(() => {
@@ -98,6 +102,7 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
   }, [filterClassId, editingId]);
 
   const fetchMaterials = async () => {
+    if (!user.id) return;
     setLoading(true);
     // Fetch materials (supports empty classId for ALL)
     const data = await getScopeMaterials(filterClassId, filterSemester, user.id, selectedSubject);

@@ -122,7 +122,13 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
       setLoading(true);
       const cls = await getClasses(user.id, user.schoolNpsn);
       setClasses(cls);
-      if (cls.length > 0) setSelectedClassId(cls[0].id);
+      if (cls.length > 0) {
+        setSelectedClassId(prev => {
+          const classExists = cls.some(c => c.id === prev);
+          if (prev && classExists) return prev;
+          return cls[0].id;
+        });
+      }
       setLoading(false);
     };
     init();
@@ -130,7 +136,7 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
 
   useEffect(() => {
     if (selectedClassId) fetchData();
-  }, [selectedClassId, selectedSemester, selectedSubject]);
+  }, [selectedClassId, selectedSemester, selectedSubject, user.id]);
 
   // ROBUST PARSER
   const parseSubScopes = (val: any): string[] => {
@@ -147,6 +153,7 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
   };
 
   const fetchData = async () => {
+    if (!user.id) return;
     setLoading(true);
     const [stData, matData, scoreData] = await Promise.all([
       getStudents(selectedClassId),

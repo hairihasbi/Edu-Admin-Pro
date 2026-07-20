@@ -223,7 +223,7 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
 
   // Fetch Materials when Form Class Changes (For Dropdown)
   useEffect(() => {
-    if (formData.classId) {
+    if (formData.classId && user.id) {
       const fetchMats = async () => {
         // PASS user.id here too
         const matGanjil = await getScopeMaterials(formData.classId, 'Ganjil', user.id, formSubject);
@@ -234,7 +234,7 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
     } else {
       setAllMaterials([]);
     }
-  }, [formData.classId, formSubject]);
+  }, [formData.classId, formSubject, user.id]);
 
   const fetchJournals = async () => {
     const data = await getTeachingJournals(user.id, selectedSubject);
