@@ -2014,6 +2014,13 @@ export const addTeachingJournal = async (data: Omit<TeachingJournal, 'id'|'lastM
     return item;
 };
 
+export const updateTeachingJournal = async (id: string, data: Partial<TeachingJournal>) => {
+    await db.teachingJournals.update(id, { ...data, lastModified: Date.now(), isSynced: false });
+    const item = await db.teachingJournals.get(id);
+    if (item) triggerDebouncedSync();
+    return item;
+};
+
 export const deleteTeachingJournal = async (id: string) => {
     const item = await db.teachingJournals.get(id);
     await db.teachingJournals.delete(id);
