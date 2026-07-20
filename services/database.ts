@@ -1833,20 +1833,26 @@ export const getScopeMaterials = async (classId: string, semester: string, userI
     
     if (semester) collection = collection.filter(m => m.semester === semester);
 
-    // Apply teacher privacy rules (only allow other teachers' materials if they are Matematika Umum or Matematika Tingkat Lanjut)
+    // Apply teacher privacy rules (keep Matematika/Umum/Tingkat Lanjut subjects strictly private to the creator)
     if (userId) {
         collection = collection.filter(m => {
             if (m.userId === userId) return true;
             if (m.subject) {
                 const s = m.subject.trim().toLowerCase();
-                if (
+                const isPrivateMath = 
                     s === 'matematika umum' || 
                     s === 'matematika tingkat lanjut' ||
                     s === 'umum' ||
                     s === 'matematika' ||
-                    s === 'tingkat lanjut'
-                ) {
-                    return true;
+                    s === 'tingkat lanjut' ||
+                    s.includes('matematika umum') ||
+                    s.includes('matematika tingkat lanjut') ||
+                    s.includes('matematika') ||
+                    s.includes('umum') ||
+                    s.includes('tingkat lanjut');
+                
+                if (isPrivateMath) {
+                    return false; // Do not show to other teachers
                 }
             }
             return false;
@@ -1892,18 +1898,23 @@ export const copyScopeMaterials = async (sourceClassId: string, targetClassId: s
         // If it belongs to this teacher, they can copy it
         if (s.userId === userId) return true;
         
-        // If it belongs to another teacher, check if it's a shared math subject
+        // If it belongs to another teacher, check if it's a private math subject (which are not copyable by others)
         if (s.subject) {
             const normS = s.subject.trim().toLowerCase();
-            const normSub = subject.trim().toLowerCase();
-            
-            const isShared = normS === 'matematika umum' || normS === 'matematika tingkat lanjut' || normS === 'umum' || normS === 'matematika' || normS === 'tingkat lanjut';
-            if (isShared) {
-                // Check if the source subject matches the requested subject
-                if (normS === normSub) return true;
-                if (normSub === 'matematika umum' && (normS === 'umum' || normS === 'matematika')) return true;
-                if (normSub === 'matematika tingkat lanjut' && normS === 'tingkat lanjut') return true;
-                if (normSub === 'matematika' && (normS === 'matematika umum' || normS === 'matematika tingkat lanjut' || normS === 'umum' || normS === 'tingkat lanjut')) return true;
+            const isPrivateMath = 
+                normS === 'matematika umum' || 
+                normS === 'matematika tingkat lanjut' || 
+                normS === 'umum' || 
+                normS === 'matematika' || 
+                normS === 'tingkat lanjut' ||
+                normS.includes('matematika umum') ||
+                normS.includes('matematika tingkat lanjut') ||
+                normS.includes('matematika') ||
+                normS.includes('umum') ||
+                normS.includes('tingkat lanjut');
+
+            if (isPrivateMath) {
+                return false; // Cannot copy another teacher's private math materials
             }
         }
         return false;
