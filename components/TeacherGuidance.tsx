@@ -65,7 +65,13 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
       const allCls = await getClasses('', user.schoolNpsn); // Passing empty string for userId to get all school classes
       setAllSchoolClasses(allCls);
 
-      if (cls.length > 0) setSelectedClassId(cls[0].id);
+      if (cls.length > 0) {
+        setSelectedClassId(prev => {
+          const classExists = cls.some(c => c.id === prev);
+          if (prev && classExists) return prev;
+          return cls[0].id;
+        });
+      }
 
       // 2. Load Students ONLY from these classes to populate the display map
       const map: Record<string, {name: string, className: string}> = {};

@@ -77,7 +77,11 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
       
       // Default Form Class to First Available
       if (cls.length > 0) {
-        setFormData(prev => ({ ...prev, classId: cls[0].id }));
+        setFormData(prev => {
+          const classExists = cls.some(c => c.id === prev.classId);
+          if (prev.classId && classExists) return prev;
+          return { ...prev, classId: cls[0].id };
+        });
       }
       
       setLoading(false);
