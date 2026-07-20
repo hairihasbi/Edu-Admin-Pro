@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { User, ClassRoom, ScopeMaterial, TeachingJournal, SD_SUBJECTS_PHASE_A, SD_SUBJECTS_PHASE_BC, MATH_SUBJECT_OPTIONS, AbsentStudent, TeachingSchedule, Student } from '../types';
-import { getClasses, getScopeMaterials, getTeachingJournals, addTeachingJournal, deleteTeachingJournal, bulkDeleteTeachingJournals, getStudents, getTeachingSchedules, getLocalDate, isSubjectMatching } from '../services/database'; // Updated to refresh compiler state
-import { Plus, Save, Trash2, Filter, Printer, FileSpreadsheet, NotebookPen, CalendarDays, ChevronLeft, ChevronRight, UserMinus } from './Icons';
+import { getClasses, getScopeMaterials, getTeachingJournals, addTeachingJournal, updateTeachingJournal, deleteTeachingJournal, bulkDeleteTeachingJournals, getStudents, getTeachingSchedules, getLocalDate, isSubjectMatching } from '../services/database';
+import { Plus, Save, Trash2, Filter, Printer, FileSpreadsheet, NotebookPen, CalendarDays, ChevronLeft, ChevronRight, UserMinus, Pencil } from './Icons';
 import Skeleton from './Skeleton';
 import * as XLSX from 'xlsx';
 
@@ -36,6 +36,7 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
   const [schedules, setSchedules] = useState<TeachingSchedule[]>([]);
   const [absentStudents, setAbsentStudents] = useState<AbsentStudent[]>([]);
   const [selectedAbsentStudentId, setSelectedAbsentStudentId] = useState('');
+  const [editingJournalId, setEditingJournalId] = useState<string | null>(null);
 
   // 2. Filter & UI States
   const [filterClassId, setFilterClassId] = useState('');
@@ -67,7 +68,6 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
   useEffect(() => {
     if (formData.classId) {
       getStudents(formData.classId).then(setClassStudents);
-      setAbsentStudents([]); // Reset absent list when class changes
     } else {
       setClassStudents([]);
       setAbsentStudents([]);
@@ -175,7 +175,13 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
       setClasses(cls);
       if (cls.length > 0) {
         // Default form class to first available, BUT FILTER defaults to All ('')
-        setFormData(prev => ({ ...prev, classId: cls[0].id }));
+        setFormData(prev => {
+          const classExists = cls.some(c => c.id === prev.classId);
+          if (prev.classId && classExists) {
+            return prev;
+          }
+          return { ...prev, classId: cls[0].id };
+        });
       }
       
       // Fetch ALL Materials for Lookup Map (for Print/Export)
@@ -238,7 +244,54 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
   // --- HANDLERS ---
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setFormData(prev => {
+      const updated = { ...prev, [name]: value };
+      if (name === 'classId') {
+        setAbsentStudents([]);
+        updated.materialId = '';
+      }
+      return updated;
+    });
+  };
+
+  const handleEdit = (journal: TeachingJournal) => {
+    setEditingJournalId(journal.id);
+    setFormData({
+      classId: journal.classId,
+      materialId: journal.materialId || '',
+      learningObjective: journal.learningObjective || '',
+      date: journal.date,
+      meetingNo: journal.meetingNo || '',
+      activities: journal.activities || '',
+      reflection: journal.reflection || '',
+      followUp: journal.followUp || '',
+      examAgenda: journal.examAgenda || ''
+    });
+    if (journal.subject) {
+      setFormSubject(journal.subject);
+    }
+    const absents = journal.absentStudents ? JSON.parse(journal.absentStudents) : [];
+    setAbsentStudents(absents);
+    
+    // Scroll to top/form section smoothly
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingJournalId(null);
+    setFormData({
+      classId: classes[0]?.id || '',
+      materialId: '',
+      learningObjective: '',
+      date: getLocalDate(),
+      meetingNo: '',
+      activities: '',
+      reflection: '',
+      followUp: '',
+      examAgenda: ''
+    });
+    setAbsentStudents([]);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -256,29 +309,58 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
     }
 
     setIsSaving(true);
-    const newJournal = await addTeachingJournal({
-      ...formData,
-      userId: user.id,
-      subject: formSubject,
-      absentStudents: JSON.stringify(absentStudents)
-    });
-
-    if (newJournal) {
-      setJournals([newJournal, ...journals]);
-      // Reset form partials (keep class/date/meeting flow)
-      setFormData(prev => ({
-        ...prev,
-        materialId: '',
-        learningObjective: '',
-        activities: '',
-        reflection: '',
-        followUp: '',
-        examAgenda: ''
-      }));
-      setAbsentStudents([]);
-      alert('Jurnal berhasil disimpan!');
+    
+    if (editingJournalId) {
+      const updatedJournal = await updateTeachingJournal(editingJournalId, {
+        ...formData,
+        subject: formSubject,
+        absentStudents: JSON.stringify(absentStudents)
+      });
+      if (updatedJournal) {
+        setJournals(journals.map(j => j.id === editingJournalId ? updatedJournal : j));
+        setEditingJournalId(null);
+        // Reset form to defaults
+        setFormData({
+          classId: classes[0]?.id || '',
+          materialId: '',
+          learningObjective: '',
+          date: getLocalDate(),
+          meetingNo: '',
+          activities: '',
+          reflection: '',
+          followUp: '',
+          examAgenda: ''
+        });
+        setAbsentStudents([]);
+        alert('Jurnal berhasil diperbarui!');
+      } else {
+        alert('Gagal memperbarui jurnal.');
+      }
     } else {
-      alert('Gagal menyimpan jurnal.');
+      const newJournal = await addTeachingJournal({
+        ...formData,
+        userId: user.id,
+        subject: formSubject,
+        absentStudents: JSON.stringify(absentStudents)
+      });
+
+      if (newJournal) {
+        setJournals([newJournal, ...journals]);
+        // Reset form partials (keep class/date/meeting flow)
+        setFormData(prev => ({
+          ...prev,
+          materialId: '',
+          learningObjective: '',
+          activities: '',
+          reflection: '',
+          followUp: '',
+          examAgenda: ''
+        }));
+        setAbsentStudents([]);
+        alert('Jurnal berhasil disimpan!');
+      } else {
+        alert('Gagal menyimpan jurnal.');
+      }
     }
     setIsSaving(false);
   };
@@ -493,7 +575,7 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
          <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2 mb-6">
             <NotebookPen className="text-blue-600" />
-            Tambah Jurnal Baru
+            {editingJournalId ? 'Edit Jurnal' : 'Tambah Jurnal Baru'}
          </h2>
          
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -759,14 +841,23 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
                )}
             </div>
 
-            <div className="flex justify-end pt-4 border-t border-gray-100">
+            <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
+               {editingJournalId && (
+                  <button 
+                     type="button"
+                     onClick={handleCancelEdit}
+                     className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2.5 px-6 rounded-lg transition"
+                  >
+                     Batal
+                  </button>
+               )}
                <button 
                   type="submit"
                   disabled={isSaving}
                   className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-6 rounded-lg shadow-sm transition flex items-center gap-2"
                >
                   <Save size={18} />
-                  {isSaving ? 'Menyimpan...' : 'Simpan Jurnal'}
+                  {isSaving ? 'Menyimpan...' : (editingJournalId ? 'Simpan Perubahan' : 'Simpan Jurnal')}
                </button>
             </div>
          </form>
@@ -1067,13 +1158,22 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
                                     )}
                                  </td>
                                  <td className="p-4 align-top text-center">
-                                    <button 
-                                       onClick={() => handleDelete(journal.id)}
-                                       className="text-gray-300 hover:text-red-600 p-2 transition rounded-full hover:bg-red-50"
-                                       title="Hapus Jurnal"
-                                    >
-                                       <Trash2 size={18} />
-                                    </button>
+                                    <div className="flex items-center justify-center gap-1">
+                                       <button 
+                                          onClick={() => handleEdit(journal)}
+                                          className="text-gray-300 hover:text-blue-600 p-2 transition rounded-full hover:bg-blue-50"
+                                          title="Edit Jurnal"
+                                       >
+                                          <Pencil size={18} />
+                                       </button>
+                                       <button 
+                                          onClick={() => handleDelete(journal.id)}
+                                          className="text-gray-300 hover:text-red-600 p-2 transition rounded-full hover:bg-red-50"
+                                          title="Hapus Jurnal"
+                                       >
+                                          <Trash2 size={18} />
+                                       </button>
+                                    </div>
                                  </td>
                               </tr>
                            );
@@ -1097,12 +1197,22 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
                                         <h3 className="font-bold text-gray-800 mt-2">{cls?.name || 'Unknown Class'}</h3>
                                         <p className="text-xs text-gray-500">{new Date(journal.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
                                     </div>
-                                    <button 
-                                       onClick={() => handleDelete(journal.id)}
-                                       className="text-gray-400 hover:text-red-600 p-1"
-                                    >
-                                       <Trash2 size={18} />
-                                    </button>
+                                    <div className="flex gap-1">
+                                       <button 
+                                          onClick={() => handleEdit(journal)}
+                                          className="text-gray-400 hover:text-blue-600 p-1"
+                                          title="Edit Jurnal"
+                                       >
+                                          <Pencil size={18} />
+                                       </button>
+                                       <button 
+                                          onClick={() => handleDelete(journal.id)}
+                                          className="text-gray-400 hover:text-red-600 p-1"
+                                          title="Hapus Jurnal"
+                                       >
+                                          <Trash2 size={18} />
+                                        </button>
+                                    </div>
                                 </div>
                                 
                                 {!journal.examAgenda && (
