@@ -59,14 +59,6 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [calendarEvents, setCalendarEvents] = useState<TeacherCalendarEvent[]>([]);
-  const [workDayOption, setWorkDayOption] = useState<'5' | '6'>(() => {
-    return (localStorage.getItem('eduadmin_workday_option') as '5' | '6') || '5';
-  });
-
-  const handleWorkDayOptionChange = (val: '5' | '6') => {
-    setWorkDayOption(val);
-    localStorage.setItem('eduadmin_workday_option', val);
-  };
 
   // Recap Mode State
   const [recapFilter, setRecapFilter] = useState<'ganjil' | 'genap' | 'full'>(new Date().getMonth() >= 6 ? 'ganjil' : 'genap');
@@ -111,7 +103,11 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
       const cls = await getClasses(user.id, user.schoolNpsn);
       setClasses(cls);
       if (cls.length > 0) {
-        setSelectedClassId(cls[0].id);
+        setSelectedClassId(prev => {
+          const classExists = cls.some(c => c.id === prev);
+          if (prev && classExists) return prev;
+          return cls[0].id;
+        });
       }
       setLoading(false);
     };
@@ -141,11 +137,21 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
     // Calculate date range for calendar events
     const start = new Date(selectedYear, selectedMonth, 1);
     const end = new Date(selectedYear, selectedMonth + 1, 0);
+
+    const formatDateLocal = (date: Date) => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+    
+    const startStr = formatDateLocal(start);
+    const endStr = formatDateLocal(end);
     
     const [studentData, attendanceData, eventsData] = await Promise.all([
       getStudents(classId),
       getAttendanceRecords(classId, selectedMonth, selectedYear, user.id),
-      getCalendarEvents(user.id, start.toISOString().split('T')[0], end.toISOString().split('T')[0])
+      getCalendarEvents(user.id, startStr, endStr)
     ]);
     
     setStudents(studentData);
@@ -233,6 +239,12 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
   };
 
   // --- HANDLERS (INPUT MODE) ---
+
+  const isWeekend = (day: number) => {
+    const date = new Date(selectedYear, selectedMonth, day);
+    const dayOfWeek = date.getDay();
+    return dayOfWeek === 0 || dayOfWeek === 6; // Sunday or Saturday
+  };
   
   const getEventForDay = (day: number) => {
       const target = new Date(selectedYear, selectedMonth, day);
@@ -241,38 +253,17 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
       const d = String(target.getDate()).padStart(2, '0');
       const formatted = `${y}-${m}-${d}`;
       
-      const dbEvent = calendarEvents.find(e => e.date === formatted);
-      if (dbEvent) return dbEvent;
-
-      const dayOfWeek = target.getDay(); // 0 = Sunday, 6 = Saturday
-      if (workDayOption === '5') {
-          if (dayOfWeek === 0 || dayOfWeek === 6) {
-              return {
-                  id: `weekend-${formatted}`,
-                  date: formatted,
-                  type: 'HOLIDAY',
-                  description: dayOfWeek === 0 ? 'Hari Minggu (Akhir Pekan)' : 'Hari Sabtu (Akhir Pekan)',
-                  isSynced: true
-              } as TeacherCalendarEvent;
-          }
-      } else {
-          if (dayOfWeek === 0) {
-              return {
-                  id: `weekend-${formatted}`,
-                  date: formatted,
-                  type: 'HOLIDAY',
-                  description: 'Hari Minggu (Akhir Pekan)',
-                  isSynced: true
-              } as TeacherCalendarEvent;
-          }
-      }
-      return undefined;
+      return calendarEvents.find(e => e.date === formatted);
   };
 
   const handleCellClick = (studentId: string, day: number) => {
     const event = getEventForDay(day);
     if (event && (event.type === 'HOLIDAY' || event.type === 'LEAVE')) {
         setToast({ message: `Tanggal ini ditandai sebagai: ${event.description}`, type: 'success' });
+        return;
+    }
+    if (isWeekend(day) && (!event || event.type === 'HOLIDAY' || event.type === 'LEAVE')) {
+        setToast({ message: `Hari libur akhir pekan.`, type: 'success' });
         return;
     }
 
@@ -322,6 +313,10 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
     const event = getEventForDay(dailyDay);
     if (event && (event.type === 'HOLIDAY' || event.type === 'LEAVE')) {
         setToast({ message: `Tanggal ini ditandai sebagai: ${event.description}`, type: 'success' });
+        return;
+    }
+    if (isWeekend(dailyDay) && (!event || event.type === 'HOLIDAY' || event.type === 'LEAVE')) {
+        setToast({ message: `Hari libur akhir pekan.`, type: 'success' });
         return;
     }
 
@@ -639,30 +634,12 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
                             <Filter size={16} className="absolute right-3 top-2.5 text-gray-400 pointer-events-none" />
                         </div>
                         <div className={`flex gap-2 w-full sm:w-auto ${mobileView === 'daily' ? 'hidden md:flex' : 'flex'}`}>
-                            <div className="flex flex-col gap-1">
-                                <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Bulan</label>
-                                <select className="flex-1 sm:w-32 py-2 border border-gray-300 rounded-lg bg-white text-sm px-2" value={selectedMonth} onChange={(e) => setSelectedMonth(Number(e.target.value))}>
-                                    {monthNames.map((m, i) => <option key={i} value={i}>{m}</option>)}
-                                </select>
-                            </div>
-                            <div className="flex flex-col gap-1">
-                                <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Tahun</label>
-                                <select className="w-24 py-2 border border-gray-300 rounded-lg bg-white text-sm px-2" value={selectedYear} onChange={(e) => setSelectedYear(Number(e.target.value))}>
-                                    {yearsList.map(y => <option key={y} value={y}>{y}</option>)}
-                                </select>
-                            </div>
-                            <div className="flex flex-col gap-1">
-                                <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Hari Kerja</label>
-                                <select 
-                                    className="w-32 py-2 border border-gray-300 rounded-lg bg-white text-sm px-2 font-semibold text-blue-700 bg-blue-50/50" 
-                                    value={workDayOption} 
-                                    onChange={(e) => handleWorkDayOptionChange(e.target.value as '5' | '6')}
-                                    title="Pilih sistem hari kerja mingguan untuk otomatis menentukan tanggal merah akhir pekan"
-                                >
-                                    <option value="5">5 Hari Kerja</option>
-                                    <option value="6">6 Hari Kerja</option>
-                                </select>
-                            </div>
+                            <select className="flex-1 sm:w-32 py-2 border border-gray-300 rounded-lg bg-white text-sm px-2" value={selectedMonth} onChange={(e) => setSelectedMonth(Number(e.target.value))}>
+                                {monthNames.map((m, i) => <option key={i} value={i}>{m}</option>)}
+                            </select>
+                            <select className="w-24 py-2 border border-gray-300 rounded-lg bg-white text-sm px-2" value={selectedYear} onChange={(e) => setSelectedYear(Number(e.target.value))}>
+                                {yearsList.map(y => <option key={y} value={y}>{y}</option>)}
+                            </select>
                         </div>
                         <div className={`flex gap-2 w-full items-center justify-between ${mobileView === 'daily' ? 'flex md:hidden' : 'hidden'}`}>
                             <button onClick={() => setDailyDay(d => Math.max(1, d - 1))} className="p-2 bg-gray-100 rounded-full"><ChevronLeft size={20}/></button>
@@ -804,48 +781,48 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
 
             <div className={`bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden ${mobileView === 'monthly' ? 'block' : 'hidden md:block'}`}>
                 {loading ? <div className="p-10 text-center text-gray-400">Memuat data absensi...</div> : students.length === 0 ? <div className="p-10 text-center text-gray-400">Tidak ada siswa.</div> : (
-                <div className="overflow-x-auto w-full">
-                    <table className="w-full text-xs border border-gray-300 border-collapse min-w-max">
+                <div className="overflow-auto max-h-[600px] w-full relative">
+                    <table className="w-full text-xs border-separate border-spacing-0 min-w-max">
                         <thead>
                             <tr className="bg-gray-100 text-gray-700">
-                                <th className="p-3 border border-gray-300 w-10 md:sticky md:left-0 bg-gray-100 z-10 font-bold">No</th>
-                                <th className="p-3 border border-gray-300 min-w-[150px] text-left md:sticky md:left-10 bg-gray-100 z-10 font-bold">Nama Siswa</th>
+                                <th className="p-3 border-r border-b border-gray-200 w-10 sticky left-0 top-0 bg-gray-100 z-30 shadow-[2px_2px_5px_rgba(0,0,0,0.05)] text-center">No</th>
+                                <th className="p-3 border-r border-b border-gray-200 min-w-[220px] max-w-[220px] text-left sticky left-10 top-0 bg-gray-100 z-30 shadow-[2px_2px_5px_rgba(0,0,0,0.05)]">Nama Siswa</th>
                                 {days.map(d => {
                                     const event = getEventForDay(d);
-                                    const isHoliday = event && (event.type === 'HOLIDAY' || event.type === 'LEAVE');
+                                    const isHoliday = (event && (event.type === 'HOLIDAY' || event.type === 'LEAVE')) || isWeekend(d);
                                     return (
-                                        <th key={d} title={event?.description} className={`p-1 border border-gray-300 min-w-[32px] text-center font-bold ${d === dailyDay && mobileView === 'monthly' ? 'bg-blue-200 text-blue-900' : ''} ${isHoliday ? 'bg-red-100 text-red-600' : 'bg-gray-55 text-gray-800'}`}>{d}</th>
+                                        <th key={d} title={event?.description} className={`p-1 border-r border-b border-gray-200 min-w-[32px] text-center font-normal sticky top-0 bg-gray-100 z-20 ${d === dailyDay && mobileView === 'monthly' ? 'bg-blue-200 font-bold' : ''} ${isHoliday ? 'bg-red-50 text-red-500' : ''}`}>{d}</th>
                                     );
                                 })}
-                                <th className="p-2 border border-gray-300 bg-yellow-100 min-w-[32px] text-center font-bold text-yellow-800">S</th>
-                                <th className="p-2 border border-gray-300 bg-blue-100 min-w-[32px] text-center font-bold text-blue-800">I</th>
-                                <th className="p-2 border border-gray-300 bg-red-100 min-w-[32px] text-center font-bold text-red-800">A</th>
-                                <th className="p-2 border border-gray-300 bg-orange-100 min-w-[32px] text-center font-bold text-orange-800">T</th>
-                                <th className="p-2 border border-gray-300 bg-green-100 min-w-[32px] text-center font-bold text-green-800">H</th>
-                                <th className="p-2 border border-gray-300 bg-gray-200 min-w-[44px] text-center font-bold text-gray-800">%</th>
+                                <th className="p-2 border-r border-b border-gray-200 bg-yellow-50 min-w-[32px] text-center font-bold text-yellow-700 sticky top-0 z-20">S</th>
+                                <th className="p-2 border-r border-b border-gray-200 bg-blue-50 min-w-[32px] text-center font-bold text-blue-700 sticky top-0 z-20">I</th>
+                                <th className="p-2 border-r border-b border-gray-200 bg-red-50 min-w-[32px] text-center font-bold text-red-700 sticky top-0 z-20">A</th>
+                                <th className="p-2 border-r border-b border-gray-200 bg-orange-50 min-w-[32px] text-center font-bold text-orange-700 sticky top-0 z-20">T</th>
+                                <th className="p-2 border-r border-b border-gray-200 bg-green-50 min-w-[32px] text-center font-bold text-green-700 sticky top-0 z-20">H</th>
+                                <th className="p-2 bg-gray-50 min-w-[44px] text-center font-bold text-gray-700 sticky top-0 z-20 border-b border-gray-200">%</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody className="divide-y divide-gray-100">
                             {students.map((student, idx) => {
                                 const summary = calculateSummary(student.id);
                                 return (
-                                    <tr key={student.id} className="hover:bg-blue-50/40 transition-colors">
-                                        <td className="p-3 text-center border border-gray-300 md:sticky md:left-0 bg-white z-10 font-medium">{idx + 1}</td>
-                                        <td className="p-3 border border-gray-300 font-bold text-gray-900 md:sticky md:left-10 bg-white z-10 truncate max-w-[150px]">{student.name}</td>
+                                    <tr key={student.id} className="hover:bg-gray-50 transition-colors group">
+                                        <td className="p-3 text-center border-r border-b border-gray-100 sticky left-0 bg-white group-hover:bg-gray-50 z-10 shadow-[2px_0_5px_rgba(0,0,0,0.02)]">{idx + 1}</td>
+                                        <td className="p-3 border-r border-b border-gray-100 font-bold text-gray-950 sticky left-10 bg-white group-hover:bg-gray-50 z-10 whitespace-normal min-w-[220px] max-w-[220px] shadow-[2px_0_5px_rgba(0,0,0,0.02)] leading-tight">{student.name}</td>
                                         {days.map(d => {
                                             const event = getEventForDay(d);
-                                            const isHoliday = event && (event.type === 'HOLIDAY' || event.type === 'LEAVE');
+                                            const isHoliday = (event && (event.type === 'HOLIDAY' || event.type === 'LEAVE')) || isWeekend(d);
                                             
-                                            let cellClass = `w-full h-8 flex items-center justify-center font-bold text-center cursor-pointer select-none transition-colors ${getStatusColor(attendance[student.id]?.[d] || '')}`;
+                                            let cellClass = `p-1 border-r border-gray-100 text-center cursor-pointer select-none transition-colors ${getStatusColor(attendance[student.id]?.[d] || '')}`;
                                             let cellContent = attendance[student.id]?.[d] || '';
                                             
                                             if (isHoliday) {
-                                                cellClass = `w-full h-8 flex items-center justify-center text-center bg-red-100/90 text-red-700 font-black cursor-not-allowed select-none`;
+                                                cellClass = `p-1 border-r border-gray-100 text-center bg-red-50 text-red-300 cursor-not-allowed`;
                                                 cellContent = '-';
                                             }
- 
+
                                             return (
-                                                <td key={d} className="relative p-0 border border-gray-300 min-w-[32px] h-8 group">
+                                                <td key={d} className="relative group/cell border-b border-gray-100">
                                                     <div 
                                                         onClick={() => !isHoliday && handleCellClick(student.id, d)} 
                                                         className={cellClass} 
@@ -856,7 +833,7 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
                                                     {!isHoliday && (
                                                         <button 
                                                             onClick={() => handleOpenNote(student.id, d, student.name)}
-                                                            className={`absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center z-20 transition-opacity ${notes[student.id]?.[d] ? 'bg-blue-600 text-white opacity-100' : 'bg-gray-300 text-gray-600 opacity-0 group-hover:opacity-100'}`}
+                                                            className={`absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center z-20 transition-opacity ${notes[student.id]?.[d] ? 'bg-blue-600 text-white opacity-100' : 'bg-gray-200 text-gray-500 opacity-0 group-hover/cell:opacity-100'}`}
                                                             title={notes[student.id]?.[d] || 'Tambah Catatan'}
                                                         >
                                                             <FileText size={8} />
@@ -865,12 +842,12 @@ const TeacherAttendance: React.FC<TeacherAttendanceProps> = ({ user }) => {
                                                 </td>
                                             );
                                         })}
-                                        <td className="p-2 text-center border border-gray-300 bg-yellow-50 font-bold text-gray-800">{summary.s > 0 ? summary.s : ''}</td>
-                                        <td className="p-2 text-center border border-gray-300 bg-blue-50 font-bold text-gray-800">{summary.i > 0 ? summary.i : ''}</td>
-                                        <td className="p-2 text-center border border-gray-300 bg-red-50 font-bold text-gray-800">{summary.a > 0 ? summary.a : ''}</td>
-                                        <td className="p-2 text-center border border-gray-300 bg-orange-50 font-bold text-gray-800">{summary.t > 0 ? summary.t : ''}</td>
-                                        <td className="p-2 text-center border border-gray-300 bg-green-50 font-extrabold text-green-700">{summary.h > 0 ? summary.h : ''}</td>
-                                        <td className="p-2 text-center border border-gray-300 bg-gray-100/80 font-extrabold text-gray-900">{summary.percentage}%</td>
+                                        <td className="p-2 text-center border-r border-b border-gray-100 bg-yellow-50/50 font-medium">{summary.s}</td>
+                                        <td className="p-2 text-center border-r border-b border-gray-100 bg-blue-50/50 font-medium">{summary.i}</td>
+                                        <td className="p-2 text-center border-r border-b border-gray-100 bg-red-50/50 font-medium">{summary.a}</td>
+                                        <td className="p-2 text-center border-r border-b border-gray-100 bg-orange-50/50 font-medium">{summary.t}</td>
+                                        <td className="p-2 text-center border-r border-b border-gray-100 bg-green-50/50 font-bold">{summary.h}</td>
+                                        <td className="p-2 text-center border-b border-gray-100 bg-gray-50/50 font-bold text-gray-800">{summary.percentage}%</td>
                                     </tr>
                                 );
                             })}
