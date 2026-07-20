@@ -152,16 +152,31 @@ const DailyPicket: React.FC<DailyPicketProps> = ({ currentUser }) => {
                 { header: 'Ket. Tidak Hadir', dataKey: 'ket' },
             ];
             
-            dataToPrint = summary.map((s, i) => ({
-                no: i + 1,
-                className: s.className,
-                sakit: s.sakit,
-                izin: s.izin,
-                alfa: s.alfa,
-                hadir: s.hadir,
-                total: s.studentCount, // Note: In range summary, totalRecords might be more relevant, but keeping studentCount for consistency
-                ket: s.absentDetails.map((d: any) => `${d.name} (${d.status})`).join(', ') || '-'
-            }));
+            dataToPrint = summary.map((s: any, i) => {
+                let ketText = '-';
+                if (s.hasAttendanceFilled === false) {
+                    ketText = 'Belum ada absen dari guru';
+                } else if (s.absentDetails && s.absentDetails.length > 0) {
+                    ketText = s.absentDetails.map((d: any) => `${d.name} (${d.status})`).join(', ');
+                } else if (s.hasAttendanceFilled === true) {
+                    ketText = 'Semua siswa hadir';
+                } else {
+                    ketText = s.absentDetails && s.absentDetails.length > 0 
+                        ? s.absentDetails.map((d: any) => `${d.name} (${d.status})`).join(', ') 
+                        : '-';
+                }
+
+                return {
+                    no: i + 1,
+                    className: s.className,
+                    sakit: s.sakit,
+                    izin: s.izin,
+                    alfa: s.alfa,
+                    hadir: s.hadir,
+                    total: s.studentCount, // Note: In range summary, totalRecords might be more relevant, but keeping studentCount for consistency
+                    ket: ketText
+                };
+            });
 
         } else {
             subtitle = 'Laporan Kejadian Siswa (Terlambat/Pulang)';

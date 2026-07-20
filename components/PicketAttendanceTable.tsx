@@ -59,7 +59,11 @@ const PicketAttendanceTable: React.FC<PicketAttendanceTableProps> = ({ date, sch
                             <td className="border border-gray-300 px-3 py-2 text-center font-bold text-green-600">{row.hadir}</td>
                             <td className="border border-gray-300 px-3 py-2 text-center font-bold">{row.studentCount}</td>
                             <td className="border border-gray-300 px-3 py-2 text-xs text-gray-600">
-                                {row.absentDetails.length > 0 ? (
+                                {!row.hasAttendanceFilled ? (
+                                    <span className="text-amber-600 font-semibold italic bg-amber-50 px-2 py-1 rounded border border-amber-100 block w-fit">
+                                        ⚠️ Belum ada absen dari guru
+                                    </span>
+                                ) : row.absentDetails.length > 0 ? (
                                     <ul className="list-disc list-inside space-y-0.5">
                                         {row.absentDetails.map((s: any, i: number) => (
                                             <li key={i}>
@@ -74,7 +78,11 @@ const PicketAttendanceTable: React.FC<PicketAttendanceTableProps> = ({ date, sch
                                             </li>
                                         ))}
                                     </ul>
-                                ) : <span className="text-gray-400 italic">- Nihil -</span>}
+                                ) : (
+                                    <span className="text-emerald-700 font-semibold bg-emerald-50 px-2 py-1 rounded border border-emerald-100 inline-flex items-center gap-1">
+                                        ✓ Semua siswa hadir
+                                    </span>
+                                )}
                             </td>
                         </tr>
                     ))}
