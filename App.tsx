@@ -215,6 +215,9 @@ const AppContent: React.FC = () => {
   // Session Timer Ref
   const sessionTimerRef = useRef<any>(null);
 
+  // Track last user activity for automatic sync idle check
+  const lastActivityRef = useRef<number>(Date.now());
+
   // Hooks
   const navigate = useNavigate();
   const location = useLocation();
@@ -419,6 +422,29 @@ const AppContent: React.FC = () => {
     return () => window.removeEventListener("sync-status", handleSyncStatus);
   }, [currentUser]);
 
+  // --- USER ACTIVITY TRACKER FOR IDLE DETECTOR ---
+  useEffect(() => {
+    const handleUserActivity = () => {
+      lastActivityRef.current = Date.now();
+    };
+    const events = [
+      "mousedown",
+      "mousemove",
+      "keydown",
+      "scroll",
+      "touchstart",
+      "click",
+    ];
+    events.forEach((event) => {
+      window.addEventListener(event, handleUserActivity, { passive: true });
+    });
+    return () => {
+      events.forEach((event) => {
+        window.removeEventListener(event, handleUserActivity);
+      });
+    };
+  }, []);
+
   // --- AUTOMATIC SYNC HEARTBEAT ---
   // Runs every 40 seconds to ensure data flows between Guru <-> Admin
   useEffect(() => {
@@ -426,7 +452,7 @@ const AppContent: React.FC = () => {
 
     const syncInterval = setInterval(() => {
       if (navigator.onLine) {
-        // Cek apakah guru sedang aktif mengisi formulir atau mengetik
+        // 1. Cek apakah pengguna sedang aktif menginput/fokus pada form
         const activeEl = document.activeElement;
         if (activeEl) {
           const tagName = activeEl.tagName.toUpperCase();
@@ -441,6 +467,13 @@ const AppContent: React.FC = () => {
             console.log("Auto-Sync ditunda karena pengguna sedang mengisi formulir.");
             return;
           }
+        }
+
+        // 2. Cek apakah ada aktivitas user dalam 30 detik terakhir (tidak idle)
+        const idleDuration = Date.now() - lastActivityRef.current;
+        if (idleDuration < 30000) {
+          console.log(`Auto-Sync ditunda karena pengguna sedang aktif/bekerja (Idle: ${Math.round(idleDuration / 1000)}s).`);
+          return;
         }
 
         console.log("Auto-Sync Triggered");
