@@ -1832,6 +1832,26 @@ export const getScopeMaterials = async (classId: string, semester: string, userI
     }
     
     if (semester) collection = collection.filter(m => m.semester === semester);
+
+    // Apply teacher privacy rules (only allow other teachers' materials if they are Matematika Umum or Matematika Tingkat Lanjut)
+    if (userId) {
+        collection = collection.filter(m => {
+            if (m.userId === userId) return true;
+            if (m.subject) {
+                const s = m.subject.trim().toLowerCase();
+                if (
+                    s === 'matematika umum' || 
+                    s === 'matematika tingkat lanjut' ||
+                    s === 'umum' ||
+                    s === 'matematika' ||
+                    s === 'tingkat lanjut'
+                ) {
+                    return true;
+                }
+            }
+            return false;
+        });
+    }
     
     // FIX: Robust filtering (Case-insensitive + Allow legacy/empty + Math Loose Matching)
     if (subject && subject !== 'ALL') {
@@ -1867,12 +1887,36 @@ export const copyScopeMaterials = async (sourceClassId: string, targetClassId: s
     const sources = await db.scopeMaterials.where({ classId: sourceClassId, semester: sourceSem }).toArray();
     if (sources.length === 0) return false;
 
-    const newItems = sources.map(s => ({
+    // Filter source materials based on teacher privacy and subject relevance
+    const filteredSources = sources.filter(s => {
+        // If it belongs to this teacher, they can copy it
+        if (s.userId === userId) return true;
+        
+        // If it belongs to another teacher, check if it's a shared math subject
+        if (s.subject) {
+            const normS = s.subject.trim().toLowerCase();
+            const normSub = subject.trim().toLowerCase();
+            
+            const isShared = normS === 'matematika umum' || normS === 'matematika tingkat lanjut' || normS === 'umum' || normS === 'matematika' || normS === 'tingkat lanjut';
+            if (isShared) {
+                // Check if the source subject matches the requested subject
+                if (normS === normSub) return true;
+                if (normSub === 'matematika umum' && (normS === 'umum' || normS === 'matematika')) return true;
+                if (normSub === 'matematika tingkat lanjut' && normS === 'tingkat lanjut') return true;
+                if (normSub === 'matematika' && (normS === 'matematika umum' || normS === 'matematika tingkat lanjut' || normS === 'umum' || normS === 'tingkat lanjut')) return true;
+            }
+        }
+        return false;
+    });
+
+    if (filteredSources.length === 0) return false;
+
+    const newItems = filteredSources.map(s => ({
         id: uuidv4(),
         classId: targetClassId,
         semester: targetSem,
         userId,
-        subject,
+        subject: s.subject || subject, // Prefer the original subject to keep 'Matematika Umum' or 'Matematika Tingkat Lanjut'
         code: s.code,
         phase: s.phase,
         content: s.content,
