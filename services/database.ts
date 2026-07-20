@@ -1283,6 +1283,7 @@ export const getSchoolAttendanceSummary = async (date: string, schoolNpsn: strin
             sakit,
             izin,
             alfa,
+            hasAttendanceFilled: classAttendance.length > 0,
             absentDetails: Promise.all(absentStudents)
         };
     });
