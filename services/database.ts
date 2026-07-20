@@ -1821,19 +1821,20 @@ export const updateScopeMaterial = async (id: string, data: Partial<ScopeMateria
 };
 
 export const getScopeMaterials = async (classId: string, semester: string, userId: string, subject?: string) => {
+    if (!userId) {
+        console.warn("[Database] getScopeMaterials called without a valid userId. Returning empty to protect privacy.");
+        return [];
+    }
+    
     let list: ScopeMaterial[] = [];
     if (classId) {
         list = await db.scopeMaterials.where('classId').equals(classId).toArray();
-    } else if (userId) {
-        list = await db.scopeMaterials.where('userId').equals(userId).toArray();
     } else {
-        list = await db.scopeMaterials.toArray();
+        list = await db.scopeMaterials.where('userId').equals(userId).toArray();
     }
     
     // 1. Strictly filter by userId to ensure complete privacy across all teachers and subjects
-    if (userId) {
-        list = list.filter(m => m.userId === userId);
-    }
+    list = list.filter(m => m.userId === userId);
 
     // 2. Filter by semester
     if (semester) {
