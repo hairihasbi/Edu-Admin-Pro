@@ -1860,13 +1860,7 @@ export const getScopeMaterials = async (classId: string, semester: string, userI
         list = list.filter(m => {
             if (!m.subject) return true; // Keep legacy
             const s = m.subject.trim().toLowerCase();
-            if (s === normSubject) return true;
-            
-            // Math Loose Matching
-            if (normSubject === 'matematika umum' && (s === 'umum' || s === 'matematika')) return true;
-            if (normSubject === 'matematika tingkat lanjut' && s === 'tingkat lanjut') return true;
-            
-            return false;
+            return matchSubjectHelper(normSubject, s);
         });
     }
 
@@ -1967,13 +1961,7 @@ export const getAssessmentScores = async (classId: string, semester: string, sub
         collection = collection.filter(s => {
             if (!s.subject) return true;
             const sub = s.subject.trim().toLowerCase();
-            if (sub === normSubject) return true;
-
-            // Math Loose Matching
-            if (normSubject === 'matematika umum' && (sub === 'umum' || sub === 'matematika')) return true;
-            if (normSubject === 'matematika tingkat lanjut' && sub === 'tingkat lanjut') return true;
-
-            return false;
+            return matchSubjectHelper(normSubject, sub);
         });
     }
     return await collection.toArray();
@@ -1989,13 +1977,7 @@ export const getTeachingJournals = async (userId: string, subject?: string) => {
         collection = collection.filter(j => {
             if (!j.subject) return true;
             const s = j.subject.trim().toLowerCase();
-            if (s === normSubject) return true;
-
-            // Math Loose Matching
-            if (normSubject === 'matematika umum' && (s === 'umum' || s === 'matematika')) return true;
-            if (normSubject === 'matematika tingkat lanjut' && s === 'tingkat lanjut') return true;
-
-            return false;
+            return matchSubjectHelper(normSubject, s);
         });
     }
     return await collection.reverse().sortBy('date');
@@ -3163,10 +3145,28 @@ export const getStudent360Data = async (studentId: string) => {
     };
 };
 
+export const matchSubjectHelper = (normSubject: string, s: string): boolean => {
+    if (s === normSubject) return true;
+    
+    // Exact checks to prevent cross-contamination between Matematika Umum and Matematika Tingkat Lanjut
+    const isUmumRequest = normSubject === 'matematika umum' || normSubject === 'umum' || normSubject === 'matematika wajib';
+    const isLanjutRequest = normSubject === 'matematika tingkat lanjut' || normSubject === 'tingkat lanjut' || normSubject === 'peminatan';
+    
+    const isUmumMaterial = s === 'matematika umum' || s === 'umum' || s === 'matematika wajib' || s === 'matematika';
+    const isLanjutMaterial = s === 'matematika tingkat lanjut' || s === 'tingkat lanjut' || s === 'peminatan';
+    
+    if (isUmumRequest && isUmumMaterial) return true;
+    if (isLanjutRequest && isLanjutMaterial) return true;
+    
+    return false;
+};
+
 export const isSubjectMatching = (selectedSubject: string | undefined, journalSubject: string | undefined): boolean => {
     if (!selectedSubject || selectedSubject === '' || selectedSubject.toUpperCase() === 'ALL') {
         return true;
     }
-    return (journalSubject || '').toLowerCase() === selectedSubject.toLowerCase();
+    const normSubject = selectedSubject.trim().toLowerCase();
+    const s = (journalSubject || '').trim().toLowerCase();
+    return matchSubjectHelper(normSubject, s);
 };
 
