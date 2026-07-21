@@ -1846,8 +1846,8 @@ export const getScopeMaterials = async (classId: string, semester: string, userI
         list = await db.scopeMaterials.where('userId').equals(userId).toArray();
     }
     
-    // 1. Strictly filter by userId to ensure complete privacy across all teachers and subjects
-    list = list.filter(m => m.userId === userId);
+    // 1. Strictly filter by userId to ensure complete privacy across all teachers and subjects and filter out deleted ones
+    list = list.filter(m => m.userId === userId && !m.deleted);
 
     // 2. Filter by semester
     if (semester) {
@@ -1889,25 +1889,36 @@ export const copyScopeMaterials = async (sourceClassId: string, targetClassId: s
     const sources = await db.scopeMaterials.where({ classId: sourceClassId, semester: sourceSem }).toArray();
     if (sources.length === 0) return false;
 
-    // Filter source materials so they are strictly private to this teacher
-    const filteredSources = sources.filter(s => s.userId === userId);
+    // Filter source materials so they are strictly private to this teacher and not deleted
+    const filteredSources = sources.filter(s => s.userId === userId && !s.deleted);
 
     if (filteredSources.length === 0) return false;
 
-    const newItems = filteredSources.map(s => ({
-        id: uuidv4(),
-        classId: targetClassId,
-        semester: targetSem,
-        userId,
-        subject: s.subject || subject, // Prefer the original subject to keep 'Matematika Umum' or 'Matematika Tingkat Lanjut'
-        code: s.code,
-        phase: s.phase,
-        content: s.content,
-        subScopes: s.subScopes,
-        lastModified: Date.now(),
-        isSynced: false
-    }));
+    // Fetch existing target materials to prevent duplicates
+    const targets = await db.scopeMaterials.where('classId').equals(targetClassId).toArray();
+    const activeTargets = targets.filter(t => t.semester === targetSem && t.userId === userId && !t.deleted);
+    const existingKeys = new Set(
+        activeTargets.map(t => `${t.code.trim().toLowerCase()}|||${t.content.trim().toLowerCase()}`)
+    );
+
+    const newItems = filteredSources
+        .filter(s => !existingKeys.has(`${s.code.trim().toLowerCase()}|||${s.content.trim().toLowerCase()}`))
+        .map(s => ({
+            id: uuidv4(),
+            classId: targetClassId,
+            semester: targetSem,
+            userId,
+            subject: s.subject || subject, // Prefer the original subject to keep 'Matematika Umum' or 'Matematika Tingkat Lanjut'
+            code: s.code,
+            phase: s.phase,
+            content: s.content,
+            subScopes: s.subScopes,
+            lastModified: Date.now(),
+            isSynced: false
+        }));
     
+    if (newItems.length === 0) return true; // None to add, but count as success (already exists)
+
     await db.scopeMaterials.bulkAdd(newItems);
     triggerDebouncedSync();
     return true;
