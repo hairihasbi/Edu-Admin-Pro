@@ -1777,13 +1777,24 @@ export const deleteAttendanceRecords = async (classId: string, month: number, ye
         return matchMonth && isOwner;
     });
     const ids = toDelete.map(r => r.id);
+    
+    // First, delete locally
     await db.attendanceRecords.bulkDelete(ids);
-    pushToTurso('eduadmin_attendance', toDelete.map(item => ({ ...item, deleted: true })));
+    
+    // Crucial: Await the push to Turso so that the remote database is updated before finishing.
+    // This prevents race conditions where an immediate page reload or filter change triggers a pull
+    // that fetches the old records from the server and restores them to the local database.
+    try {
+        await pushToTurso('eduadmin_attendance', toDelete.map(item => ({ ...item, deleted: true, lastModified: Date.now() })));
+    } catch (err) {
+        console.error("[Database] Failed to push attendance deletion to Turso:", err);
+    }
 };
 
 export const getAttendanceRecords = async (classId: string, month: number, year: number, userId: string) => {
     const all = await db.attendanceRecords.where('classId').equals(classId).toArray();
     return all.filter(r => {
+        if (r.deleted) return false;
         // Safe parsing: YYYY-MM-DD
         const parts = r.date.split('-');
         if (parts.length !== 3) return false;
@@ -1800,6 +1811,7 @@ export const getAttendanceRecords = async (classId: string, month: number, year:
 export const getAttendanceRecordsByRange = async (classId: string, startDate: string, endDate: string, userId: string) => {
     const all = await db.attendanceRecords.where('classId').equals(classId).toArray();
     return all.filter(r => {
+        if (r.deleted) return false;
         const isOwner = r.userId === userId;
         const isShared = r.visibility === 'SHARED' || !r.visibility;
         return r.date >= startDate && r.date <= endDate && (isOwner || isShared);
