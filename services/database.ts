@@ -11,7 +11,7 @@ import {
   SupervisionAssignment, SupervisionResult, CbtExam, CbtQuestion, CbtAttempt, RfidLog,
   MentoringJournal, GraduateProfileAssessment
 } from '../types';
-import { initTurso, pushToTurso, pullFromTurso, deleteFromTurso, clearRemoteTable, requestPasswordResetApi, verifyResetTokenApi, completePasswordResetApi } from './tursoService';
+import { initTurso, pushToTurso, pullFromTurso, deleteFromTurso, deleteBatchFromTurso, clearRemoteTable, requestPasswordResetApi, verifyResetTokenApi, completePasswordResetApi } from './tursoService';
 import bcrypt from 'bcryptjs';
 
 const uuidv4 = () => {
@@ -1781,13 +1781,13 @@ export const deleteAttendanceRecords = async (classId: string, month: number, ye
     // First, delete locally
     await db.attendanceRecords.bulkDelete(ids);
     
-    // Crucial: Await the push to Turso so that the remote database is updated before finishing.
+    // Crucial: Await the batch delete to Turso so that the remote database is permanently updated before finishing.
     // This prevents race conditions where an immediate page reload or filter change triggers a pull
     // that fetches the old records from the server and restores them to the local database.
     try {
-        await pushToTurso('eduadmin_attendance', toDelete.map(item => ({ ...item, deleted: true, lastModified: Date.now() })));
+        await deleteBatchFromTurso('eduadmin_attendance', ids);
     } catch (err) {
-        console.error("[Database] Failed to push attendance deletion to Turso:", err);
+        console.error("[Database] Failed to delete attendance records from Turso:", err);
     }
 };
 

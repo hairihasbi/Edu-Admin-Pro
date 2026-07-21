@@ -259,6 +259,36 @@ export const deleteFromTurso = async (collection: string, id: string) => {
   }
 };
 
+// Delete Multiple Remote Data from Turso via API (Hard Delete Batch)
+export const deleteBatchFromTurso = async (collection: string, ids: string[]) => {
+  if (!ids || ids.length === 0) return true;
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      throw new Error("OFFLINE: Cannot delete from Turso");
+  }
+
+  try {
+      const response = await fetch('/api/turso', {
+        method: 'POST',
+        headers: { 
+            'Content-Type': 'application/json',
+            ...getAuthHeader() // Add Auth
+        } as HeadersInit,
+        body: JSON.stringify({ 
+          action: 'delete', 
+          collection, 
+          ids,
+          userId: getCurrentUserId()
+        })
+      });
+
+      await handleApiResponse(response);
+      return true;
+  } catch (error: any) {
+      console.error(`Batch delete failed for ${collection}:`, error);
+      throw error;
+  }
+};
+
 // Password Reset API Helpers
 export const requestPasswordResetApi = async (email: string) => {
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
