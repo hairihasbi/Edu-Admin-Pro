@@ -167,7 +167,35 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
         ...m,
         subScopes: parseSubScopes(m.subScopes)
     }));
-    setMaterials(cleanMaterials);
+
+    // Deduplicate materials by code and content
+    const uniqueMaterials: ScopeMaterial[] = [];
+    const materialIdMap = new Map<string, string>(); // Maps original id -> representative id
+    const seen = new Map<string, ScopeMaterial>(); // Key -> representative ScopeMaterial
+
+    cleanMaterials.forEach(m => {
+        const key = `${(m.code || '').trim().toLowerCase()}|||${(m.content || '').trim().toLowerCase()}`;
+        if (!seen.has(key)) {
+            seen.set(key, m);
+            uniqueMaterials.push(m);
+            materialIdMap.set(m.id, m.id);
+        } else {
+            const representative = seen.get(key)!;
+            materialIdMap.set(m.id, representative.id);
+            
+            // Merge subScopes if representative doesn't have some subScopes that this one has
+            const repScopes = representative.subScopes || [];
+            const curScopes = m.subScopes || [];
+            curScopes.forEach(s => {
+                if (!repScopes.includes(s)) {
+                    repScopes.push(s);
+                }
+            });
+            representative.subScopes = repScopes;
+        }
+    });
+
+    setMaterials(uniqueMaterials);
 
     const scoreDict: {[key: string]: number} = {};
     const subScoreDict: {[key: string]: number} = {};
@@ -175,8 +203,9 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
 
     scoreData.forEach(s => {
       if (!s.subject || s.subject === selectedSubject) {
+          const mappedMaterialId = s.materialId ? (materialIdMap.get(s.materialId) || s.materialId) : '';
           const key = s.category === 'LM' 
-            ? `${s.studentId}-LM-${s.materialId}`
+            ? `${s.studentId}-LM-${mappedMaterialId}`
             : `${s.studentId}-${s.category}`;
           scoreDict[key] = s.score;
           if (s.id) idDict[key] = s.id;
@@ -188,7 +217,7 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
 
               if (details && typeof details === 'object') {
                   Object.entries(details).forEach(([subName, val]) => {
-                      const subKey = `${s.studentId}-LM-${s.materialId}-${subName}`;
+                      const subKey = `${s.studentId}-LM-${mappedMaterialId}-${subName}`;
                       subScoreDict[subKey] = val as number;
                   });
               }
