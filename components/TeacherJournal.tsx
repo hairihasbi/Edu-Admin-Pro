@@ -228,7 +228,19 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
         // PASS user.id here too
         const matGanjil = await getScopeMaterials(formData.classId, 'Ganjil', user.id, formSubject);
         const matGenap = await getScopeMaterials(formData.classId, 'Genap', user.id, formSubject);
-        setAllMaterials([...matGanjil, ...matGenap]);
+        const combined = [...matGanjil, ...matGenap];
+        
+        // Deduplicate materials by code and content to prevent duplicate options in dropdown
+        const unique: ScopeMaterial[] = [];
+        const seen = new Set<string>();
+        for (const m of combined) {
+          const key = `${(m.code || '').trim().toLowerCase()}|||${(m.content || '').trim().toLowerCase()}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            unique.push(m);
+          }
+        }
+        setAllMaterials(unique);
       };
       fetchMats();
     } else {
