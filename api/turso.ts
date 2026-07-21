@@ -1618,17 +1618,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // --- DELETE LOGIC ---
     if (action === 'delete') {
-        const { id } = body;
-        if (!id) return res.status(400).json({ error: 'ID is required for delete' });
+        const { id, ids } = body;
+        if (!id && (!ids || ids.length === 0)) return res.status(400).json({ error: 'ID or IDs is required for delete' });
 
         const tableConfig = getTableConfig(collection);
         if (!tableConfig) return res.status(400).json({ error: 'Invalid collection' });
 
         try {
-            await client.execute({
-                sql: `DELETE FROM ${tableConfig.table} WHERE id = ?`,
-                args: [id]
-            });
+            if (ids && Array.isArray(ids) && ids.length > 0) {
+                // Batch delete in chunks of 100 to prevent SQL variable limit issues
+                const CHUNK_SIZE = 100;
+                for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+                    const chunk = ids.slice(i, i + CHUNK_SIZE);
+                    const placeholders = chunk.map(() => '?').join(', ');
+                    await client.execute({
+                        sql: `DELETE FROM ${tableConfig.table} WHERE id IN (${placeholders})`,
+                        args: chunk
+                    });
+                }
+            } else if (id) {
+                await client.execute({
+                    sql: `DELETE FROM ${tableConfig.table} WHERE id = ?`,
+                    args: [id]
+                });
+            }
             return res.status(200).json({ success: true, message: 'Deleted permanently' });
         } catch (e: any) {
             return res.status(500).json({ error: e.message });
