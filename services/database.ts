@@ -1925,9 +1925,11 @@ export const saveBulkAssessmentScores = async (scores: Omit<AssessmentScore, 'id
     // Handle Deletions
     if (deletedIds && deletedIds.length > 0) {
         await db.assessmentScores.bulkDelete(deletedIds);
-        deletedIds.forEach(id => {
-            itemsToSync.push({ id, deleted: true });
-        });
+        try {
+            await deleteBatchFromTurso('eduadmin_scores', deletedIds);
+        } catch (err) {
+            console.error("[Database] Failed to hard delete assessment scores from Turso:", err);
+        }
     }
 
     // Handle Upserts
