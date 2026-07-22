@@ -7,3 +7,71 @@ body {
   background-color: #f3f4f6;
   -webkit-tap-highlight-color: transparent;
 }
+
+@media print {
+  /* Hide all standard web UI elements */
+  aside,
+  header,
+  nav,
+  footer,
+  iframe,
+  .print\:hidden,
+  .no-print,
+  div.fixed.bottom-0,
+  div.px-6.py-2.border-b {
+    display: none !important;
+  }
+
+  /* Base page settings for pristine vector print */
+  body, html {
+    background-color: #ffffff !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Reset outer layout constraints */
+  #root,
+  main,
+  div.flex-1.overflow-y-auto,
+  div.max-w-6xl {
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    display: block !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  /* Format official document container */
+  .print-document {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 20px !important;
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  /* Prevent awkward page break splitting */
+  tr, .break-inside-avoid {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 15mm 10mm 15mm 10mm;
+  }
+}
