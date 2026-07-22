@@ -76,13 +76,41 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
     bkStatus: { processed: number, pending: number };
   } | null>(null);
   const [isLoadingExecutive, setIsLoadingExecutive] = useState(false);
-  const [printType, setPrintType] = useState<'GURU' | 'KELAS' | 'INFOGRAPHIC' | null>(null);
+  const [printType, setPrintType] = useState<'GURU' | 'KELAS' | 'INFOGRAPHIC' | 'REKAP_GURU' | 'REKAP_KELAS' | null>(null);
+  const [rekapJournals, setRekapJournals] = useState<TeachingJournal[]>([]);
+  const [isFetchingRekap, setIsFetchingRekap] = useState(false);
 
   const handlePrintMonitoring = (type: 'GURU' | 'KELAS') => {
     setPrintType(type);
     setTimeout(() => {
       window.print();
     }, 150);
+  };
+
+  const handlePrintRekap = async (type: 'GURU' | 'KELAS') => {
+    setIsFetchingRekap(true);
+    try {
+      const dateObj = new Date(selectedDate);
+      const year = dateObj.getFullYear();
+      const month = dateObj.getMonth();
+      const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+      const lastDay = new Date(year, month + 1, 0).getDate();
+      const endDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+      
+      const teacherIds = teachers.map(t => t.id);
+      if (teacherIds.length > 0) {
+        const fetched = await getSchoolJournalsByRange(teacherIds, startDate, endDate);
+        setRekapJournals(fetched);
+      }
+      setPrintType(type === 'GURU' ? 'REKAP_GURU' : 'REKAP_KELAS');
+      setTimeout(() => {
+        window.print();
+      }, 300);
+    } catch (err) {
+      console.error("Failed to fetch monthly rekap journals:", err);
+    } finally {
+      setIsFetchingRekap(false);
+    }
   };
 
   const parseAbsentStudents = (absentStr?: string): AbsentStudent[] => {
@@ -1350,12 +1378,28 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
               <Info size={14} /> Menampilkan data per tanggal {new Date(selectedDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
             </div>
             {(activeTab === 'GURU' || activeTab === 'KELAS') && (
-              <button 
-                onClick={() => handlePrintMonitoring(activeTab)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg text-xs font-bold border border-red-100 transition shadow-sm ml-2"
-              >
-                <Printer size={14} /> Cetak PDF
-              </button>
+              <div className="flex items-center gap-2 ml-2">
+                <button 
+                  onClick={() => handlePrintMonitoring(activeTab)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg text-xs font-bold border border-red-100 transition shadow-sm"
+                  title="Cetak Laporan Monitoring Harian"
+                >
+                  <Printer size={14} /> Cetak PDF Harian
+                </button>
+                <button 
+                  onClick={() => handlePrintRekap(activeTab)}
+                  disabled={isFetchingRekap}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 text-purple-700 hover:bg-purple-100 rounded-lg text-xs font-bold border border-purple-100 transition shadow-sm disabled:opacity-50"
+                  title="Cetak Rekap Monitoring Jurnal & KBM Bulanan"
+                >
+                  {isFetchingRekap ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <Calendar size={14} />
+                  )}
+                  {isFetchingRekap ? 'Memuat...' : 'Cetak Rekap 1 Bulan'}
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -1818,7 +1862,7 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
   </div>
 
   {/* Printable Infographic Section */}
-      <div ref={infographicRef} className={`${(printType === 'INFOGRAPHIC' || (printType === null && activeTab === 'PRESENSI')) ? 'print-document' : 'hidden'} hidden p-10 bg-white font-sans text-gray-900 w-[210mm]`}>
+      <div ref={infographicRef} className={`${(printType === 'INFOGRAPHIC' || (printType === null && activeTab === 'PRESENSI')) ? 'print-document' : 'hidden'} p-10 bg-white font-sans text-gray-900 w-[210mm]`}>
         {/* Header */}
         <div className="flex items-center justify-between border-b-4 border-purple-600 pb-8 mb-10">
           <div className="flex items-center gap-6">
@@ -1934,7 +1978,7 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
       </div>
 
       {/* Printable Teacher Monitoring Section */}
-      <div className={`${(printType === 'GURU' || (printType === null && activeTab === 'GURU')) ? 'print-document' : 'hidden'} hidden p-10 bg-white font-sans text-gray-900 w-[210mm] mx-auto`}>
+      <div className={`${(printType === 'GURU' || (printType === null && activeTab === 'GURU')) ? 'print-document' : 'hidden'} p-10 bg-white font-sans text-gray-900 w-[210mm] mx-auto`}>
         {/* Kop Surat (Letterhead) */}
         <div className="flex items-center justify-between border-b-4 border-double border-gray-800 pb-4 mb-6">
           <div className="flex items-center gap-4">
@@ -2060,7 +2104,7 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
       </div>
 
       {/* Printable Class Monitoring Section */}
-      <div className={`${(printType === 'KELAS' || (printType === null && activeTab === 'KELAS')) ? 'print-document' : 'hidden'} hidden p-10 bg-white font-sans text-gray-900 w-[210mm] mx-auto`}>
+      <div className={`${(printType === 'KELAS' || (printType === null && activeTab === 'KELAS')) ? 'print-document' : 'hidden'} p-10 bg-white font-sans text-gray-900 w-[210mm] mx-auto`}>
         {/* Kop Surat (Letterhead) */}
         <div className="flex items-center justify-between border-b-4 border-double border-gray-800 pb-4 mb-6">
           <div className="flex items-center gap-4">
@@ -2172,6 +2216,212 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
           <div>
             <p className="text-[10px] text-gray-400 font-mono leading-relaxed max-w-sm">
               Laporan KBM ini sah dan dihasilkan secara otomatis melalui Sistem Informasi Kurikulum Digital EduAdmin Pro pada {new Date().toLocaleString('id-ID')}.
+            </p>
+          </div>
+          <div className="flex flex-col items-center min-w-[200px]">
+            <p className="text-[10px] font-bold text-gray-700 uppercase tracking-wider mb-14">
+              {user.additionalRole === 'KEPALA_SEKOLAH' ? 'Kepala Sekolah' : 'Wakasek Kurikulum'}
+            </p>
+            <div className="w-full h-px bg-gray-900 mb-2"></div>
+            <p className="text-xs font-black uppercase text-gray-900">{user.fullName}</p>
+            <p className="text-[10px] text-gray-500 font-medium">NIP. {user.nip || '..........................'}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Printable Teacher Monthly Recap Section */}
+      <div className={`${printType === 'REKAP_GURU' ? 'print-document' : 'hidden'} p-10 bg-white font-sans text-gray-900 w-[210mm] mx-auto`}>
+        {/* Kop Surat (Letterhead) */}
+        <div className="flex items-center justify-between border-b-4 border-double border-gray-800 pb-4 mb-6">
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 bg-purple-600 rounded-xl flex items-center justify-center text-white shadow">
+              <School size={32} />
+            </div>
+            <div>
+              <h1 className="text-xl font-black uppercase tracking-tight text-gray-900">{user.schoolName || ''}</h1>
+              <p className="text-[10px] text-gray-500 font-mono">NPSN: {user.schoolNpsn} | SISTEM MONITORING KURIKULUM DIGITAL</p>
+              <p className="text-[10px] text-gray-400">Email: info@{(user.schoolName || 'sekolah').toLowerCase().replace(/\s+/g, '')}.sch.id</p>
+            </div>
+          </div>
+          <div className="text-right">
+            <span className="text-[9px] font-bold text-purple-600 bg-purple-50 px-2 py-1 rounded">MONTHLY RECAP</span>
+          </div>
+        </div>
+
+        {/* Title & Metadata */}
+        <div className="text-center mb-6">
+          <h2 className="text-base font-black uppercase tracking-wider text-gray-900">REKAP BULANAN MONITORING JURNAL GURU</h2>
+          <p className="text-xs text-gray-600 mt-1 uppercase">
+            Periode Bulan: {new Date(selectedDate).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}
+          </p>
+        </div>
+
+        {/* Main Table */}
+        <table className="w-full text-[11px] border-collapse border border-gray-400 mb-8">
+          <thead>
+            <tr className="bg-gray-100 border border-gray-400">
+              <th className="border border-gray-400 px-2 py-2 text-center w-8">No</th>
+              <th className="border border-gray-400 px-2 py-2 text-left w-48">Nama Guru</th>
+              <th className="border border-gray-400 px-2 py-2 text-left w-36">Mata Pelajaran</th>
+              <th className="border border-gray-400 px-2 py-2 text-center w-28">Hari Aktif Mengisi</th>
+              <th className="border border-gray-400 px-2 py-2 text-center w-28">Total Jurnal (Realisasi/Target)</th>
+              <th className="border border-gray-400 px-2 py-2 text-center w-20">Persentase Keaktifan</th>
+            </tr>
+          </thead>
+          <tbody>
+            {teachers.map((teacher, index) => {
+              const teacherJournals = rekapJournals.filter(j => j.userId === teacher.id);
+              const actualCount = teacherJournals.length;
+              const activeDays = new Set(teacherJournals.map(j => j.date)).size;
+              
+              const teacherSchedules = schedules.filter(s => s.userId === teacher.id);
+              const weeklyTarget = teacherSchedules.length;
+              const monthlyTarget = weeklyTarget * 4;
+              
+              const percent = monthlyTarget > 0 ? Math.min(Math.round((actualCount / monthlyTarget) * 100), 100) : null;
+              
+              return (
+                <tr key={teacher.id} className="border border-gray-400 break-inside-avoid">
+                  <td className="border border-gray-400 px-2 py-2 text-center align-middle">{index + 1}</td>
+                  <td className="border border-gray-400 px-2 py-2 align-middle">
+                    <div className="font-bold text-gray-950">{teacher.fullName}</div>
+                    <div className="text-[10px] text-gray-500">NIP. {teacher.nip || '-'}</div>
+                  </td>
+                  <td className="border border-gray-400 px-2 py-2 align-middle text-gray-800">
+                    {teacher.subject || (teacher.teacherType === 'CLASS' ? 'Guru Kelas' : '-')}
+                  </td>
+                  <td className="border border-gray-400 px-2 py-2 text-center align-middle">
+                    <span className="font-bold">{activeDays}</span> Hari
+                  </td>
+                  <td className="border border-gray-400 px-2 py-2 text-center align-middle">
+                    <span className="font-bold text-gray-950">{actualCount}</span> / {monthlyTarget || '-'} Sesi
+                  </td>
+                  <td className="border border-gray-400 px-2 py-2 text-center align-middle">
+                    <div className="font-bold text-gray-950">{percent !== null ? `${percent}%` : '-'}</div>
+                    {percent !== null && (
+                      <div className={`text-[8px] font-bold ${percent >= 80 ? 'text-green-700' : percent >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>
+                        {percent >= 80 ? 'SANGAT AKTIF' : percent >= 50 ? 'CUKUP AKTIF' : 'KURANG AKTIF'}
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+
+        {/* Signatures */}
+        <div className="mt-12 pt-6 border-t border-gray-200 flex justify-between items-start break-inside-avoid">
+          <div>
+            <p className="text-[10px] text-gray-400 font-mono leading-relaxed max-w-sm">
+              Laporan rekap bulanan ini sah dan dihasilkan secara otomatis melalui Sistem Informasi Kurikulum Digital EduAdmin Pro pada {new Date().toLocaleString('id-ID')}.
+            </p>
+          </div>
+          <div className="flex flex-col items-center min-w-[200px]">
+            <p className="text-[10px] font-bold text-gray-700 uppercase tracking-wider mb-14">
+              {user.additionalRole === 'KEPALA_SEKOLAH' ? 'Kepala Sekolah' : 'Wakasek Kurikulum'}
+            </p>
+            <div className="w-full h-px bg-gray-900 mb-2"></div>
+            <p className="text-xs font-black uppercase text-gray-900">{user.fullName}</p>
+            <p className="text-[10px] text-gray-500 font-medium">NIP. {user.nip || '..........................'}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Printable Class Monthly Recap Section */}
+      <div className={`${printType === 'REKAP_KELAS' ? 'print-document' : 'hidden'} p-10 bg-white font-sans text-gray-900 w-[210mm] mx-auto`}>
+        {/* Kop Surat (Letterhead) */}
+        <div className="flex items-center justify-between border-b-4 border-double border-gray-800 pb-4 mb-6">
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow">
+              <School size={32} />
+            </div>
+            <div>
+              <h1 className="text-xl font-black uppercase tracking-tight text-gray-900">{user.schoolName || ''}</h1>
+              <p className="text-[10px] text-gray-500 font-mono">NPSN: {user.schoolNpsn} | SISTEM MONITORING KURIKULUM DIGITAL</p>
+              <p className="text-[10px] text-gray-400">Email: info@{(user.schoolName || 'sekolah').toLowerCase().replace(/\s+/g, '')}.sch.id</p>
+            </div>
+          </div>
+          <div className="text-right">
+            <span className="text-[9px] font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded">MONTHLY RECAP</span>
+          </div>
+        </div>
+
+        {/* Title & Metadata */}
+        <div className="text-center mb-6">
+          <h2 className="text-base font-black uppercase tracking-wider text-gray-900">REKAP BULANAN MONITORING KBM PER KELAS</h2>
+          <p className="text-xs text-gray-600 mt-1 uppercase">
+            Periode Bulan: {new Date(selectedDate).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}
+          </p>
+        </div>
+
+        {/* Main Table */}
+        <table className="w-full text-[11px] border-collapse border border-gray-400 mb-8">
+          <thead>
+            <tr className="bg-gray-100 border border-gray-400">
+              <th className="border border-gray-400 px-2 py-2 text-center w-8">No</th>
+              <th className="border border-gray-400 px-2 py-2 text-left w-36">Nama Kelas</th>
+              <th className="border border-gray-400 px-2 py-2 text-left w-40">Wali Kelas</th>
+              <th className="border border-gray-400 px-2 py-2 text-center w-36">Total Sesi KBM Terlaksana</th>
+              <th className="border border-gray-400 px-2 py-2 text-center">Rekap Absensi Siswa Bulanan</th>
+            </tr>
+          </thead>
+          <tbody>
+            {classes.map((cls, index) => {
+              const classJournals = rekapJournals.filter(j => j.classId === cls.id);
+              const actualCount = classJournals.length;
+              
+              let totalSakit = 0;
+              let totalIzin = 0;
+              let totalAlfa = 0;
+              
+              classJournals.forEach(j => {
+                const absList = parseAbsentStudents(j.absentStudents);
+                absList.forEach(a => {
+                  const statusClean = (a.status || '').toUpperCase();
+                  if (statusClean === 'S' || statusClean === 'SAKIT') totalSakit++;
+                  else if (statusClean === 'I' || statusClean === 'IZIN') totalIzin++;
+                  else if (statusClean === 'A' || statusClean === 'ALFA' || statusClean === 'ALPA') totalAlfa++;
+                });
+              });
+              
+              return (
+                <tr key={cls.id} className="border border-gray-400 break-inside-avoid">
+                  <td className="border border-gray-400 px-2 py-2 text-center align-middle">{index + 1}</td>
+                  <td className="border border-gray-400 px-2 py-2 align-middle">
+                    <div className="font-bold text-gray-950">{cls.name}</div>
+                    <div className="text-[10px] text-gray-500">{cls.studentCount} Siswa</div>
+                  </td>
+                  <td className="border border-gray-400 px-2 py-2 align-middle text-gray-800 font-medium">
+                    {cls.homeroomTeacherName || '-'}
+                  </td>
+                  <td className="border border-gray-400 px-2 py-2 text-center align-middle">
+                    <span className="font-bold text-gray-950">{actualCount}</span> Sesi KBM
+                  </td>
+                  <td className="border border-gray-400 px-2 py-2 align-middle">
+                    <div className="grid grid-cols-3 gap-2 text-center text-[10px]">
+                      <div className="bg-yellow-50 border border-yellow-200 p-1 rounded">
+                        <span className="font-bold text-yellow-800">Sakit: {totalSakit}</span>
+                      </div>
+                      <div className="bg-blue-50 border border-blue-200 p-1 rounded">
+                        <span className="font-bold text-blue-800">Izin: {totalIzin}</span>
+                      </div>
+                      <div className="bg-red-50 border border-red-200 p-1 rounded">
+                        <span className="font-bold text-red-800">Alfa: {totalAlfa}</span>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+
+        {/* Signatures */}
+        <div className="mt-12 pt-6 border-t border-gray-200 flex justify-between items-start break-inside-avoid">
+          <div>
+            <p className="text-[10px] text-gray-400 font-mono leading-relaxed max-w-sm">
+              Laporan rekap bulanan KBM ini sah dan dihasilkan secara otomatis melalui Sistem Informasi Kurikulum Digital EduAdmin Pro pada {new Date().toLocaleString('id-ID')}.
             </p>
           </div>
           <div className="flex flex-col items-center min-w-[200px]">
