@@ -136,6 +136,7 @@ const DB_SCHEMAS = [
         class_id TEXT,
         school_npsn TEXT,
         date TEXT,
+        subject TEXT,
         material_id TEXT,
         learning_objective TEXT,
         meeting_no TEXT,
@@ -715,7 +716,8 @@ const DB_SCHEMAS = [
     `ALTER TABLE students ADD COLUMN rfid_tag TEXT`,
     `ALTER TABLE students ADD COLUMN guru_wali_id TEXT`,
     `ALTER TABLE students ADD COLUMN guru_wali_name TEXT`,
-    `ALTER TABLE journals ADD COLUMN absent_students TEXT`
+    `ALTER TABLE journals ADD COLUMN absent_students TEXT`,
+    `ALTER TABLE journals ADD COLUMN subject TEXT`
 ];
 
 // Helper to convert undefined to null for SQL
@@ -744,7 +746,7 @@ const getTableConfig = (collection: string) => {
     case 'eduadmin_students': return { table: 'students', columns: ['id', 'class_id', 'school_npsn', 'name', 'nis', 'gender', 'phone', 'rfid_tag', 'guru_wali_id', 'guru_wali_name', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.classId), s(item.schoolNpsn || 'DEFAULT'), s(item.name), s(item.nis), s(item.gender), s(item.phone || ''), s(item.rfidTag || ''), s(item.guruWaliId || null), s(item.guruWaliName || null), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_scores': return { table: 'scores', columns: ['id', 'user_id', 'student_id', 'class_id', 'school_npsn', 'semester', 'subject', 'category', 'material_id', 'score', 'score_details', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.userId || 'UNKNOWN'), s(item.studentId), s(item.classId), s(item.schoolNpsn), s(item.semester), s(item.subject), s(item.category), s(item.materialId), s(item.score), JSON.stringify(item.scoreDetails || {}), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_attendance': return { table: 'attendance', columns: ['id', 'student_id', 'class_id', 'school_npsn', 'date', 'status', 'user_id', 'visibility', 'notes', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.studentId), s(item.classId), s(item.schoolNpsn), s(item.date), s(item.status), s(item.userId), s(item.visibility || 'SHARED'), s(item.notes), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
-    case 'eduadmin_journals': return { table: 'journals', columns: ['id', 'user_id', 'class_id', 'school_npsn', 'date', 'material_id', 'learning_objective', 'meeting_no', 'activities', 'reflection', 'follow_up', 'absent_students', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.userId), s(item.classId), s(item.schoolNpsn), s(item.date), s(item.materialId), s(item.learningObjective), s(item.meetingNo), s(item.activities), s(item.reflection), s(item.followUp), s(item.absentStudents), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
+    case 'eduadmin_journals': return { table: 'journals', columns: ['id', 'user_id', 'class_id', 'school_npsn', 'date', 'subject', 'material_id', 'learning_objective', 'meeting_no', 'activities', 'reflection', 'follow_up', 'absent_students', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.userId), s(item.classId), s(item.schoolNpsn), s(item.date), s(item.subject), s(item.materialId), s(item.learningObjective), s(item.meetingNo), s(item.activities), s(item.reflection), s(item.followUp), s(item.absentStudents), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_materials': return { table: 'materials', columns: ['id', 'class_id', 'user_id', 'school_npsn', 'subject', 'semester', 'code', 'phase', 'content', 'sub_scopes', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.classId), s(item.userId), s(item.schoolNpsn), s(item.subject), s(item.semester), s(item.code), s(item.phase), s(item.content), JSON.stringify(item.subScopes || []), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_schedules': return { table: 'schedules', columns: ['id', 'user_id', 'school_npsn', 'day', 'time_start', 'time_end', 'class_name', 'subject', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.userId), s(item.schoolNpsn), s(item.day), s(item.timeStart), s(item.timeEnd), s(item.className), s(item.subject), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_bk_violations': return { table: 'bk_violations', columns: ['id', 'student_id', 'date', 'violation_name', 'points', 'description', 'reported_by', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.studentId), s(item.date), s(item.violationName), s(item.points), s(item.description), s(item.reportedBy), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
@@ -876,6 +878,7 @@ const mapRowToJSON = (collection: string, row: any) => {
     };
     case 'eduadmin_journals': return {
         id: row.id, userId: row.user_id, classId: row.class_id, date: row.date,
+        subject: row.subject,
         materialId: row.material_id, learningObjective: row.learning_objective,
         meetingNo: row.meeting_no, activities: row.activities, reflection: row.reflection,
         followUp: row.follow_up, absentStudents: row.absent_students, lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
@@ -1807,6 +1810,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     await client.execute(`ALTER TABLE users ADD COLUMN rpp_usage_count INTEGER DEFAULT 0`).catch(() => {});
                     await client.execute(`ALTER TABLE users ADD COLUMN rpp_last_reset TEXT`).catch(() => {});
                     await client.execute(`ALTER TABLE journals ADD COLUMN absent_students TEXT`).catch(() => {});
+                    await client.execute(`ALTER TABLE journals ADD COLUMN subject TEXT`).catch(() => {});
                     await client.batch(statements);
                 } else {
                     throw batchError;
