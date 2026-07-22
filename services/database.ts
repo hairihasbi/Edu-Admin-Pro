@@ -2004,7 +2004,8 @@ export const getTeachingJournals = async (userId: string, subject?: string) => {
             return matchSubjectHelper(normSubject, s);
         });
     }
-    return await collection.reverse().sortBy('date');
+    const list = await collection.toArray();
+    return list.sort((a, b) => b.date.localeCompare(a.date));
 };
 
 export const addTeachingJournal = async (data: Omit<TeachingJournal, 'id'|'lastModified'|'isSynced'>) => {
