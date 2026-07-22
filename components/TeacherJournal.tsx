@@ -1103,6 +1103,7 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
                               />
                            </th>
                            <th className="p-4 w-32">Tanggal</th>
+                           <th className="p-4 w-36">Mata Pelajaran</th>
                            <th className="p-4 w-20 text-center">Jam Ke</th>
                            <th className="p-4 w-48">Kelas / Materi</th>
                            <th className="p-4 min-w-[300px]">Kegiatan Pembelajaran</th>
@@ -1127,6 +1128,11 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
                                     <div className="font-medium text-gray-900">
                                        {new Date(journal.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
                                     </div>
+                                 </td>
+                                 <td className="p-4 align-top">
+                                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-100">
+                                       {journal.subject || '-'}
+                                    </span>
                                  </td>
                                  <td className="p-4 align-top text-center">
                                     <span className={`inline-block px-2 py-1 rounded-md text-xs font-bold ${journal.examAgenda ? 'bg-gray-100 text-gray-500' : 'bg-blue-100 text-blue-700'}`}>
@@ -1214,6 +1220,11 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
                                         </span>
                                         <h3 className="font-bold text-gray-800 mt-2">{cls?.name || 'Unknown Class'}</h3>
                                         <p className="text-xs text-gray-500">{new Date(journal.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                                        <div className="mt-1.5">
+                                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-100">
+                                              {journal.subject || '-'}
+                                           </span>
+                                        </div>
                                     </div>
                                     <div className="flex gap-1">
                                        <button 
