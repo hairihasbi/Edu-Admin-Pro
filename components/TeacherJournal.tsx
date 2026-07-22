@@ -25,8 +25,14 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
     followUp: '',
     examAgenda: ''
   });
-  const [selectedSubject, setSelectedSubject] = useState<string>(user.subject || '');
-  const [formSubject, setFormSubject] = useState<string>(user.subject || '');
+  const [selectedSubject, setSelectedSubject] = useState<string>(() => {
+    if (user.subject === 'Matematika') return MATH_SUBJECT_OPTIONS[0];
+    return user.subject || '';
+  });
+  const [formSubject, setFormSubject] = useState<string>(() => {
+    if (user.subject === 'Matematika') return MATH_SUBJECT_OPTIONS[0];
+    return user.subject || '';
+  });
   
   const [classes, setClasses] = useState<ClassRoom[]>([]);
   const [allMaterials, setAllMaterials] = useState<ScopeMaterial[]>([]);
@@ -139,7 +145,7 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
          setFormSubject(subjects[0]);
       }
     } else if (user.subject === 'Matematika' || user.secondarySubject) {
-      if (!formSubject) {
+      if (!formSubject || formSubject === 'Matematika') {
          setFormSubject(user.subject === 'Matematika' ? MATH_SUBJECT_OPTIONS[0] : (user.subject || ''));
       }
     } else {
@@ -187,9 +193,9 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
       // Fetch ALL Materials for Lookup Map (for Print/Export)
       const matMap: Record<string, ScopeMaterial> = {};
       const matPromises = cls.map(async (c) => {
-         // PASS user.id to get own materials
-         const ganjil = await getScopeMaterials(c.id, 'Ganjil', user.id, selectedSubject);
-         const genap = await getScopeMaterials(c.id, 'Genap', user.id, selectedSubject);
+         // PASS 'ALL' to get all materials of this teacher for lookup map
+         const ganjil = await getScopeMaterials(c.id, 'Ganjil', user.id, 'ALL');
+         const genap = await getScopeMaterials(c.id, 'Genap', user.id, 'ALL');
          return [...ganjil, ...genap];
       });
       const allMatsArrays = await Promise.all(matPromises);
@@ -214,7 +220,7 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
     return () => {
         window.removeEventListener('sync-status', handleSyncStatus);
     };
-  }, [user, selectedSubject]);
+  }, [user]);
 
   // Reset pagination when filters change
   useEffect(() => {
@@ -249,7 +255,7 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
   }, [formData.classId, formSubject, user.id]);
 
   const fetchJournals = async () => {
-    const data = await getTeachingJournals(user.id, selectedSubject);
+    const data = await getTeachingJournals(user.id, 'ALL');
     setJournals(data);
   };
 
