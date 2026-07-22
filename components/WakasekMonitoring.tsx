@@ -1818,7 +1818,7 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
   </div>
 
   {/* Printable Infographic Section */}
-      <div ref={infographicRef} className={`${(printType === 'INFOGRAPHIC' || (printType === null && activeTab === 'PRESENSI')) ? 'print:block' : 'print:hidden'} hidden p-10 bg-white font-sans text-gray-900 w-[210mm]`}>
+      <div ref={infographicRef} className={`${(printType === 'INFOGRAPHIC' || (printType === null && activeTab === 'PRESENSI')) ? 'print-document' : 'hidden'} hidden p-10 bg-white font-sans text-gray-900 w-[210mm]`}>
         {/* Header */}
         <div className="flex items-center justify-between border-b-4 border-purple-600 pb-8 mb-10">
           <div className="flex items-center gap-6">
@@ -1934,7 +1934,7 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
       </div>
 
       {/* Printable Teacher Monitoring Section */}
-      <div className={`${(printType === 'GURU' || (printType === null && activeTab === 'GURU')) ? 'print:block' : 'print:hidden'} hidden p-10 bg-white font-sans text-gray-900 w-[210mm] mx-auto`}>
+      <div className={`${(printType === 'GURU' || (printType === null && activeTab === 'GURU')) ? 'print-document' : 'hidden'} hidden p-10 bg-white font-sans text-gray-900 w-[210mm] mx-auto`}>
         {/* Kop Surat (Letterhead) */}
         <div className="flex items-center justify-between border-b-4 border-double border-gray-800 pb-4 mb-6">
           <div className="flex items-center gap-4">
@@ -2060,7 +2060,7 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
       </div>
 
       {/* Printable Class Monitoring Section */}
-      <div className={`${(printType === 'KELAS' || (printType === null && activeTab === 'KELAS')) ? 'print:block' : 'print:hidden'} hidden p-10 bg-white font-sans text-gray-900 w-[210mm] mx-auto`}>
+      <div className={`${(printType === 'KELAS' || (printType === null && activeTab === 'KELAS')) ? 'print-document' : 'hidden'} hidden p-10 bg-white font-sans text-gray-900 w-[210mm] mx-auto`}>
         {/* Kop Surat (Letterhead) */}
         <div className="flex items-center justify-between border-b-4 border-double border-gray-800 pb-4 mb-6">
           <div className="flex items-center gap-4">
