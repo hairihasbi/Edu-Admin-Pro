@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, TeachingJournal, AttendanceRecord, ClassRoom, TeachingSchedule, SystemSettings, RfidLog } from '../types';
+import { User, TeachingJournal, AttendanceRecord, ClassRoom, TeachingSchedule, SystemSettings, RfidLog, AbsentStudent } from '../types';
 import { 
   getSchoolTeachers, 
   getSchoolJournals, 
@@ -76,6 +76,34 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
     bkStatus: { processed: number, pending: number };
   } | null>(null);
   const [isLoadingExecutive, setIsLoadingExecutive] = useState(false);
+  const [printType, setPrintType] = useState<'GURU' | 'KELAS' | 'INFOGRAPHIC' | null>(null);
+
+  const handlePrintMonitoring = (type: 'GURU' | 'KELAS') => {
+    setPrintType(type);
+    setTimeout(() => {
+      window.print();
+    }, 150);
+  };
+
+  const parseAbsentStudents = (absentStr?: string): AbsentStudent[] => {
+    if (!absentStr) return [];
+    try {
+      const parsed = JSON.parse(absentStr);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  };
+
+  useEffect(() => {
+    const handleAfterPrint = () => {
+      setPrintType(null);
+    };
+    window.addEventListener('afterprint', handleAfterPrint);
+    return () => {
+      window.removeEventListener('afterprint', handleAfterPrint);
+    };
+  }, []);
 
   const lastTodayRef = useRef(getLocalDate());
 
@@ -1317,8 +1345,18 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          <div className="text-xs text-gray-500 italic flex items-center gap-1">
-            <Info size={14} /> Menampilkan data per tanggal {new Date(selectedDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+          <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+            <div className="text-xs text-gray-500 italic flex items-center gap-1">
+              <Info size={14} /> Menampilkan data per tanggal {new Date(selectedDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+            </div>
+            {(activeTab === 'GURU' || activeTab === 'KELAS') && (
+              <button 
+                onClick={() => handlePrintMonitoring(activeTab)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg text-xs font-bold border border-red-100 transition shadow-sm ml-2"
+              >
+                <Printer size={14} /> Cetak PDF
+              </button>
+            )}
           </div>
         </div>
 
@@ -1780,7 +1818,7 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
   </div>
 
   {/* Printable Infographic Section */}
-      <div ref={infographicRef} className="hidden print:block p-10 bg-white font-sans text-gray-900 w-[210mm]">
+      <div ref={infographicRef} className={`${(printType === 'INFOGRAPHIC' || (printType === null && activeTab === 'PRESENSI')) ? 'print:block' : 'print:hidden'} hidden p-10 bg-white font-sans text-gray-900 w-[210mm]`}>
         {/* Header */}
         <div className="flex items-center justify-between border-b-4 border-purple-600 pb-8 mb-10">
           <div className="flex items-center gap-6">
@@ -1886,6 +1924,258 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
           
           <div className="flex flex-col items-center min-w-[200px]">
             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-16">
+              {user.additionalRole === 'KEPALA_SEKOLAH' ? 'Kepala Sekolah' : 'Wakasek Kurikulum'}
+            </p>
+            <div className="w-full h-px bg-gray-900 mb-2"></div>
+            <p className="text-xs font-black uppercase text-gray-900">{user.fullName}</p>
+            <p className="text-[10px] text-gray-500 font-medium">NIP. {user.nip || '..........................'}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Printable Teacher Monitoring Section */}
+      <div className={`${(printType === 'GURU' || (printType === null && activeTab === 'GURU')) ? 'print:block' : 'print:hidden'} hidden p-10 bg-white font-sans text-gray-900 w-[210mm] mx-auto`}>
+        {/* Kop Surat (Letterhead) */}
+        <div className="flex items-center justify-between border-b-4 border-double border-gray-800 pb-4 mb-6">
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 bg-purple-600 rounded-xl flex items-center justify-center text-white shadow">
+              <School size={32} />
+            </div>
+            <div>
+              <h1 className="text-xl font-black uppercase tracking-tight text-gray-900">{user.schoolName || ''}</h1>
+              <p className="text-[10px] text-gray-500 font-mono">NPSN: {user.schoolNpsn} | SISTEM MONITORING KURIKULUM DIGITAL</p>
+              <p className="text-[10px] text-gray-400">Email: info@{(user.schoolName || 'sekolah').toLowerCase().replace(/\s+/g, '')}.sch.id</p>
+            </div>
+          </div>
+          <div className="text-right">
+            <span className="text-[9px] font-bold text-purple-600 bg-purple-50 px-2 py-1 rounded">OFFICIAL REPORT</span>
+          </div>
+        </div>
+
+        {/* Title & Metadata */}
+        <div className="text-center mb-6">
+          <h2 className="text-base font-black uppercase tracking-wider text-gray-900">LAPORAN MONITORING JURNAL MENGAJAR GURU</h2>
+          <p className="text-xs text-gray-600 mt-1">
+            Hari/Tanggal: {new Date(selectedDate).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+          </p>
+        </div>
+
+        {/* Main Table */}
+        <table className="w-full text-[11px] border-collapse border border-gray-400 mb-8">
+          <thead>
+            <tr className="bg-gray-100 border border-gray-400">
+              <th className="border border-gray-400 px-2 py-2 text-center w-8">No</th>
+              <th className="border border-gray-400 px-2 py-2 text-left w-48">Nama Guru</th>
+              <th className="border border-gray-400 px-2 py-2 text-left w-36">Mata Pelajaran</th>
+              <th className="border border-gray-400 px-2 py-2 text-center w-28">Target / Realisasi</th>
+              <th className="border border-gray-400 px-2 py-2 text-left">Ringkasan Aktivitas & Kehadiran Siswa</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredTeachers.map((teacher, index) => {
+              const teacherJournals = journals.filter(j => j.userId === teacher.id).sort((a, b) => a.meetingNo.localeCompare(b.meetingNo, undefined, { numeric: true }));
+              const teacherSchedules = todaySchedules.filter(s => s.userId === teacher.id).sort((a, b) => a.timeStart.localeCompare(b.timeStart));
+              const plannedCount = teacherSchedules.length;
+              const actualCount = teacherJournals.length;
+              const isFullyCompliant = plannedCount > 0 && actualCount >= plannedCount;
+              
+              return (
+                <tr key={teacher.id} className="border border-gray-400 break-inside-avoid">
+                  <td className="border border-gray-400 px-2 py-2 text-center align-top">{index + 1}</td>
+                  <td className="border border-gray-400 px-2 py-2 align-top">
+                    <div className="font-bold text-gray-950">{teacher.fullName}</div>
+                    <div className="text-[10px] text-gray-500">NIP. {teacher.nip || '-'}</div>
+                  </td>
+                  <td className="border border-gray-400 px-2 py-2 align-top text-gray-800">
+                    {teacher.subject || (teacher.teacherType === 'CLASS' ? 'Guru Kelas' : '-')}
+                  </td>
+                  <td className="border border-gray-400 px-2 py-2 text-center align-top">
+                    <div className="font-bold text-gray-950">{actualCount} / {plannedCount || '-'} Sesi</div>
+                    <div className={`text-[9px] font-bold mt-1 ${isFullyCompliant ? 'text-green-700' : plannedCount > 0 ? 'text-red-600' : 'text-gray-500'}`}>
+                      {isFullyCompliant ? 'LENGKAP' : plannedCount > 0 ? 'BELUM LENGKAP' : 'LUAR JADWAL'}
+                    </div>
+                  </td>
+                  <td className="border border-gray-400 px-2 py-2 align-top space-y-2">
+                    {/* Schedules planned */}
+                    {teacherSchedules.length > 0 && (
+                      <div>
+                        <span className="text-[9px] font-bold text-gray-500 uppercase block mb-0.5">Rencana Jadwal:</span>
+                        <div className="flex flex-wrap gap-1">
+                          {teacherSchedules.map(s => (
+                            <span key={s.id} className="text-[9px] bg-gray-50 border border-gray-200 px-1 py-0.5 rounded">
+                              Jam {s.meetingNo}: {s.className}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Actual Journals */}
+                    {teacherJournals.length > 0 ? (
+                      <div className="space-y-1.5 pt-1 border-t border-dashed border-gray-200">
+                        <span className="text-[9px] font-bold text-purple-700 uppercase block">Realisasi Kelas & Materi:</span>
+                        {teacherJournals.map(journal => {
+                          const absList = parseAbsentStudents(journal.absentStudents);
+                          return (
+                            <div key={journal.id} className="text-[10px] text-gray-800 pl-2 border-l-2 border-purple-500">
+                              <span className="font-bold text-purple-950">Jam ke-{journal.meetingNo} ({classNameMap[journal.classId]}):</span>{' '}
+                              <span className="italic">"{journal.learningObjective}"</span> — {journal.activities}
+                              {absList.length > 0 ? (
+                                <div className="text-[9px] text-red-600 font-medium mt-0.5">
+                                  Ketidakhadiran: {absList.map(a => `${a.name} (${a.status})`).join(', ')}
+                                </div>
+                              ) : (
+                                <div className="text-[9px] text-green-600 font-medium mt-0.5">Siswa: Hadir Semua</div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="text-[10px] text-red-500 italic font-medium">Belum ada jurnal mengajar yang diisi untuk hari ini.</div>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+
+        {/* Signatures */}
+        <div className="mt-12 pt-6 border-t border-gray-200 flex justify-between items-start break-inside-avoid">
+          <div>
+            <p className="text-[10px] text-gray-400 font-mono leading-relaxed max-w-sm">
+              Laporan monitoring ini sah dan dihasilkan secara otomatis melalui Sistem Informasi Kurikulum Digital EduAdmin Pro pada {new Date().toLocaleString('id-ID')}.
+            </p>
+          </div>
+          <div className="flex flex-col items-center min-w-[200px]">
+            <p className="text-[10px] font-bold text-gray-700 uppercase tracking-wider mb-14">
+              {user.additionalRole === 'KEPALA_SEKOLAH' ? 'Kepala Sekolah' : 'Wakasek Kurikulum'}
+            </p>
+            <div className="w-full h-px bg-gray-900 mb-2"></div>
+            <p className="text-xs font-black uppercase text-gray-900">{user.fullName}</p>
+            <p className="text-[10px] text-gray-500 font-medium">NIP. {user.nip || '..........................'}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Printable Class Monitoring Section */}
+      <div className={`${(printType === 'KELAS' || (printType === null && activeTab === 'KELAS')) ? 'print:block' : 'print:hidden'} hidden p-10 bg-white font-sans text-gray-900 w-[210mm] mx-auto`}>
+        {/* Kop Surat (Letterhead) */}
+        <div className="flex items-center justify-between border-b-4 border-double border-gray-800 pb-4 mb-6">
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow">
+              <School size={32} />
+            </div>
+            <div>
+              <h1 className="text-xl font-black uppercase tracking-tight text-gray-900">{user.schoolName || ''}</h1>
+              <p className="text-[10px] text-gray-500 font-mono">NPSN: {user.schoolNpsn} | SISTEM MONITORING KURIKULUM DIGITAL</p>
+              <p className="text-[10px] text-gray-400">Email: info@{(user.schoolName || 'sekolah').toLowerCase().replace(/\s+/g, '')}.sch.id</p>
+            </div>
+          </div>
+          <div className="text-right">
+            <span className="text-[9px] font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded">OFFICIAL REPORT</span>
+          </div>
+        </div>
+
+        {/* Title & Metadata */}
+        <div className="text-center mb-6">
+          <h2 className="text-base font-black uppercase tracking-wider text-gray-900">LAPORAN MONITORING KBM PER KELAS</h2>
+          <p className="text-xs text-gray-600 mt-1">
+            Hari/Tanggal: {new Date(selectedDate).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+          </p>
+        </div>
+
+        {/* Main Table */}
+        <table className="w-full text-[11px] border-collapse border border-gray-400 mb-8">
+          <thead>
+            <tr className="bg-gray-100 border border-gray-400">
+              <th className="border border-gray-400 px-2 py-2 text-center w-8">No</th>
+              <th className="border border-gray-400 px-2 py-2 text-left w-36">Nama Kelas</th>
+              <th className="border border-gray-400 px-2 py-2 text-left w-40">Wali Kelas</th>
+              <th className="border border-gray-400 px-2 py-2 text-center w-28">Sesi KBM (Realisasi)</th>
+              <th className="border border-gray-400 px-2 py-2 text-left">Kronologi & Aktivitas Pembelajaran</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredClasses.map((cls, index) => {
+              const classJournals = journals.filter(j => j.classId === cls.id).sort((a, b) => a.meetingNo.localeCompare(b.meetingNo, undefined, { numeric: true }));
+              const classSchedules = todaySchedules.filter(s => s.className === cls.name).sort((a, b) => a.timeStart.localeCompare(b.timeStart));
+              const plannedCount = classSchedules.length;
+              const actualCount = classJournals.length;
+              const isFullyCompliant = plannedCount > 0 && actualCount >= plannedCount;
+              
+              return (
+                <tr key={cls.id} className="border border-gray-400 break-inside-avoid">
+                  <td className="border border-gray-400 px-2 py-2 text-center align-top">{index + 1}</td>
+                  <td className="border border-gray-400 px-2 py-2 align-top">
+                    <div className="font-bold text-gray-950">{cls.name}</div>
+                    <div className="text-[10px] text-gray-500">{cls.studentCount} Siswa</div>
+                  </td>
+                  <td className="border border-gray-400 px-2 py-2 align-top text-gray-800 font-medium">
+                    {cls.homeroomTeacherName || '-'}
+                  </td>
+                  <td className="border border-gray-400 px-2 py-2 text-center align-top">
+                    <div className="font-bold text-gray-950">{actualCount} / {plannedCount || '-'} Sesi</div>
+                    <div className={`text-[9px] font-bold mt-1 ${isFullyCompliant ? 'text-green-700' : plannedCount > 0 ? 'text-red-600' : 'text-gray-500'}`}>
+                      {isFullyCompliant ? 'LENGKAP' : plannedCount > 0 ? 'BELUM LENGKAP' : 'LUAR JADWAL'}
+                    </div>
+                  </td>
+                  <td className="border border-gray-400 px-2 py-2 align-top space-y-2">
+                    {/* Schedules planned */}
+                    {classSchedules.length > 0 && (
+                      <div>
+                        <span className="text-[9px] font-bold text-gray-500 uppercase block mb-0.5">Rencana KBM:</span>
+                        <div className="flex flex-wrap gap-1">
+                          {classSchedules.map(s => (
+                            <span key={s.id} className="text-[9px] bg-gray-50 border border-gray-200 px-1 py-0.5 rounded">
+                              Jam {s.meetingNo}: {s.subject} ({teacherNameMap[s.userId] || 'Guru'})
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Actual Journals */}
+                    {classJournals.length > 0 ? (
+                      <div className="space-y-1.5 pt-1 border-t border-dashed border-gray-200">
+                        <span className="text-[9px] font-bold text-blue-700 uppercase block">Realisasi Pembelajaran:</span>
+                        {classJournals.map(journal => {
+                          const absList = parseAbsentStudents(journal.absentStudents);
+                          return (
+                            <div key={journal.id} className="text-[10px] text-gray-800 pl-2 border-l-2 border-blue-500">
+                              <span className="font-bold text-blue-950">Jam ke-{journal.meetingNo} — {journal.subject || 'Mata Pelajaran'} ({teacherNameMap[journal.userId] || 'Guru'}):</span>{' '}
+                              <span className="italic">"{journal.learningObjective}"</span> — {journal.activities}
+                              {absList.length > 0 ? (
+                                <div className="text-[9px] text-red-600 font-medium mt-0.5">
+                                  Ketidakhadiran: {absList.map(a => `${a.name} (${a.status})`).join(', ')}
+                                </div>
+                              ) : (
+                                <div className="text-[9px] text-green-600 font-medium mt-0.5">Kehadiran: Lengkap</div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="text-[10px] text-red-500 italic font-medium">Belum ada KBM yang tercatat untuk kelas ini hari ini.</div>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+
+        {/* Signatures */}
+        <div className="mt-12 pt-6 border-t border-gray-200 flex justify-between items-start break-inside-avoid">
+          <div>
+            <p className="text-[10px] text-gray-400 font-mono leading-relaxed max-w-sm">
+              Laporan KBM ini sah dan dihasilkan secara otomatis melalui Sistem Informasi Kurikulum Digital EduAdmin Pro pada {new Date().toLocaleString('id-ID')}.
+            </p>
+          </div>
+          <div className="flex flex-col items-center min-w-[200px]">
+            <p className="text-[10px] font-bold text-gray-700 uppercase tracking-wider mb-14">
               {user.additionalRole === 'KEPALA_SEKOLAH' ? 'Kepala Sekolah' : 'Wakasek Kurikulum'}
             </p>
             <div className="w-full h-px bg-gray-900 mb-2"></div>
