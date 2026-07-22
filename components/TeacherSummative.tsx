@@ -29,7 +29,10 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
   const [hasChanges, setHasChanges] = useState(false);
   
   // NEW: Subject State Logic
-  const [selectedSubject, setSelectedSubject] = useState<string>(user.subject || '');
+  const [selectedSubject, setSelectedSubject] = useState<string>(() => {
+    if (user.subject === 'Matematika') return MATH_SUBJECT_OPTIONS[0];
+    return user.subject || '';
+  });
 
   // Initialize Subject based on Teacher Type
   useEffect(() => {
@@ -46,7 +49,7 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
       }
     } else if (user.subject === 'Matematika' || user.secondarySubject) {
       // Default to first math option or primary subject
-      if (!selectedSubject || (selectedSubject !== user.subject && selectedSubject !== user.secondarySubject && !MATH_SUBJECT_OPTIONS.includes(selectedSubject))) {
+      if (!selectedSubject || selectedSubject === 'Matematika' || (selectedSubject !== user.subject && selectedSubject !== user.secondarySubject && !MATH_SUBJECT_OPTIONS.includes(selectedSubject))) {
          setSelectedSubject(user.subject === 'Matematika' ? MATH_SUBJECT_OPTIONS[0] : (user.subject || ''));
       }
     } else {
@@ -202,6 +205,7 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
     const idDict: {[key: string]: string} = {};
 
     scoreData.forEach(s => {
+      if (s.deleted) return;
       if (!s.subject || s.subject === selectedSubject) {
           const mappedMaterialId = s.materialId ? (materialIdMap.get(s.materialId) || s.materialId) : '';
           const key = s.category === 'LM' 

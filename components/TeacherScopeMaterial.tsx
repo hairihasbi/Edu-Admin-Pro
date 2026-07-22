@@ -41,7 +41,10 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
   const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
   
   // NEW: Subject State Logic
-  const [selectedSubject, setSelectedSubject] = useState<string>(user.subject || '');
+  const [selectedSubject, setSelectedSubject] = useState<string>(() => {
+    if (user.subject === 'Matematika' || user.secondarySubject) return 'ALL';
+    return user.subject || '';
+  });
 
   // Initialize Subject based on Teacher Type
   useEffect(() => {
@@ -158,6 +161,11 @@ const TeacherScopeMaterial: React.FC<TeacherScopeMaterialProps> = ({ user }) => 
              }
         } else if (user.subject === 'Matematika') {
              // Math teacher must select in form
+             if (selectedSubject !== 'ALL') {
+                 finalSubject = selectedSubject;
+             }
+        } else if (user.secondarySubject || user.isMultiSubject) {
+             // Multi-subject/secondary-subject fallback to selected subject filter if specific
              if (selectedSubject !== 'ALL') {
                  finalSubject = selectedSubject;
              }
