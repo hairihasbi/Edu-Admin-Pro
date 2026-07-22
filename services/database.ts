@@ -3173,16 +3173,46 @@ export const getStudent360Data = async (studentId: string) => {
 export const matchSubjectHelper = (normSubject: string, s: string): boolean => {
     if (s === normSubject) return true;
     
-    // Exact checks to prevent cross-contamination between Matematika Umum and Matematika Tingkat Lanjut
-    const isUmumRequest = normSubject === 'matematika umum' || normSubject === 'umum' || normSubject === 'matematika wajib' || normSubject === 'matematika';
-    const isLanjutRequest = normSubject === 'matematika tingkat lanjut' || normSubject === 'tingkat lanjut' || normSubject === 'peminatan';
+    // Clean both strings of whitespace
+    const cleanNorm = normSubject.replace(/\s+/g, '').toLowerCase();
+    const cleanS = s.replace(/\s+/g, '').toLowerCase();
+    if (cleanS === cleanNorm) return true;
+
+    // Check for Matematika explicitly to prevent cross-contamination
+    const isMathNorm = cleanNorm.includes('matematika');
+    const isMathS = cleanS.includes('matematika');
     
-    const isUmumMaterial = s === 'matematika umum' || s === 'umum' || s === 'matematika wajib' || s === 'matematika';
-    const isLanjutMaterial = s === 'matematika tingkat lanjut' || s === 'tingkat lanjut' || s === 'peminatan';
+    if (isMathNorm || isMathS) {
+        // If one is math and the other is not, they don't match
+        if (!isMathNorm || !isMathS) return false;
+        
+        // Both are math. Now check if either is "tingkat lanjut" / "lanjut" / "peminatan"
+        const isLanjutNorm = cleanNorm.includes('lanjut') || cleanNorm.includes('peminatan');
+        const isLanjutS = cleanS.includes('lanjut') || cleanS.includes('peminatan');
+        
+        if (isLanjutNorm && isLanjutS) return true;
+        if (!isLanjutNorm && !isLanjutS) return true;
+        
+        return false;
+    }
     
-    if (isUmumRequest && isUmumMaterial) return true;
-    if (isLanjutRequest && isLanjutMaterial) return true;
+    // For other subjects, remove "dan" and non-alphanumeric chars for maximum compatibility
+    const alphaNorm = cleanNorm.replace(/dan/g, '').replace(/[^a-z0-9]/g, '');
+    const alphaS = cleanS.replace(/dan/g, '').replace(/[^a-z0-9]/g, '');
     
+    if (alphaNorm && alphaS) {
+        if (alphaNorm.includes(alphaS) || alphaS.includes(alphaNorm)) return true;
+    }
+    
+    // Also check if we remove parentheses content, e.g. "Seni dan Budaya (Rupa/...)" -> "Seni dan Budaya"
+    const removeParens = (str: string) => str.replace(/\([^)]*\)/g, '').replace(/\s+/g, '').replace(/dan/g, '').replace(/[^a-z0-9]/g, '');
+    const noParenNorm = removeParens(normSubject);
+    const noParenS = removeParens(s);
+    
+    if (noParenNorm && noParenS) {
+        if (noParenNorm.includes(noParenS) || noParenS.includes(noParenNorm)) return true;
+    }
+
     return false;
 };
 
