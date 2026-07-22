@@ -8,6 +8,12 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+@media screen {
+  .print-document {
+    display: none !important;
+  }
+}
+
 @media print {
   /* Hide all standard web UI elements */
   aside,
@@ -18,7 +24,9 @@ body {
   .print\:hidden,
   .no-print,
   div.fixed.bottom-0,
-  div.px-6.py-2.border-b {
+  div.px-6.py-2.border-b,
+  div.max-w-6xl.mx-auto.space-y-6.pb-20,
+  .breadcrumbs {
     display: none !important;
   }
 
@@ -36,6 +44,7 @@ body {
 
   /* Reset outer layout constraints */
   #root,
+  #root > div,
   main,
   div.flex-1.overflow-y-auto,
   div.max-w-6xl {
