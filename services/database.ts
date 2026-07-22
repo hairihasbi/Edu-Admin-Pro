@@ -1858,7 +1858,7 @@ export const getScopeMaterials = async (classId: string, semester: string, userI
     if (subject && subject !== 'ALL') {
         const normSubject = subject.trim().toLowerCase();
         list = list.filter(m => {
-            if (!m.subject) return true; // Keep legacy
+            if (!m.subject) return false; // FIX: Don't leak empty-subject scope materials to specific subject filters
             const s = m.subject.trim().toLowerCase();
             return matchSubjectHelper(normSubject, s);
         });
@@ -1884,7 +1884,17 @@ export const copyScopeMaterials = async (sourceClassId: string, targetClassId: s
     if (sources.length === 0) return false;
 
     // Filter source materials so they are strictly private to this teacher and not deleted
-    const filteredSources = sources.filter(s => s.userId === userId && !s.deleted);
+    let filteredSources = sources.filter(s => s.userId === userId && !s.deleted);
+
+    // Filter by subject to prevent cross-subject contamination during copying
+    if (subject && subject !== 'ALL') {
+        const normSubject = subject.trim().toLowerCase();
+        filteredSources = filteredSources.filter(s => {
+            if (!s.subject) return false;
+            const sub = s.subject.trim().toLowerCase();
+            return matchSubjectHelper(normSubject, sub);
+        });
+    }
 
     if (filteredSources.length === 0) return false;
 
@@ -1924,7 +1934,19 @@ export const saveBulkAssessmentScores = async (scores: Omit<AssessmentScore, 'id
     
     // Handle Deletions
     if (deletedIds && deletedIds.length > 0) {
-        await db.assessmentScores.bulkDelete(deletedIds);
+        // Soft delete locally first to ensure robust offline synchronization of deletions
+        for (const id of deletedIds) {
+            const existing = await db.assessmentScores.get(id);
+            if (existing) {
+                await db.assessmentScores.put({
+                    ...existing,
+                    deleted: true,
+                    isSynced: false,
+                    lastModified: Date.now()
+                });
+            }
+        }
+        
         try {
             await deleteBatchFromTurso('eduadmin_scores', deletedIds);
         } catch (err) {
@@ -1955,13 +1977,13 @@ export const saveBulkAssessmentScores = async (scores: Omit<AssessmentScore, 'id
 };
 
 export const getAssessmentScores = async (classId: string, semester: string, subject?: string) => {
-    let collection = db.assessmentScores.where({ classId, semester });
+    let collection = db.assessmentScores.where({ classId, semester }).filter(s => !s.deleted);
     
     // FIX: Robust filtering (Case-insensitive + Allow legacy/empty + Math Loose Matching)
     if (subject && subject !== 'ALL') {
         const normSubject = subject.trim().toLowerCase();
         collection = collection.filter(s => {
-            if (!s.subject) return true;
+            if (!s.subject) return false; // FIX: Don't leak empty-subject scores to specific subject filters
             const sub = s.subject.trim().toLowerCase();
             return matchSubjectHelper(normSubject, sub);
         });
@@ -1971,13 +1993,13 @@ export const getAssessmentScores = async (classId: string, semester: string, sub
 
 // --- JOURNALS ---
 export const getTeachingJournals = async (userId: string, subject?: string) => {
-    let collection = db.teachingJournals.where('userId').equals(userId);
+    let collection = db.teachingJournals.where('userId').equals(userId).filter(j => !j.deleted);
     
     // FIX: Robust filtering (Case-insensitive + Allow legacy/empty + Math Loose Matching)
     if (subject && subject !== 'ALL') {
         const normSubject = subject.trim().toLowerCase();
         collection = collection.filter(j => {
-            if (!j.subject) return true;
+            if (!j.subject) return false; // FIX: Don't leak empty-subject journals to specific subject filters
             const s = j.subject.trim().toLowerCase();
             return matchSubjectHelper(normSubject, s);
         });
@@ -3151,7 +3173,7 @@ export const matchSubjectHelper = (normSubject: string, s: string): boolean => {
     if (s === normSubject) return true;
     
     // Exact checks to prevent cross-contamination between Matematika Umum and Matematika Tingkat Lanjut
-    const isUmumRequest = normSubject === 'matematika umum' || normSubject === 'umum' || normSubject === 'matematika wajib';
+    const isUmumRequest = normSubject === 'matematika umum' || normSubject === 'umum' || normSubject === 'matematika wajib' || normSubject === 'matematika';
     const isLanjutRequest = normSubject === 'matematika tingkat lanjut' || normSubject === 'tingkat lanjut' || normSubject === 'peminatan';
     
     const isUmumMaterial = s === 'matematika umum' || s === 'umum' || s === 'matematika wajib' || s === 'matematika';
