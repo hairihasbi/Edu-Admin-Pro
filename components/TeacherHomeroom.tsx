@@ -35,7 +35,28 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
   const [detectedSubjects, setDetectedSubjects] = useState<string[]>([]);
   
   // Health Data State
-  const [todayAttendance, setTodayAttendance] = useState<{ absent: number; late: number; rfidLateDetail: string[] }>({ absent: 0, late: 0, rfidLateDetail: [] });
+  const [todayAttendance, setTodayAttendance] = useState<{ 
+    absent: number; 
+    alpha: number;
+    sakit: number;
+    izin: number;
+    late: number; 
+    rfidLateDetail: string[];
+    alphaDetail: string[];
+    sakitDetail: string[];
+    izinDetail: string[];
+  }>({ 
+    absent: 0, 
+    alpha: 0,
+    sakit: 0,
+    izin: 0,
+    late: 0, 
+    rfidLateDetail: [],
+    alphaDetail: [],
+    sakitDetail: [],
+    izinDetail: []
+  });
+  const [frequentAbsentees, setFrequentAbsentees] = useState<{ student: Student; alphaCount: number }[]>([]);
   const [disciplineTrend, setDisciplineTrend] = useState<any[]>([]);
   const [isRefreshingHealth, setIsRefreshingHealth] = useState(false);
   
@@ -184,8 +205,14 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
       const attendanceToday = await getAttendanceRecordsByRange(user.homeroomClassId!, todayString, todayString, user.id);
       
       const lateDetails: string[] = [];
+      const alphaDetails: string[] = [];
+      const sakitDetails: string[] = [];
+      const izinDetails: string[] = [];
+
       let lateCount = 0;
-      let absentCount = 0;
+      let alphaCount = 0;
+      let sakitCount = 0;
+      let izinCount = 0;
 
       studentData.forEach(s => {
         const manualAtt = attendanceToday.find(a => a.studentId === s.id);
@@ -197,24 +224,73 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
           const log = lateLogs.find(l => l.studentId === s.id);
           lateDetails.push(`${s.name} (${log?.timestamp.split('T')[1].substring(0, 5) || 'Telat'})`);
         } else if (!hasTapped) {
-          // If not tapped, check if they have a manual status
+          // If not tapped, check manual status
           if (manualAtt) {
-            // If manual says non-H (Alpha, Ijin, Sakit), count as "absent" for today's health summary
-            if (['A', 'I', 'S'].includes(manualAtt.status)) {
-              absentCount++;
+            if (manualAtt.status === 'S') {
+              sakitCount++;
+              sakitDetails.push(s.name);
+            } else if (manualAtt.status === 'I') {
+              izinCount++;
+              izinDetails.push(s.name);
+            } else if (manualAtt.status === 'A') {
+              alphaCount++;
+              alphaDetails.push(s.name);
             }
           } else {
             // No tap AND no manual record -> Assume Alpha/Waiting
-            absentCount++;
+            alphaCount++;
+            alphaDetails.push(s.name);
+          }
+        } else {
+          // Tapped RFID, but check manual attendance just in case it was modified
+          if (manualAtt && ['S', 'I', 'A'].includes(manualAtt.status)) {
+            if (manualAtt.status === 'S') {
+              sakitCount++;
+              sakitDetails.push(s.name);
+            } else if (manualAtt.status === 'I') {
+              izinCount++;
+              izinDetails.push(s.name);
+            } else if (manualAtt.status === 'A') {
+              alphaCount++;
+              alphaDetails.push(s.name);
+            }
           }
         }
       });
       
       setTodayAttendance({
-        absent: absentCount,
+        absent: alphaCount + sakitCount + izinCount,
+        alpha: alphaCount,
+        sakit: sakitCount,
+        izin: izinCount,
         late: lateCount,
-        rfidLateDetail: lateDetails
+        rfidLateDetail: lateDetails,
+        alphaDetail: alphaDetails,
+        sakitDetail: sakitDetails,
+        izinDetail: izinDetails
       });
+
+      // Calculate long-term absences (Alpha > 3) to guide them
+      const longTermStart = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      const longTermAttendance = await getAttendanceRecordsByRange(user.homeroomClassId!, longTermStart, todayString, user.id);
+
+      const alphaCounts: { [studentId: string]: number } = {};
+      longTermAttendance.forEach(record => {
+        if (record.status === 'A') {
+          alphaCounts[record.studentId] = (alphaCounts[record.studentId] || 0) + 1;
+        }
+      });
+
+      const frequentAbs: { student: Student; alphaCount: number }[] = [];
+      studentData.forEach(s => {
+        const count = alphaCounts[s.id] || 0;
+        if (count > 3) {
+          frequentAbs.push({ student: s, alphaCount: count });
+        }
+      });
+
+      frequentAbs.sort((a, b) => b.alphaCount - a.alphaCount);
+      setFrequentAbsentees(frequentAbs);
 
       // Update Trends
       const last30DaysAttendance = await getAttendanceRecordsByRange(user.homeroomClassId!, monthAgo, todayString, user.id);
@@ -1483,36 +1559,88 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
 
                   <div className="mt-6 flex flex-col md:flex-row gap-8 items-start">
                      <div className="space-y-1">
-                        <p className="text-4xl font-black text-gray-800">{todayAttendance.absent + todayAttendance.late}</p>
+                        <p className="text-4xl font-black text-gray-800">{todayAttendance.alpha + todayAttendance.sakit + todayAttendance.izin + todayAttendance.late}</p>
                         <p className="text-sm font-medium text-gray-500 uppercase tracking-widest">Anomali Hari Ini</p>
                      </div>
                      <div className="flex-1 w-full space-y-3">
-                        <div className="p-4 bg-red-50 rounded-xl border border-red-100 flex items-center justify-between">
-                           <div className="flex items-center gap-3">
-                              <ShieldAlert className="text-red-500" size={18} />
-                              <span className="text-sm font-bold text-red-700">Tidak Hadir (Alpha)</span>
-                           </div>
-                           <span className="text-lg font-black text-red-800">{todayAttendance.absent} Siswa</span>
-                        </div>
-                        <div className="p-4 bg-orange-50 rounded-xl border border-orange-100">
-                           <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-3">
-                                 <Clock className="text-orange-500" size={18} />
-                                 <span className="text-sm font-bold text-orange-700">Terlambat Scan RFID</span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                           {/* Alpha */}
+                           <div className="p-4 bg-red-50 rounded-xl border border-red-100 flex flex-col justify-between">
+                              <div className="flex items-center justify-between gap-2 mb-1">
+                                 <div className="flex items-center gap-2">
+                                    <ShieldAlert className="text-red-500" size={16} />
+                                    <span className="text-xs font-bold text-red-700">Tidak Hadir (Alpha)</span>
+                                 </div>
+                                 <span className="text-xs font-black text-red-800 bg-red-100 px-1.5 py-0.5 rounded">{todayAttendance.alpha} Siswa</span>
                               </div>
-                              <span className="text-lg font-black text-orange-800">{todayAttendance.late} Siswa</span>
+                              {todayAttendance.alphaDetail.length > 0 ? (
+                                <p className="text-[10px] text-red-600 mt-1 font-semibold leading-relaxed bg-white/60 p-1.5 rounded-lg border border-red-200/40">
+                                  Detail: {todayAttendance.alphaDetail.join(', ')}
+                                </p>
+                              ) : (
+                                <p className="text-[10px] text-red-400 mt-1 italic font-medium">Nihil / Hadir Semua</p>
+                              )}
                            </div>
-                           {todayAttendance.rfidLateDetail.length > 0 && (
-                             <div className="text-[11px] text-orange-600 font-medium bg-white/50 p-2 rounded-lg mt-1 border border-orange-200/50">
-                                Detail: {todayAttendance.rfidLateDetail.join(', ')}
-                             </div>
-                           )}
+
+                           {/* Sakit */}
+                           <div className="p-4 bg-amber-50 rounded-xl border border-amber-100 flex flex-col justify-between">
+                              <div className="flex items-center justify-between gap-2 mb-1">
+                                 <div className="flex items-center gap-2">
+                                    <HeartPulse className="text-amber-500" size={16} />
+                                    <span className="text-xs font-bold text-amber-700">Sakit</span>
+                                 </div>
+                                 <span className="text-xs font-black text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded">{todayAttendance.sakit} Siswa</span>
+                              </div>
+                              {todayAttendance.sakitDetail.length > 0 ? (
+                                <p className="text-[10px] text-amber-600 mt-1 font-semibold leading-relaxed bg-white/60 p-1.5 rounded-lg border border-amber-200/40">
+                                  Detail: {todayAttendance.sakitDetail.join(', ')}
+                                </p>
+                              ) : (
+                                <p className="text-[10px] text-amber-400 mt-1 italic font-medium">Nihil / Sehat Semua</p>
+                              )}
+                           </div>
+
+                           {/* Izin */}
+                           <div className="p-4 bg-blue-50 rounded-xl border border-blue-100 flex flex-col justify-between">
+                              <div className="flex items-center justify-between gap-2 mb-1">
+                                 <div className="flex items-center gap-2">
+                                    <Calendar className="text-blue-500" size={16} />
+                                    <span className="text-xs font-bold text-blue-700">Izin</span>
+                                 </div>
+                                 <span className="text-xs font-black text-blue-800 bg-blue-100 px-1.5 py-0.5 rounded">{todayAttendance.izin} Siswa</span>
+                              </div>
+                              {todayAttendance.izinDetail.length > 0 ? (
+                                <p className="text-[10px] text-blue-600 mt-1 font-semibold leading-relaxed bg-white/60 p-1.5 rounded-lg border border-blue-200/40">
+                                  Detail: {todayAttendance.izinDetail.join(', ')}
+                                </p>
+                              ) : (
+                                <p className="text-[10px] text-blue-400 mt-1 italic font-medium">Nihil / Tidak Ada Izin</p>
+                              )}
+                           </div>
+
+                           {/* Terlambat */}
+                           <div className="p-4 bg-orange-50 rounded-xl border border-orange-100 flex flex-col justify-between">
+                              <div className="flex items-center justify-between gap-2 mb-1">
+                                 <div className="flex items-center gap-2">
+                                    <Clock className="text-orange-500" size={16} />
+                                    <span className="text-xs font-bold text-orange-700">Terlambat Scan RFID</span>
+                                 </div>
+                                 <span className="text-xs font-black text-orange-800 bg-orange-100 px-1.5 py-0.5 rounded">{todayAttendance.late} Siswa</span>
+                              </div>
+                              {todayAttendance.rfidLateDetail.length > 0 ? (
+                                <p className="text-[10px] text-orange-600 mt-1 font-semibold leading-relaxed bg-white/60 p-1.5 rounded-lg border border-orange-200/40">
+                                  Detail: {todayAttendance.rfidLateDetail.join(', ')}
+                                </p>
+                              ) : (
+                                <p className="text-[10px] text-orange-400 mt-1 italic font-medium">Nihil / Tepat Waktu Semua</p>
+                              )}
+                           </div>
                         </div>
                      </div>
                   </div>
 
                   <p className="mt-6 text-xs text-gray-400 italic flex items-center gap-1 group">
-                     <AlertCircle size={12} className="group-hover:animate-pulse" /> Tips: Segera lakukan panggilan orang tua bagi siswa yang sering terlambat di pagi hari.
+                     <AlertCircle size={12} className="group-hover:animate-pulse" /> Tips: Wali Kelas dapat mengonfirmasi data ketidakhadiran di atas secara langsung ke wali murid.
                   </p>
                </div>
             </div>
@@ -1540,12 +1668,78 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                   </div>
                </div>
                <button 
-                  onClick={() => setActiveTab('behavior')}
+                  onClick={() => {
+                     setSearchQuery('');
+                     setActiveTab('behavior');
+                  }}
                   className="mt-8 w-full bg-white text-indigo-600 py-3 rounded-xl font-bold text-sm shadow-xl hover:bg-indigo-50 transition-all flex items-center justify-center gap-2"
                >
                   Buka Folder BK <Users size={16} />
                </button>
             </div>
+          </div>
+
+          {/* Siswa Memerlukan Pembinaan Card */}
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 text-left">
+             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-gray-100">
+                <div className="flex items-center gap-3">
+                   <div className="p-3 bg-red-100 text-red-600 rounded-xl">
+                      <ShieldAlert size={24} />
+                   </div>
+                   <div>
+                      <h3 className="text-lg font-extrabold text-gray-800">Siswa Memerlukan Pembinaan (Lebih dari 3x Alfa)</h3>
+                      <p className="text-xs text-gray-500">Berdasarkan data absensi kumulatif harian semester berjalan</p>
+                   </div>
+                </div>
+                <div className="text-xs font-bold text-gray-500 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100 shrink-0">
+                   Total: {frequentAbsentees.length} Siswa
+                </div>
+             </div>
+
+             {frequentAbsentees.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                   {frequentAbsentees.map(({ student, alphaCount }) => (
+                      <div key={student.id} className="p-4 rounded-xl border border-red-100 bg-red-50/20 hover:bg-red-50/40 transition duration-150 flex flex-col justify-between gap-3">
+                         <div>
+                            <div className="flex items-start justify-between gap-2">
+                               <div>
+                                  <h4 className="font-extrabold text-sm text-gray-900">{student.name}</h4>
+                                  <p className="text-[11px] text-gray-500">NIS: {student.nis} • {student.gender === 'L' ? 'Laki-laki' : 'Perempuan'}</p>
+                               </div>
+                               <span className="text-xs bg-red-100 text-red-700 font-black px-2.5 py-1 rounded-lg shrink-0">
+                                  {alphaCount}x Alfa
+                               </span>
+                            </div>
+                            <div className="mt-3 flex items-center gap-2">
+                               <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                  alphaCount > 5 
+                                     ? 'bg-red-600 text-white' 
+                                     : 'bg-amber-100 text-amber-800'
+                               }`}>
+                                  {alphaCount > 5 ? 'Pembinaan Intensif' : 'Pembinaan Tahap 1'}
+                               </span>
+                            </div>
+                         </div>
+                         
+                         <button
+                            onClick={() => {
+                               setSearchQuery(student.name);
+                               setActiveTab('behavior');
+                            }}
+                            className="w-full mt-2 bg-white hover:bg-red-600 text-red-600 hover:text-white border border-red-200 hover:border-red-600 py-2 rounded-lg text-xs font-bold transition duration-150 flex items-center justify-center gap-1.5 shadow-sm"
+                         >
+                            <Users size={14} /> Hubungi BK / Mulai Pembinaan
+                         </button>
+                      </div>
+                   ))}
+                </div>
+             ) : (
+                <div className="py-8 text-center bg-emerald-50/30 rounded-xl border border-dashed border-emerald-100">
+                   <HeartPulse size={36} className="text-emerald-500 mx-auto mb-2" />
+                   <p className="text-sm font-bold text-emerald-800">Kondisi Kelas Sangat Baik!</p>
+                   <p className="text-xs text-emerald-600 mt-1">Tidak ada siswa yang tidak hadir (Alpha) lebih dari 3 kali.</p>
+                </div>
+             )}
           </div>
 
           {/* Trend Chart */}
