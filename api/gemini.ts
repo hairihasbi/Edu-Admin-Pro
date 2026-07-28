@@ -107,7 +107,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   let currentUser;
   try {
-    currentUser = await authorize(req, ['ADMIN', 'GURU']);
+    currentUser = await authorize(req, ['ADMIN', 'GURU', 'TENDIK']);
   } catch (err: any) {
     return res.status(err.status || 401).json({ error: err.message });
   }
@@ -147,8 +147,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const settings = await getSystemSettings(redis);
   
   // --- QUOTA GATEKEEPER ---
-  // Only applies to Teachers (GURU), Admins are exempt
-  if (currentUser.role === 'GURU') {
+  // Only applies to Teachers (GURU) and TENDIK, Admins are exempt
+  if (currentUser.role === 'GURU' || currentUser.role === 'TENDIK') {
       let rawUrl = cleanEnv(process.env.TURSO_DB_URL);
       if (rawUrl && rawUrl.startsWith('libsql://')) rawUrl = rawUrl.replace('libsql://', 'https://');
       const url = rawUrl;
@@ -234,7 +234,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           if (!response.body) throw new Error("No response body from gateway");
 
           // INCREMENT USAGE AFTER SUCCESSFUL START
-          if (currentUser.role === 'GURU') {
+          if (currentUser.role === 'GURU' || currentUser.role === 'TENDIK') {
               try {
                   await incrementUsage(currentUser.userId);
               } catch (e) {
@@ -366,7 +366,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       streamStarted = true;
       
       // INCREMENT USAGE FOR USER
-      if (currentUser.role === 'GURU') {
+      if (currentUser.role === 'GURU' || currentUser.role === 'TENDIK') {
           try {
               await incrementUsage(currentUser.userId);
           } catch (e) {

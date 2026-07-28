@@ -16,7 +16,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   let currentUser;
   try {
-    currentUser = await authorize(req, ['ADMIN', 'GURU']);
+    currentUser = await authorize(req, ['ADMIN', 'GURU', 'TENDIK']);
   } catch (err: any) {
     // 401 specifically means user not found in DB
     return res.status(err.status || 401).json({ error: err.message });
@@ -55,7 +55,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 1. FILTERING LOGIC
     const userRole = currentUser.role.toUpperCase();
     
-    if (userRole === 'GURU') {
+    if (userRole === 'GURU' || userRole === 'TENDIK') {
         const userRes = await client.execute({ sql: "SELECT school_npsn FROM users WHERE id = ?", args: [currentUser.userId] });
         const userNpsn = userRes.rows[0]?.school_npsn;
         
@@ -162,7 +162,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // --- META FILTERS (Admin Only) ---
     let schoolsRes, teachersRes;
-    if (currentUser.role !== 'GURU') {
+    if (currentUser.role !== 'GURU' && currentUser.role !== 'TENDIK') {
         // Parallel Metadata Fetch for Filters
         const [sRes, tRes] = await Promise.all([
             client.execute("SELECT DISTINCT school_name FROM users WHERE role = 'GURU' AND school_name IS NOT NULL AND school_name != ''"),

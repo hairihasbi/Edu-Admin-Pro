@@ -1109,7 +1109,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     
     if (!publicActions.includes(action)) {
         try {
-            currentUser = await authorize(req, ['ADMIN', 'GURU', 'SISWA']);
+            currentUser = await authorize(req, ['ADMIN', 'GURU', 'SISWA', 'TENDIK']);
         } catch (err: any) {
              const isUserPush = action === 'push' && collection === 'eduadmin_users';
              const isAuthError = err.status === 401 || (err.message && err.message.includes('User not found'));
