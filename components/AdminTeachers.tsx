@@ -12,6 +12,18 @@ const AdminTeachers: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   
+  // Custom Confirmation & Alert Modal States
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    type: 'approve' | 'reject' | 'delete';
+    teacher: User | null;
+  }>({ isOpen: false, type: 'approve', teacher: null });
+
+  const [alertModal, setAlertModal] = useState<{
+    isOpen: boolean;
+    message: string;
+  }>({ isOpen: false, message: '' });
+
   // Search & Pagination State
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -86,9 +98,26 @@ const AdminTeachers: React.FC = () => {
       setIsSyncing(false);
   };
 
-  const handleApprove = async (teacher: User) => {
-    if (window.confirm(`Setujui pendaftaran guru ${teacher.fullName}?`)) {
-        setIsLoading(true);
+  const triggerApproveConfirm = (teacher: User) => {
+    setConfirmModal({ isOpen: true, type: 'approve', teacher });
+  };
+
+  const triggerRejectConfirm = (teacher: User) => {
+    setConfirmModal({ isOpen: true, type: 'reject', teacher });
+  };
+
+  const triggerDeleteConfirm = (teacher: User) => {
+    setConfirmModal({ isOpen: true, type: 'delete', teacher });
+  };
+
+  const executeConfirmAction = async () => {
+    const { type, teacher } = confirmModal;
+    if (!teacher) return;
+
+    setIsLoading(true);
+    setConfirmModal({ isOpen: false, type: 'approve', teacher: null });
+
+    if (type === 'approve') {
         const success = await approveTeacher(teacher.id);
         if (success) {
             setPendingTeachers(prev => prev.filter(u => u.id !== teacher.id));
@@ -98,29 +127,19 @@ const AdminTeachers: React.FC = () => {
             if (teacher.email) {
                 message += "\n\nNotifikasi email sedang dikirim ke " + teacher.email;
             }
-            
-            alert(message);
+            setAlertModal({ isOpen: true, message });
         } else {
-            alert("Gagal menyetujui guru.");
+            setAlertModal({ isOpen: true, message: "Gagal menyetujui guru." });
         }
-        setIsLoading(false);
-    }
-  };
-
-  const handleReject = async (userId: string) => {
-    if (window.confirm("Tolak dan hapus pendaftaran ini?")) {
-        const success = await rejectTeacher(userId);
+    } else if (type === 'reject') {
+        const success = await rejectTeacher(teacher.id);
         if (success) {
-            setPendingTeachers(prev => prev.filter(u => u.id !== userId));
+            setPendingTeachers(prev => prev.filter(u => u.id !== teacher.id));
+            setAlertModal({ isOpen: true, message: "Pendaftaran guru berhasil ditolak." });
         } else {
-            alert("Gagal menolak guru.");
+            setAlertModal({ isOpen: true, message: "Gagal menolak guru." });
         }
-    }
-  };
-
-  const handleDeleteAccount = async (teacher: User) => {
-    if (window.confirm(`Yakin ingin MENGHAPUS AKUN: ${teacher.fullName}?\n\nPERINGATAN: Tindakan ini tidak dapat dibatalkan.`)) {
-        setIsLoading(true);
+    } else if (type === 'delete') {
         const success = await deleteTeacher(teacher.id);
         if (success) {
             if (teacher.role === UserRole.TENDIK) {
@@ -128,12 +147,12 @@ const AdminTeachers: React.FC = () => {
             } else {
                 setActiveTeachers(prev => prev.filter(u => u.id !== teacher.id));
             }
-            alert("Akun berhasil dihapus.");
+            setAlertModal({ isOpen: true, message: "Akun berhasil dihapus." });
         } else {
-            alert("Gagal menghapus akun.");
+            setAlertModal({ isOpen: true, message: "Gagal menghapus akun." });
         }
-        setIsLoading(false);
     }
+    setIsLoading(false);
   };
 
   const handleExportExcel = () => {
@@ -143,7 +162,7 @@ const AdminTeachers: React.FC = () => {
     else dataToExport = pendingTeachers;
     
     if (dataToExport.length === 0) {
-        alert("Tidak ada data untuk diekspor.");
+        setAlertModal({ isOpen: true, message: "Tidak ada data untuk diekspor." });
         return;
     }
 
@@ -351,15 +370,15 @@ const AdminTeachers: React.FC = () => {
                             <div className="w-32 flex justify-end gap-2">
                                 {activeTab === 'pending' ? (
                                     <>
-                                        <button onClick={() => handleApprove(teacher)} className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-700 shadow-sm transition" title="Setujui">
+                                        <button onClick={() => triggerApproveConfirm(teacher)} className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-700 shadow-sm transition" title="Setujui">
                                             <CheckCircle size={16} />
                                         </button>
-                                        <button onClick={() => handleReject(teacher.id)} className="p-2 bg-white text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition" title="Tolak">
+                                        <button onClick={() => triggerRejectConfirm(teacher)} className="p-2 bg-white text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition" title="Tolak">
                                             <X size={16} />
                                         </button>
                                     </>
                                 ) : (
-                                    <button onClick={() => handleDeleteAccount(teacher)} className="flex items-center gap-1 px-3 py-1.5 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg text-xs font-bold transition border border-transparent hover:border-red-200">
+                                    <button onClick={() => triggerDeleteConfirm(teacher)} className="flex items-center gap-1 px-3 py-1.5 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg text-xs font-bold transition border border-transparent hover:border-red-200">
                                         <Trash2 size={14} /> Hapus
                                     </button>
                                 )}
@@ -401,11 +420,11 @@ const AdminTeachers: React.FC = () => {
                                     <div className="flex gap-2">
                                         {activeTab === 'pending' ? (
                                             <>
-                                                <button onClick={() => handleApprove(teacher)} className="bg-green-600 text-white px-3 py-1.5 rounded text-xs font-bold">Setujui</button>
-                                                <button onClick={() => handleReject(teacher.id)} className="bg-red-50 text-red-600 px-3 py-1.5 rounded text-xs font-bold">Tolak</button>
+                                                <button onClick={() => triggerApproveConfirm(teacher)} className="bg-green-600 text-white px-3 py-1.5 rounded text-xs font-bold">Setujui</button>
+                                                <button onClick={() => triggerRejectConfirm(teacher)} className="bg-red-50 text-red-600 px-3 py-1.5 rounded text-xs font-bold">Tolak</button>
                                             </>
                                         ) : (
-                                            <button onClick={() => handleDeleteAccount(teacher)} className="text-red-500 hover:text-red-700 text-xs font-bold flex items-center gap-1">
+                                            <button onClick={() => triggerDeleteConfirm(teacher)} className="text-red-500 hover:text-red-700 text-xs font-bold flex items-center gap-1">
                                                 <Trash2 size={12} /> Hapus Akun
                                             </button>
                                         )}
@@ -463,6 +482,82 @@ const AdminTeachers: React.FC = () => {
                 </button>
             </div>
           </div>
+      )}
+
+      {/* Custom Confirmation Dialog Modal */}
+      {confirmModal.isOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full overflow-hidden border border-gray-100 animate-in fade-in zoom-in-95 duration-150">
+            <div className="p-6">
+              <div className="flex justify-between items-start mb-4">
+                <h3 className="text-lg font-bold text-gray-900">
+                  {confirmModal.type === 'approve' && 'Setujui Pendaftaran'}
+                  {confirmModal.type === 'reject' && 'Tolak Pendaftaran'}
+                  {confirmModal.type === 'delete' && 'Hapus Akun'}
+                </h3>
+                <button 
+                  onClick={() => setConfirmModal({ isOpen: false, type: 'approve', teacher: null })}
+                  className="p-1 hover:bg-gray-100 rounded-full transition text-gray-400 hover:text-gray-600"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+              <p className="text-sm text-gray-600 leading-relaxed">
+                {confirmModal.type === 'approve' && `Apakah Anda yakin ingin menyetujui pendaftaran guru ${confirmModal.teacher?.fullName}? Akun ini akan aktif sepenuhnya dan dapat digunakan untuk mengakses dashboard.`}
+                {confirmModal.type === 'reject' && `Apakah Anda yakin ingin menolak dan menghapus pendaftaran guru ${confirmModal.teacher?.fullName}? Tindakan ini tidak dapat dibatalkan.`}
+                {confirmModal.type === 'delete' && `Apakah Anda yakin ingin MENGHAPUS PERMANEN akun: ${confirmModal.teacher?.fullName}? Semua data yang berkaitan dengan guru ini akan terhapus dari sistem.`}
+              </p>
+            </div>
+            <div className="bg-gray-50 px-6 py-4 flex justify-end gap-2 border-t border-gray-100">
+              <button
+                onClick={() => setConfirmModal({ isOpen: false, type: 'approve', teacher: null })}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition"
+              >
+                Batal
+              </button>
+              <button
+                onClick={executeConfirmAction}
+                className={`px-4 py-2 text-sm font-bold text-white rounded-lg transition shadow-sm ${
+                  confirmModal.type === 'approve' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'
+                }`}
+              >
+                {confirmModal.type === 'approve' && 'Setujui'}
+                {confirmModal.type === 'reject' && 'Tolak'}
+                {confirmModal.type === 'delete' && 'Hapus'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Alert/Notification Modal */}
+      {alertModal.isOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full overflow-hidden border border-gray-100 animate-in fade-in zoom-in-95 duration-150">
+            <div className="p-6">
+              <div className="flex justify-between items-start mb-4">
+                <h3 className="text-lg font-bold text-gray-900">Pemberitahuan</h3>
+                <button 
+                  onClick={() => setAlertModal({ isOpen: false, message: '' })}
+                  className="p-1 hover:bg-gray-100 rounded-full transition text-gray-400 hover:text-gray-600"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+              <div className="text-sm text-gray-600 whitespace-pre-line leading-relaxed">
+                {alertModal.message}
+              </div>
+            </div>
+            <div className="bg-gray-50 px-6 py-4 flex justify-end border-t border-gray-100">
+              <button
+                onClick={() => setAlertModal({ isOpen: false, message: '' })}
+                className="px-4 py-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition shadow-sm"
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
