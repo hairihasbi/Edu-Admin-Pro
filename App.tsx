@@ -405,9 +405,15 @@ const AppContent: React.FC = () => {
               freshUser.rppLastReset !== currentUser.rppLastReset ||
               freshUser.role !== currentUser.role ||
               freshUser.isSupervisor !== currentUser.isSupervisor ||
-              freshUser.additionalRole !== currentUser.additionalRole
+              freshUser.additionalRole !== currentUser.additionalRole ||
+              freshUser.status !== currentUser.status
             ) {
               console.log("[App] Sync updated user data:", freshUser);
+              if (freshUser.status !== "ACTIVE" && freshUser.role !== "ADMIN") {
+                alert("Akun Anda telah dinonaktifkan oleh Admin. Anda akan dialihkan ke halaman login.");
+                handleLogout();
+                return;
+              }
               setCurrentUser(freshUser);
               localStorage.setItem("eduadmin_user", JSON.stringify(freshUser));
             }
@@ -420,7 +426,7 @@ const AppContent: React.FC = () => {
 
     window.addEventListener("sync-status", handleSyncStatus);
     return () => window.removeEventListener("sync-status", handleSyncStatus);
-  }, [currentUser]);
+  }, [currentUser, handleLogout]);
 
   // --- USER ACTIVITY TRACKER FOR IDLE DETECTOR ---
   useEffect(() => {
