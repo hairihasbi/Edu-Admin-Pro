@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, UserStatus, UserRole } from '../types';
-import { getTeachers, getTendik, getPendingTeachers, approveTeacher, rejectTeacher, deleteTeacher, runManualSync } from '../services/database';
-import { User as UserIcon, CheckCircle, X, Shield, Search, School, Mail, ChevronLeft, ChevronRight, FileSpreadsheet, Smartphone, Trash2, MoreVertical, BookOpen, RefreshCcw, Settings } from './Icons';
+import { getTeachers, getTendik, getPendingTeachers, approveTeacher, rejectTeacher, deactivateTeacher, deleteTeacher, runManualSync } from '../services/database';
+import { User as UserIcon, CheckCircle, X, Shield, Search, School, Mail, ChevronLeft, ChevronRight, FileSpreadsheet, Smartphone, Trash2, MoreVertical, BookOpen, RefreshCcw, Settings, UserMinus } from './Icons';
 import * as XLSX from 'xlsx';
 
 const AdminTeachers: React.FC = () => {
@@ -15,7 +15,7 @@ const AdminTeachers: React.FC = () => {
   // Custom Confirmation & Alert Modal States
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
-    type: 'approve' | 'reject' | 'delete';
+    type: 'approve' | 'reject' | 'delete' | 'deactivate';
     teacher: User | null;
   }>({ isOpen: false, type: 'approve', teacher: null });
 
@@ -110,6 +110,10 @@ const AdminTeachers: React.FC = () => {
     setConfirmModal({ isOpen: true, type: 'delete', teacher });
   };
 
+  const triggerDeactivateConfirm = (teacher: User) => {
+    setConfirmModal({ isOpen: true, type: 'deactivate', teacher });
+  };
+
   const executeConfirmAction = async () => {
     const { type, teacher } = confirmModal;
     if (!teacher) return;
@@ -150,6 +154,18 @@ const AdminTeachers: React.FC = () => {
             setAlertModal({ isOpen: true, message: "Akun berhasil dihapus." });
         } else {
             setAlertModal({ isOpen: true, message: "Gagal menghapus akun." });
+        }
+    } else if (type === 'deactivate') {
+        const success = await deactivateTeacher(teacher.id);
+        if (success) {
+            if (teacher.role === UserRole.TENDIK) {
+                setActiveTendik(prev => prev.filter(u => u.id !== teacher.id));
+            } else {
+                setActiveTeachers(prev => prev.filter(u => u.id !== teacher.id));
+            }
+            setAlertModal({ isOpen: true, message: `Akun ${teacher.fullName} berhasil dinonaktifkan. Pengguna tidak dapat masuk lagi sampai akun diaktifkan kembali di tab Menunggu.` });
+        } else {
+            setAlertModal({ isOpen: true, message: "Gagal menonaktifkan akun." });
         }
     }
     setIsLoading(false);
@@ -289,7 +305,7 @@ const AdminTeachers: React.FC = () => {
               <div className="flex-1">Sekolah & Mapel</div>
               <div className="w-40">Kontak</div>
               <div className="w-24 text-center">Status</div>
-              <div className="w-32 text-right">Aksi</div>
+              <div className="w-56 text-right">Aksi</div>
           </div>
 
           {isLoading ? (
@@ -367,7 +383,7 @@ const AdminTeachers: React.FC = () => {
                                 </span>
                             </div>
 
-                            <div className="w-32 flex justify-end gap-2">
+                            <div className="w-56 flex justify-end gap-2">
                                 {activeTab === 'pending' ? (
                                     <>
                                         <button onClick={() => triggerApproveConfirm(teacher)} className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-700 shadow-sm transition" title="Setujui">
@@ -378,9 +394,22 @@ const AdminTeachers: React.FC = () => {
                                         </button>
                                     </>
                                 ) : (
-                                    <button onClick={() => triggerDeleteConfirm(teacher)} className="flex items-center gap-1 px-3 py-1.5 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg text-xs font-bold transition border border-transparent hover:border-red-200">
-                                        <Trash2 size={14} /> Hapus
-                                    </button>
+                                    <>
+                                        <button 
+                                            onClick={() => triggerDeactivateConfirm(teacher)} 
+                                            className="flex items-center gap-1 px-3 py-1.5 text-orange-600 bg-orange-50 hover:bg-orange-100 rounded-lg text-xs font-bold transition border border-transparent hover:border-orange-200"
+                                            title="Nonaktifkan Akun"
+                                        >
+                                            <UserMinus size={14} /> Nonaktifkan
+                                        </button>
+                                        <button 
+                                            onClick={() => triggerDeleteConfirm(teacher)} 
+                                            className="flex items-center gap-1 px-3 py-1.5 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg text-xs font-bold transition border border-transparent hover:border-red-200"
+                                            title="Hapus Akun"
+                                        >
+                                            <Trash2 size={14} /> Hapus
+                                        </button>
+                                    </>
                                 )}
                             </div>
                         </div>
@@ -424,9 +453,20 @@ const AdminTeachers: React.FC = () => {
                                                 <button onClick={() => triggerRejectConfirm(teacher)} className="bg-red-50 text-red-600 px-3 py-1.5 rounded text-xs font-bold">Tolak</button>
                                             </>
                                         ) : (
-                                            <button onClick={() => triggerDeleteConfirm(teacher)} className="text-red-500 hover:text-red-700 text-xs font-bold flex items-center gap-1">
-                                                <Trash2 size={12} /> Hapus Akun
-                                            </button>
+                                            <>
+                                                <button 
+                                                    onClick={() => triggerDeactivateConfirm(teacher)} 
+                                                    className="text-orange-600 hover:text-orange-800 text-xs font-bold flex items-center gap-1"
+                                                >
+                                                    <UserMinus size={12} /> Nonaktifkan
+                                                </button>
+                                                <button 
+                                                    onClick={() => triggerDeleteConfirm(teacher)} 
+                                                    className="text-red-500 hover:text-red-700 text-xs font-bold flex items-center gap-1"
+                                                >
+                                                    <Trash2 size={12} /> Hapus
+                                                </button>
+                                            </>
                                         )}
                                     </div>
                                 </div>
@@ -494,6 +534,7 @@ const AdminTeachers: React.FC = () => {
                   {confirmModal.type === 'approve' && 'Setujui Pendaftaran'}
                   {confirmModal.type === 'reject' && 'Tolak Pendaftaran'}
                   {confirmModal.type === 'delete' && 'Hapus Akun'}
+                  {confirmModal.type === 'deactivate' && 'Nonaktifkan Akun'}
                 </h3>
                 <button 
                   onClick={() => setConfirmModal({ isOpen: false, type: 'approve', teacher: null })}
@@ -506,6 +547,7 @@ const AdminTeachers: React.FC = () => {
                 {confirmModal.type === 'approve' && `Apakah Anda yakin ingin menyetujui pendaftaran guru ${confirmModal.teacher?.fullName}? Akun ini akan aktif sepenuhnya dan dapat digunakan untuk mengakses dashboard.`}
                 {confirmModal.type === 'reject' && `Apakah Anda yakin ingin menolak dan menghapus pendaftaran guru ${confirmModal.teacher?.fullName}? Tindakan ini tidak dapat dibatalkan.`}
                 {confirmModal.type === 'delete' && `Apakah Anda yakin ingin MENGHAPUS PERMANEN akun: ${confirmModal.teacher?.fullName}? Semua data yang berkaitan dengan guru ini akan terhapus dari sistem.`}
+                {confirmModal.type === 'deactivate' && `Apakah Anda yakin ingin menonaktifkan akun ${confirmModal.teacher?.fullName}? Pengguna tidak akan bisa masuk/mengakses sistem sementara waktu, namun datanya tidak dihapus. Anda dapat mengaktifkannya kembali di tab Menunggu.`}
               </p>
             </div>
             <div className="bg-gray-50 px-6 py-4 flex justify-end gap-2 border-t border-gray-100">
@@ -518,12 +560,15 @@ const AdminTeachers: React.FC = () => {
               <button
                 onClick={executeConfirmAction}
                 className={`px-4 py-2 text-sm font-bold text-white rounded-lg transition shadow-sm ${
-                  confirmModal.type === 'approve' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'
+                  confirmModal.type === 'approve' ? 'bg-green-600 hover:bg-green-700' :
+                  confirmModal.type === 'deactivate' ? 'bg-orange-600 hover:bg-orange-700' :
+                  'bg-red-600 hover:bg-red-700'
                 }`}
               >
                 {confirmModal.type === 'approve' && 'Setujui'}
                 {confirmModal.type === 'reject' && 'Tolak'}
                 {confirmModal.type === 'delete' && 'Hapus'}
+                {confirmModal.type === 'deactivate' && 'Nonaktifkan'}
               </button>
             </div>
           </div>
