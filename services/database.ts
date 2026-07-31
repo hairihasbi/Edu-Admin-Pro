@@ -320,6 +320,15 @@ export const rejectTeacher = async (id: string) => {
     return true;
 };
 
+export const deactivateTeacher = async (id: string) => {
+    await db.users.update(id, { status: 'PENDING', lastModified: Date.now(), isSynced: false });
+    const user = await db.users.get(id);
+    if (user) {
+        triggerDebouncedSync();
+    }
+    return true;
+};
+
 export const deleteTeacher = async (id: string) => {
     const user = await db.users.get(id);
     if (user) {
