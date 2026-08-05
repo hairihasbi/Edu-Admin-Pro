@@ -40,11 +40,6 @@ export interface HomeroomLpjReport {
   recommendations: string;
 }
 
-const INDONESIAN_MONTHS = [
-  'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 
-  'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
-];
-
 const DEFAULT_WORKPLAN_TEMPLATES: HomeroomWorkplanItem[] = [
   {
     id: 'wp-1',
@@ -208,43 +203,6 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
   // Inventory State
   const [inventoryItems, setInventoryItems] = useState<ClassInventory[]>([]);
   const [isSavingInventory, setIsSavingInventory] = useState(false);
-
-  // Monthly Attendance Recap State for LPJ & Workplan
-  const [recapMonth, setRecapMonth] = useState<number>(() => {
-    const d = new Date();
-    return d.getMonth() === 0 ? 11 : d.getMonth() - 1;
-  });
-  const [recapYear, setRecapYear] = useState<number>(() => {
-    const d = new Date();
-    return d.getMonth() === 0 ? d.getFullYear() - 1 : d.getFullYear();
-  });
-  const [customEffectiveDays, setCustomEffectiveDays] = useState<number>(20);
-  const [attendanceRecapList, setAttendanceRecapList] = useState<{
-    studentId: string;
-    nis: string;
-    name: string;
-    gender?: string;
-    hadir: number;
-    sakit: number;
-    izin: number;
-    alfa: number;
-    totalDays: number;
-    percentage: number;
-    predicate: string;
-  }[]>([]);
-  const [attendanceRecapSummary, setAttendanceRecapSummary] = useState({
-    monthName: INDONESIAN_MONTHS[new Date().getMonth() === 0 ? 11 : new Date().getMonth() - 1],
-    year: new Date().getMonth() === 0 ? new Date().getFullYear() - 1 : new Date().getFullYear(),
-    effectiveDays: 20,
-    totalStudents: 0,
-    totalHadir: 0,
-    totalSakit: 0,
-    totalIzin: 0,
-    totalAlfa: 0,
-    classPercentage: 100
-  });
-  const [isCalculatingRecap, setIsCalculatingRecap] = useState<boolean>(false);
-  const [recapSearchQuery, setRecapSearchQuery] = useState<string>('');
 
   const [className, setClassName] = useState('...');
   const [selectedSemester, setSelectedSemester] = useState('Ganjil');
@@ -565,163 +523,6 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
       return () => clearInterval(timer);
     }
   }, [activeTab]);
-
-  // --- MONTHLY ATTENDANCE RECAP LOGIC FOR LPJ & WORKPLAN ---
-  const calculateMonthlyAttendanceRecap = async (monthIdx: number, yearNum: number, effectiveDaysOverride?: number) => {
-    if (!user.homeroomClassId || students.length === 0) return;
-    setIsCalculatingRecap(true);
-    try {
-      const monthStr = String(monthIdx + 1).padStart(2, '0');
-      const startDate = `${yearNum}-${monthStr}-01`;
-      const lastDay = new Date(yearNum, monthIdx + 1, 0).getDate();
-      const endDate = `${yearNum}-${monthStr}-${String(lastDay).padStart(2, '0')}`;
-
-      const records = await getAttendanceRecordsByRange(user.homeroomClassId, startDate, endDate, user.id);
-      
-      const distinctDates = new Set(records.map(r => r.date));
-      const detectedEffectiveDays = distinctDates.size > 0 ? distinctDates.size : 20;
-      const effectiveDaysToUse = (effectiveDaysOverride !== undefined && effectiveDaysOverride > 0) 
-        ? effectiveDaysOverride 
-        : (customEffectiveDays > 0 ? customEffectiveDays : detectedEffectiveDays);
-
-      let sumHadir = 0;
-      let sumSakit = 0;
-      let sumIzin = 0;
-      let sumAlfa = 0;
-
-      const recapList = students.map(s => {
-        const studentRecs = records.filter(r => r.studentId === s.id);
-        let sakit = 0;
-        let izin = 0;
-        let alfa = 0;
-        let explicitHadir = 0;
-
-        studentRecs.forEach(r => {
-          if (r.status === 'S') sakit++;
-          else if (r.status === 'I') izin++;
-          else if (r.status === 'A') alfa++;
-          else if (r.status === 'H' || r.status === 'T') explicitHadir++;
-        });
-
-        const absentCount = sakit + izin + alfa;
-        let hadir = Math.max(0, effectiveDaysToUse - absentCount);
-        if (explicitHadir > hadir) {
-          hadir = explicitHadir;
-        }
-
-        const totalDays = effectiveDaysToUse;
-        const pct = totalDays > 0 ? Math.round(((hadir / totalDays) * 100) * 10) / 10 : 100;
-
-        let predicate = 'Sangat Baik (≥95%)';
-        if (pct < 80) predicate = 'Perlu Perhatian (<80%)';
-        else if (pct < 90) predicate = 'Cukup (80-89%)';
-        else if (pct < 95) predicate = 'Baik (90-94%)';
-
-        sumHadir += hadir;
-        sumSakit += sakit;
-        sumIzin += izin;
-        sumAlfa += alfa;
-
-        return {
-          studentId: s.id,
-          nis: s.nis,
-          name: s.name,
-          gender: s.gender,
-          hadir,
-          sakit,
-          izin,
-          alfa,
-          totalDays,
-          percentage: pct,
-          predicate
-        };
-      });
-
-      const totalPossibleDays = students.length * effectiveDaysToUse;
-      const overallPct = totalPossibleDays > 0 
-        ? Math.round(((sumHadir / totalPossibleDays) * 100) * 10) / 10 
-        : 100;
-
-      setAttendanceRecapList(recapList);
-      setAttendanceRecapSummary({
-        monthName: INDONESIAN_MONTHS[monthIdx],
-        year: yearNum,
-        effectiveDays: effectiveDaysToUse,
-        totalStudents: students.length,
-        totalHadir: sumHadir,
-        totalSakit: sumSakit,
-        totalIzin: sumIzin,
-        totalAlfa: sumAlfa,
-        classPercentage: overallPct
-      });
-
-    } catch (err) {
-      console.error("Error calculating monthly attendance recap:", err);
-    } finally {
-      setIsCalculatingRecap(false);
-    }
-  };
-
-  const handleUpdateStudentRecapItem = (studentId: string, field: 'sakit' | 'izin' | 'alfa', value: number) => {
-    const num = Math.max(0, isNaN(value) ? 0 : value);
-    setAttendanceRecapList(prev => {
-      const updated = prev.map(item => {
-        if (item.studentId === studentId) {
-          const newSakit = field === 'sakit' ? num : item.sakit;
-          const newIzin = field === 'izin' ? num : item.izin;
-          const newAlfa = field === 'alfa' ? num : item.alfa;
-          const absentCount = newSakit + newIzin + newAlfa;
-          const newHadir = Math.max(0, item.totalDays - absentCount);
-          const newPct = item.totalDays > 0 ? Math.round(((newHadir / item.totalDays) * 100) * 10) / 10 : 100;
-          
-          let predicate = 'Sangat Baik (≥95%)';
-          if (newPct < 80) predicate = 'Perlu Perhatian (<80%)';
-          else if (newPct < 90) predicate = 'Cukup (80-89%)';
-          else if (newPct < 95) predicate = 'Baik (90-94%)';
-
-          return {
-            ...item,
-            sakit: newSakit,
-            izin: newIzin,
-            alfa: newAlfa,
-            hadir: newHadir,
-            percentage: newPct,
-            predicate
-          };
-        }
-        return item;
-      });
-
-      let sumH = 0, sumS = 0, sumI = 0, sumA = 0;
-      updated.forEach(u => {
-        sumH += u.hadir;
-        sumS += u.sakit;
-        sumI += u.izin;
-        sumA += u.alfa;
-      });
-      const totalPossibleDays = updated.length * (attendanceRecapSummary.effectiveDays || 20);
-      const overallPct = totalPossibleDays > 0 
-        ? Math.round(((sumH / totalPossibleDays) * 100) * 10) / 10 
-        : 100;
-
-      setAttendanceRecapSummary(s => ({
-        ...s,
-        totalHadir: sumH,
-        totalSakit: sumS,
-        totalIzin: sumI,
-        totalAlfa: sumA,
-        classPercentage: overallPct
-      }));
-
-      return updated;
-    });
-  };
-
-  useEffect(() => {
-    if (user.homeroomClassId && students.length > 0) {
-      calculateMonthlyAttendanceRecap(recapMonth, recapYear);
-    }
-  }, [user.homeroomClassId, students.length, recapMonth, recapYear]);
 
   // --- ACADEMIC CALCULATION LOGIC ---
   
@@ -1754,7 +1555,7 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
 
             .section-title { font-size: 14px; font-weight: bold; background: #e2e8f0; padding: 6px 12px; border-left: 4px solid #2563eb; margin: 20px 0 10px 0; color: #0f172a; text-transform: uppercase; }
 
-            .summary-cards { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 15px; }
+            .summary-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 15px; }
             .card { border: 1px solid #cbd5e1; border-radius: 6px; padding: 10px; text-align: center; background: #fff; }
             .card-val { font-size: 18px; font-weight: bold; color: #1e3a8a; }
             .card-lbl { font-size: 11px; color: #64748b; margin-top: 2px; }
@@ -1796,7 +1597,7 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
           </div>
 
           <div class="section-title">I. RINGKASAN CAPAIAN & STATISTIKA KINERJA KELAS</div>
-          <div class="summary-cards" style="grid-template-columns: repeat(4, 1fr);">
+          <div class="summary-cards">
             <div class="card">
               <div class="card-val">${workplanProgressPercent}%</div>
               <div class="card-lbl">Capaian Program Kerja</div>
@@ -1849,64 +1650,7 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
             </tbody>
           </table>
 
-          <div class="section-title">III. REKAPITULASI PRESENSI / KEHADIRAN SISWA BULAN SEBELUMNYA (${attendanceRecapSummary.monthName.toUpperCase()} ${attendanceRecapSummary.year})</div>
-          <div class="summary-cards">
-            <div class="card">
-              <div class="card-val">${attendanceRecapSummary.classPercentage}%</div>
-              <div class="card-lbl">Kehadiran Kelas</div>
-            </div>
-            <div class="card">
-              <div class="card-val">${attendanceRecapSummary.effectiveDays} Hari</div>
-              <div class="card-lbl">Hari Efektif Belajar</div>
-            </div>
-            <div class="card">
-              <div class="card-val">${attendanceRecapSummary.totalSakit}</div>
-              <div class="card-lbl">Total Sakit (S)</div>
-            </div>
-            <div class="card">
-              <div class="card-val">${attendanceRecapSummary.totalIzin}</div>
-              <div class="card-lbl">Total Izin (I)</div>
-            </div>
-            <div class="card">
-              <div class="card-val">${attendanceRecapSummary.totalAlfa}</div>
-              <div class="card-lbl">Total Alpa (A)</div>
-            </div>
-          </div>
-
-          <table>
-            <thead>
-              <tr>
-                <th width="30">NO</th>
-                <th width="90">NIS</th>
-                <th>NAMA SISWA</th>
-                <th width="40">L/P</th>
-                <th width="55">HADIR</th>
-                <th width="55">SAKIT</th>
-                <th width="55">IZIN</th>
-                <th width="55">ALPA</th>
-                <th width="65">JML HARI</th>
-                <th width="80">% HADIR</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${attendanceRecapList.map((st, idx) => `
-                <tr>
-                  <td class="text-center">${idx + 1}</td>
-                  <td class="text-center">${st.nis}</td>
-                  <td><strong>${st.name}</strong></td>
-                  <td class="text-center">${st.gender || '-'}</td>
-                  <td class="text-center">${st.hadir}</td>
-                  <td class="text-center">${st.sakit}</td>
-                  <td class="text-center">${st.izin}</td>
-                  <td class="text-center">${st.alfa}</td>
-                  <td class="text-center">${st.totalDays}</td>
-                  <td class="text-center"><strong>${st.percentage}%</strong></td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-
-          <div class="section-title">IV. EVALUASI KINERJA, HAMBATAN & SOLUSI WALI KELAS</div>
+          <div class="section-title">III. EVALUASI KINERJA, HAMBATAN & SOLUSI WALI KELAS</div>
           
           <p><strong>A. Ringkasan Capaian & Pelaksanaan Tugas Wali Kelas:</strong></p>
           <div class="text-block">${lpjReport.evaluationSummary || 'Belum ada ringkasan'}</div>
@@ -1965,6 +1709,59 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
 
     const totalMaleStudents = students.filter(s => (s.gender as any) === 'L' || (s.gender as any) === 'M' || (s.gender && String(s.gender).toLowerCase().startsWith('l'))).length;
     const totalFemaleStudents = students.filter(s => (s.gender as any) === 'P' || (s.gender as any) === 'F' || (s.gender && String(s.gender).toLowerCase().startsWith('p'))).length;
+
+    // Group BK Violations by Student
+    const studentViolationMap: Record<string, {
+      studentName: string;
+      nis: string;
+      totalViolations: number;
+      totalPoints: number;
+      details: { date: string; category: string; description: string; points: number }[];
+      recommendation: string;
+    }> = {};
+
+    violations.forEach(v => {
+      const st = students.find(s => s.id === v.studentId);
+      if (!studentViolationMap[v.studentId]) {
+        studentViolationMap[v.studentId] = {
+          studentName: st ? st.name : v.studentId,
+          nis: st ? st.nis : '-',
+          totalViolations: 0,
+          totalPoints: 0,
+          details: [],
+          recommendation: ''
+        };
+      }
+
+      const cat = (v as any).category || v.violationName || 'Pelanggaran';
+      const desc = v.description || '';
+      const pts = v.points || 0;
+
+      studentViolationMap[v.studentId].details.push({
+        date: v.date,
+        category: cat,
+        description: desc,
+        points: pts
+      });
+      studentViolationMap[v.studentId].totalViolations += 1;
+      studentViolationMap[v.studentId].totalPoints += pts;
+    });
+
+    const groupedViolationsList = Object.values(studentViolationMap).map(grp => {
+      let rec = '';
+      if (grp.totalPoints >= 75) {
+        rec = 'Panggilan Orang Tua Ke-3, Konferensi Kasus BK & SK Skorsing / Pembinaan Khusus';
+      } else if (grp.totalPoints >= 50) {
+        rec = 'Panggilan Orang Tua Ke-2, Surat Peringatan II (SP 2) & Konseling Intensif BK';
+      } else if (grp.totalPoints >= 25) {
+        rec = 'Panggilan Orang Tua Ke-1, Surat Peringatan I (SP 1) & Pembinaan Wali Kelas';
+      } else if (grp.totalPoints >= 10) {
+        rec = 'Teguran Lisan Tegas, Pembinaan Wali Kelas & Komitmen Tertulis Siswa';
+      } else {
+        rec = 'Pembinaan Wali Kelas & Bimbingan Konseling Rutin';
+      }
+      return { ...grp, recommendation: rec };
+    });
 
     const html = `
       <!DOCTYPE html>
@@ -2255,33 +2052,47 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
               Berdasarkan hasil pengolahan leger nilai semester ${selectedSemester}, rata-rata nilai pencapaian akademik siswa kelas ${className} mencapai <strong>${classOverallAverage}</strong>.
             </p>
 
-            <div class="subchapter-title">3.2 Kedisiplinan & Catatan Pelanggaran BK (${violations.length} Kasus)</div>
-            ${violations.length === 0 ? `
-              <p class="paragraph">Selama semester ini, tidak tercatat adanya kasus pelanggaran disiplin berat pada siswa kelas ${className}.</p>
+            <div class="subchapter-title">3.2 Kedisiplinan & Catatan Pelanggaran BK (${groupedViolationsList.length} Siswa Terdata - Total ${violations.length} Kasus)</div>
+            ${groupedViolationsList.length === 0 ? `
+              <p class="paragraph">Selama semester ini, tidak tercatat adanya kasus pelanggaran disiplin pada siswa kelas ${className}. Seluruh siswa senantiasa menjaga kedisiplinan dan tata tertib sekolah dengan baik.</p>
             ` : `
               <table>
                 <thead>
                   <tr>
                     <th width="30">NO</th>
-                    <th width="90">TANGGAL</th>
-                    <th>NAMA SISWA</th>
-                    <th>JENIS / CATEGORY PELANGGARAN</th>
-                    <th width="60">POIN</th>
+                    <th width="150">NAMA SISWA & NIS</th>
+                    <th width="85">JUMLAH & TOTAL POIN</th>
+                    <th>RINCIAN TANGGAL, JENIS & KETERANGAN PELANGGARAN</th>
+                    <th width="180">REKOMENDASI TINDAKAN WALI KELAS & BK</th>
                   </tr>
                 </thead>
                 <tbody>
-                  ${violations.slice(0, 10).map((v, idx) => {
-                    const st = students.find(s => s.id === v.studentId);
-                    return `
-                      <tr>
-                        <td class="text-center">${idx + 1}</td>
-                        <td class="text-center">${v.date}</td>
-                        <td><strong>${st ? st.name : v.studentId}</strong></td>
-                        <td>${(v as any).category || v.violationName} - ${v.description || ''}</td>
-                        <td class="text-center"><strong>+${v.points}</strong></td>
-                      </tr>
-                    `;
-                  }).join('')}
+                  ${groupedViolationsList.map((grp, idx) => `
+                    <tr>
+                      <td class="text-center">${idx + 1}</td>
+                      <td>
+                        <strong>${grp.studentName}</strong>
+                        <br/><span style="font-size: 10px; color: #64748b;">NIS: ${grp.nis}</span>
+                      </td>
+                      <td class="text-center">
+                        <strong>${grp.totalViolations} Kasus</strong>
+                        <br/><span style="font-size: 11px; color: #dc2626; font-weight: bold;">+${grp.totalPoints} Poin</span>
+                      </td>
+                      <td>
+                        <ul style="margin: 0; padding-left: 15px; font-size: 11px; line-height: 1.5;">
+                          ${grp.details.map(d => `
+                            <li>
+                              <strong>[${d.date}]</strong> ${d.category} ${d.description ? `(${d.description})` : ''} 
+                              <span style="color: #dc2626; font-weight: bold;">(+${d.points} Poin)</span>
+                            </li>
+                          `).join('')}
+                        </ul>
+                      </td>
+                      <td>
+                        <span style="font-size: 11px; color: #1e3a8a; font-weight: 600;">${grp.recommendation}</span>
+                      </td>
+                    </tr>
+                  `).join('')}
                 </tbody>
               </table>
             `}
@@ -2321,43 +2132,6 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                 </tbody>
               </table>
             `}
-
-            <div class="subchapter-title">3.5 Rekapitulasi Presensi / Kehadiran Siswa Bulan ${attendanceRecapSummary.monthName} ${attendanceRecapSummary.year}</div>
-            <p class="paragraph">
-              Berikut rekapitulasi tingkat kehadiran siswa kelas ${className} pada bulan <strong>${attendanceRecapSummary.monthName} ${attendanceRecapSummary.year}</strong> dengan total ${attendanceRecapSummary.effectiveDays} hari efektif belajar dan rata-rata kehadiran kelas mencapai <strong>${attendanceRecapSummary.classPercentage}%</strong>:
-            </p>
-            <table>
-              <thead>
-                <tr>
-                  <th width="30">NO</th>
-                  <th width="80">NIS</th>
-                  <th>NAMA SISWA</th>
-                  <th width="40">L/P</th>
-                  <th width="45">HADIR</th>
-                  <th width="45">SAKIT</th>
-                  <th width="45">IZIN</th>
-                  <th width="45">ALPA</th>
-                  <th width="60">EFEKTIF</th>
-                  <th width="70">% HADIR</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${attendanceRecapList.map((st, idx) => `
-                  <tr>
-                    <td class="text-center">${idx + 1}</td>
-                    <td class="text-center">${st.nis}</td>
-                    <td><strong>${st.name}</strong></td>
-                    <td class="text-center">${st.gender || '-'}</td>
-                    <td class="text-center">${st.hadir}</td>
-                    <td class="text-center">${st.sakit}</td>
-                    <td class="text-center">${st.izin}</td>
-                    <td class="text-center">${st.alfa}</td>
-                    <td class="text-center">${st.totalDays}</td>
-                    <td class="text-center"><strong>${st.percentage}%</strong></td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
           </div>
 
           <!-- BAB IV - EVALUASI, KENDALA & SOLUSI -->
@@ -2441,31 +2215,12 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
     }));
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(wpRows), "Program Kerja Wali Kelas");
 
-    // Sheet 2: Rekap Absensi Bulan Sebelumnya
-    const attRows = attendanceRecapList.map((st, idx) => ({
-      No: idx + 1,
-      NIS: st.nis,
-      'Nama Siswa': st.name,
-      'L/P': st.gender || '-',
-      'Hadir (H)': st.hadir,
-      'Sakit (S)': st.sakit,
-      'Izin (I)': st.izin,
-      'Alpa (A)': st.alfa,
-      'Total Hari Efektif': st.totalDays,
-      'Persentase Kehadiran (%)': `${st.percentage}%`,
-      'Status Predikat': st.predicate
-    }));
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(attRows), `Rekap Absen ${attendanceRecapSummary.monthName}`);
-
-    // Sheet 3: Ringkasan LPJ & Evaluasi
+    // Sheet 2: Ringkasan LPJ & Evaluasi
     const summaryRows = [
       { Parameter: 'Nama Wali Kelas', Nilai: user.fullName },
       { Parameter: 'NIP Wali Kelas', Nilai: user.nip || '-' },
       { Parameter: 'Kelas Perwalian', Nilai: className },
       { Parameter: 'Semester / Tahun', Nilai: `${selectedSemester} / 2025-2026` },
-      { Parameter: 'Bulan Rekap Absensi', Nilai: `${attendanceRecapSummary.monthName} ${attendanceRecapSummary.year}` },
-      { Parameter: 'Hari Efektif Belajar', Nilai: `${attendanceRecapSummary.effectiveDays} Hari` },
-      { Parameter: 'Rata-Rata Kehadiran Kelas (%)', Nilai: `${attendanceRecapSummary.classPercentage}%` },
       { Parameter: 'Total Siswa', Nilai: totalStudentsCount },
       { Parameter: 'Capaian Program Kerja (%)', Nilai: `${workplanProgressPercent}%` },
       { Parameter: 'Rata-Rata Leger Akademik Kelas', Nilai: classOverallAverage },
@@ -2479,6 +2234,66 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
       { Parameter: 'REKOMENDASI SEMESTER DEPAN', Nilai: lpjReport.recommendations }
     ];
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summaryRows), "Laporan LPJ Evaluasi");
+
+    // Sheet 4: Rekap Pelanggaran BK Siswa
+    const excelViolationMap: Record<string, {
+      studentName: string;
+      nis: string;
+      totalViolations: number;
+      totalPoints: number;
+      details: { date: string; category: string; description: string; points: number }[];
+    }> = {};
+
+    violations.forEach(v => {
+      const st = students.find(s => s.id === v.studentId);
+      if (!excelViolationMap[v.studentId]) {
+        excelViolationMap[v.studentId] = {
+          studentName: st ? st.name : v.studentId,
+          nis: st ? st.nis : '-',
+          totalViolations: 0,
+          totalPoints: 0,
+          details: []
+        };
+      }
+
+      const cat = (v as any).category || v.violationName || 'Pelanggaran';
+      const desc = v.description || '';
+      const pts = v.points || 0;
+
+      excelViolationMap[v.studentId].details.push({
+        date: v.date,
+        category: cat,
+        description: desc,
+        points: pts
+      });
+      excelViolationMap[v.studentId].totalViolations += 1;
+      excelViolationMap[v.studentId].totalPoints += pts;
+    });
+
+    const violGroupedRows = Object.values(excelViolationMap).map((grp, idx) => {
+      let rec = '';
+      if (grp.totalPoints >= 75) {
+        rec = 'Panggilan Orang Tua Ke-3, Konferensi Kasus BK & SK Skorsing / Pembinaan Khusus';
+      } else if (grp.totalPoints >= 50) {
+        rec = 'Panggilan Orang Tua Ke-2, Surat Peringatan II (SP 2) & Konseling Intensif BK';
+      } else if (grp.totalPoints >= 25) {
+        rec = 'Panggilan Orang Tua Ke-1, Surat Peringatan I (SP 1) & Pembinaan Wali Kelas';
+      } else if (grp.totalPoints >= 10) {
+        rec = 'Teguran Lisan Tegas, Pembinaan Wali Kelas & Komitmen Tertulis Siswa';
+      } else {
+        rec = 'Pembinaan Wali Kelas & Bimbingan Konseling Rutin';
+      }
+      return {
+        No: idx + 1,
+        NIS: grp.nis,
+        'Nama Siswa': grp.studentName,
+        'Total Kasus Pelanggaran': grp.totalViolations,
+        'Total Poin Akumulasi': grp.totalPoints,
+        'Rincian Pelanggaran (Tanggal & Jenis)': grp.details.map(d => `[${d.date}] ${d.category}${d.description ? ' (' + d.description + ')' : ''} (+${d.points} Pts)`).join('; '),
+        'Rekomendasi Tindakan Wali Kelas & BK': rec
+      };
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(violGroupedRows.length ? violGroupedRows : [{ Info: "Tidak ada pelanggaran" }]), "Pelanggaran BK Siswa");
 
     XLSX.writeFile(wb, `LPJ_Wali_Kelas_${className.replace(/\s+/g, '_')}_Sem_${selectedSemester}.xlsx`);
   };
@@ -3818,224 +3633,6 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                         </tr>
                       );
                     })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Monthly Attendance Recap Card for LPJ Report */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden space-y-4 p-6">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-gray-100 pb-4">
-              <div>
-                <h4 className="font-bold text-gray-800 text-lg flex items-center gap-2">
-                  <ClipboardList className="text-indigo-600" size={20} /> Rekapitulasi Presensi / Kehadiran Siswa Bulan Sebelumnya
-                </h4>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  Rekapitulasi absensi bulanan otomatis per siswa (Hadir, Sakit, Izin, Alpa, % Kehadiran) untuk dilampirkan pada laporan LPJ Wali Kelas.
-                </p>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="flex items-center gap-1.5 bg-gray-50 p-1.5 rounded-xl border border-gray-200">
-                  <span className="text-xs font-semibold text-gray-600 pl-2">Bulan:</span>
-                  <select
-                    value={recapMonth}
-                    onChange={(e) => setRecapMonth(Number(e.target.value))}
-                    className="bg-white border border-gray-200 rounded-lg text-xs font-semibold px-2.5 py-1.5 text-gray-700 outline-none focus:ring-2 focus:ring-indigo-500"
-                  >
-                    {INDONESIAN_MONTHS.map((m, idx) => (
-                      <option key={idx} value={idx}>{m}</option>
-                    ))}
-                  </select>
-
-                  <select
-                    value={recapYear}
-                    onChange={(e) => setRecapYear(Number(e.target.value))}
-                    className="bg-white border border-gray-200 rounded-lg text-xs font-semibold px-2.5 py-1.5 text-gray-700 outline-none focus:ring-2 focus:ring-indigo-500"
-                  >
-                    {[2024, 2025, 2026, 2027].map((y) => (
-                      <option key={y} value={y}>{y}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="flex items-center gap-1.5 bg-gray-50 p-1.5 rounded-xl border border-gray-200">
-                  <span className="text-xs font-semibold text-gray-600 pl-2">Hari Efektif:</span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={31}
-                    value={customEffectiveDays}
-                    onChange={(e) => {
-                      const val = Number(e.target.value);
-                      setCustomEffectiveDays(val);
-                      calculateMonthlyAttendanceRecap(recapMonth, recapYear, val);
-                    }}
-                    className="w-16 bg-white border border-gray-200 rounded-lg text-xs font-bold text-center py-1.5 text-gray-800 outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                  <span className="text-xs text-gray-500 pr-2">Hari</span>
-                </div>
-
-                <button
-                  onClick={() => calculateMonthlyAttendanceRecap(recapMonth, recapYear, customEffectiveDays)}
-                  disabled={isCalculatingRecap}
-                  className="px-3.5 py-2 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold hover:bg-indigo-100 transition flex items-center gap-1.5 disabled:opacity-50"
-                  title="Hitung Ulang Rekap Absen Bulan Ini"
-                >
-                  <RefreshCcw size={14} className={isCalculatingRecap ? 'animate-spin' : ''} /> 
-                  {isCalculatingRecap ? 'Menghitung...' : 'Refresh Absen'}
-                </button>
-              </div>
-            </div>
-
-            {/* Attendance Summary KPI Badges */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-              <div className="bg-indigo-50/60 p-3.5 rounded-xl border border-indigo-100 text-center">
-                <p className="text-[11px] font-bold uppercase text-indigo-600 tracking-wider">Rata-Rata Kehadiran</p>
-                <h5 className="text-xl font-extrabold text-indigo-900 mt-0.5">{attendanceRecapSummary.classPercentage}%</h5>
-                <p className="text-[10px] text-indigo-500 mt-0.5">{attendanceRecapSummary.totalStudents} Siswa Terdata</p>
-              </div>
-
-              <div className="bg-emerald-50/60 p-3.5 rounded-xl border border-emerald-100 text-center">
-                <p className="text-[11px] font-bold uppercase text-emerald-600 tracking-wider">Hari Efektif Belajar</p>
-                <h5 className="text-xl font-extrabold text-emerald-900 mt-0.5">{attendanceRecapSummary.effectiveDays} <span className="text-xs font-normal">Hari</span></h5>
-                <p className="text-[10px] text-emerald-600 mt-0.5">Bulan {attendanceRecapSummary.monthName}</p>
-              </div>
-
-              <div className="bg-amber-50/60 p-3.5 rounded-xl border border-amber-100 text-center">
-                <p className="text-[11px] font-bold uppercase text-amber-700 tracking-wider">Sakit (S)</p>
-                <h5 className="text-xl font-extrabold text-amber-900 mt-0.5">{attendanceRecapSummary.totalSakit} <span className="text-xs font-normal">Kali</span></h5>
-                <p className="text-[10px] text-amber-600 mt-0.5">Total Akumulasi Kelas</p>
-              </div>
-
-              <div className="bg-blue-50/60 p-3.5 rounded-xl border border-blue-100 text-center">
-                <p className="text-[11px] font-bold uppercase text-blue-700 tracking-wider">Izin (I)</p>
-                <h5 className="text-xl font-extrabold text-blue-900 mt-0.5">{attendanceRecapSummary.totalIzin} <span className="text-xs font-normal">Kali</span></h5>
-                <p className="text-[10px] text-blue-600 mt-0.5">Total Akumulasi Kelas</p>
-              </div>
-
-              <div className="bg-red-50/60 p-3.5 rounded-xl border border-red-100 text-center col-span-2 sm:col-span-1">
-                <p className="text-[11px] font-bold uppercase text-red-700 tracking-wider">Alpa (A)</p>
-                <h5 className="text-xl font-extrabold text-red-900 mt-0.5">{attendanceRecapSummary.totalAlfa} <span className="text-xs font-normal">Kali</span></h5>
-                <p className="text-[10px] text-red-600 mt-0.5">Tanpa Keterangan</p>
-              </div>
-            </div>
-
-            {/* Search Filter & Information Banner */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
-              <div className="relative w-full sm:w-72">
-                <Search className="absolute left-3 top-2.5 text-gray-400" size={16} />
-                <input
-                  type="text"
-                  placeholder="Cari NIS atau Nama Siswa..."
-                  value={recapSearchQuery}
-                  onChange={(e) => setRecapSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-3 py-1.5 border border-gray-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-              <p className="text-[11px] text-gray-500 italic">
-                *Catatan: Anda dapat menyesuaikan angka Sakit (S), Izin (I), dan Alpa (A) secara manual pada tabel di bawah jika ada koreksi fisik.
-              </p>
-            </div>
-
-            {/* Attendance Recap Table */}
-            <div className="overflow-x-auto border border-gray-100 rounded-xl">
-              <table className="w-full text-xs text-left border-collapse">
-                <thead>
-                  <tr className="bg-gray-100/80 text-gray-700 border-b border-gray-200 uppercase font-semibold">
-                    <th className="p-2.5 text-center w-10">No</th>
-                    <th className="p-2.5 min-w-[100px] text-center">NIS</th>
-                    <th className="p-2.5 min-w-[200px]">Nama Siswa</th>
-                    <th className="p-2.5 text-center w-12">L/P</th>
-                    <th className="p-2.5 text-center w-20 bg-emerald-50/70 text-emerald-800">Hadir (H)</th>
-                    <th className="p-2.5 text-center w-20 bg-amber-50/70 text-amber-800">Sakit (S)</th>
-                    <th className="p-2.5 text-center w-20 bg-blue-50/70 text-blue-800">Izin (I)</th>
-                    <th className="p-2.5 text-center w-20 bg-red-50/70 text-red-800">Alpa (A)</th>
-                    <th className="p-2.5 text-center w-20">Total Hari</th>
-                    <th className="p-2.5 text-center min-w-[110px]">% Kehadiran</th>
-                    <th className="p-2.5 text-center min-w-[130px]">Status Predikat</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {attendanceRecapList.length === 0 ? (
-                    <tr>
-                      <td colSpan={11} className="p-6 text-center text-gray-400">
-                        {isCalculatingRecap ? 'Sedang memuat & menghitung data presensi...' : 'Belum ada data presensi terdeteksi untuk bulan ini.'}
-                      </td>
-                    </tr>
-                  ) : (
-                    attendanceRecapList
-                      .filter(st => 
-                        !recapSearchQuery || 
-                        st.name.toLowerCase().includes(recapSearchQuery.toLowerCase()) || 
-                        st.nis.toLowerCase().includes(recapSearchQuery.toLowerCase())
-                      )
-                      .map((st, idx) => {
-                        const pctColor = 
-                          st.percentage >= 95 ? 'bg-emerald-100 text-emerald-800 border-emerald-200' :
-                          st.percentage >= 90 ? 'bg-blue-100 text-blue-800 border-blue-200' :
-                          st.percentage >= 80 ? 'bg-amber-100 text-amber-800 border-amber-200' :
-                          'bg-red-100 text-red-800 border-red-200';
-
-                        return (
-                          <tr key={st.studentId} className="hover:bg-indigo-50/30 transition">
-                            <td className="p-2.5 text-center font-bold text-gray-500">{idx + 1}</td>
-                            <td className="p-2.5 text-center font-mono text-gray-600">{st.nis}</td>
-                            <td className="p-2.5 font-bold text-gray-800">{st.name}</td>
-                            <td className="p-2.5 text-center font-semibold text-gray-600">{st.gender || '-'}</td>
-                            
-                            <td className="p-2.5 text-center font-extrabold text-emerald-700 bg-emerald-50/30">
-                              {st.hadir}
-                            </td>
-
-                            <td className="p-1.5 text-center bg-amber-50/30">
-                              <input
-                                type="number"
-                                min={0}
-                                max={31}
-                                value={st.sakit}
-                                onChange={(e) => handleUpdateStudentRecapItem(st.studentId, 'sakit', Number(e.target.value))}
-                                className="w-14 text-center py-1 border border-amber-200 rounded font-bold text-amber-900 bg-white outline-none focus:ring-2 focus:ring-amber-500"
-                              />
-                            </td>
-
-                            <td className="p-1.5 text-center bg-blue-50/30">
-                              <input
-                                type="number"
-                                min={0}
-                                max={31}
-                                value={st.izin}
-                                onChange={(e) => handleUpdateStudentRecapItem(st.studentId, 'izin', Number(e.target.value))}
-                                className="w-14 text-center py-1 border border-blue-200 rounded font-bold text-blue-900 bg-white outline-none focus:ring-2 focus:ring-blue-500"
-                              />
-                            </td>
-
-                            <td className="p-1.5 text-center bg-red-50/30">
-                              <input
-                                type="number"
-                                min={0}
-                                max={31}
-                                value={st.alfa}
-                                onChange={(e) => handleUpdateStudentRecapItem(st.studentId, 'alfa', Number(e.target.value))}
-                                className="w-14 text-center py-1 border border-red-200 rounded font-bold text-red-900 bg-white outline-none focus:ring-2 focus:ring-red-500"
-                              />
-                            </td>
-
-                            <td className="p-2.5 text-center font-semibold text-gray-600">{st.totalDays}</td>
-
-                            <td className="p-2.5 text-center">
-                              <span className={`px-2.5 py-1 rounded-full font-extrabold border text-[11px] inline-block ${pctColor}`}>
-                                {st.percentage}%
-                              </span>
-                            </td>
-
-                            <td className="p-2.5 text-center text-gray-600 font-medium">
-                              {st.predicate}
-                            </td>
-                          </tr>
-                        );
-                      })
                   )}
                 </tbody>
               </table>
