@@ -884,6 +884,363 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
     XLSX.writeFile(wb, `Laporan_BK_${student.name.replace(/\s+/g, '_')}.xlsx`);
   };
 
+  const handlePrintAllBKReport = () => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    const allStudentsWithDetails = students.map((s, idx) => {
+      const bStats = getStudentBehaviorStats(s.id);
+      const sViolations = violations.filter(v => v.studentId === s.id);
+      const sReductions = pointReductions.filter(r => r.studentId === s.id);
+      const sHomeVisits = homeVisits.filter(hv => hv.studentId === s.id);
+      const sParentCalls = parentCalls.filter(pc => pc.studentId === s.id);
+      const totalViolPoints = sViolations.reduce((sum, v) => sum + v.points, 0);
+      const totalReducPoints = sReductions.reduce((sum, r) => sum + r.pointsRemoved, 0);
+
+      return {
+        idx: idx + 1,
+        student: s,
+        stats: bStats,
+        violPoints: totalViolPoints,
+        reducPoints: totalReducPoints,
+        violations: sViolations,
+        reductions: sReductions,
+        homeVisits: sHomeVisits,
+        parentCalls: sParentCalls,
+        hasRecords: sViolations.length > 0 || sReductions.length > 0 || sHomeVisits.length > 0 || sParentCalls.length > 0
+      };
+    });
+
+    const studentsWithRecords = allStudentsWithDetails.filter(d => d.hasRecords);
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Laporan BK & Kedisiplinan Seluruh Siswa Kelas ${className}</title>
+          <style>
+            @page { size: A4; margin: 12mm; }
+            body { font-family: 'Times New Roman', Times, serif; color: #111; line-height: 1.4; font-size: 10.5pt; padding: 0; margin: 0; }
+            
+            .header { text-align: center; margin-bottom: 18px; border-bottom: 2px solid #000; padding-bottom: 8px; }
+            .header h1 { margin: 0; font-size: 14pt; text-transform: uppercase; font-weight: bold; }
+            .header h2 { margin: 3px 0 0 0; font-size: 11.5pt; text-transform: uppercase; font-weight: bold; }
+            .header p { margin: 3px 0 0 0; font-size: 9.5pt; font-style: italic; color: #333; }
+
+            .summary-box { border: 1px solid #000; padding: 8px; margin-bottom: 16px; background: #f9f9f9; display: flex; justify-content: space-around; font-size: 9.5pt; text-align: center; }
+            .summary-item strong { display: block; font-size: 12pt; margin-top: 2px; }
+
+            .section-title { font-size: 11pt; font-weight: bold; text-transform: uppercase; border-bottom: 1.5px solid #000; padding-bottom: 3px; margin-top: 18px; margin-bottom: 8px; }
+
+            table { width: 100%; border-collapse: collapse; margin-top: 6px; margin-bottom: 12px; font-size: 9.5pt; font-family: 'Times New Roman', Times, serif; }
+            th, td { border: 1px solid #000; padding: 4px 6px; text-align: left; vertical-align: top; }
+            th { background-color: #f2f2f2; font-weight: bold; text-align: center; }
+            .text-center { text-align: center; }
+            .text-right { text-align: right; }
+
+            .student-card { border: 1px solid #666; padding: 8px; margin-bottom: 12px; page-break-inside: avoid; background: #fff; }
+            .student-card-header { font-weight: bold; font-size: 10pt; background: #eee; padding: 4px 8px; margin: -8px -8px 6px -8px; border-bottom: 1px solid #666; display: flex; justify-content: space-between; }
+
+            .signature-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-top: 25px; text-align: center; font-size: 10pt; page-break-inside: avoid; }
+            .signature-box { display: flex; flex-direction: column; justify-content: space-between; height: 110px; }
+
+            @media print {
+              body { padding: 0; }
+              .no-print { display: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>LAPORAN REKAPITULASI BIMBINGAN KONSELING & KEDISIPLINAN SISWA</h1>
+            <h2>KELAS ${className} - SEMESTER ${selectedSemester.toUpperCase()} T.A 2025/2026</h2>
+            <p>${user.schoolName || 'EduAdmin Pro'} • Tanggal Cetak: ${printSettings.date}</p>
+          </div>
+
+          <div class="summary-box">
+            <div class="summary-item">Total Siswa Kelas<strong>${students.length} Siswa</strong></div>
+            <div class="summary-item">Siswa Berpoin Aktif<strong>${problemStudents.length} Siswa</strong></div>
+            <div class="summary-item">Total Kasus Pelanggaran<strong>${violations.length} Kasus</strong></div>
+            <div class="summary-item">Home Visit & Panggilan Ortu<strong>${homeVisits.length + parentCalls.length} Kegiatan</strong></div>
+          </div>
+
+          <div class="section-title">BAGIAN I : REKAPITULASI AKUMULASI POIN KEDISIPLINAN SELURUH SISWA</div>
+          <table>
+            <thead>
+              <tr>
+                <th width="30">NO</th>
+                <th width="80">NIS</th>
+                <th>NAMA SISWA</th>
+                <th width="40">L/P</th>
+                <th width="75">POIN PELANGGARAN</th>
+                <th width="75">PEMULIHAN POIN</th>
+                <th width="75">POIN BERSIH</th>
+                <th width="140">STATUS / REKOMENDASI BK</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${allStudentsWithDetails.map((item) => `
+                <tr>
+                  <td class="text-center">${item.idx}</td>
+                  <td class="text-center">${item.student.nis}</td>
+                  <td><strong>${item.student.name}</strong></td>
+                  <td class="text-center">${item.student.gender || '-'}</td>
+                  <td class="text-center">${item.violPoints > 0 ? `+${item.violPoints}` : '0'}</td>
+                  <td class="text-center">${item.reducPoints > 0 ? `-${item.reducPoints}` : '0'}</td>
+                  <td class="text-center"><strong>${item.stats.totalPoints}</strong></td>
+                  <td>${item.stats.recommendation}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+
+          <div class="section-title">BAGIAN II : RINCIAN CATATAN KEDISIPLINAN & BK SISWA</div>
+          ${studentsWithRecords.length === 0 ? `
+            <p style="font-style: italic; color: #555;">Tidak ada siswa yang memiliki catatan pelanggaran, home visit, atau panggilan orang tua pada semester ini.</p>
+          ` : `
+            ${studentsWithRecords.map((item) => `
+              <div class="student-card">
+                <div class="student-card-header">
+                  <span>${item.student.name} (NIS: ${item.student.nis})</span>
+                  <span>Poin Aktif: ${item.stats.totalPoints} Poin • Status: ${item.stats.recommendation}</span>
+                </div>
+
+                ${item.violations.length > 0 ? `
+                  <p style="margin: 3px 0; font-weight: bold; font-size: 9pt;">• Catatan Pelanggaran (${item.violations.length} Kasus):</p>
+                  <table style="margin-bottom: 6px;">
+                    <thead>
+                      <tr>
+                        <th width="25">No</th>
+                        <th width="75">Tanggal</th>
+                        <th>Jenis Pelanggaran</th>
+                        <th>Keterangan</th>
+                        <th width="35">Poin</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${item.violations.map((v, i) => `
+                        <tr>
+                          <td class="text-center">${i + 1}</td>
+                          <td class="text-center">${v.date}</td>
+                          <td>${v.violationName}</td>
+                          <td>${v.description || '-'}</td>
+                          <td class="text-center">+${v.points}</td>
+                        </tr>
+                      `).join('')}
+                    </tbody>
+                  </table>
+                ` : ''}
+
+                ${item.reductions.length > 0 ? `
+                  <p style="margin: 3px 0; font-weight: bold; font-size: 9pt;">• Catatan Pemulihan Poin (${item.reductions.length} Kegiatan):</p>
+                  <table style="margin-bottom: 6px;">
+                    <thead>
+                      <tr>
+                        <th width="25">No</th>
+                        <th width="75">Tanggal</th>
+                        <th>Kegiatan Pemulihan</th>
+                        <th>Keterangan</th>
+                        <th width="35">Poin</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${item.reductions.map((r, i) => `
+                        <tr>
+                          <td class="text-center">${i + 1}</td>
+                          <td class="text-center">${r.date}</td>
+                          <td>${r.activityName}</td>
+                          <td>${r.description || '-'}</td>
+                          <td class="text-center">-${r.pointsRemoved}</td>
+                        </tr>
+                      `).join('')}
+                    </tbody>
+                  </table>
+                ` : ''}
+
+                ${item.homeVisits.length > 0 ? `
+                  <p style="margin: 3px 0; font-weight: bold; font-size: 9pt;">• Kunjungan Rumah / Home Visit (${item.homeVisits.length} Kali):</p>
+                  <table style="margin-bottom: 6px;">
+                    <thead>
+                      <tr>
+                        <th width="25">No</th>
+                        <th width="75">Tanggal</th>
+                        <th>Alamat</th>
+                        <th>Alasan</th>
+                        <th>Hasil & Tindak Lanjut</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${item.homeVisits.map((hv, i) => `
+                        <tr>
+                          <td class="text-center">${i + 1}</td>
+                          <td class="text-center">${hv.date}</td>
+                          <td>${hv.address}</td>
+                          <td>${hv.reason}</td>
+                          <td>${hv.result} (${hv.followUp || '-'})</td>
+                        </tr>
+                      `).join('')}
+                    </tbody>
+                  </table>
+                ` : ''}
+
+                ${item.parentCalls.length > 0 ? `
+                  <p style="margin: 3px 0; font-weight: bold; font-size: 9pt;">• Panggilan Orang Tua (${item.parentCalls.length} Kali):</p>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th width="25">No</th>
+                        <th width="75">Tanggal</th>
+                        <th>Nama Orang Tua</th>
+                        <th>Permasalahan</th>
+                        <th>Solusi & Kesepakatan</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${item.parentCalls.map((pc, i) => `
+                        <tr>
+                          <td class="text-center">${i + 1}</td>
+                          <td class="text-center">${pc.date}</td>
+                          <td>${pc.parentName} (${pc.parentPhone || '-'})</td>
+                          <td>${pc.problem}</td>
+                          <td>${pc.solution} (${pc.followUp || '-'})</td>
+                        </tr>
+                      `).join('')}
+                    </tbody>
+                  </table>
+                ` : ''}
+              </div>
+            `).join('')}
+          `}
+
+          <div class="signature-grid">
+            <div class="signature-box">
+              <div>
+                <p>Mengetahui,</p>
+                <p><strong>Guru / Koordinator BK</strong></p>
+              </div>
+              <div>
+                <p>__________________________</p>
+                <p>NIP. .....................................</p>
+              </div>
+            </div>
+
+            <div class="signature-box">
+              <div>
+                <p>${printSettings.place}, ${printSettings.date}</p>
+                <p><strong>Wali Kelas ${className}</strong></p>
+              </div>
+              <div>
+                <p><strong>${user.fullName}</strong></p>
+                <p>NIP. ${user.nip || '-'}</p>
+              </div>
+            </div>
+          </div>
+
+          <script>
+            window.onload = () => {
+              window.print();
+            };
+          </script>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+  };
+
+  const handleExcelAllBKReport = () => {
+    const wb = XLSX.utils.book_new();
+
+    // Sheet 1: Rekap Poin Seluruh Siswa
+    const summaryRows = students.map((s, i) => {
+      const bStats = getStudentBehaviorStats(s.id);
+      const sViolations = violations.filter(v => v.studentId === s.id);
+      const sReductions = pointReductions.filter(r => r.studentId === s.id);
+      const totalViol = sViolations.reduce((sum, v) => sum + v.points, 0);
+      const totalReduc = sReductions.reduce((sum, r) => sum + r.pointsRemoved, 0);
+
+      return {
+        No: i + 1,
+        NIS: s.nis,
+        NamaSiswa: s.name,
+        Gender: s.gender || '-',
+        TotalPoinPelanggaran: totalViol,
+        TotalPemulihanPoin: totalReduc,
+        PoinBersihAktif: bStats.totalPoints,
+        RekomendasiStatusBK: bStats.recommendation
+      };
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summaryRows), "Rekap Poin Siswa");
+
+    // Sheet 2: Detail Pelanggaran
+    const violRows = violations.map((v, i) => {
+      const st = students.find(s => s.id === v.studentId);
+      return {
+        No: i + 1,
+        Tanggal: v.date,
+        NIS: st ? st.nis : '-',
+        NamaSiswa: st ? st.name : v.studentId,
+        JenisPelanggaran: v.violationName,
+        Poin: v.points,
+        Keterangan: v.description || '-'
+      };
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(violRows.length ? violRows : [{ Info: "Tidak ada data" }]), "Detail Pelanggaran");
+
+    // Sheet 3: Detail Pemulihan Poin
+    const reducRows = pointReductions.map((r, i) => {
+      const st = students.find(s => s.id === r.studentId);
+      return {
+        No: i + 1,
+        Tanggal: r.date,
+        NIS: st ? st.nis : '-',
+        NamaSiswa: st ? st.name : r.studentId,
+        KegiatanPemulihan: r.activityName,
+        PoinDikurangi: r.pointsRemoved,
+        Keterangan: r.description || '-'
+      };
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(reducRows.length ? reducRows : [{ Info: "Tidak ada data" }]), "Detail Pemulihan");
+
+    // Sheet 4: Detail Home Visit
+    const hvRows = homeVisits.map((hv, i) => {
+      const st = students.find(s => s.id === hv.studentId);
+      return {
+        No: i + 1,
+        Tanggal: hv.date,
+        NIS: st ? st.nis : '-',
+        NamaSiswa: st ? st.name : hv.studentId,
+        Alamat: hv.address,
+        Alasan: hv.reason,
+        Hasil: hv.result,
+        TindakLanjut: hv.followUp,
+        Keterangan: hv.notes || '-'
+      };
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(hvRows.length ? hvRows : [{ Info: "Tidak ada data" }]), "Detail Home Visit");
+
+    // Sheet 5: Detail Panggilan Ortu
+    const pcRows = parentCalls.map((pc, i) => {
+      const st = students.find(s => s.id === pc.studentId);
+      return {
+        No: i + 1,
+        Tanggal: pc.date,
+        NIS: st ? st.nis : '-',
+        NamaSiswa: st ? st.name : pc.studentId,
+        OrangTua: pc.parentName,
+        NoHP: pc.parentPhone,
+        Masalah: pc.problem,
+        Solusi: pc.solution,
+        TindakLanjut: pc.followUp,
+        Keterangan: pc.notes || '-'
+      };
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(pcRows.length ? pcRows : [{ Info: "Tidak ada data" }]), "Detail Panggilan Ortu");
+
+    XLSX.writeFile(wb, `Laporan_BK_Seluruh_Siswa_${className.replace(/\s+/g, '_')}.xlsx`);
+  };
+
   // --- INVENTORY LOGIC ---
   const handleAddInventoryRow = () => {
     const newItem: any = {
@@ -1299,8 +1656,8 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
 
-    const totalMaleStudents = students.filter(s => s.gender === 'L' || s.gender === 'M' || (s.gender && s.gender.toLowerCase().startsWith('l'))).length;
-    const totalFemaleStudents = students.filter(s => s.gender === 'P' || s.gender === 'F' || (s.gender && s.gender.toLowerCase().startsWith('p'))).length;
+    const totalMaleStudents = students.filter(s => (s.gender as any) === 'L' || (s.gender as any) === 'M' || (s.gender && String(s.gender).toLowerCase().startsWith('l'))).length;
+    const totalFemaleStudents = students.filter(s => (s.gender as any) === 'P' || (s.gender as any) === 'F' || (s.gender && String(s.gender).toLowerCase().startsWith('p'))).length;
 
     const html = `
       <!DOCTYPE html>
@@ -1613,7 +1970,7 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                         <td class="text-center">${idx + 1}</td>
                         <td class="text-center">${v.date}</td>
                         <td><strong>${st ? st.name : v.studentId}</strong></td>
-                        <td>${v.category} - ${v.description || ''}</td>
+                        <td>${(v as any).category || v.violationName} - ${v.description || ''}</td>
                         <td class="text-center"><strong>+${v.points}</strong></td>
                       </tr>
                     `;
@@ -1650,7 +2007,7 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                         <td><strong>${st ? st.name : a.studentId}</strong></td>
                         <td>${a.title}</td>
                         <td class="text-center">${a.level}</td>
-                        <td class="text-center"><strong>${a.rank}</strong></td>
+                        <td class="text-center"><strong>${(a as any).rank || a.description || 'Juara'}</strong></td>
                       </tr>
                     `;
                   }).join('')}
@@ -1702,7 +2059,7 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                   <tr>
                     <td class="text-center">${idx + 1}</td>
                     <td>${item.itemName}</td>
-                    <td class="text-center">${item.quantity} ${item.unit}</td>
+                    <td class="text-center">${(item as any).quantity || item.volume} ${(item as any).unit || 'Unit'}</td>
                     <td class="text-center"><strong>${item.condition}</strong></td>
                     <td>${item.notes || '-'}</td>
                   </tr>
@@ -1996,14 +2353,32 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
       {activeTab === 'behavior' && (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
             
-            {/* Header / Announcement */}
-            <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg flex items-start gap-3 text-left">
-               <ShieldAlert className="text-red-600 shrink-0 mt-1" />
-               <div>
-                  <h3 className="font-bold text-red-800">Manajemen Kedisiplinan & Bimbingan</h3>
-                  <p className="text-sm text-red-700 mt-1">
-                     Wali Kelas dapat mencatatkan pelanggaran (+) maupun pengurangan poin pelanggaran (-) untuk siswa walinya secara langsung. Data disinkronkan secara real-time dengan Guru BK.
-                  </p>
+            {/* Header / Announcement & Global Print Actions */}
+            <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-left shadow-sm">
+               <div className="flex items-start gap-3">
+                  <ShieldAlert className="text-red-600 shrink-0 mt-1" />
+                  <div>
+                     <h3 className="font-bold text-red-800 text-base">Manajemen Kedisiplinan & Bimbingan (BK)</h3>
+                     <p className="text-xs sm:text-sm text-red-700 mt-0.5">
+                        Wali Kelas dapat mencatatkan pelanggaran (+) maupun pengurangan poin (-). Data disinkronkan secara real-time dengan Guru BK.
+                     </p>
+                  </div>
+               </div>
+               <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  <button
+                     onClick={handlePrintAllBKReport}
+                     className="px-3.5 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 transition flex items-center gap-1.5 shadow-sm active:scale-95"
+                     title="Cetak Laporan Rekapitulasi BK & Kedisiplinan Seluruh Siswa Dalam Satu File"
+                  >
+                     <Printer size={15} /> Cetak Laporan Seluruh Siswa
+                  </button>
+                  <button
+                     onClick={handleExcelAllBKReport}
+                     className="px-3.5 py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition flex items-center gap-1.5 shadow-sm active:scale-95"
+                     title="Export File Excel Rekap BK & Detail Pelanggaran Seluruh Siswa"
+                  >
+                     <FileSpreadsheet size={15} /> Export Excel Seluruh Siswa
+                  </button>
                </div>
             </div>
 
@@ -2060,9 +2435,18 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
 
                 {/* COLUMN 2: PROBLEM STUDENTS LIST (Leaderboard) */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden h-full text-left">
-                    <div className="p-6 border-b border-gray-100">
-                        <h3 className="font-bold text-gray-800 text-base">Peringkat Poin Pelanggaran Aktif</h3>
-                        <p className="text-xs text-gray-500 mt-1">Siswa yang memiliki akumulasi poin aktif saat ini.</p>
+                    <div className="p-6 border-b border-gray-100 flex items-center justify-between gap-2">
+                        <div>
+                            <h3 className="font-bold text-gray-800 text-base">Peringkat Poin Pelanggaran Aktif</h3>
+                            <p className="text-xs text-gray-500 mt-1">Siswa yang memiliki akumulasi poin aktif saat ini.</p>
+                        </div>
+                        <button
+                            onClick={handlePrintAllBKReport}
+                            className="px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg text-xs font-bold transition flex items-center gap-1 border border-blue-200 shrink-0"
+                            title="Cetak Laporan Rekapitulasi Seluruh Siswa Dalam 1 File"
+                        >
+                            <Printer size={13} /> Cetak Seluruh Siswa
+                        </button>
                     </div>
 
                     <div className="overflow-x-auto">
