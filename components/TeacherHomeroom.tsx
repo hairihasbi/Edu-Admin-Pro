@@ -13,7 +13,7 @@ import {
   UserCheck, Users, GraduationCap, AlertTriangle, FileSpreadsheet, 
   Search, Filter, Printer, ShieldAlert, Trophy, MessageSquareHeart, 
   ChevronDown, ChevronUp, AlertCircle, MessageCircle, Package, Plus, Save, Trash2, X, FileText,
-  HeartPulse, TrendingUp, Clock, Calendar, RefreshCcw, Pencil
+  HeartPulse, TrendingUp, Clock, Calendar, RefreshCcw, Pencil, ClipboardList, ClipboardCheck, CheckCircle, Download, BookOpen, Award, Check
 } from './Icons';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import * as XLSX from 'xlsx';
@@ -22,6 +22,97 @@ interface TeacherHomeroomProps {
   user: User;
 }
 
+export interface HomeroomWorkplanItem {
+  id: string;
+  category: string;
+  title: string;
+  targetMonth: string;
+  indicator: string;
+  status: 'BELUM' | 'PROSES' | 'TERLAKSANA' | 'TERTUNDA';
+  progress: number;
+  notes?: string;
+}
+
+export interface HomeroomLpjReport {
+  evaluationSummary: string;
+  obstacles: string;
+  solutions: string;
+  recommendations: string;
+}
+
+const DEFAULT_WORKPLAN_TEMPLATES: HomeroomWorkplanItem[] = [
+  {
+    id: 'wp-1',
+    category: 'Organisasi & Administrasi',
+    title: 'Pembentukan Pengurus Kelas & Pembagian Kelompok Piket',
+    targetMonth: 'Juli',
+    indicator: 'Terbentuk struktur organisasi kelas dan jadwal piket kebersihan harian',
+    status: 'TERLAKSANA',
+    progress: 100,
+    notes: 'Berjalan lancar pada minggu pertama masuk sekolah'
+  },
+  {
+    id: 'wp-2',
+    category: 'Fisik & Kebersihan',
+    title: 'Penataan Kelengkapan & Keindahan Ruang Kelas',
+    targetMonth: 'Juli - Agustus',
+    indicator: 'Tersedia struktur kelas, denah duduk, jadwal piket, sudut baca, dan inventaris terdata',
+    status: 'TERLAKSANA',
+    progress: 100,
+    notes: 'Dilengkapi dengan pendataan inventaris kelas'
+  },
+  {
+    id: 'wp-3',
+    category: 'Paguyuban Ortu',
+    title: 'Musyawarah Pembentukan Paguyuban Orang Tua / Wali Murid',
+    targetMonth: 'Agustus',
+    indicator: 'Terbentuk paguyuban ortu dan grup komunikasi WhatsApp kelas',
+    status: 'TERLAKSANA',
+    progress: 100,
+    notes: 'Keterlibatan orang tua sangat mendukung program sekolah'
+  },
+  {
+    id: 'wp-4',
+    category: 'Karakter & Kedisiplinan',
+    title: 'Pembinaan Ketertiban, Presensi & Karakter Kedisiplinan Siswa',
+    targetMonth: 'Setiap Bulan',
+    indicator: 'Tingkat kehadiran siswa ≥ 95% dan penurunan poin pelanggaran siswa',
+    status: 'PROSES',
+    progress: 85,
+    notes: 'Rutin dipantau via sistem presensi RFID & koordinasi dengan BK'
+  },
+  {
+    id: 'wp-5',
+    category: 'Akademik & Bimbingan',
+    title: 'Pendampingan Belajar, Monitoring Leger & Program Remedial',
+    targetMonth: 'Tengah & Akhir Semester',
+    indicator: 'Seluruh siswa tuntas KKM (≥ 75) dan mendapat bimbingan hasil belajar',
+    status: 'PROSES',
+    progress: 80,
+    notes: 'Monitoring capaian nilai leger tengah semester dan koordinasi guru mapel'
+  },
+  {
+    id: 'wp-6',
+    category: 'Karakter & Kedisiplinan',
+    title: 'Pelaksanaan Kunjungan Rumah (Home Visit) & Panggilan Ortu Kasus Khusus',
+    targetMonth: 'Insidental / Sesuai Kebutuhan',
+    indicator: 'Terlaksananya penanganan siswa bermasalah secara intensif',
+    status: 'PROSES',
+    progress: 75,
+    notes: 'Dicatat dan tersinkronisasi di menu BK Center & Wali Kelas'
+  },
+  {
+    id: 'wp-7',
+    category: 'Organisasi & Administrasi',
+    title: 'Penyusunan LPJ Wali Kelas & Pembagian Rapor Semester',
+    targetMonth: 'Desember / Juni',
+    indicator: 'Rapor terbagikan tepat waktu & LPJ Wali Kelas tersusun lengkap',
+    status: 'PROSES',
+    progress: 90,
+    notes: 'Penyusunan laporan kinerja & cetak LPJ akhir semester'
+  }
+];
+
 const DEFAULT_INVENTORY_ITEMS = [
   'Meja Guru', 'Kursi Guru', 'Meja Siswa', 'Kursi Siswa', 
   'Sapu', 'Pel Lantai', 'Ember', 'Jam Dinding', 
@@ -29,7 +120,7 @@ const DEFAULT_INVENTORY_ITEMS = [
 ];
 
 const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
-  const [activeTab, setActiveTab] = useState<'academic' | 'behavior' | 'inventory' | 'health'>('academic');
+  const [activeTab, setActiveTab] = useState<'academic' | 'behavior' | 'inventory' | 'health' | 'workplan'>('academic');
   const [students, setStudents] = useState<Student[]>([]);
   const [scores, setScores] = useState<AssessmentScore[]>([]);
   const [detectedSubjects, setDetectedSubjects] = useState<string[]>([]);
@@ -79,6 +170,34 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
     points: 5,
     description: '',
     date: new Date().toISOString().split('T')[0]
+  });
+
+  // Workplan & LPJ State
+  const [workplanItems, setWorkplanItems] = useState<HomeroomWorkplanItem[]>([]);
+  const [lpjReport, setLpjReport] = useState<HomeroomLpjReport>({
+    evaluationSummary: '',
+    obstacles: '',
+    solutions: '',
+    recommendations: ''
+  });
+  const [showWorkplanModal, setShowWorkplanModal] = useState(false);
+  const [editingWorkplan, setEditingWorkplan] = useState<HomeroomWorkplanItem | null>(null);
+  const [workplanForm, setWorkplanForm] = useState<{
+    category: string;
+    title: string;
+    targetMonth: string;
+    indicator: string;
+    status: 'BELUM' | 'PROSES' | 'TERLAKSANA' | 'TERTUNDA';
+    progress: number;
+    notes: string;
+  }>({
+    category: 'Organisasi & Administrasi',
+    title: '',
+    targetMonth: 'Juli',
+    indicator: '',
+    status: 'BELUM',
+    progress: 0,
+    notes: ''
   });
 
   // Inventory State
@@ -174,6 +293,37 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
           headmasterNip: settings.headmasterNip || '',
           place: settings.schoolCity || 'Jakarta'
         }));
+      }
+
+      // Load Workplan & LPJ from localStorage
+      const wpKey = `homeroom_workplan_${user.homeroomClassId}_${selectedSemester}`;
+      const lpjKey = `homeroom_lpj_${user.homeroomClassId}_${selectedSemester}`;
+
+      const savedWp = localStorage.getItem(wpKey);
+      if (savedWp) {
+        try { setWorkplanItems(JSON.parse(savedWp)); } catch(e) { setWorkplanItems(DEFAULT_WORKPLAN_TEMPLATES); }
+      } else {
+        setWorkplanItems(DEFAULT_WORKPLAN_TEMPLATES);
+      }
+
+      const currentClassName = cls ? cls.name : 'Kelas';
+      const savedLpj = localStorage.getItem(lpjKey);
+      if (savedLpj) {
+        try { setLpjReport(JSON.parse(savedLpj)); } catch(e) { 
+          setLpjReport({
+            evaluationSummary: `Pelaksanaan tugas wali kelas di ${currentClassName} semester ${selectedSemester} secara umum telah berjalan dengan baik dan lancar. Seluruh aspek pengelolaan kelas, pembinaan karakter, dan pendampingan akademik siswa dapat terealisasi secara optimal.`,
+            obstacles: '1. Terdapat beberapa siswa yang masih mengalami keterlambatan sekolah berulang.\n2. Beberapa orang tua perlu koordinasi lebih aktif terkait capaian nilai akademik anak.',
+            solutions: '1. Pembinaan rutin wali kelas, pencatatan poin pelanggaran, dan panggilan orang tua siswa terlambat.\n2. Mengoptimalkan peran paguyuban orang tua murid dan grup komunikasi kelas.',
+            recommendations: 'Melanjutkan program kerja yang berjalan efektif serta meningkatkan pemantauan presensi dan bimbingan akademik secara berkelanjutan.'
+          });
+        }
+      } else {
+        setLpjReport({
+          evaluationSummary: `Pelaksanaan tugas wali kelas di ${currentClassName} semester ${selectedSemester} secara umum telah berjalan dengan baik dan lancar. Seluruh aspek pengelolaan kelas, pembinaan karakter, dan pendampingan akademik siswa dapat terealisasi secara optimal.`,
+          obstacles: '1. Terdapat beberapa siswa yang masih mengalami keterlambatan sekolah berulang.\n2. Beberapa orang tua perlu koordinasi lebih aktif terkait capaian nilai akademik anak.',
+          solutions: '1. Pembinaan rutin wali kelas, pencatatan poin pelanggaran, dan panggilan orang tua siswa terlambat.\n2. Mengoptimalkan peran paguyuban orang tua murid dan grup komunikasi kelas.',
+          recommendations: 'Melanjutkan program kerja yang berjalan efektif serta meningkatkan pemantauan presensi dan bimbingan akademik secara berkelanjutan.'
+        });
       }
       
       setIsLoading(false);
@@ -878,6 +1028,312 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
     printWindow.document.close();
   };
 
+  // --- WORKPLAN & LPJ LOGIC ---
+  const handleSaveWorkplanList = (items: HomeroomWorkplanItem[]) => {
+    setWorkplanItems(items);
+    if (user.homeroomClassId) {
+      const wpKey = `homeroom_workplan_${user.homeroomClassId}_${selectedSemester}`;
+      localStorage.setItem(wpKey, JSON.stringify(items));
+    }
+  };
+
+  const handleOpenAddWorkplan = () => {
+    setEditingWorkplan(null);
+    setWorkplanForm({
+      category: 'Organisasi & Administrasi',
+      title: '',
+      targetMonth: 'Juli',
+      indicator: '',
+      status: 'BELUM',
+      progress: 0,
+      notes: ''
+    });
+    setShowWorkplanModal(true);
+  };
+
+  const handleOpenEditWorkplan = (item: HomeroomWorkplanItem) => {
+    setEditingWorkplan(item);
+    setWorkplanForm({
+      category: item.category,
+      title: item.title,
+      targetMonth: item.targetMonth,
+      indicator: item.indicator,
+      status: item.status,
+      progress: item.progress,
+      notes: item.notes || ''
+    });
+    setShowWorkplanModal(true);
+  };
+
+  const handleSaveWorkplanForm = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!workplanForm.title.trim()) {
+      alert('Nama program kerja harus diisi!');
+      return;
+    }
+
+    let updatedList: HomeroomWorkplanItem[];
+    if (editingWorkplan) {
+      updatedList = workplanItems.map(item => 
+        item.id === editingWorkplan.id 
+          ? { ...item, ...workplanForm }
+          : item
+      );
+    } else {
+      const newItem: HomeroomWorkplanItem = {
+        id: `wp-${Date.now()}`,
+        ...workplanForm
+      };
+      updatedList = [...workplanItems, newItem];
+    }
+
+    handleSaveWorkplanList(updatedList);
+    setShowWorkplanModal(false);
+  };
+
+  const handleDeleteWorkplan = (id: string) => {
+    if (confirm('Apakah Anda yakin ingin menghapus program kerja ini?')) {
+      const updated = workplanItems.filter(item => item.id !== id);
+      handleSaveWorkplanList(updated);
+    }
+  };
+
+  const handleResetWorkplans = () => {
+    if (confirm('Apakah Anda yakin ingin memuat ulang template program kerja standar? Data yang sudah ada akan digantikan.')) {
+      handleSaveWorkplanList(DEFAULT_WORKPLAN_TEMPLATES);
+    }
+  };
+
+  const handleSaveLpj = () => {
+    if (user.homeroomClassId) {
+      const lpjKey = `homeroom_lpj_${user.homeroomClassId}_${selectedSemester}`;
+      localStorage.setItem(lpjKey, JSON.stringify(lpjReport));
+      alert('Laporan Kinerja & Evaluasi LPJ Wali Kelas berhasil disimpan!');
+    }
+  };
+
+  // Class Summary Calculations for LPJ
+  const totalStudentsCount = students.length;
+  
+  // Class Average
+  const classAverages = students.map(s => getStudentGlobalStats(s.id).globalAvg).filter(a => a > 0);
+  const classOverallAverage = classAverages.length > 0 
+    ? (classAverages.reduce((sum, a) => sum + a, 0) / classAverages.length).toFixed(1)
+    : '-';
+
+  // Completed Workplans %
+  const completedWorkplansCount = workplanItems.filter(w => w.status === 'TERLAKSANA').length;
+  const workplanProgressPercent = workplanItems.length > 0 
+    ? Math.round((completedWorkplansCount / workplanItems.length) * 100)
+    : 0;
+
+  // Good Inventory %
+  const goodInventoryCount = inventoryItems.filter(i => i.condition === 'BAIK').length;
+  const inventoryGoodPercent = inventoryItems.length > 0 
+    ? Math.round((goodInventoryCount / inventoryItems.length) * 100)
+    : 0;
+
+  const handlePrintLpj = () => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    const html = `
+      <html>
+        <head>
+          <title>LPJ Wali Kelas ${className} - Semester ${selectedSemester}</title>
+          <style>
+            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 40px; color: #1e293b; line-height: 1.5; font-size: 13px; }
+            .header { text-align: center; margin-bottom: 25px; border-bottom: 3px double #0f172a; padding-bottom: 12px; }
+            .header h1 { margin: 0; font-size: 20px; text-transform: uppercase; letter-spacing: 1px; color: #0f172a; }
+            .header h2 { margin: 4px 0 0 0; font-size: 15px; font-weight: 600; color: #334155; }
+            .header p { margin: 4px 0 0 0; font-size: 12px; color: #64748b; }
+            
+            .meta-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; margin-bottom: 20px; font-size: 12px; padding: 12px; }
+            .meta-item { display: flex; gap: 8px; }
+            .meta-label { font-weight: bold; width: 110px; color: #475569; }
+
+            .section-title { font-size: 14px; font-weight: bold; background: #e2e8f0; padding: 6px 12px; border-left: 4px solid #2563eb; margin: 20px 0 10px 0; color: #0f172a; text-transform: uppercase; }
+
+            .summary-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 15px; }
+            .card { border: 1px solid #cbd5e1; border-radius: 6px; padding: 10px; text-align: center; background: #fff; }
+            .card-val { font-size: 18px; font-weight: bold; color: #1e3a8a; }
+            .card-lbl { font-size: 11px; color: #64748b; margin-top: 2px; }
+
+            table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 11px; }
+            th, td { border: 1px solid #94a3b8; padding: 7px 9px; text-align: left; }
+            th { background-color: #f1f5f9; font-weight: bold; text-align: center; color: #1e293b; }
+            .text-center { text-align: center; }
+            .badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; text-align: center; }
+            .badge-success { background: #dcfce7; color: #15803d; }
+            .badge-blue { background: #dbeafe; color: #1d4ed8; }
+            .badge-warning { background: #fef3c7; color: #b45309; }
+            .badge-gray { background: #f1f5f9; color: #475569; }
+
+            .text-block { background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; padding: 10px 14px; margin-top: 6px; white-space: pre-line; line-height: 1.6; }
+
+            .footer { margin-top: 40px; display: flex; justify-content: space-between; page-break-inside: avoid; }
+            .signature-box { text-align: center; width: 220px; }
+            .signature-space { height: 75px; }
+
+            @media print {
+              body { padding: 0; }
+              .no-print { display: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>LAPORAN PERTANGGUNGJAWABAN (LPJ) & KINERJA WALI KELAS</h1>
+            <h2>SEMESTER ${selectedSemester.toUpperCase()} - TAHUN AJARAN 2025/2026</h2>
+            <p>${user.schoolName || 'EduAdmin Pro'}</p>
+          </div>
+
+          <div class="meta-grid">
+            <div class="meta-item"><span class="meta-label">Nama Wali Kelas</span>: <strong>${user.fullName}</strong></div>
+            <div class="meta-item"><span class="meta-label">NIP Wali Kelas</span>: ${user.nip || '-'}</div>
+            <div class="meta-item"><span class="meta-label">Kelas Perwalian</span>: <strong>${className}</strong></div>
+            <div class="meta-item"><span class="meta-label">Jumlah Siswa</span>: ${totalStudentsCount} Siswa</div>
+          </div>
+
+          <div class="section-title">I. RINGKASAN CAPAIAN & STATISTIKA KINERJA KELAS</div>
+          <div class="summary-cards">
+            <div class="card">
+              <div class="card-val">${workplanProgressPercent}%</div>
+              <div class="card-lbl">Capaian Program Kerja</div>
+            </div>
+            <div class="card">
+              <div class="card-val">${classOverallAverage}</div>
+              <div class="card-lbl">Rata-Rata Leger Akademik</div>
+            </div>
+            <div class="card">
+              <div class="card-val">${violations.length} Pelanggaran</div>
+              <div class="card-lbl">Catatan BK & Kedisiplinan</div>
+            </div>
+            <div class="card">
+              <div class="card-val">${inventoryGoodPercent}% Baik</div>
+              <div class="card-lbl">Kelayakan Inventaris</div>
+            </div>
+          </div>
+
+          <div class="section-title">II. MATRIKS PROGRAM KERJA & REALISASI WALI KELAS</div>
+          <table>
+            <thead>
+              <tr>
+                <th width="30">NO</th>
+                <th width="140">BIDANG KEGIATAN</th>
+                <th>NAMA PROGRAM KERJA</th>
+                <th width="90">TARGET WAKTU</th>
+                <th>INDIKATOR KEBERHASILAN</th>
+                <th width="90">STATUS</th>
+                <th width="50">%</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${workplanItems.map((item, idx) => `
+                <tr>
+                  <td class="text-center">${idx + 1}</td>
+                  <td><strong>${item.category}</strong></td>
+                  <td>${item.title}</td>
+                  <td class="text-center">${item.targetMonth}</td>
+                  <td>${item.indicator}</td>
+                  <td class="text-center">
+                    <span class="badge ${
+                      item.status === 'TERLAKSANA' ? 'badge-success' :
+                      item.status === 'PROSES' ? 'badge-blue' :
+                      item.status === 'TERTUNDA' ? 'badge-warning' : 'badge-gray'
+                    }">${item.status}</span>
+                  </td>
+                  <td class="text-center"><strong>${item.progress}%</strong></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+
+          <div class="section-title">III. EVALUASI KINERJA, HAMBATAN & SOLUSI WALI KELAS</div>
+          
+          <p><strong>A. Ringkasan Capaian & Pelaksanaan Tugas Wali Kelas:</strong></p>
+          <div class="text-block">${lpjReport.evaluationSummary || 'Belum ada ringkasan'}</div>
+
+          <p style="margin-top: 12px;"><strong>B. Hambatan & Kendala Dalam Kelas:</strong></p>
+          <div class="text-block">${lpjReport.obstacles || 'Tidak ada hambatan berarti'}</div>
+
+          <p style="margin-top: 12px;"><strong>C. Solusi & Tindak Lanjut Yang Dilakukan:</strong></p>
+          <div class="text-block">${lpjReport.solutions || 'Solusi berjalan dengan baik'}</div>
+
+          <p style="margin-top: 12px;"><strong>D. Rekomendasi & Rencana Langkah Selanjutnya:</strong></p>
+          <div class="text-block">${lpjReport.recommendations || 'Melanjutkan program kerja secara konsisten'}</div>
+
+          ${printSettings.showSignature ? `
+          <div class="footer">
+            <div class="signature-box">
+              <p>Mengetahui,</p>
+              <p>Kepala Sekolah</p>
+              <div class="signature-space"></div>
+              <p style="white-space: nowrap;"><strong>${printSettings.headmasterName || '................................'}</strong></p>
+              <p>NIP. ${printSettings.headmasterNip || '................................'}</p>
+            </div>
+            <div class="signature-box">
+              <p>${printSettings.place}, ${printSettings.date}</p>
+              <p>Wali Kelas ${className}</p>
+              <div class="signature-space"></div>
+              <p style="white-space: nowrap;"><strong>${user.fullName}</strong></p>
+              <p>NIP. ${user.nip || '-'}</p>
+            </div>
+          </div>
+          ` : ''}
+
+          <script>
+            window.onload = () => {
+              window.print();
+            };
+          </script>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+  };
+
+  const handleExportLpjExcel = () => {
+    const wb = XLSX.utils.book_new();
+
+    // Sheet 1: Program Kerja
+    const wpRows = workplanItems.map((item, idx) => ({
+      No: idx + 1,
+      'Bidang Kegiatan': item.category,
+      'Nama Program Kerja': item.title,
+      'Target Waktu': item.targetMonth,
+      'Indikator Keberhasilan': item.indicator,
+      'Status Realisasi': item.status,
+      'Progress (%)': item.progress,
+      'Catatan / Keterangan': item.notes || '-'
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(wpRows), "Program Kerja Wali Kelas");
+
+    // Sheet 2: Ringkasan LPJ & Evaluasi
+    const summaryRows = [
+      { Parameter: 'Nama Wali Kelas', Nilai: user.fullName },
+      { Parameter: 'NIP Wali Kelas', Nilai: user.nip || '-' },
+      { Parameter: 'Kelas Perwalian', Nilai: className },
+      { Parameter: 'Semester / Tahun', Nilai: `${selectedSemester} / 2025-2026` },
+      { Parameter: 'Total Siswa', Nilai: totalStudentsCount },
+      { Parameter: 'Capaian Program Kerja (%)', Nilai: `${workplanProgressPercent}%` },
+      { Parameter: 'Rata-Rata Leger Akademik Kelas', Nilai: classOverallAverage },
+      { Parameter: 'Total Catatan Pelanggaran BK', Nilai: violations.length },
+      { Parameter: 'Total Home Visit / Panggilan Ortu', Nilai: homeVisits.length + parentCalls.length },
+      { Parameter: 'Kondisi Inventaris Layak (%)', Nilai: `${inventoryGoodPercent}%` },
+      { Parameter: '---', Nilai: '---' },
+      { Parameter: 'EVALUASI CAPAIAN WALI KELAS', Nilai: lpjReport.evaluationSummary },
+      { Parameter: 'HAMBATAN & KENDALA', Nilai: lpjReport.obstacles },
+      { Parameter: 'SOLUSI & TINDAK LANJUT', Nilai: lpjReport.solutions },
+      { Parameter: 'REKOMENDASI SEMESTER DEPAN', Nilai: lpjReport.recommendations }
+    ];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summaryRows), "Laporan LPJ Evaluasi");
+
+    XLSX.writeFile(wb, `LPJ_Wali_Kelas_${className.replace(/\s+/g, '_')}_Sem_${selectedSemester}.xlsx`);
+  };
+
   if (!user.homeroomClassId) {
     return (
       <div className="p-8 text-center bg-white rounded-xl shadow-sm border border-gray-100">
@@ -960,6 +1416,14 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
           }`}
         >
           <Package size={16} /> Inventaris Kelas
+        </button>
+        <button
+          onClick={() => setActiveTab('workplan')}
+          className={`px-4 py-2.5 rounded-md text-sm font-medium transition flex items-center gap-2 ${
+            activeTab === 'workplan' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-600 hover:text-gray-800'
+          }`}
+        >
+          <ClipboardList size={16} /> Program Kerja & LPJ
         </button>
       </div>
 
@@ -1976,6 +2440,399 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
               <strong>Keterangan Kondisi:</strong> Baik (B), Rusak Ringan (RR), Rusak Sedang (RS), Rusak Berat (RB). 
               Pastikan klik tombol <strong>Simpan Inventaris</strong> setelah melakukan perubahan data.
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* --- TAB: WORKPLAN & LPJ --- */}
+      {activeTab === 'workplan' && (
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
+          {/* Header Action Bar */}
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+              <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                <ClipboardList className="text-indigo-600" size={24} /> Program Kerja & Laporan Kinerja (LPJ) Wali Kelas
+              </h3>
+              <p className="text-sm text-gray-500 mt-1">
+                Kelola perencanaan kerja semester, pantau indikator ketercapaian, dan susun Laporan Pertanggungjawaban (LPJ) wali kelas secara otomatis.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2 shrink-0">
+              <button
+                onClick={handleResetWorkplans}
+                className="px-3.5 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition flex items-center gap-2"
+                title="Muat ulang 7 program baku standar wali kelas"
+              >
+                <RefreshCcw size={16} /> Reset Template
+              </button>
+              <button
+                onClick={handleOpenAddWorkplan}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition flex items-center gap-2 shadow-sm"
+              >
+                <Plus size={16} /> Tambah Program Kerja
+              </button>
+              <button
+                onClick={handleExportLpjExcel}
+                className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 transition flex items-center gap-2 shadow-sm"
+              >
+                <FileSpreadsheet size={16} /> Excel LPJ
+              </button>
+              <button
+                onClick={handlePrintLpj}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition flex items-center gap-2 shadow-sm"
+              >
+                <Printer size={16} /> Cetak LPJ Resmi
+              </button>
+            </div>
+          </div>
+
+          {/* Real-time KPI Metric Summary Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
+              <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
+                <Award size={24} />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Capaian Workplan</p>
+                <h4 className="font-extrabold text-2xl text-gray-800">{workplanProgressPercent}%</h4>
+                <p className="text-xs text-gray-500 mt-0.5">{completedWorkplansCount} dari {workplanItems.length} Terlaksana</p>
+              </div>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
+              <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
+                <GraduationCap size={24} />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Rata-Rata Leger</p>
+                <h4 className="font-extrabold text-2xl text-gray-800">{classOverallAverage}</h4>
+                <p className="text-xs text-gray-500 mt-0.5">{totalStudentsCount} Siswa Terdata</p>
+              </div>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
+              <div className="p-3 bg-red-50 text-red-600 rounded-xl">
+                <ShieldAlert size={24} />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Disiplin & BK</p>
+                <h4 className="font-extrabold text-2xl text-gray-800">{violations.length} <span className="text-xs font-normal text-gray-500">Kasus</span></h4>
+                <p className="text-xs text-gray-500 mt-0.5">{homeVisits.length + parentCalls.length} HomeVisit & Ortu</p>
+              </div>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
+              <div className="p-3 bg-amber-50 text-amber-600 rounded-xl">
+                <Package size={24} />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Kondisi Inventaris</p>
+                <h4 className="font-extrabold text-2xl text-gray-800">{inventoryGoodPercent}% <span className="text-xs font-normal text-gray-500">Baik</span></h4>
+                <p className="text-xs text-gray-500 mt-0.5">{inventoryItems.length} Item Sarpras Kelas</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Table: Workplan Programs */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+              <div>
+                <h4 className="font-bold text-gray-800 text-base flex items-center gap-2">
+                  <CheckCircle className="text-emerald-500" size={18} /> Matriks Program Kerja Wali Kelas ({workplanItems.length})
+                </h4>
+                <p className="text-xs text-gray-500 mt-0.5">Program kerja berbasis target semester dan indikator capaian kelas.</p>
+              </div>
+              <span className="text-xs font-semibold px-3 py-1 bg-indigo-50 text-indigo-700 rounded-full border border-indigo-100">
+                Semester {selectedSemester}
+              </span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left border-collapse">
+                <thead>
+                  <tr className="bg-gray-100/70 text-gray-700 border-b border-gray-200 text-xs uppercase font-semibold">
+                    <th className="p-3 text-center w-12">No</th>
+                    <th className="p-3 min-w-[160px]">Bidang / Kategori</th>
+                    <th className="p-3 min-w-[220px]">Program Kerja</th>
+                    <th className="p-3 min-w-[120px] text-center">Target Waktu</th>
+                    <th className="p-3 min-w-[240px]">Indikator Keberhasilan</th>
+                    <th className="p-3 min-w-[130px] text-center">Status</th>
+                    <th className="p-3 min-w-[120px] text-center">Progress</th>
+                    <th className="p-3 text-center w-24">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 text-xs">
+                  {workplanItems.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="p-8 text-center text-gray-400">
+                        Belum ada program kerja. Klik <strong>Tambah Program Kerja</strong> atau <strong>Reset Template</strong>.
+                      </td>
+                    </tr>
+                  ) : (
+                    workplanItems.map((item, idx) => {
+                      const statusColor = 
+                        item.status === 'TERLAKSANA' ? 'bg-emerald-100 text-emerald-800 border-emerald-200' :
+                        item.status === 'PROSES' ? 'bg-blue-100 text-blue-800 border-blue-200' :
+                        item.status === 'TERTUNDA' ? 'bg-amber-100 text-amber-800 border-amber-200' :
+                        'bg-gray-100 text-gray-700 border-gray-200';
+
+                      return (
+                        <tr key={item.id} className="hover:bg-indigo-50/30 transition">
+                          <td className="p-3 text-center font-bold text-gray-500">{idx + 1}</td>
+                          <td className="p-3 font-semibold text-indigo-900">
+                            <span className="px-2 py-1 bg-indigo-50 text-indigo-700 rounded-md border border-indigo-100 text-[11px] inline-block">
+                              {item.category}
+                            </span>
+                          </td>
+                          <td className="p-3 font-semibold text-gray-800">
+                            {item.title}
+                            {item.notes && <p className="text-[11px] font-normal text-gray-500 mt-0.5">{item.notes}</p>}
+                          </td>
+                          <td className="p-3 text-center font-medium text-gray-600 bg-gray-50/50 rounded">{item.targetMonth}</td>
+                          <td className="p-3 text-gray-600 leading-relaxed">{item.indicator}</td>
+                          <td className="p-3 text-center">
+                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${statusColor}`}>
+                              {item.status}
+                            </span>
+                          </td>
+                          <td className="p-3 text-center">
+                            <div className="flex items-center gap-2">
+                              <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                                <div 
+                                  className={`h-2 rounded-full ${item.progress === 100 ? 'bg-emerald-500' : 'bg-indigo-600'}`} 
+                                  style={{ width: `${item.progress}%` }}
+                                ></div>
+                              </div>
+                              <span className="font-bold text-[11px] w-8 text-right">{item.progress}%</span>
+                            </div>
+                          </td>
+                          <td className="p-3 text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              <button
+                                onClick={() => handleOpenEditWorkplan(item)}
+                                className="p-1.5 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded transition"
+                                title="Edit Program Kerja"
+                              >
+                                <Pencil size={15} />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteWorkplan(item.id)}
+                                className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded transition"
+                                title="Hapus Program Kerja"
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* LPJ Evaluation Narrative Inputs */}
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
+              <div>
+                <h4 className="font-bold text-gray-800 text-lg flex items-center gap-2">
+                  <BookOpen className="text-indigo-600" size={20} /> Laporan Kinerja & Catatan LPJ Wali Kelas
+                </h4>
+                <p className="text-xs text-gray-500 mt-1">
+                  Catatan kualitatif evaluasi kelas yang akan secara otomatis dimasukkan ke dalam dokumen cetak LPJ Wali Kelas.
+                </p>
+              </div>
+              <button
+                onClick={handleSaveLpj}
+                className="px-4 py-2.5 bg-indigo-600 text-white rounded-lg font-semibold text-sm hover:bg-indigo-700 transition flex items-center justify-center gap-2 shadow-sm shrink-0"
+              >
+                <Save size={16} /> Simpan Evaluasi LPJ
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-gray-700 uppercase flex items-center gap-1.5">
+                  <Award size={14} className="text-indigo-600" /> A. Ringkasan Capaian & Pelaksanaan Tugas Wali Kelas
+                </label>
+                <textarea
+                  rows={4}
+                  value={lpjReport.evaluationSummary}
+                  onChange={(e) => setLpjReport({ ...lpjReport, evaluationSummary: e.target.value })}
+                  placeholder="Tuliskan ringkasan umum pelaksanaan tugas perwalian kelas selama semester ini..."
+                  className="w-full p-3 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none leading-relaxed"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-gray-700 uppercase flex items-center gap-1.5">
+                  <AlertTriangle size={14} className="text-amber-600" /> B. Hambatan & Kendala Dalam Kelas
+                </label>
+                <textarea
+                  rows={4}
+                  value={lpjReport.obstacles}
+                  onChange={(e) => setLpjReport({ ...lpjReport, obstacles: e.target.value })}
+                  placeholder="Tuliskan kendala atau hambatan utama yang dihadapi di kelas..."
+                  className="w-full p-3 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none leading-relaxed"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-gray-700 uppercase flex items-center gap-1.5">
+                  <CheckCircle size={14} className="text-emerald-600" /> C. Solusi & Tindak Lanjut Yang Dilakukan
+                </label>
+                <textarea
+                  rows={4}
+                  value={lpjReport.solutions}
+                  onChange={(e) => setLpjReport({ ...lpjReport, solutions: e.target.value })}
+                  placeholder="Tuliskan solusi atau langkah penyelesaian masalah yang telah dilakukan..."
+                  className="w-full p-3 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none leading-relaxed"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-gray-700 uppercase flex items-center gap-1.5">
+                  <TrendingUp size={14} className="text-blue-600" /> D. Rekomendasi & Rencana Semester Berikutnya
+                </label>
+                <textarea
+                  rows={4}
+                  value={lpjReport.recommendations}
+                  onChange={(e) => setLpjReport({ ...lpjReport, recommendations: e.target.value })}
+                  placeholder="Tuliskan rekomendasi dan rencana perbaikan untuk semester mendatang..."
+                  className="w-full p-3 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none leading-relaxed"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Workplan Form Modal */}
+      {showWorkplanModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-indigo-50">
+              <h3 className="text-lg font-bold text-indigo-900 flex items-center gap-2">
+                <ClipboardList size={20} /> {editingWorkplan ? 'Edit Program Kerja' : 'Tambah Program Kerja Baru'}
+              </h3>
+              <button onClick={() => setShowWorkplanModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveWorkplanForm} className="p-6 space-y-4 text-sm">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-gray-600 uppercase">Bidang / Kategori</label>
+                  <select
+                    value={workplanForm.category}
+                    onChange={(e) => setWorkplanForm({ ...workplanForm, category: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                  >
+                    <option value="Organisasi & Administrasi">Organisasi & Administrasi</option>
+                    <option value="Fisik & Kebersihan">Fisik & Kebersihan</option>
+                    <option value="Paguyuban Ortu">Paguyuban Ortu</option>
+                    <option value="Karakter & Kedisiplinan">Karakter & Kedisiplinan</option>
+                    <option value="Akademik & Bimbingan">Akademik & Bimbingan</option>
+                    <option value="Lain-lain">Lain-lain</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-gray-600 uppercase">Target Waktu</label>
+                  <input
+                    type="text"
+                    value={workplanForm.targetMonth}
+                    onChange={(e) => setWorkplanForm({ ...workplanForm, targetMonth: e.target.value })}
+                    placeholder="Contoh: Juli - Agustus"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-gray-600 uppercase">Nama Program Kerja</label>
+                <input
+                  type="text"
+                  value={workplanForm.title}
+                  onChange={(e) => setWorkplanForm({ ...workplanForm, title: e.target.value })}
+                  placeholder="Contoh: Musyawarah Pembentukan Paguyuban Orang Tua"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-gray-600 uppercase">Indikator Keberhasilan</label>
+                <textarea
+                  rows={2}
+                  value={workplanForm.indicator}
+                  onChange={(e) => setWorkplanForm({ ...workplanForm, indicator: e.target.value })}
+                  placeholder="Target konkret output keberhasilan..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-gray-600 uppercase">Status Realisasi</label>
+                  <select
+                    value={workplanForm.status}
+                    onChange={(e) => setWorkplanForm({ ...workplanForm, status: e.target.value as any })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                  >
+                    <option value="BELUM">BELUM</option>
+                    <option value="PROSES">PROSES</option>
+                    <option value="TERLAKSANA">TERLAKSANA</option>
+                    <option value="TERTUNDA">TERTUNDA</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-gray-600 uppercase">Progress ({workplanForm.progress}%)</label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="5"
+                    value={workplanForm.progress}
+                    onChange={(e) => setWorkplanForm({ ...workplanForm, progress: parseInt(e.target.value) })}
+                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer mt-3"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-gray-600 uppercase">Catatan / Keterangan (Opsional)</label>
+                <input
+                  type="text"
+                  value={workplanForm.notes}
+                  onChange={(e) => setWorkplanForm({ ...workplanForm, notes: e.target.value })}
+                  placeholder="Catatan pelaksanaan..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+
+              <div className="p-4 bg-gray-50 -mx-6 -mb-6 border-t border-gray-100 flex gap-3 mt-6">
+                <button
+                  type="button"
+                  onClick={() => setShowWorkplanModal(false)}
+                  className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-100 transition"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 px-4 py-2.5 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition flex items-center justify-center gap-2"
+                >
+                  <Save size={18} /> Simpan Program Kerja
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

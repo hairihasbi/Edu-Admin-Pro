@@ -1,5 +1,6 @@
 
 import { 
+  Award,
   LayoutDashboard, 
   LayoutGrid,
   Users, 
@@ -245,5 +246,6 @@ export {
   Sun,
   Play,
   QrCode,
-  Camera
+  Camera,
+  Award
 };
