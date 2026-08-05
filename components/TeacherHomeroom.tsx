@@ -40,6 +40,11 @@ export interface HomeroomLpjReport {
   recommendations: string;
 }
 
+const INDONESIAN_MONTHS = [
+  'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+  'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+];
+
 const DEFAULT_WORKPLAN_TEMPLATES: HomeroomWorkplanItem[] = [
   {
     id: 'wp-1',
@@ -203,6 +208,41 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
   // Inventory State
   const [inventoryItems, setInventoryItems] = useState<ClassInventory[]>([]);
   const [isSavingInventory, setIsSavingInventory] = useState(false);
+
+  // Monthly Attendance Recap State for LPJ Report
+  const prevMonthDate = new Date();
+  prevMonthDate.setMonth(prevMonthDate.getMonth() - 1);
+  const [recapMonth, setRecapMonth] = useState<number>(prevMonthDate.getMonth());
+  const [recapYear, setRecapYear] = useState<number>(prevMonthDate.getFullYear());
+  const [customEffectiveDays, setCustomEffectiveDays] = useState<number>(22);
+  const [isCalculatingRecap, setIsCalculatingRecap] = useState<boolean>(false);
+  const [recapSearchQuery, setRecapSearchQuery] = useState<string>('');
+
+  const [attendanceRecapList, setAttendanceRecapList] = useState<Array<{
+    studentId: string;
+    nis: string;
+    name: string;
+    gender?: string;
+    hadir: number;
+    sakit: number;
+    izin: number;
+    alfa: number;
+    totalDays: number;
+    percentage: number;
+    predicate: string;
+  }>>([]);
+
+  const [attendanceRecapSummary, setAttendanceRecapSummary] = useState({
+    monthName: INDONESIAN_MONTHS[prevMonthDate.getMonth()] || '',
+    year: prevMonthDate.getFullYear(),
+    totalStudents: 0,
+    effectiveDays: 22,
+    classPercentage: 0,
+    totalHadir: 0,
+    totalSakit: 0,
+    totalIzin: 0,
+    totalAlfa: 0
+  });
 
   const [className, setClassName] = useState('...');
   const [selectedSemester, setSelectedSemester] = useState('Ganjil');
@@ -523,6 +563,164 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
       return () => clearInterval(timer);
     }
   }, [activeTab]);
+
+  // --- MONTHLY ATTENDANCE RECAP LOGIC ---
+  const calculateMonthlyAttendanceRecap = async (monthIdx: number, yearNum: number, effectiveDaysOverride?: number) => {
+    if (!user.homeroomClassId || students.length === 0) return;
+    setIsCalculatingRecap(true);
+
+    try {
+      const startDate = `${yearNum}-${String(monthIdx + 1).padStart(2, '0')}-01`;
+      const lastDay = new Date(yearNum, monthIdx + 1, 0).getDate();
+      const endDate = `${yearNum}-${String(monthIdx + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
+      let countWorkDays = 0;
+      for (let d = 1; d <= lastDay; d++) {
+        const dt = new Date(yearNum, monthIdx, d);
+        const dayOfWeek = dt.getDay();
+        if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+          countWorkDays++;
+        }
+      }
+
+      const effDays = effectiveDaysOverride && effectiveDaysOverride > 0 ? effectiveDaysOverride : (countWorkDays || 22);
+
+      const records = await getAttendanceRecordsByRange(user.homeroomClassId, startDate, endDate, user.id);
+
+      const studentMap: Record<string, { hadir: number; sakit: number; izin: number; alfa: number }> = {};
+
+      students.forEach(st => {
+        studentMap[st.id] = { hadir: 0, sakit: 0, izin: 0, alfa: 0 };
+      });
+
+      records.forEach(rec => {
+        if (studentMap[rec.studentId]) {
+          const st = rec.status ? rec.status.toUpperCase() : '';
+          if (st === 'HADIR' || st === 'H') {
+            studentMap[rec.studentId].hadir += 1;
+          } else if (st === 'SAKIT' || st === 'S') {
+            studentMap[rec.studentId].sakit += 1;
+          } else if (st === 'IZIN' || st === 'I') {
+            studentMap[rec.studentId].izin += 1;
+          } else if (st === 'ALPA' || st === 'ALFA' || st === 'A') {
+            studentMap[rec.studentId].alfa += 1;
+          }
+        }
+      });
+
+      let totalClassHadir = 0;
+      let totalClassSakit = 0;
+      let totalClassIzin = 0;
+      let totalClassAlfa = 0;
+
+      const list = students.map(st => {
+        const counts = studentMap[st.id] || { hadir: 0, sakit: 0, izin: 0, alfa: 0 };
+        let hadirCount = counts.hadir;
+        const nonHadir = counts.sakit + counts.izin + counts.alfa;
+        if (hadirCount === 0 && nonHadir <= effDays) {
+          hadirCount = Math.max(0, effDays - nonHadir);
+        }
+
+        const totalDays = effDays;
+        const pct = totalDays > 0 ? Math.min(100, Math.round((hadirCount / totalDays) * 100)) : 0;
+
+        let pred = 'Sangat Baik';
+        if (pct < 75) pred = 'Sangat Kurang';
+        else if (pct < 85) pred = 'Kurang';
+        else if (pct < 92) pred = 'Cukup';
+        else if (pct < 96) pred = 'Baik';
+
+        totalClassHadir += hadirCount;
+        totalClassSakit += counts.sakit;
+        totalClassIzin += counts.izin;
+        totalClassAlfa += counts.alfa;
+
+        return {
+          studentId: st.id,
+          nis: st.nis || '-',
+          name: st.name,
+          gender: st.gender || '-',
+          hadir: hadirCount,
+          sakit: counts.sakit,
+          izin: counts.izin,
+          alfa: counts.alfa,
+          totalDays: totalDays,
+          percentage: pct,
+          predicate: pred
+        };
+      });
+
+      const avgClassPct = list.length > 0
+        ? Math.round(list.reduce((sum, item) => sum + item.percentage, 0) / list.length)
+        : 0;
+
+      setAttendanceRecapList(list);
+      setAttendanceRecapSummary({
+        monthName: INDONESIAN_MONTHS[monthIdx] || '',
+        year: yearNum,
+        totalStudents: students.length,
+        effectiveDays: effDays,
+        classPercentage: avgClassPct,
+        totalHadir: totalClassHadir,
+        totalSakit: totalClassSakit,
+        totalIzin: totalClassIzin,
+        totalAlfa: totalClassAlfa
+      });
+    } catch (err) {
+      console.error("Error calculating monthly attendance recap:", err);
+    } finally {
+      setIsCalculatingRecap(false);
+    }
+  };
+
+  const handleUpdateStudentRecapItem = (studentId: string, field: 'sakit' | 'izin' | 'alfa', val: number) => {
+    const numVal = Math.max(0, val);
+    setAttendanceRecapList(prev => {
+      const updated = prev.map(item => {
+        if (item.studentId === studentId) {
+          const newItem = { ...item, [field]: numVal };
+          const nonHadir = newItem.sakit + newItem.izin + newItem.alfa;
+          newItem.hadir = Math.max(0, newItem.totalDays - nonHadir);
+          newItem.percentage = newItem.totalDays > 0 ? Math.min(100, Math.round((newItem.hadir / newItem.totalDays) * 100)) : 0;
+          
+          if (newItem.percentage < 75) newItem.predicate = 'Sangat Kurang';
+          else if (newItem.percentage < 85) newItem.predicate = 'Kurang';
+          else if (newItem.percentage < 92) newItem.predicate = 'Cukup';
+          else if (newItem.percentage < 96) newItem.predicate = 'Baik';
+          else newItem.predicate = 'Sangat Baik';
+
+          return newItem;
+        }
+        return item;
+      });
+
+      const avgClassPct = updated.length > 0
+        ? Math.round(updated.reduce((sum, item) => sum + item.percentage, 0) / updated.length)
+        : 0;
+
+      const totalH = updated.reduce((s, i) => s + i.hadir, 0);
+      const totalS = updated.reduce((s, i) => s + i.sakit, 0);
+      const totalI = updated.reduce((s, i) => s + i.izin, 0);
+      const totalA = updated.reduce((s, i) => s + i.alfa, 0);
+
+      setAttendanceRecapSummary(sPrev => ({
+        ...sPrev,
+        classPercentage: avgClassPct,
+        totalHadir: totalH,
+        totalSakit: totalS,
+        totalIzin: totalI,
+        totalAlfa: totalA
+      }));
+
+      return updated;
+    });
+  };
+
+  useEffect(() => {
+    if (students.length > 0 && user.homeroomClassId) {
+      calculateMonthlyAttendanceRecap(recapMonth, recapYear, customEffectiveDays);
+    }
+  }, [students, user.homeroomClassId, recapMonth, recapYear]);
 
   // --- ACADEMIC CALCULATION LOGIC ---
   
@@ -2132,6 +2330,43 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                 </tbody>
               </table>
             `}
+
+            <div class="subchapter-title">3.5 Rekapitulasi Presensi / Kehadiran Siswa Bulan ${attendanceRecapSummary.monthName} ${attendanceRecapSummary.year}</div>
+            <p class="paragraph">
+              Berikut rekapitulasi tingkat kehadiran siswa kelas ${className} pada bulan <strong>${attendanceRecapSummary.monthName} ${attendanceRecapSummary.year}</strong> dengan total ${attendanceRecapSummary.effectiveDays} hari efektif belajar dan rata-rata kehadiran kelas mencapai <strong>${attendanceRecapSummary.classPercentage}%</strong>:
+            </p>
+            <table>
+              <thead>
+                <tr>
+                  <th width="30">NO</th>
+                  <th width="80">NIS</th>
+                  <th>NAMA SISWA</th>
+                  <th width="40">L/P</th>
+                  <th width="45">HADIR</th>
+                  <th width="45">SAKIT</th>
+                  <th width="45">IZIN</th>
+                  <th width="45">ALPA</th>
+                  <th width="60">EFEKTIF</th>
+                  <th width="70">% HADIR</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${attendanceRecapList.map((st, idx) => `
+                  <tr>
+                    <td class="text-center">${idx + 1}</td>
+                    <td class="text-center">${st.nis}</td>
+                    <td><strong>${st.name}</strong></td>
+                    <td class="text-center">${st.gender || '-'}</td>
+                    <td class="text-center">${st.hadir}</td>
+                    <td class="text-center">${st.sakit}</td>
+                    <td class="text-center">${st.izin}</td>
+                    <td class="text-center">${st.alfa}</td>
+                    <td class="text-center">${st.totalDays}</td>
+                    <td class="text-center"><strong>${st.percentage}%</strong></td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
           </div>
 
           <!-- BAB IV - EVALUASI, KENDALA & SOLUSI -->
@@ -2215,7 +2450,23 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
     }));
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(wpRows), "Program Kerja Wali Kelas");
 
-    // Sheet 2: Ringkasan LPJ & Evaluasi
+    // Sheet 2: Rekap Absensi Bulan Sebelumnya
+    const attRows = attendanceRecapList.map((st, idx) => ({
+      No: idx + 1,
+      NIS: st.nis,
+      'Nama Siswa': st.name,
+      'L/P': st.gender || '-',
+      'Hadir (H)': st.hadir,
+      'Sakit (S)': st.sakit,
+      'Izin (I)': st.izin,
+      'Alpa (A)': st.alfa,
+      'Total Hari Efektif': st.totalDays,
+      'Persentase Kehadiran (%)': `${st.percentage}%`,
+      'Status Predikat': st.predicate
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(attRows), `Rekap Absen ${attendanceRecapSummary.monthName}`);
+
+    // Sheet 3: Ringkasan LPJ & Evaluasi
     const summaryRows = [
       { Parameter: 'Nama Wali Kelas', Nilai: user.fullName },
       { Parameter: 'NIP Wali Kelas', Nilai: user.nip || '-' },
@@ -2223,6 +2474,7 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
       { Parameter: 'Semester / Tahun', Nilai: `${selectedSemester} / 2025-2026` },
       { Parameter: 'Total Siswa', Nilai: totalStudentsCount },
       { Parameter: 'Capaian Program Kerja (%)', Nilai: `${workplanProgressPercent}%` },
+      { Parameter: 'Rata-Rata Kehadiran Kelas (%)', Nilai: `${attendanceRecapSummary.classPercentage}%` },
       { Parameter: 'Rata-Rata Leger Akademik Kelas', Nilai: classOverallAverage },
       { Parameter: 'Total Catatan Pelanggaran BK', Nilai: violations.length },
       { Parameter: 'Total Home Visit / Panggilan Ortu', Nilai: homeVisits.length + parentCalls.length },
@@ -3636,6 +3888,222 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                   )}
                 </tbody>
               </table>
+            </div>
+          </div>
+
+          {/* Monthly Attendance Recap Card for LPJ Report */}
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-100 pb-4">
+              <div>
+                <h4 className="font-bold text-gray-800 text-lg flex items-center gap-2">
+                  <ClipboardCheck className="text-emerald-600" size={20} /> Rekapitulasi Presensi & Kehadiran Siswa Bulan Sebelumnya
+                </h4>
+                <p className="text-xs text-gray-500 mt-1">
+                  Perhitungan otomatis akumulasi presensi siswa berdasarkan log absensi harian. Digunakan untuk melengkapi laporan LPJ Wali Kelas.
+                </p>
+              </div>
+
+              {/* Month / Year / Effective Days Controls */}
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={recapMonth}
+                  onChange={(e) => setRecapMonth(parseInt(e.target.value))}
+                  className="px-3 py-2 border border-gray-200 rounded-lg text-xs font-semibold text-gray-700 bg-white focus:ring-2 focus:ring-emerald-500 outline-none"
+                >
+                  {INDONESIAN_MONTHS.map((m, idx) => (
+                    <option key={m} value={idx}>{m}</option>
+                  ))}
+                </select>
+
+                <select
+                  value={recapYear}
+                  onChange={(e) => setRecapYear(parseInt(e.target.value))}
+                  className="px-3 py-2 border border-gray-200 rounded-lg text-xs font-semibold text-gray-700 bg-white focus:ring-2 focus:ring-emerald-500 outline-none"
+                >
+                  <option value={2025}>2025</option>
+                  <option value={2026}>2026</option>
+                  <option value={2027}>2027</option>
+                </select>
+
+                <div className="flex items-center gap-1.5 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200">
+                  <span className="text-[11px] font-semibold text-gray-600">Hari Efektif:</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={31}
+                    value={customEffectiveDays}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value) || 1;
+                      setCustomEffectiveDays(val);
+                      calculateMonthlyAttendanceRecap(recapMonth, recapYear, val);
+                    }}
+                    className="w-12 text-center text-xs font-bold bg-white border border-gray-300 rounded p-1 outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+
+                <button
+                  onClick={() => calculateMonthlyAttendanceRecap(recapMonth, recapYear, customEffectiveDays)}
+                  disabled={isCalculatingRecap}
+                  className="px-3 py-2 bg-emerald-600 text-white rounded-lg font-semibold text-xs hover:bg-emerald-700 transition flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+                  title="Hitung Ulang Presensi"
+                >
+                  <RefreshCcw size={14} className={isCalculatingRecap ? "animate-spin" : ""} />
+                  {isCalculatingRecap ? "Menghitung..." : "Hitung"}
+                </button>
+              </div>
+            </div>
+
+            {/* Attendance KPI Overview */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              <div className="p-3 bg-emerald-50/70 border border-emerald-100 rounded-xl text-center">
+                <p className="text-[10px] font-bold text-emerald-700 uppercase">Rata-Rata Kehadiran</p>
+                <h5 className="text-xl font-extrabold text-emerald-900 mt-0.5">{attendanceRecapSummary.classPercentage}%</h5>
+              </div>
+
+              <div className="p-3 bg-blue-50/70 border border-blue-100 rounded-xl text-center">
+                <p className="text-[10px] font-bold text-blue-700 uppercase">Hari Efektif</p>
+                <h5 className="text-xl font-extrabold text-blue-900 mt-0.5">{attendanceRecapSummary.effectiveDays} Hari</h5>
+              </div>
+
+              <div className="p-3 bg-teal-50/70 border border-teal-100 rounded-xl text-center">
+                <p className="text-[10px] font-bold text-teal-700 uppercase">Total Hadir</p>
+                <h5 className="text-xl font-extrabold text-teal-900 mt-0.5">{attendanceRecapSummary.totalHadir}</h5>
+              </div>
+
+              <div className="p-3 bg-amber-50/70 border border-amber-100 rounded-xl text-center">
+                <p className="text-[10px] font-bold text-amber-700 uppercase">Sakit (S)</p>
+                <h5 className="text-xl font-extrabold text-amber-900 mt-0.5">{attendanceRecapSummary.totalSakit}</h5>
+              </div>
+
+              <div className="p-3 bg-indigo-50/70 border border-indigo-100 rounded-xl text-center">
+                <p className="text-[10px] font-bold text-indigo-700 uppercase">Izin (I)</p>
+                <h5 className="text-xl font-extrabold text-indigo-900 mt-0.5">{attendanceRecapSummary.totalIzin}</h5>
+              </div>
+
+              <div className="p-3 bg-red-50/70 border border-red-100 rounded-xl text-center">
+                <p className="text-[10px] font-bold text-red-700 uppercase">Alpa (A)</p>
+                <h5 className="text-xl font-extrabold text-red-900 mt-0.5">{attendanceRecapSummary.totalAlfa}</h5>
+              </div>
+            </div>
+
+            {/* Attendance Table */}
+            <div className="space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="relative w-full sm:w-64">
+                  <Search size={14} className="absolute left-3 top-2.5 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Cari siswa..."
+                    value={recapSearchQuery}
+                    onChange={(e) => setRecapSearchQuery(e.target.value)}
+                    className="w-full pl-8 pr-3 py-1.5 border border-gray-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+                <p className="text-[11px] text-gray-500 italic">
+                  *Anda dapat mengedit angka Sakit, Izin, dan Alpa secara manual jika ada penyesuaian khusus.
+                </p>
+              </div>
+
+              <div className="overflow-x-auto rounded-xl border border-gray-200">
+                <table className="w-full text-xs text-left border-collapse">
+                  <thead>
+                    <tr className="bg-gray-100 text-gray-700 uppercase font-semibold border-b border-gray-200">
+                      <th className="p-2.5 text-center w-10">No</th>
+                      <th className="p-2.5 w-24">NIS</th>
+                      <th className="p-2.5">Nama Siswa</th>
+                      <th className="p-2.5 text-center w-12">L/P</th>
+                      <th className="p-2.5 text-center w-16 bg-emerald-50 text-emerald-800">Hadir</th>
+                      <th className="p-2.5 text-center w-16 bg-amber-50 text-amber-800">Sakit</th>
+                      <th className="p-2.5 text-center w-16 bg-indigo-50 text-indigo-800">Izin</th>
+                      <th className="p-2.5 text-center w-16 bg-red-50 text-red-800">Alpa</th>
+                      <th className="p-2.5 text-center w-20">Total Hari</th>
+                      <th className="p-2.5 text-center w-20">% Kehadiran</th>
+                      <th className="p-2.5 text-center w-28">Predikat</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {attendanceRecapList.filter(item => 
+                      item.name.toLowerCase().includes(recapSearchQuery.toLowerCase()) || 
+                      item.nis.includes(recapSearchQuery)
+                    ).length === 0 ? (
+                      <tr>
+                        <td colSpan={11} className="p-6 text-center text-gray-400">
+                          Tidak ada data presensi siswa ditemukan.
+                        </td>
+                      </tr>
+                    ) : (
+                      attendanceRecapList.filter(item => 
+                        item.name.toLowerCase().includes(recapSearchQuery.toLowerCase()) || 
+                        item.nis.includes(recapSearchQuery)
+                      ).map((st, idx) => {
+                        const predBadge = 
+                          st.percentage >= 96 ? 'bg-emerald-100 text-emerald-800 border-emerald-200' :
+                          st.percentage >= 92 ? 'bg-blue-100 text-blue-800 border-blue-200' :
+                          st.percentage >= 85 ? 'bg-amber-100 text-amber-800 border-amber-200' :
+                          'bg-red-100 text-red-800 border-red-200';
+
+                        return (
+                          <tr key={st.studentId} className="hover:bg-emerald-50/30 transition">
+                            <td className="p-2.5 text-center font-bold text-gray-500">{idx + 1}</td>
+                            <td className="p-2.5 font-medium text-gray-600">{st.nis}</td>
+                            <td className="p-2.5 font-bold text-gray-800">{st.name}</td>
+                            <td className="p-2.5 text-center font-medium text-gray-600">{st.gender}</td>
+                            
+                            {/* Hadir */}
+                            <td className="p-2 text-center font-bold text-emerald-700 bg-emerald-50/30">
+                              {st.hadir}
+                            </td>
+
+                            {/* Sakit */}
+                            <td className="p-1.5 text-center bg-amber-50/30">
+                              <input
+                                type="number"
+                                min={0}
+                                max={st.totalDays}
+                                value={st.sakit}
+                                onChange={(e) => handleUpdateStudentRecapItem(st.studentId, 'sakit', parseInt(e.target.value) || 0)}
+                                className="w-12 p-1 text-center font-bold text-amber-800 border border-amber-200 rounded outline-none focus:ring-1 focus:ring-amber-500 bg-white"
+                              />
+                            </td>
+
+                            {/* Izin */}
+                            <td className="p-1.5 text-center bg-indigo-50/30">
+                              <input
+                                type="number"
+                                min={0}
+                                max={st.totalDays}
+                                value={st.izin}
+                                onChange={(e) => handleUpdateStudentRecapItem(st.studentId, 'izin', parseInt(e.target.value) || 0)}
+                                className="w-12 p-1 text-center font-bold text-indigo-800 border border-indigo-200 rounded outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+                              />
+                            </td>
+
+                            {/* Alpa */}
+                            <td className="p-1.5 text-center bg-red-50/30">
+                              <input
+                                type="number"
+                                min={0}
+                                max={st.totalDays}
+                                value={st.alfa}
+                                onChange={(e) => handleUpdateStudentRecapItem(st.studentId, 'alfa', parseInt(e.target.value) || 0)}
+                                className="w-12 p-1 text-center font-bold text-red-800 border border-red-200 rounded outline-none focus:ring-1 focus:ring-red-500 bg-white"
+                              />
+                            </td>
+
+                            <td className="p-2.5 text-center font-semibold text-gray-700">{st.totalDays} Hari</td>
+                            <td className="p-2.5 text-center font-extrabold text-gray-900">{st.percentage}%</td>
+                            <td className="p-2.5 text-center">
+                              <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] border ${predBadge}`}>
+                                {st.predicate}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
 
