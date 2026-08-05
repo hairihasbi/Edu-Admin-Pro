@@ -1295,6 +1295,435 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
     printWindow.document.close();
   };
 
+  const handlePrintOfficialPortfolio = () => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    const totalMaleStudents = students.filter(s => s.gender === 'L' || s.gender === 'M' || (s.gender && s.gender.toLowerCase().startsWith('l'))).length;
+    const totalFemaleStudents = students.filter(s => s.gender === 'P' || s.gender === 'F' || (s.gender && s.gender.toLowerCase().startsWith('p'))).length;
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Portofolio Administrasi Wali Kelas ${className} - ${user.schoolName || 'Sekolah'}</title>
+          <style>
+            @page { size: A4; margin: 20mm; }
+            body { font-family: 'Times New Roman', Times, serif; color: #111; line-height: 1.6; font-size: 12pt; padding: 0; margin: 0; }
+            
+            /* COVER STYLING */
+            .cover-container { min-height: 90vh; display: flex; flex-direction: column; justify-content: space-between; text-align: center; page-break-after: always; break-after: page; padding: 20px 10px; box-sizing: border-box; }
+            .cover-header { border-bottom: 3px double #000; padding-bottom: 12px; margin-bottom: 30px; }
+            .cover-header h3 { margin: 0; font-size: 14pt; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; }
+            .cover-header h2 { margin: 4px 0 0 0; font-size: 16pt; font-weight: bold; text-transform: uppercase; }
+            .cover-header p { margin: 4px 0 0 0; font-size: 11pt; font-style: italic; color: #333; }
+            
+            .cover-title-box { margin: 40px 0; }
+            .cover-title-box h1 { font-size: 18pt; font-weight: bold; text-transform: uppercase; margin: 0 0 10px 0; letter-spacing: 1px; line-height: 1.3; }
+            .cover-title-box h2 { font-size: 14pt; font-weight: bold; text-transform: uppercase; margin: 0; color: #222; }
+
+            .cover-identity-box { border: 2px solid #000; padding: 20px; margin: 30px auto; max-width: 480px; text-align: left; background: #fafafa; }
+            .cover-identity-box table { width: 100%; border: none; font-size: 11pt; font-family: 'Times New Roman', Times, serif; }
+            .cover-identity-box td { border: none; padding: 5px 8px; vertical-align: top; }
+
+            .cover-footer { margin-top: 40px; font-size: 12pt; font-weight: bold; text-transform: uppercase; }
+
+            /* DOCUMENT CONTENT STYLING */
+            .page-break { page-break-after: always; break-after: page; }
+            .doc-header { text-align: center; margin-bottom: 25px; border-bottom: 2px solid #000; padding-bottom: 10px; }
+            .doc-header h2 { margin: 0; font-size: 15pt; text-transform: uppercase; }
+            .doc-header h3 { margin: 5px 0 0 0; font-size: 12pt; font-weight: normal; }
+
+            .chapter-title { font-size: 13pt; font-weight: bold; text-transform: uppercase; margin-top: 25px; margin-bottom: 12px; border-bottom: 1.5px solid #000; padding-bottom: 4px; color: #000; }
+            .subchapter-title { font-size: 11.5pt; font-weight: bold; margin-top: 14px; margin-bottom: 6px; }
+
+            p.paragraph { text-align: justify; text-indent: 30px; margin: 6px 0; line-height: 1.6; }
+            
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 15px; font-size: 10.5pt; font-family: 'Times New Roman', Times, serif; }
+            th, td { border: 1px solid #000; padding: 6px 8px; text-align: left; vertical-align: top; }
+            th { background-color: #f2f2f2; font-weight: bold; text-align: center; }
+            .text-center { text-align: center; }
+            .text-right { text-align: right; }
+
+            .signature-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-top: 40px; text-align: center; font-size: 11pt; page-break-inside: avoid; }
+            .signature-box { display: flex; flex-direction: column; justify-content: space-between; height: 160px; }
+
+            @media print {
+              body { padding: 0; }
+              .no-print { display: none; }
+            }
+          </style>
+        </head>
+        <body>
+          
+          <!-- COVER / HALAMAN DEPAN -->
+          <div class="cover-container">
+            <div class="cover-header">
+              <h3>DOKUMEN STANDAR ADMINISTRASI SEKOLAH</h3>
+              2. LAPORAN PERTANGGUNGJAWABAN (LPJ) & PORTOFOLIO KINERJA WALI KELAS
+              <h2>${user.schoolName || 'SMA / SMK / SMP NEGERI'}</h2>
+              <p>Sistem Informasi Manajemen Portofolio & Perwalian Kelas</p>
+            </div>
+
+            <div class="cover-title-box">
+              <h1>PORTOFOLIO ADMINISTRASI & LAPORAN PERTANGGUNGJAWABAN (LPJ) WALI KELAS</h1>
+              <h2>SEMESTER ${selectedSemester.toUpperCase()} - TAHUN AJARAN 2025/2026</h2>
+            </div>
+
+            <div class="cover-identity-box">
+              <table>
+                <tr>
+                  <td width="140"><strong>Nama Sekolah</strong></td>
+                  <td width="15">:</td>
+                  <td>${user.schoolName || 'EduAdmin Pro'}</td>
+                </tr>
+                <tr>
+                  <td><strong>Kelas Perwalian</strong></td>
+                  <td>:</td>
+                  <td><strong>${className}</strong></td>
+                </tr>
+                <tr>
+                  <td><strong>Nama Wali Kelas</strong></td>
+                  <td>:</td>
+                  <td><strong>${user.fullName}</strong></td>
+                </tr>
+                <tr>
+                  <td><strong>NIP Wali Kelas</strong></td>
+                  <td>:</td>
+                  <td>${user.nip || '-'}</td>
+                </tr>
+                <tr>
+                  <td><strong>Jumlah Siswa</strong></td>
+                  <td>:</td>
+                  <td>${totalStudentsCount} Orang (${totalMaleStudents} L / ${totalFemaleStudents} P)</td>
+                </tr>
+                <tr>
+                  <td><strong>Semester / Tahun</strong></td>
+                  <td>:</td>
+                  <td>${selectedSemester} / 2025-2026</td>
+                </tr>
+              </table>
+            </div>
+
+            <div class="cover-footer">
+              <p>${printSettings.place.toUpperCase()}, 2026</p>
+            </div>
+          </div>
+
+          <!-- LEMBAR PENGESAHAN -->
+          <div class="page-break">
+            <div class="doc-header">
+              <h2>LEMBAR PENGESAHAN DOKUMEN PORTOFOLIO ADMINISTRASI WALI KELAS</h2>
+              <h3>Tahun Ajaran 2025/2026 - Semester ${selectedSemester}</h3>
+            </div>
+
+            <p class="paragraph">
+              Dokumen Portofolio Administrasi dan Laporan Pertanggungjawaban (LPJ) Kinerja Wali Kelas <strong>${className}</strong> 
+              pada semester <strong>${selectedSemester}</strong> Tahun Ajaran 2025/2026 yang disusun oleh <strong>${user.fullName}</strong> 
+              telah diperiksa, dievaluasi, dan disahkan sebagai dokumen portofolio pertanggungjawaban resmi sekolah.
+            </p>
+
+            <br />
+            <table style="width: 80%; margin: 20px auto; border: none;">
+              <tr style="border: none;">
+                <td style="border: none;" width="180"><strong>Dibuat Di</strong></td>
+                <td style="border: none;" width="15">:</td>
+                <td style="border: none;">${printSettings.place}</td>
+              </tr>
+              <tr style="border: none;">
+                <td style="border: none;"><strong>Pada Tanggal</strong></td>
+                <td style="border: none;">:</td>
+                <td style="border: none;">${printSettings.date}</td>
+              </tr>
+              <tr style="border: none;">
+                <td style="border: none;"><strong>Status Dokumen</strong></td>
+                <td style="border: none;">:</td>
+                <td style="border: none;">Lengkap & Disahkan (Portofolio Resmi)</td>
+              </tr>
+            </table>
+
+            <div class="signature-grid">
+              <div class="signature-box">
+                <div>
+                  <p>Mengetahui,</p>
+                  <p><strong>Koordinator BK / Guru BK</strong></p>
+                </div>
+                <div>
+                  <p>__________________________</p>
+                  <p>NIP. .....................................</p>
+                </div>
+              </div>
+
+              <div class="signature-box">
+                <div>
+                  <p>Disetujui Oleh,</p>
+                  <p><strong>Kepala Sekolah</strong></p>
+                </div>
+                <div>
+                  <p><strong>${printSettings.headmasterName || '.....................................'}</strong></p>
+                  <p>NIP. ${printSettings.headmasterNip || '.....................................'}</p>
+                </div>
+              </div>
+
+              <div class="signature-box">
+                <div>
+                  <p>${printSettings.place}, ${printSettings.date}</p>
+                  <p><strong>Wali Kelas ${className}</strong></p>
+                </div>
+                <div>
+                  <p><strong>${user.fullName}</strong></p>
+                  <p>NIP. ${user.nip || '-'}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- BAB I - PENDAHULUAN -->
+          <div class="page-break">
+            <div class="chapter-title">BAB I : PENDAHULUAN</div>
+
+            <div class="subchapter-title">1.1 Latar Belakang & Keadaan Umum Kelas</div>
+            <p class="paragraph">
+              Wali kelas memiliki peran strategis dalam sistem pengelolaan pendidikan di sekolah. Selain bertindak sebagai pendamping akademik, 
+              wali kelas berperan sebagai pengasuh, pembina karakter, serta jembatan komunikasi antara sekolah, siswa, dan orang tua/wali murid. 
+              Dokumen portofolio ini disusun sebagai wujud akuntabilitas dan transparansi pelaksanaan tugas wali kelas di <strong>${className}</strong> 
+              selama Semester ${selectedSemester} Tahun Ajaran 2025/2026.
+            </p>
+
+            <div class="subchapter-title">1.2 Profil & Demografi Siswa Kelas</div>
+            <p class="paragraph">
+              Kelas <strong>${className}</strong> memiliki total <strong>${totalStudentsCount}</strong> siswa terdaftar dengan rincian komposisi gender dan status perwalian sebagai berikut:
+            </p>
+            <table>
+              <thead>
+                <tr>
+                  <th width="40">NO</th>
+                  <th>DESKRIPSI PARAMETER DEMOGRAFI KELAS</th>
+                  <th width="150">JUMLAH / RINCIAN</th>
+                  <th width="120">PERSENTASE</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="text-center">1</td>
+                  <td>Jumlah Siswa Laki-Laki (L)</td>
+                  <td class="text-center">${totalMaleStudents} Siswa</td>
+                  <td class="text-center">${totalStudentsCount > 0 ? Math.round((totalMaleStudents/totalStudentsCount)*100) : 0}%</td>
+                </tr>
+                <tr>
+                  <td class="text-center">2</td>
+                  <td>Jumlah Siswa Perempuan (P)</td>
+                  <td class="text-center">${totalFemaleStudents} Siswa</td>
+                  <td class="text-center">${totalStudentsCount > 0 ? Math.round((totalFemaleStudents/totalStudentsCount)*100) : 0}%</td>
+                </tr>
+                <tr>
+                  <td class="text-center">3</td>
+                  <td><strong>Total Keseluruhan Siswa Kelas</strong></td>
+                  <td class="text-center"><strong>${totalStudentsCount} Siswa</strong></td>
+                  <td class="text-center"><strong>100%</strong></td>
+                </tr>
+                <tr>
+                  <td class="text-center">4</td>
+                  <td>Rata-Rata Nilai Leger Akademik Kelas</td>
+                  <td class="text-center"><strong>${classOverallAverage}</strong></td>
+                  <td class="text-center">SKBM ≥ ${kkm}</td>
+                </tr>
+                <tr>
+                  <td class="text-center">5</td>
+                  <td>Tingkat Kelayakan Sarpras Inventaris Kelas</td>
+                  <td class="text-center">${inventoryGoodPercent}% Layak Baik</td>
+                  <td class="text-center">${inventoryItems.length} Item</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div class="subchapter-title">1.3 Visi, Misi & Target Pengelolaan Kelas</div>
+            <p class="paragraph">
+              <strong>Visi Perwalian Kelas:</strong> "Mewujudkan kelas ${className} yang berakhlak mulia, disiplin tinggi, unggul secara akademik, serta memiliki solidaritas kekeluargaan yang erat."
+            </p>
+            <p class="paragraph">
+              <strong>Target Utama Semester Ini:</strong> (1) Memastikan seluruh siswa tuntas secara akademik dengan nilai di atas KKM (${kkm}); 
+              (2) Menekan tingkat ketidakhadiran dan pelanggaran disiplin hingga &lt; 5%; (3) Membangun kemitraan sinergis dengan Paguyuban Orang Tua Murid.
+            </p>
+          </div>
+
+          <!-- BAB II - PELAKSANAAN PROGRAM KERJA -->
+          <div>
+            <div class="chapter-title">BAB II : PELAKSANAAN PROGRAM KERJA WALI KELAS</div>
+            <p class="paragraph">
+              Berikut adalah rekapitulasi pelaksanaan program kerja wali kelas yang telah direalisasikan sepanjang Semester ${selectedSemester}:
+            </p>
+
+            <table>
+              <thead>
+                <tr>
+                  <th width="30">NO</th>
+                  <th width="140">BIDANG KEGIATAN</th>
+                  <th>NAMA PROGRAM KERJA</th>
+                  <th width="90">TARGET WAKTU</th>
+                  <th>INDIKATOR KEBERHASILAN</th>
+                  <th width="80">STATUS</th>
+                  <th width="50">%</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${workplanItems.map((item, idx) => `
+                  <tr>
+                    <td class="text-center">${idx + 1}</td>
+                    <td><strong>${item.category}</strong></td>
+                    <td>${item.title}</td>
+                    <td class="text-center">${item.targetMonth}</td>
+                    <td>${item.indicator}</td>
+                    <td class="text-center"><strong>${item.status}</strong></td>
+                    <td class="text-center">${item.progress}%</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+
+          <!-- BAB III - REKAPITULASI PEMBINAAN & DINAMIKA KELAS -->
+          <div>
+            <div class="chapter-title">BAB III : REKAPITULASI PEMBINAAN & DINAMIKA KELAS</div>
+
+            <div class="subchapter-title">3.1 Capaian Akademik & Leger Kelas</div>
+            <p class="paragraph">
+              Berdasarkan hasil pengolahan leger nilai semester ${selectedSemester}, rata-rata nilai pencapaian akademik siswa kelas ${className} mencapai <strong>${classOverallAverage}</strong>.
+            </p>
+
+            <div class="subchapter-title">3.2 Kedisiplinan & Catatan Pelanggaran BK (${violations.length} Kasus)</div>
+            ${violations.length === 0 ? `
+              <p class="paragraph">Selama semester ini, tidak tercatat adanya kasus pelanggaran disiplin berat pada siswa kelas ${className}.</p>
+            ` : `
+              <table>
+                <thead>
+                  <tr>
+                    <th width="30">NO</th>
+                    <th width="90">TANGGAL</th>
+                    <th>NAMA SISWA</th>
+                    <th>JENIS / CATEGORY PELANGGARAN</th>
+                    <th width="60">POIN</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${violations.slice(0, 10).map((v, idx) => {
+                    const st = students.find(s => s.id === v.studentId);
+                    return `
+                      <tr>
+                        <td class="text-center">${idx + 1}</td>
+                        <td class="text-center">${v.date}</td>
+                        <td><strong>${st ? st.name : v.studentId}</strong></td>
+                        <td>${v.category} - ${v.description || ''}</td>
+                        <td class="text-center"><strong>+${v.points}</strong></td>
+                      </tr>
+                    `;
+                  }).join('')}
+                </tbody>
+              </table>
+            `}
+
+            <div class="subchapter-title">3.3 Rekapitulasi Home Visit & Panggilan Orang Tua (${homeVisits.length + parentCalls.length} Kegiatan)</div>
+            <p class="paragraph">
+              Untuk mempererat hubungan dan menangani permasalahan siswa secara komprehensif, wali kelas bekerjasama dengan Guru BK telah melaksanakan <strong>${homeVisits.length}</strong> kali kunjungan rumah (home visit) dan <strong>${parentCalls.length}</strong> kali panggilan orang tua ke sekolah.
+            </p>
+
+            <div class="subchapter-title">3.4 Rekapitulasi Prestasi Siswa (${achievements.length} Prestasi)</div>
+            ${achievements.length === 0 ? `
+              <p class="paragraph">Belum ada catatan prestasi kompetisi resmi yang dibukukan pada semester ini.</p>
+            ` : `
+              <table>
+                <thead>
+                  <tr>
+                    <th width="30">NO</th>
+                    <th>NAMA SISWA</th>
+                    <th>NAMA PRESTASI / KEJUARAAN</th>
+                    <th width="100">TINGKAT</th>
+                    <th width="80">JUARA</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${achievements.map((a, idx) => {
+                    const st = students.find(s => s.id === a.studentId);
+                    return `
+                      <tr>
+                        <td class="text-center">${idx + 1}</td>
+                        <td><strong>${st ? st.name : a.studentId}</strong></td>
+                        <td>${a.title}</td>
+                        <td class="text-center">${a.level}</td>
+                        <td class="text-center"><strong>${a.rank}</strong></td>
+                      </tr>
+                    `;
+                  }).join('')}
+                </tbody>
+              </table>
+            `}
+          </div>
+
+          <!-- BAB IV - EVALUASI, KENDALA & SOLUSI -->
+          <div>
+            <div class="chapter-title">BAB IV : EVALUASI, KENDALA & SOLUSI</div>
+
+            <div class="subchapter-title">4.1 Evaluasi Capaian & Pelaksanaan Tugas Wali Kelas</div>
+            <p class="paragraph" style="white-space: pre-line;">${lpjReport.evaluationSummary || 'Belum ada catatan evaluasi.'}</p>
+
+            <div class="subchapter-title">4.2 Hambatan & Kendala Dalam Mengelola Kelas</div>
+            <p class="paragraph" style="white-space: pre-line;">${lpjReport.obstacles || 'Tidak ada kendala berarti.'}</p>
+
+            <div class="subchapter-title">4.3 Solusi & Langkah Penyelesaian Yang Dilakukan</div>
+            <p class="paragraph" style="white-space: pre-line;">${lpjReport.solutions || 'Solusi berjalan dengan baik.'}</p>
+
+            <div class="subchapter-title">4.4 Rekomendasi & Rencana Langkah Semester Berikutnya</div>
+            <p class="paragraph" style="white-space: pre-line;">${lpjReport.recommendations || 'Melanjutkan program kerja secara konsisten.'}</p>
+          </div>
+
+          <!-- BAB V - PENUTUP & LAMPIRAN -->
+          <div>
+            <div class="chapter-title">BAB V : PENUTUP & LAMPIRAN</div>
+
+            <div class="subchapter-title">5.1 Kesimpulan & Penutup</div>
+            <p class="paragraph">
+              Demikian Laporan Pertanggungjawaban (LPJ) dan Portofolio Administrasi Wali Kelas ini disusun dengan sebenarnya. 
+              Diharapkan dokumen ini dapat memberikan gambaran utuh mengenai perkembangan kelas ${className} serta menjadi bahan evaluasi peningkatan mutu perwalian di masa mendatang.
+            </p>
+
+            <div class="subchapter-title">5.2 Lampiran I: Inventory & Sarana Prasarana Kelas (${inventoryItems.length} Item)</div>
+            <table>
+              <thead>
+                <tr>
+                  <th width="30">NO</th>
+                  <th>NAMA BARANG / SARPRAS</th>
+                  <th width="80">JUMLAH</th>
+                  <th width="100">KONDISI</th>
+                  <th>KETERANGAN</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${inventoryItems.map((item, idx) => `
+                  <tr>
+                    <td class="text-center">${idx + 1}</td>
+                    <td>${item.itemName}</td>
+                    <td class="text-center">${item.quantity} ${item.unit}</td>
+                    <td class="text-center"><strong>${item.condition}</strong></td>
+                    <td>${item.notes || '-'}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+
+          <script>
+            window.onload = () => {
+              window.print();
+            };
+          </script>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+  };
+
   const handleExportLpjExcel = () => {
     const wb = XLSX.utils.book_new();
 
@@ -2479,9 +2908,17 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
               </button>
               <button
                 onClick={handlePrintLpj}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition flex items-center gap-2 shadow-sm"
+                className="px-3.5 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition flex items-center gap-1.5 shadow-sm"
+                title="Cetak Laporan Pertanggungjawaban ringkas"
               >
-                <Printer size={16} /> Cetak LPJ Resmi
+                <Printer size={16} /> Cetak LPJ Ringkas
+              </button>
+              <button
+                onClick={handlePrintOfficialPortfolio}
+                className="px-3.5 py-2 bg-purple-700 text-white rounded-lg text-sm font-medium hover:bg-purple-800 transition flex items-center gap-1.5 shadow-sm"
+                title="Cetak Portofolio Lengkap Standar Administrasi Sekolah (Cover, Lembar Pengesahan, BAB I - V, Lampiran)"
+              >
+                <BookOpen size={16} /> Cetak Portofolio Standar Administrasi
               </button>
             </div>
           </div>
