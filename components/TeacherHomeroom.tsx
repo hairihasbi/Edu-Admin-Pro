@@ -900,6 +900,7 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
             violationName: finalCategory,
             points: Number(formInput.points),
             description: formInput.description || 'Dicatat oleh Wali Kelas',
+            reportedBy: (editingRecord as any).reportedBy || (user.fullName ? `Wali Kelas (${user.fullName})` : 'Wali Kelas')
           });
         } else {
           await updateStudentPointReduction(editingRecord.id, {
@@ -917,7 +918,7 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
             violationName: finalCategory,
             points: Number(formInput.points),
             description: formInput.description || 'Dicatat oleh Wali Kelas',
-            reportedBy: user.fullName || 'Wali Kelas'
+            reportedBy: user.fullName ? `Wali Kelas (${user.fullName})` : 'Wali Kelas'
           });
         } else {
           await addStudentPointReduction({
@@ -994,22 +995,24 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
               <thead>
                 <tr>
                   <th width="5%">No</th>
-                  <th width="15%">Tanggal</th>
-                  <th width="25%">Jenis Pelanggaran</th>
-                  <th width="45%">Keterangan</th>
-                  <th width="10%">Poin</th>
+                  <th width="12%">Tanggal</th>
+                  <th width="23%">Jenis Pelanggaran</th>
+                  <th width="20%">Diinput Oleh</th>
+                  <th width="32%">Keterangan</th>
+                  <th width="8%">Poin</th>
                 </tr>
               </thead>
               <tbody>
                 ${student.details.violations.map((v: any, i: number) => `
                   <tr>
-                    <td>${i + 1}</td>
-                    <td>${v.date}</td>
-                    <td>${v.violationName}</td>
+                    <td style="text-align:center">${i + 1}</td>
+                    <td style="text-align:center">${v.date}</td>
+                    <td><strong>${v.violationName}</strong></td>
+                    <td><span style="background:#e0e7ff; color:#3730a3; padding:2px 6px; border-radius:4px; font-weight:bold; font-size:10px;">${v.reportedBy || 'Guru BK / Wali Kelas'}</span></td>
                     <td>${v.description || '-'}</td>
-                    <td>${v.points}</td>
+                    <td style="text-align:center; font-weight:bold; color:#dc2626;">+${v.points}</td>
                   </tr>
-                `).join('') || '<tr><td colspan="5" style="text-align:center">Tidak ada data</td></tr>'}
+                `).join('') || '<tr><td colspan="6" style="text-align:center">Tidak ada data</td></tr>'}
               </tbody>
             </table>
           </div>
@@ -1093,6 +1096,7 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
       No: i + 1,
       Tanggal: v.date,
       Pelanggaran: v.violationName,
+      'Penginput Data': v.reportedBy || 'Guru BK / Wali Kelas',
       Poin: v.points,
       Keterangan: v.description || '-'
     }));
@@ -1255,6 +1259,7 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                         <th width="25">No</th>
                         <th width="75">Tanggal</th>
                         <th>Jenis Pelanggaran</th>
+                        <th width="120">Diinput Oleh</th>
                         <th>Keterangan</th>
                         <th width="35">Poin</th>
                       </tr>
@@ -1264,9 +1269,10 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                         <tr>
                           <td class="text-center">${i + 1}</td>
                           <td class="text-center">${v.date}</td>
-                          <td>${v.violationName}</td>
+                          <td><strong>${v.violationName}</strong></td>
+                          <td><span style="font-weight:600; color:#1e1b4b;">${v.reportedBy || 'Guru BK / Wali Kelas'}</span></td>
                           <td>${v.description || '-'}</td>
-                          <td class="text-center">+${v.points}</td>
+                          <td class="text-center" style="font-weight:bold; color:#dc2626;">+${v.points}</td>
                         </tr>
                       `).join('')}
                     </tbody>
@@ -1424,6 +1430,7 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
         NIS: st ? st.nis : '-',
         NamaSiswa: st ? st.name : v.studentId,
         JenisPelanggaran: v.violationName,
+        PenginputData: v.reportedBy || 'Guru BK / Wali Kelas',
         Poin: v.points,
         Keterangan: v.description || '-'
       };
@@ -1914,7 +1921,7 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
       nis: string;
       totalViolations: number;
       totalPoints: number;
-      details: { date: string; category: string; description: string; points: number }[];
+      details: { date: string; category: string; description: string; points: number; reportedBy?: string }[];
       recommendation: string;
     }> = {};
 
@@ -1939,7 +1946,8 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
         date: v.date,
         category: cat,
         description: desc,
-        points: pts
+        points: pts,
+        reportedBy: v.reportedBy || 'Guru BK / Wali Kelas'
       });
       studentViolationMap[v.studentId].totalViolations += 1;
       studentViolationMap[v.studentId].totalPoints += pts;
@@ -2278,10 +2286,11 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                       </td>
                       <td>
                         <ul style="margin: 0; padding-left: 15px; font-size: 11px; line-height: 1.5;">
-                          ${grp.details.map(d => `
+                          ${grp.details.map((d: any) => `
                             <li>
                               <strong>[${d.date}]</strong> ${d.category} ${d.description ? `(${d.description})` : ''} 
                               <span style="color: #dc2626; font-weight: bold;">(+${d.points} Poin)</span>
+                              <span style="color: #4338ca; font-weight: 600; font-size: 10px;"> [Input: ${d.reportedBy}]</span>
                             </li>
                           `).join('')}
                         </ul>
@@ -2493,7 +2502,7 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
       nis: string;
       totalViolations: number;
       totalPoints: number;
-      details: { date: string; category: string; description: string; points: number }[];
+      details: { date: string; category: string; description: string; points: number; reportedBy?: string }[];
     }> = {};
 
     violations.forEach(v => {
@@ -2516,7 +2525,8 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
         date: v.date,
         category: cat,
         description: desc,
-        points: pts
+        points: pts,
+        reportedBy: v.reportedBy || 'Guru BK / Wali Kelas'
       });
       excelViolationMap[v.studentId].totalViolations += 1;
       excelViolationMap[v.studentId].totalPoints += pts;
@@ -2541,7 +2551,7 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
         'Nama Siswa': grp.studentName,
         'Total Kasus Pelanggaran': grp.totalViolations,
         'Total Poin Akumulasi': grp.totalPoints,
-        'Rincian Pelanggaran (Tanggal & Jenis)': grp.details.map(d => `[${d.date}] ${d.category}${d.description ? ' (' + d.description + ')' : ''} (+${d.points} Pts)`).join('; '),
+        'Rincian Pelanggaran (Tanggal & Jenis)': grp.details.map((d: any) => `[${d.date}] ${d.category}${d.description ? ' (' + d.description + ')' : ''} (+${d.points} Pts) [Penginput: ${d.reportedBy}]`).join('; '),
         'Rekomendasi Tindakan Wali Kelas & BK': rec
       };
     });
@@ -2936,10 +2946,16 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                                                                         {s.details.violations.map(v => (
                                                                             <div key={v.id} className="group flex justify-between items-center p-2 rounded-lg hover:bg-red-50/50 transition">
                                                                                 <div className="text-[11px] text-gray-700">
-                                                                                    <span className="font-bold text-red-600 bg-red-50 px-1 py-0.5 rounded text-[10px] mr-1.5">{v.date}</span>
-                                                                                    <span className="font-semibold text-gray-900">{v.violationName}</span>
-                                                                                    <span className="ml-1 text-red-600 font-bold">(+{v.points} pts)</span>
-                                                                                    {v.description && <span className="text-gray-500 block mt-0.5 ml-2.5">— {v.description}</span>}
+                                                                                    <div className="flex flex-wrap items-center gap-1.5">
+                                                                                        <span className="font-bold text-red-600 bg-red-50 px-1 py-0.5 rounded text-[10px]">{v.date}</span>
+                                                                                        <span className="font-semibold text-gray-900">{v.violationName}</span>
+                                                                                        <span className="text-red-600 font-bold">(+{v.points} pts)</span>
+                                                                                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
+                                                                                            <UserCheck size={11} className="text-indigo-600" />
+                                                                                            Penginput: <span className="font-bold">{v.reportedBy || 'Guru BK / Wali Kelas'}</span>
+                                                                                        </span>
+                                                                                    </div>
+                                                                                    {v.description && <span className="text-gray-500 block mt-0.5 ml-1">— {v.description}</span>}
                                                                                 </div>
                                                                                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                                                                     <button

@@ -280,7 +280,7 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
       violationName: violationForm.name,
       points: Number(violationForm.points),
       description: violationForm.description,
-      reportedBy: user.fullName
+      reportedBy: user.fullName ? `Guru BK (${user.fullName})` : 'Guru BK'
     });
     setViolationForm({ name: '', points: 5, description: '', date: new Date().toISOString().split('T')[0] });
     loadFeatureData();
@@ -419,11 +419,12 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
         <tr>
           <td style="text-align:center">${i+1}</td>
           <td>${v.date}</td>
-          <td>${v.violationName}</td>
+          <td><strong>${v.violationName}</strong></td>
+          <td><span style="font-weight:600; color:#3730a3;">${v.reportedBy || 'Guru BK / Wali Kelas'}</span></td>
           <td>${v.description || '-'}</td>
-          <td style="text-align:center">${v.points}</td>
+          <td style="text-align:center; font-weight:bold; color:#dc2626;">+${v.points}</td>
         </tr>`).join('')
-      : '<tr><td colspan="5" style="text-align:center; font-style: italic;">Tidak ada data pelanggaran</td></tr>';
+      : '<tr><td colspan="6" style="text-align:center; font-style: italic;">Tidak ada data pelanggaran</td></tr>';
 
     const reductionRows = data.reductions.length > 0 
       ? data.reductions.map((r: any, i: number) => `
@@ -529,10 +530,11 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
               <thead>
                 <tr>
                   <th width="5%">No</th>
-                  <th width="15%">Tanggal</th>
-                  <th width="25%">Jenis Pelanggaran</th>
-                  <th width="45%">Keterangan</th>
-                  <th width="10%">Poin</th>
+                  <th width="12%">Tanggal</th>
+                  <th width="23%">Jenis Pelanggaran</th>
+                  <th width="20%">Diinput Oleh</th>
+                  <th width="32%">Keterangan</th>
+                  <th width="8%">Poin</th>
                 </tr>
               </thead>
               <tbody>${violationRows}</tbody>
