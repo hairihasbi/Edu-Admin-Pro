@@ -216,18 +216,52 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
   // Expanded row state for Behavior tab
   const [expandedStudentId, setExpandedStudentId] = useState<string | null>(null);
 
-  // Print Settings (for Inventory)
+  // Print Settings (for LPJ, Portfolio, Inventory, BK Reports)
   const [printSettings, setPrintSettings] = useState({
     showDate: true,
     showSignature: true,
     place: 'Jakarta',
     date: new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }),
-    homeroomName: user.fullName,
+    homeroomName: user.fullName || '',
     homeroomNip: user.nip || '-',
     headmasterName: '',
-    headmasterNip: ''
+    headmasterNip: '',
+    bkName: '',
+    bkNip: ''
   });
   const [showPrintModal, setShowPrintModal] = useState(false);
+
+  // Helper to update & persist print settings
+  const handleUpdatePrintSetting = (field: string, value: any) => {
+    setPrintSettings(prev => {
+      const updated = { ...prev, [field]: value };
+      try {
+        localStorage.setItem(`homeroom_print_settings_${user.schoolNpsn || 'default'}`, JSON.stringify(updated));
+      } catch (e) {
+        console.error("Error saving print settings", e);
+      }
+      return updated;
+    });
+  };
+
+  // Load saved print settings on mount
+  useEffect(() => {
+    const key = `homeroom_print_settings_${user.schoolNpsn || 'default'}`;
+    const saved = localStorage.getItem(key);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        setPrintSettings(prev => ({
+          ...prev,
+          ...parsed,
+          homeroomName: parsed.homeroomName || user.fullName,
+          homeroomNip: parsed.homeroomNip || user.nip || '-'
+        }));
+      } catch (e) {
+        console.error("Error parsing saved print settings", e);
+      }
+    }
+  }, [user.schoolNpsn, user.fullName, user.nip]);
 
   const visibleSubjects = filterSubject === 'ALL' 
       ? detectedSubjects 
@@ -287,12 +321,22 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
       }
 
       if (settings) {
-        setPrintSettings(prev => ({
-          ...prev,
-          headmasterName: settings.headmasterName || '',
-          headmasterNip: settings.headmasterNip || '',
-          place: settings.schoolCity || 'Jakarta'
-        }));
+        setPrintSettings(prev => {
+          const key = `homeroom_print_settings_${user.schoolNpsn || 'default'}`;
+          const saved = localStorage.getItem(key);
+          let loadedSaved: any = {};
+          if (saved) {
+            try { loadedSaved = JSON.parse(saved); } catch(e) {}
+          }
+          return {
+            ...prev,
+            headmasterName: loadedSaved.headmasterName !== undefined && loadedSaved.headmasterName !== '' ? loadedSaved.headmasterName : (settings.headmasterName || prev.headmasterName || ''),
+            headmasterNip: loadedSaved.headmasterNip !== undefined && loadedSaved.headmasterNip !== '' ? loadedSaved.headmasterNip : (settings.headmasterNip || prev.headmasterNip || ''),
+            bkName: loadedSaved.bkName !== undefined && loadedSaved.bkName !== '' ? loadedSaved.bkName : ((settings as any).bkName || prev.bkName || ''),
+            bkNip: loadedSaved.bkNip !== undefined && loadedSaved.bkNip !== '' ? loadedSaved.bkNip : ((settings as any).bkNip || prev.bkNip || ''),
+            place: loadedSaved.place !== undefined && loadedSaved.place !== '' ? loadedSaved.place : (settings.schoolCity && settings.schoolCity.trim() !== '' ? settings.schoolCity : prev.place)
+          };
+        });
       }
 
       // Load Workplan & LPJ from localStorage
@@ -1621,20 +1665,27 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
           <div class="text-block">${lpjReport.recommendations || 'Melanjutkan program kerja secara konsisten'}</div>
 
           ${printSettings.showSignature ? `
-          <div class="footer">
-            <div class="signature-box">
+          <div class="footer" style="margin-top: 40px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; text-align: center; page-break-inside: avoid;">
+            <div class="signature-box" style="width: auto;">
               <p>Mengetahui,</p>
-              <p>Kepala Sekolah</p>
+              <p><strong>Koordinator BK / Guru BK</strong></p>
+              <div class="signature-space"></div>
+              <p style="white-space: nowrap;"><strong>${printSettings.bkName || '................................'}</strong></p>
+              <p>NIP. ${printSettings.bkNip || '................................'}</p>
+            </div>
+            <div class="signature-box" style="width: auto;">
+              <p>Disetujui Oleh,</p>
+              <p><strong>Kepala Sekolah</strong></p>
               <div class="signature-space"></div>
               <p style="white-space: nowrap;"><strong>${printSettings.headmasterName || '................................'}</strong></p>
               <p>NIP. ${printSettings.headmasterNip || '................................'}</p>
             </div>
-            <div class="signature-box">
+            <div class="signature-box" style="width: auto;">
               <p>${printSettings.place}, ${printSettings.date}</p>
-              <p>Wali Kelas ${className}</p>
+              <p><strong>Wali Kelas ${className}</strong></p>
               <div class="signature-space"></div>
-              <p style="white-space: nowrap;"><strong>${user.fullName}</strong></p>
-              <p>NIP. ${user.nip || '-'}</p>
+              <p style="white-space: nowrap;"><strong>${printSettings.homeroomName || user.fullName}</strong></p>
+              <p>NIP. ${printSettings.homeroomNip || user.nip || '-'}</p>
             </div>
           </div>
           ` : ''}
@@ -1806,8 +1857,8 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                   <p><strong>Koordinator BK / Guru BK</strong></p>
                 </div>
                 <div>
-                  <p>__________________________</p>
-                  <p>NIP. .....................................</p>
+                  <p><strong>${printSettings.bkName || '.....................................'}</strong></p>
+                  <p>NIP. ${printSettings.bkNip || '.....................................'}</p>
                 </div>
               </div>
 
@@ -1828,8 +1879,8 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                   <p><strong>Wali Kelas ${className}</strong></p>
                 </div>
                 <div>
-                  <p><strong>${user.fullName}</strong></p>
-                  <p>NIP. ${user.nip || '-'}</p>
+                  <p><strong>${printSettings.homeroomName || user.fullName}</strong></p>
+                  <p>NIP. ${printSettings.homeroomNip || user.nip || '-'}</p>
                 </div>
               </div>
             </div>
@@ -3291,6 +3342,13 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                 <FileSpreadsheet size={16} /> Excel LPJ
               </button>
               <button
+                onClick={() => setShowPrintModal(true)}
+                className="px-3.5 py-2 border border-indigo-200 bg-indigo-50 text-indigo-700 rounded-lg text-sm font-medium hover:bg-indigo-100 transition flex items-center gap-1.5 shadow-sm"
+                title="Atur Tempat, Tanggal, serta NIP/Nama Kepsek, Guru BK & Wali Kelas"
+              >
+                <Printer size={16} /> Legalisasi Cetak
+              </button>
+              <button
                 onClick={handlePrintLpj}
                 className="px-3.5 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition flex items-center gap-1.5 shadow-sm"
                 title="Cetak Laporan Pertanggungjawaban ringkas"
@@ -3527,6 +3585,113 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
               </div>
             </div>
           </div>
+
+          {/* Legalisasi & Tanda Tangan Cetak Laporan Card */}
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
+              <div>
+                <h4 className="font-bold text-gray-800 text-lg flex items-center gap-2">
+                  <FileText className="text-indigo-600" size={20} /> Pengaturan Legalisasi & Tanda Tangan Cetak Laporan
+                </h4>
+                <p className="text-xs text-gray-500 mt-1">
+                  Atur tempat penerbitan (kota/kabupaten), tanggal cetak, serta nama & NIP Kepala Sekolah, Guru BK, dan Wali Kelas untuk Lembar Pengesahan.
+                </p>
+              </div>
+              <span className="text-xs bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-lg font-semibold border border-emerald-100 shrink-0 flex items-center gap-1.5">
+                <Check size={14} /> Otomatis Tersimpan
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-gray-700 uppercase">Tempat Dibuat (Kota)</label>
+                <input
+                  type="text"
+                  value={printSettings.place}
+                  onChange={(e) => handleUpdatePrintSetting('place', e.target.value)}
+                  placeholder="Contoh: Jakarta / Bandung / Malang"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-gray-700 uppercase">Tanggal Dokumen</label>
+                <input
+                  type="text"
+                  value={printSettings.date}
+                  onChange={(e) => handleUpdatePrintSetting('date', e.target.value)}
+                  placeholder="Contoh: 5 Agustus 2026"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-gray-700 uppercase">Nama Kepala Sekolah</label>
+                <input
+                  type="text"
+                  value={printSettings.headmasterName}
+                  onChange={(e) => handleUpdatePrintSetting('headmasterName', e.target.value)}
+                  placeholder="Nama & Gelar Kepsek"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-gray-700 uppercase">NIP Kepala Sekolah</label>
+                <input
+                  type="text"
+                  value={printSettings.headmasterNip}
+                  onChange={(e) => handleUpdatePrintSetting('headmasterNip', e.target.value)}
+                  placeholder="NIP Kepala Sekolah"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-gray-700 uppercase">Nama Guru / Koordinator BK</label>
+                <input
+                  type="text"
+                  value={printSettings.bkName}
+                  onChange={(e) => handleUpdatePrintSetting('bkName', e.target.value)}
+                  placeholder="Nama & Gelar Guru BK"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-gray-700 uppercase">NIP Guru / Koordinator BK</label>
+                <input
+                  type="text"
+                  value={printSettings.bkNip}
+                  onChange={(e) => handleUpdatePrintSetting('bkNip', e.target.value)}
+                  placeholder="NIP Guru BK"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-gray-700 uppercase">Nama Wali Kelas</label>
+                <input
+                  type="text"
+                  value={printSettings.homeroomName}
+                  onChange={(e) => handleUpdatePrintSetting('homeroomName', e.target.value)}
+                  placeholder="Nama Wali Kelas"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-gray-700 uppercase">NIP Wali Kelas</label>
+                <input
+                  type="text"
+                  value={printSettings.homeroomNip}
+                  onChange={(e) => handleUpdatePrintSetting('homeroomNip', e.target.value)}
+                  placeholder="NIP Wali Kelas"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -3661,66 +3826,117 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
       {/* Print Settings Modal */}
       {showPrintModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-indigo-50">
               <h3 className="text-lg font-bold text-indigo-900 flex items-center gap-2">
-                <Printer size={20} /> Pengaturan Cetak
+                <Printer size={20} /> Pengaturan Legalisasi & Cetak
               </h3>
               <button onClick={() => setShowPrintModal(false)} className="text-gray-400 hover:text-gray-600">
                 <X size={20} />
               </button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="p-6 space-y-4 max-h-[75vh] overflow-y-auto text-sm">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-gray-500 uppercase">Tempat</label>
+                  <label className="text-xs font-bold text-gray-600 uppercase">Tempat Dibuat (Kota)</label>
                   <input 
                     type="text" 
                     value={printSettings.place}
-                    onChange={(e) => setPrintSettings({...printSettings, place: e.target.value})}
+                    onChange={(e) => handleUpdatePrintSetting('place', e.target.value)}
+                    placeholder="misal: Jakarta / Bandung"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-gray-500 uppercase">Tanggal</label>
+                  <label className="text-xs font-bold text-gray-600 uppercase">Tanggal Dokumen</label>
                   <input 
                     type="text" 
                     value={printSettings.date}
-                    onChange={(e) => setPrintSettings({...printSettings, date: e.target.value})}
+                    onChange={(e) => handleUpdatePrintSetting('date', e.target.value)}
+                    placeholder="misal: 5 Agustus 2026"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
                   />
                 </div>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-500 uppercase">Nama Kepala Sekolah</label>
-                <input 
-                  type="text" 
-                  value={printSettings.headmasterName}
-                  onChange={(e) => setPrintSettings({...printSettings, headmasterName: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                />
+              <div className="grid grid-cols-2 gap-4 pt-2 border-t border-gray-100">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-gray-600 uppercase">Nama Kepala Sekolah</label>
+                  <input 
+                    type="text" 
+                    value={printSettings.headmasterName}
+                    onChange={(e) => handleUpdatePrintSetting('headmasterName', e.target.value)}
+                    placeholder="Nama & Gelar Kepsek"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-gray-600 uppercase">NIP Kepala Sekolah</label>
+                  <input 
+                    type="text" 
+                    value={printSettings.headmasterNip}
+                    onChange={(e) => handleUpdatePrintSetting('headmasterNip', e.target.value)}
+                    placeholder="NIP Kepsek"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                  />
+                </div>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-500 uppercase">NIP Kepala Sekolah</label>
-                <input 
-                  type="text" 
-                  value={printSettings.headmasterNip}
-                  onChange={(e) => setPrintSettings({...printSettings, headmasterNip: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                />
+              <div className="grid grid-cols-2 gap-4 pt-2 border-t border-gray-100">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-gray-600 uppercase">Nama Guru / Koordinator BK</label>
+                  <input 
+                    type="text" 
+                    value={printSettings.bkName}
+                    onChange={(e) => handleUpdatePrintSetting('bkName', e.target.value)}
+                    placeholder="Nama & Gelar Guru BK"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-gray-600 uppercase">NIP Guru / Koordinator BK</label>
+                  <input 
+                    type="text" 
+                    value={printSettings.bkNip}
+                    onChange={(e) => handleUpdatePrintSetting('bkNip', e.target.value)}
+                    placeholder="NIP Guru BK"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                  />
+                </div>
               </div>
 
-              <div className="flex items-center gap-2 pt-2">
+              <div className="grid grid-cols-2 gap-4 pt-2 border-t border-gray-100">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-gray-600 uppercase">Nama Wali Kelas</label>
+                  <input 
+                    type="text" 
+                    value={printSettings.homeroomName}
+                    onChange={(e) => handleUpdatePrintSetting('homeroomName', e.target.value)}
+                    placeholder="Nama Wali Kelas"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-gray-600 uppercase">NIP Wali Kelas</label>
+                  <input 
+                    type="text" 
+                    value={printSettings.homeroomNip}
+                    onChange={(e) => handleUpdatePrintSetting('homeroomNip', e.target.value)}
+                    placeholder="NIP Wali Kelas"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
                 <input 
                   type="checkbox" 
                   id="showSignature"
                   checked={printSettings.showSignature}
-                  onChange={(e) => setPrintSettings({...printSettings, showSignature: e.target.checked})}
+                  onChange={(e) => handleUpdatePrintSetting('showSignature', e.target.checked)}
                   className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
                 />
-                <label htmlFor="showSignature" className="text-sm text-gray-700">Tampilkan Tanda Tangan</label>
+                <label htmlFor="showSignature" className="text-sm text-gray-700">Tampilkan Blok Tanda Tangan Pada Laporan</label>
               </div>
             </div>
             <div className="p-6 bg-gray-50 border-t border-gray-100 flex gap-3">
@@ -3728,7 +3944,7 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                 onClick={() => setShowPrintModal(false)}
                 className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-100 transition"
               >
-                Batal
+                Tutup & Simpan
               </button>
               <button 
                 onClick={() => {
@@ -3737,7 +3953,7 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                 }}
                 className="flex-1 px-4 py-2.5 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition flex items-center justify-center gap-2"
               >
-                <Printer size={18} /> Cetak Sekarang
+                <Printer size={18} /> Cetak Inventaris
               </button>
             </div>
           </div>
