@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, ClassRoom, ScopeMaterial, TeachingJournal, SD_SUBJECTS_PHASE_A, SD_SUBJECTS_PHASE_BC, MATH_SUBJECT_OPTIONS, AbsentStudent, TeachingSchedule, Student } from '../types';
 import { getClasses, getScopeMaterials, getTeachingJournals, addTeachingJournal, updateTeachingJournal, deleteTeachingJournal, bulkDeleteTeachingJournals, getStudents, getTeachingSchedules, getLocalDate, isSubjectMatching } from '../services/database';
-import { Plus, Save, Trash2, Filter, Printer, FileSpreadsheet, NotebookPen, CalendarDays, ChevronLeft, ChevronRight, UserMinus, Pencil } from './Icons';
+import { Plus, Save, Trash2, Filter, Printer, FileSpreadsheet, NotebookPen, CalendarDays, ChevronLeft, ChevronRight, UserMinus, Pencil, Copy, Search, X } from './Icons';
 import Skeleton from './Skeleton';
 import * as XLSX from 'xlsx';
 
@@ -57,6 +57,9 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
   const [printMode, setPrintMode] = useState<'BULANAN' | 'SEMESTER'>('BULANAN');
   const [printSemester, setPrintSemester] = useState<'Ganjil' | 'Genap' | '1 Tahun'>('Ganjil');
   const [printClassStudents, setPrintClassStudents] = useState<Student[]>([]);
+  const [copyNotice, setCopyNotice] = useState<string | null>(null);
+  const [showCopyModal, setShowCopyModal] = useState<boolean>(false);
+  const [copySearch, setCopySearch] = useState<string>('');
 
   const [validationData, setValidationData] = useState({
     placeName: localStorage.getItem('journal_place_name') || '',
@@ -259,6 +262,26 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
           }
         }
         setAllMaterials(unique);
+
+        // If formData.materialId is set but doesn't exist directly in new target class materials, try to auto-map by code/content
+        setFormData(prev => {
+          if (!prev.materialId) return prev;
+          const exists = unique.some(m => m.id === prev.materialId);
+          if (!exists) {
+            const srcMat = materialMap[prev.materialId];
+            if (srcMat) {
+              const matched = unique.find(m => 
+                (m.code && srcMat.code && m.code.trim().toLowerCase() === srcMat.code.trim().toLowerCase()) ||
+                (m.content && srcMat.content && m.content.trim().toLowerCase() === srcMat.content.trim().toLowerCase())
+              );
+              if (matched) {
+                return { ...prev, materialId: matched.id };
+              }
+            }
+            return { ...prev, materialId: '' };
+          }
+          return prev;
+        });
       };
       fetchMats();
     } else {
@@ -279,14 +302,60 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
       const updated = { ...prev, [name]: value };
       if (name === 'classId') {
         setAbsentStudents([]);
-        updated.materialId = '';
+        // Don't reset materialId immediately if copying is active, let useEffect auto-map
       }
       return updated;
     });
   };
 
+  const handleCopyJournal = (journal: TeachingJournal) => {
+    setEditingJournalId(null); // Create a NEW journal entry
+
+    const srcClass = classes.find(c => c.id === journal.classId);
+    const srcClassName = srcClass ? srcClass.name : 'Kelas Lain';
+
+    if (journal.subject) {
+      setFormSubject(journal.subject);
+    }
+
+    // Attempt to match material in target class if source material exists
+    const srcMat = materialMap[journal.materialId];
+    let matchedMaterialId = journal.materialId || '';
+
+    if (srcMat && allMaterials.length > 0) {
+      const matched = allMaterials.find(m => 
+        (m.code && srcMat.code && m.code.trim().toLowerCase() === srcMat.code.trim().toLowerCase()) ||
+        (m.content && srcMat.content && m.content.trim().toLowerCase() === srcMat.content.trim().toLowerCase())
+      );
+      if (matched) {
+        matchedMaterialId = matched.id;
+      }
+    }
+
+    setFormData({
+      classId: formData.classId || classes[0]?.id || '',
+      materialId: matchedMaterialId,
+      learningObjective: journal.learningObjective || '',
+      date: getLocalDate(), // default to today for the copied journal
+      meetingNo: journal.meetingNo || '',
+      activities: journal.activities || '',
+      reflection: journal.reflection || '',
+      followUp: journal.followUp || '',
+      examAgenda: journal.examAgenda || ''
+    });
+
+    // Reset absent students since the new class session has different students
+    setAbsentStudents([]);
+
+    setCopyNotice(`📋 Isi jurnal disalin dari ${srcClassName} (${journal.subject || ''}). Silakan tentukan Kelas Tujuan, Jam Ke, Tanggal, & Presensi Siswa.`);
+
+    // Scroll to form smoothly
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const handleEdit = (journal: TeachingJournal) => {
     setEditingJournalId(journal.id);
+    setCopyNotice(null);
     setFormData({
       classId: journal.classId,
       materialId: journal.materialId || '',
@@ -310,6 +379,7 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
 
   const handleCancelEdit = () => {
     setEditingJournalId(null);
+    setCopyNotice(null);
     setFormData({
       classId: classes[0]?.id || '',
       materialId: '',
@@ -376,6 +446,7 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
 
       if (newJournal) {
         setJournals([newJournal, ...journals]);
+        setCopyNotice(null);
         // Reset form partials (keep class/date/meeting flow)
         setFormData(prev => ({
           ...prev,
@@ -916,10 +987,36 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
 
       {/* --- FORM SECTION --- */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-         <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2 mb-6">
-            <NotebookPen className="text-blue-600" />
-            {editingJournalId ? 'Edit Jurnal' : 'Tambah Jurnal Baru'}
-         </h2>
+         <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+            <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+               <NotebookPen className="text-blue-600" />
+               {editingJournalId ? 'Edit Jurnal' : 'Tambah Jurnal Baru'}
+            </h2>
+            <button
+               type="button"
+               onClick={() => setShowCopyModal(true)}
+               className="px-3.5 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold rounded-lg border border-blue-200 transition flex items-center gap-2 shadow-sm"
+               title="Salin isi jurnal dari kelas atau pertemuan lain"
+            >
+               <Copy size={16} /> Salin dari Jurnal Lain
+            </button>
+         </div>
+
+         {copyNotice && (
+            <div className="mb-6 p-3.5 bg-amber-50 border border-amber-200 rounded-lg flex items-start justify-between gap-2 text-amber-800 text-xs font-medium animate-in fade-in">
+               <div className="flex items-center gap-2">
+                  <Copy size={16} className="text-amber-600 shrink-0 mt-0.5" />
+                  <span>{copyNotice}</span>
+               </div>
+               <button 
+                  type="button" 
+                  onClick={() => setCopyNotice(null)} 
+                  className="text-amber-600 hover:text-amber-900 font-bold text-sm px-1"
+               >
+                  ✕
+               </button>
+            </div>
+         )}
          
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Baris 1: Kelas, Mapel, Agenda Ujian */}
@@ -1562,6 +1659,13 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
                                  <td className="p-4 align-top text-center">
                                     <div className="flex items-center justify-center gap-1">
                                        <button 
+                                          onClick={() => handleCopyJournal(journal)}
+                                          className="text-gray-300 hover:text-blue-600 p-2 transition rounded-full hover:bg-blue-50"
+                                          title="Salin Jurnal ke Kelas Lain"
+                                       >
+                                          <Copy size={18} />
+                                       </button>
+                                       <button 
                                           onClick={() => handleEdit(journal)}
                                           className="text-gray-300 hover:text-blue-600 p-2 transition rounded-full hover:bg-blue-50"
                                           title="Edit Jurnal"
@@ -1605,6 +1709,13 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
                                         </div>
                                     </div>
                                     <div className="flex gap-1">
+                                       <button 
+                                          onClick={() => handleCopyJournal(journal)}
+                                          className="text-gray-400 hover:text-blue-600 p-1"
+                                          title="Salin Jurnal ke Kelas Lain"
+                                       >
+                                          <Copy size={18} />
+                                       </button>
                                        <button 
                                           onClick={() => handleEdit(journal)}
                                           className="text-gray-400 hover:text-blue-600 p-1"
@@ -1697,6 +1808,127 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
             )}
          </div>
       </div>
+
+      {/* Modal Copy Jurnal Dari Kelas Lain */}
+      {showCopyModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl max-w-3xl w-full max-h-[85vh] flex flex-col shadow-2xl border border-gray-100 animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-4 sm:p-5 border-b border-gray-100 flex items-center justify-between bg-blue-600 text-white rounded-t-xl">
+              <div className="flex items-center gap-2 font-bold text-base">
+                <Copy size={20} />
+                <span>Salin Jurnal dari Kelas / Pertemuan Lain</span>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setShowCopyModal(false)}
+                className="text-white/80 hover:text-white hover:bg-blue-700 p-1.5 rounded-lg transition"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-4 border-b border-gray-100 bg-gray-50 flex items-center gap-3">
+              <div className="relative flex-1">
+                <Search size={16} className="absolute left-3 top-3 text-gray-400" />
+                <input
+                  type="text"
+                  value={copySearch}
+                  onChange={(e) => setCopySearch(e.target.value)}
+                  placeholder="Cari materi, tujuan, kegiatan, atau nama kelas..."
+                  className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                />
+              </div>
+              {copySearch && (
+                <button 
+                  type="button"
+                  onClick={() => setCopySearch('')} 
+                  className="text-xs text-gray-500 hover:text-gray-700 font-semibold"
+                >
+                  Reset
+                </button>
+              )}
+            </div>
+
+            <div className="p-4 overflow-y-auto flex-1 space-y-3">
+              {journals.length === 0 ? (
+                <div className="p-12 text-center text-gray-400 text-xs">
+                  Belum ada catatan jurnal mengajar sebelumnya.
+                </div>
+              ) : (
+                journals
+                  .filter(j => {
+                    if (!copySearch) return true;
+                    const query = copySearch.toLowerCase();
+                    const cls = classes.find(c => c.id === j.classId);
+                    const mat = materialMap[j.materialId];
+                    const clsName = cls ? cls.name.toLowerCase() : '';
+                    const matText = mat ? mat.content.toLowerCase() : '';
+                    const subj = (j.subject || '').toLowerCase();
+                    const obj = (j.learningObjective || '').toLowerCase();
+                    const act = (j.activities || '').toLowerCase();
+                    return clsName.includes(query) || matText.includes(query) || subj.includes(query) || obj.includes(query) || act.includes(query);
+                  })
+                  .slice(0, 30)
+                  .map(j => {
+                    const cls = classes.find(c => c.id === j.classId);
+                    const mat = materialMap[j.materialId];
+                    return (
+                      <div key={j.id} className="p-3.5 border border-gray-200 rounded-lg hover:border-blue-400 hover:bg-blue-50/30 transition flex flex-col md:flex-row justify-between items-start md:items-center gap-3 bg-white">
+                        <div className="space-y-1.5 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-[11px] font-bold rounded">
+                              {cls?.name || 'Kelas'}
+                            </span>
+                            <span className="px-2 py-0.5 bg-gray-100 text-gray-700 text-[11px] font-semibold rounded">
+                              {j.subject || '-'}
+                            </span>
+                            <span className="text-gray-400 text-[11px]">
+                              {new Date(j.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                            </span>
+                          </div>
+                          {mat && (
+                            <p className="text-xs font-semibold text-gray-800">
+                              [{mat.code}] {mat.content}
+                            </p>
+                          )}
+                          {j.learningObjective && (
+                            <p className="text-xs text-gray-600 line-clamp-1">
+                              <strong>Tujuan:</strong> {j.learningObjective}
+                            </p>
+                          )}
+                          <p className="text-xs text-gray-500 line-clamp-2 italic">
+                            "{j.activities}"
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleCopyJournal(j);
+                            setShowCopyModal(false);
+                          }}
+                          className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition shrink-0 flex items-center gap-1.5 shadow-sm self-end md:self-center"
+                        >
+                          <Copy size={14} />
+                          Salin Jurnal Ini
+                        </button>
+                      </div>
+                    );
+                  })
+              )}
+            </div>
+
+            <div className="p-3 border-t border-gray-100 bg-gray-50 text-right rounded-b-xl">
+              <button
+                type="button"
+                onClick={() => setShowCopyModal(false)}
+                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-semibold rounded-lg transition"
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
