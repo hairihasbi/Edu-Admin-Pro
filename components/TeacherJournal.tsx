@@ -54,6 +54,9 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
   const [loading, setLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showPrintSettings, setShowPrintSettings] = useState(false);
+  const [printMode, setPrintMode] = useState<'BULANAN' | 'SEMESTER'>('BULANAN');
+  const [printSemester, setPrintSemester] = useState<'Ganjil' | 'Genap' | '1 Tahun'>('Ganjil');
+  const [printClassStudents, setPrintClassStudents] = useState<Student[]>([]);
 
   const [validationData, setValidationData] = useState({
     placeName: localStorage.getItem('journal_place_name') || '',
@@ -79,6 +82,15 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
       setAbsentStudents([]);
     }
   }, [formData.classId]);
+
+  // Fetch Students for Class Filter (For Print/Export Semester Recap)
+  useEffect(() => {
+    if (filterClassId) {
+      getStudents(filterClassId).then(setPrintClassStudents);
+    } else {
+      setPrintClassStudents([]);
+    }
+  }, [filterClassId]);
 
   // Fetch Schedules for Jam Ke (Range)
   useEffect(() => {
@@ -447,7 +459,7 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
   const currentItems = filteredJournals.slice(indexOfFirstItem, indexOfLastItem);
   const totalPages = Math.ceil(filteredJournals.length / itemsPerPage);
 
-  // --- EXPORT ---
+  // --- EXPORT & PRINT LOGIC ---
 
   const getExportData = () => {
     return filteredJournals.map((j, idx) => {
@@ -474,7 +486,171 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
     });
   };
 
-  const exportToExcel = () => {
+  // Helper to fetch consolidated 1-semester data and student attendance totals
+  const getSemesterData = async () => {
+    if (!filterClassId) {
+      alert("Mohon pilih Kelas terlebih dahulu pada filter/pengaturan cetak untuk rekap 1 semester.");
+      return null;
+    }
+
+    const selectedClass = classes.find(c => c.id === filterClassId);
+    const className = selectedClass ? selectedClass.name : 'Kelas';
+
+    // 1. Filter journals by class, subject, year, and semester
+    const semJournals = journals.filter(j => {
+      if (j.classId !== filterClassId) return false;
+      if (!isSubjectMatching(selectedSubject, j.subject || '')) return false;
+
+      let journalYear = 0;
+      let journalMonth = 0;
+      if (j.date && j.date.includes('-')) {
+        const parts = j.date.split('-');
+        journalYear = parseInt(parts[0], 10);
+        journalMonth = parseInt(parts[1], 10) - 1;
+      } else {
+        const d = new Date(j.date);
+        journalYear = d.getFullYear();
+        journalMonth = d.getMonth();
+      }
+
+      if (journalYear !== filterYear) return false;
+
+      if (printSemester === 'Ganjil') {
+        return journalMonth >= 6 && journalMonth <= 11;
+      } else if (printSemester === 'Genap') {
+        return journalMonth >= 0 && journalMonth <= 5;
+      }
+      return true; // 1 Tahun Penuh
+    });
+
+    semJournals.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    // 2. Fetch students for class
+    let students = printClassStudents;
+    if (students.length === 0 || (students[0] && students[0].classId !== filterClassId)) {
+      students = await getStudents(filterClassId);
+      setPrintClassStudents(students);
+    }
+
+    // 3. Aggregate Attendance totals per student
+    const studentRecap: Record<string, { id: string; nis: string; name: string; gender: string; sakit: number; izin: number; alfa: number; total: number }> = {};
+
+    students.forEach(s => {
+      studentRecap[s.id] = {
+        id: s.id,
+        nis: s.nis || '-',
+        name: s.name,
+        gender: s.gender || '-',
+        sakit: 0,
+        izin: 0,
+        alfa: 0,
+        total: 0
+      };
+    });
+
+    semJournals.forEach(j => {
+      if (j.absentStudents) {
+        try {
+          const absents: AbsentStudent[] = JSON.parse(j.absentStudents);
+          absents.forEach(a => {
+            let rec = studentRecap[a.studentId];
+            if (!rec) {
+              const found = students.find(st => st.name.toLowerCase() === a.name.toLowerCase());
+              if (found) rec = studentRecap[found.id];
+            }
+            if (rec) {
+              if (a.status === 'S') rec.sakit += 1;
+              else if (a.status === 'I') rec.izin += 1;
+              else if (a.status === 'A') rec.alfa += 1;
+              rec.total = rec.sakit + rec.izin + rec.alfa;
+            }
+          });
+        } catch (err) {
+          console.error("Error parsing absentStudents JSON", err);
+        }
+      }
+    });
+
+    const studentRecapList = Object.values(studentRecap).sort((a, b) => a.name.localeCompare(b.name));
+
+    return {
+      className,
+      semJournals,
+      studentRecapList
+    };
+  };
+
+  const exportSemesterToExcel = async () => {
+    const semData = await getSemesterData();
+    if (!semData) return;
+
+    const { className, semJournals, studentRecapList } = semData;
+    const subjectName = selectedSubject === 'ALL' ? 'Semua Mata Pelajaran' : selectedSubject;
+
+    // Sheet 1: Jurnal Mengajar Semester
+    const journalHeaders = ['No', 'Tanggal', 'Jam Ke', 'Lingkup Materi', 'Tujuan Pembelajaran', 'Kegiatan Pembelajaran', 'Siswa Tidak Hadir', 'Refleksi', 'Tindak Lanjut'];
+    const journalRows = semJournals.map((j, idx) => {
+      const mat = materialMap[j.materialId];
+      const materialText = j.examAgenda ? `[AGENDA: ${j.examAgenda}]` : (mat ? `[${mat.code}] ${mat.content}` : j.materialId);
+      const absents: AbsentStudent[] = j.absentStudents ? JSON.parse(j.absentStudents) : [];
+      const absentText = absents.map(a => `${a.name} (${ABSENT_STATUS_MAP[a.status] || a.status})`).join(', ') || '-';
+
+      return [
+        idx + 1,
+        new Date(j.date).toLocaleDateString('id-ID'),
+        j.examAgenda ? '-' : j.meetingNo,
+        materialText,
+        j.examAgenda ? '-' : j.learningObjective,
+        j.activities,
+        absentText,
+        j.reflection || '-',
+        j.followUp || '-'
+      ];
+    });
+
+    const wsJournal = XLSX.utils.aoa_to_sheet([
+      [`REKAPITULASI JURNAL MENGAJAR SEMESTER ${printSemester.toUpperCase()}`],
+      [`Kelas: ${className} | Mapel: ${subjectName} | Tahun: ${filterYear}`],
+      [`Guru: ${user.fullName}`],
+      [],
+      journalHeaders,
+      ...journalRows
+    ]);
+
+    // Sheet 2: Rekap Presensi Siswa
+    const attendanceHeaders = ['No', 'NIS', 'Nama Siswa', 'L/P', 'Sakit (S)', 'Izin (I)', 'Alfa (A)', 'Total Tidak Hadir'];
+    const attendanceRows = studentRecapList.map((s, idx) => [
+      idx + 1,
+      s.nis,
+      s.name,
+      s.gender,
+      s.sakit,
+      s.izin,
+      s.alfa,
+      s.total
+    ]);
+
+    const wsAttendance = XLSX.utils.aoa_to_sheet([
+      [`REKAPITULASI PRESENSI SISWA 1 SEMESTER (${printSemester.toUpperCase()})`],
+      [`Kelas: ${className} | Mapel: ${subjectName} | Tahun: ${filterYear}`],
+      [],
+      attendanceHeaders,
+      ...attendanceRows
+    ]);
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, wsJournal, "Jurnal Semester");
+    XLSX.utils.book_append_sheet(wb, wsAttendance, "Rekap Presensi Siswa");
+
+    XLSX.writeFile(wb, `Rekap_Jurnal_Semester_${printSemester}_${className}_${filterYear}.xlsx`);
+  };
+
+  const exportToExcel = async () => {
+    if (printMode === 'SEMESTER') {
+      await exportSemesterToExcel();
+      return;
+    }
+
     const data = getExportData();
     const headers = ['No', 'Kelas', 'Tanggal', 'Jam Ke', 'Lingkup Materi', 'Tujuan Pembelajaran', 'Kegiatan', 'Ketidakhadiran', 'Refleksi', 'Tindak Lanjut'];
     const rows = data.map(d => Object.values(d));
@@ -492,7 +668,156 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
     XLSX.writeFile(wb, `Jurnal_Mengajar_${monthNames[filterMonth]}_${filterYear}.xlsx`);
   };
 
-  const handlePrint = () => {
+  const printSemesterToWindow = async () => {
+    const semData = await getSemesterData();
+    if (!semData) return;
+
+    const { className, semJournals, studentRecapList } = semData;
+    const printWindow = window.open('', '', 'height=700,width=1000');
+    if (!printWindow) return;
+
+    const subjectName = selectedSubject === 'ALL' ? 'Semua Mata Pelajaran' : selectedSubject;
+
+    const journalRowsHtml = semJournals.map((j, idx) => {
+      const mat = materialMap[j.materialId];
+      const materialText = j.examAgenda ? `[AGENDA: ${j.examAgenda}]` : (mat ? `[${mat.code}] ${mat.content}` : j.materialId);
+      const absents: AbsentStudent[] = j.absentStudents ? JSON.parse(j.absentStudents) : [];
+      const absentText = absents.map(a => `${a.name} (${ABSENT_STATUS_MAP[a.status] || a.status})`).join(', ') || '-';
+
+      return `
+        <tr>
+          <td class="text-center">${idx + 1}</td>
+          <td class="text-center">${new Date(j.date).toLocaleDateString('id-ID')}</td>
+          <td class="text-center">${j.examAgenda ? '-' : j.meetingNo}</td>
+          <td>${materialText}</td>
+          <td>${j.examAgenda ? '-' : j.learningObjective}</td>
+          <td>${j.activities}</td>
+          <td>${absentText}</td>
+          <td>${j.reflection || '-'}</td>
+          <td>${j.followUp || '-'}</td>
+        </tr>
+      `;
+    }).join('');
+
+    const attendanceRowsHtml = studentRecapList.map((s, idx) => `
+      <tr>
+        <td class="text-center">${idx + 1}</td>
+        <td class="text-center">${s.nis}</td>
+        <td><strong>${s.name}</strong></td>
+        <td class="text-center">${s.gender}</td>
+        <td class="text-center ${s.sakit > 0 ? 'highlight-sakit' : ''}">${s.sakit || '-'}</td>
+        <td class="text-center ${s.izin > 0 ? 'highlight-izin' : ''}">${s.izin || '-'}</td>
+        <td class="text-center ${s.alfa > 0 ? 'highlight-alfa' : ''}">${s.alfa || '-'}</td>
+        <td class="text-center font-bold">${s.total || 0}</td>
+      </tr>
+    `).join('');
+
+    const today = new Date();
+    const formattedDate = today.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Rekap Jurnal & Presensi Semester ${printSemester} - ${className}</title>
+          <style>
+            body { font-family: Arial, sans-serif; font-size: 11px; line-height: 1.4; color: #111; margin: 15px; }
+            .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px; }
+            .header h2 { margin: 0 0 5px 0; font-size: 16px; text-transform: uppercase; }
+            .header h4 { margin: 3px 0; font-size: 12px; font-weight: normal; }
+            .section-title { font-size: 13px; font-weight: bold; margin-top: 25px; margin-bottom: 8px; background: #eef2ff; padding: 6px 10px; border-left: 4px solid #2563eb; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+            th, td { border: 1px solid #333; padding: 6px; vertical-align: top; }
+            th { background-color: #f1f5f9; text-align: center; font-weight: bold; font-size: 11px; }
+            .text-center { text-align: center; }
+            .font-bold { font-weight: bold; }
+            .highlight-sakit { background-color: #fef9c3; font-weight: bold; }
+            .highlight-izin { background-color: #e0f2fe; font-weight: bold; }
+            .highlight-alfa { background-color: #fee2e2; color: #991b1b; font-weight: bold; }
+            .signature-container { margin-top: 40px; display: flex; justify-content: space-between; page-break-inside: avoid; }
+            .signature-box { width: 320px; text-align: center; }
+            @page { size: landscape; margin: 1cm; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h2>LAPORAN REKAPITULASI JURNAL MENGAJAR & PRESENSI SISWA</h2>
+            <h4>SEMESTER ${printSemester.toUpperCase()} - TAHUN AJARAN ${filterYear}</h4>
+            <h4>Kelas: <strong>${className}</strong> | Mata Pelajaran: <strong>${subjectName}</strong> | Guru: <strong>${user.fullName}</strong></h4>
+          </div>
+
+          <div class="section-title">A. REKAPITULASI JURNAL KEGIATAN PEMBELAJARAN (${semJournals.length} Pertemuan)</div>
+          <table>
+            <thead>
+              <tr>
+                <th width="30">No</th>
+                <th width="80">Tanggal</th>
+                <th width="40">Jam Ke</th>
+                <th width="140">Lingkup Materi</th>
+                <th width="160">Tujuan Pembelajaran</th>
+                <th>Kegiatan Pembelajaran</th>
+                <th width="120">Ketidakhadiran</th>
+                <th width="100">Refleksi</th>
+                <th width="100">Tindak Lanjut</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${semJournals.length === 0 ? '<tr><td colspan="9" class="text-center" style="padding: 15px; color: #666;">Tidak ada catatan jurnal mengajar pada semester ini.</td></tr>' : journalRowsHtml}
+            </tbody>
+          </table>
+
+          <div class="section-title">B. REKAPITULASI KETIDAKHADIRAN PRESENSI SISWA 1 SEMESTER</div>
+          <table>
+            <thead>
+              <tr>
+                <th width="35">No</th>
+                <th width="90">NIS</th>
+                <th>Nama Siswa</th>
+                <th width="40">L/P</th>
+                <th width="70">Sakit (S)</th>
+                <th width="70">Izin (I)</th>
+                <th width="70">Alfa (A)</th>
+                <th width="110">Total Tidak Hadir</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${studentRecapList.length === 0 ? '<tr><td colspan="8" class="text-center" style="padding: 15px; color: #666;">Data siswa kelas ini belum tersedia.</td></tr>' : attendanceRowsHtml}
+            </tbody>
+          </table>
+
+          <div class="signature-container">
+            <div class="signature-box">
+              <p>&nbsp;</p>
+              <p>Mengetahui,</p>
+              <p>Kepala Sekolah ${user.schoolName || '[Nama Sekolah]'}</p>
+              <br><br><br><br>
+              <p style="white-space: nowrap;"><strong>${validationData.principalName || '................................'}</strong></p>
+              <p>NIP. ${validationData.principalNip || '................................'}</p>
+            </div>
+            <div class="signature-box">
+              <p>&nbsp;</p>
+              <p>${validationData.placeName || '................'}, ${formattedDate}</p>
+              <p>Guru Mata Pelajaran</p>
+              <br><br><br><br>
+              <p style="white-space: nowrap;"><strong>${validationData.teacherName || user.fullName}</strong></p>
+              <p>NIP. ${validationData.teacherNip || user.nip || '................................'}</p>
+            </div>
+          </div>
+
+          <script>
+            window.onload = function() { window.print(); window.close(); }
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
+  const handlePrint = async () => {
+    if (printMode === 'SEMESTER') {
+      await printSemesterToWindow();
+      return;
+    }
+
     const data = getExportData();
     const printWindow = window.open('', '', 'height=600,width=900');
     if (!printWindow) return;
@@ -986,7 +1311,7 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
              <div className="p-6 bg-blue-50 border-b border-blue-100 animate-in slide-in-from-top duration-200">
                 <div className="flex items-center justify-between mb-4">
                    <h3 className="text-sm font-bold text-blue-800 flex items-center gap-2">
-                      <Printer size={16} /> Pengaturan Validasi Cetak
+                      <Printer size={16} /> Pengaturan Cetak & Validasi
                    </h3>
                    <button 
                       onClick={handlePrint}
@@ -995,6 +1320,59 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
                       <Printer size={16} /> Cetak Sekarang
                    </button>
                 </div>
+
+                {/* Print Mode Selector */}
+                <div className="mb-6 p-4 bg-white rounded-lg border border-blue-200 shadow-sm">
+                   <label className="block text-xs font-bold text-blue-800 uppercase mb-2">Pilih Mode / Jenis Laporan</label>
+                   <div className="flex flex-wrap gap-3">
+                      <button
+                         type="button"
+                         onClick={() => setPrintMode('BULANAN')}
+                         className={`px-4 py-2 rounded-lg text-xs font-bold transition flex items-center gap-2 ${printMode === 'BULANAN' ? 'bg-blue-600 text-white shadow' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                      >
+                         📄 Jurnal Bulanan
+                      </button>
+                      <button
+                         type="button"
+                         onClick={() => setPrintMode('SEMESTER')}
+                         className={`px-4 py-2 rounded-lg text-xs font-bold transition flex items-center gap-2 ${printMode === 'SEMESTER' ? 'bg-blue-600 text-white shadow' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                      >
+                         📊 Rekap Jurnal 1 Semester (+ Presensi Siswa)
+                      </button>
+                   </div>
+
+                   {printMode === 'SEMESTER' && (
+                      <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-1 md:grid-cols-2 gap-4">
+                         <div>
+                            <label className="block text-xs font-semibold text-gray-700 mb-1">Pilih Semester</label>
+                            <select
+                               value={printSemester}
+                               onChange={(e) => setPrintSemester(e.target.value as any)}
+                               className="w-full text-xs border border-gray-300 rounded-md p-2 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                            >
+                               <option value="Ganjil">Semester Ganjil (Juli - Desember)</option>
+                               <option value="Genap">Semester Genap (Januari - Juni)</option>
+                               <option value="1 Tahun">1 Tahun Penuh</option>
+                            </select>
+                         </div>
+                         <div>
+                            <label className="block text-xs font-semibold text-gray-700 mb-1">Pilih Kelas *</label>
+                            <select
+                               value={filterClassId}
+                               onChange={(e) => setFilterClassId(e.target.value)}
+                               className="w-full text-xs border border-gray-300 rounded-md p-2 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                            >
+                               <option value="">-- Pilih Kelas --</option>
+                               {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            </select>
+                         </div>
+                         <div className="md:col-span-2 text-[11px] text-blue-700 bg-blue-50/70 p-2.5 rounded border border-blue-100">
+                            ℹ️ <strong>Catatan Rekap Semester:</strong> Laporan ini mencakup gabungan seluruh jurnal mengajar selama 1 semester serta akumulasi ketidakhadiran siswa (Sakit, Izin, Alfa) per siswa untuk membantu pertimbangan penilaian.
+                         </div>
+                      </div>
+                   )}
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                    <div className="space-y-4">
                       <p className="text-xs font-bold text-blue-600 uppercase">Kepala Sekolah</p>
