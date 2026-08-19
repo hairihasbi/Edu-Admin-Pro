@@ -2261,16 +2261,17 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
           <thead>
             <tr className="bg-gray-100 border border-gray-400">
               <th className="border border-gray-400 px-2 py-2 text-center w-8">No</th>
-              <th className="border border-gray-400 px-2 py-2 text-left w-48">Nama Guru</th>
-              <th className="border border-gray-400 px-2 py-2 text-left w-36">Mata Pelajaran</th>
-              <th className="border border-gray-400 px-2 py-2 text-center w-28">Hari Aktif Mengisi</th>
-              <th className="border border-gray-400 px-2 py-2 text-center w-28">Total Jurnal (Realisasi/Target)</th>
-              <th className="border border-gray-400 px-2 py-2 text-center w-20">Persentase Keaktifan</th>
+              <th className="border border-gray-400 px-2 py-2 text-left w-40">Nama Guru</th>
+              <th className="border border-gray-400 px-2 py-2 text-left w-28">Mata Pelajaran</th>
+              <th className="border border-gray-400 px-2 py-2 text-center w-32">Statistik Keaktifan</th>
+              <th className="border border-gray-400 px-2 py-2 text-left">Ringkasan Aktivitas & Kehadiran Siswa</th>
             </tr>
           </thead>
           <tbody>
             {teachers.map((teacher, index) => {
-              const teacherJournals = rekapJournals.filter(j => j.userId === teacher.id);
+              const teacherJournals = rekapJournals
+                .filter(j => j.userId === teacher.id)
+                .sort((a, b) => a.date.localeCompare(b.date) || a.meetingNo.localeCompare(b.meetingNo, undefined, { numeric: true }));
               const actualCount = teacherJournals.length;
               const activeDays = new Set(teacherJournals.map(j => j.date)).size;
               
@@ -2282,26 +2283,57 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
               
               return (
                 <tr key={teacher.id} className="border border-gray-400 break-inside-avoid">
-                  <td className="border border-gray-400 px-2 py-2 text-center align-middle">{index + 1}</td>
-                  <td className="border border-gray-400 px-2 py-2 align-middle">
+                  <td className="border border-gray-400 px-2 py-2 text-center align-top">{index + 1}</td>
+                  <td className="border border-gray-400 px-2 py-2 align-top">
                     <div className="font-bold text-gray-950">{teacher.fullName}</div>
                     <div className="text-[10px] text-gray-500">NIP. {teacher.nip || '-'}</div>
                   </td>
-                  <td className="border border-gray-400 px-2 py-2 align-middle text-gray-800">
+                  <td className="border border-gray-400 px-2 py-2 align-top text-gray-800">
                     {teacher.subject || (teacher.teacherType === 'CLASS' ? 'Guru Kelas' : '-')}
                   </td>
-                  <td className="border border-gray-400 px-2 py-2 text-center align-middle">
-                    <span className="font-bold">{activeDays}</span> Hari
+                  <td className="border border-gray-400 px-2 py-2 text-center align-top">
+                    <div className="text-[10px]">
+                      <div><span className="font-bold">{activeDays}</span> Hari Aktif</div>
+                      <div className="font-bold text-gray-950 mt-0.5">{actualCount} / {monthlyTarget || '-'} Sesi</div>
+                      <div className="font-bold text-purple-700 mt-0.5">{percent !== null ? `${percent}%` : '-'}</div>
+                      {percent !== null && (
+                        <div className={`text-[8px] font-bold mt-0.5 ${percent >= 80 ? 'text-green-700' : percent >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>
+                          {percent >= 80 ? 'SANGAT AKTIF' : percent >= 50 ? 'CUKUP AKTIF' : 'KURANG AKTIF'}
+                        </div>
+                      )}
+                    </div>
                   </td>
-                  <td className="border border-gray-400 px-2 py-2 text-center align-middle">
-                    <span className="font-bold text-gray-950">{actualCount}</span> / {monthlyTarget || '-'} Sesi
-                  </td>
-                  <td className="border border-gray-400 px-2 py-2 text-center align-middle">
-                    <div className="font-bold text-gray-950">{percent !== null ? `${percent}%` : '-'}</div>
-                    {percent !== null && (
-                      <div className={`text-[8px] font-bold ${percent >= 80 ? 'text-green-700' : percent >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>
-                        {percent >= 80 ? 'SANGAT AKTIF' : percent >= 50 ? 'CUKUP AKTIF' : 'KURANG AKTIF'}
+                  <td className="border border-gray-400 px-2 py-2 align-top space-y-2">
+                    {teacherJournals.length > 0 ? (
+                      <div className="space-y-1.5">
+                        {teacherJournals.map(journal => {
+                          const absList = parseAbsentStudents(journal.absentStudents);
+                          const formattedDate = new Date(journal.date + 'T00:00:00').toLocaleDateString('id-ID', {
+                            day: 'numeric',
+                            month: 'short'
+                          });
+                          return (
+                            <div key={journal.id} className="text-[10px] text-gray-800 pl-2 border-l-2 border-purple-500 py-0.5">
+                              <div className="font-bold text-purple-950">
+                                [{formattedDate}] Jam ke-{journal.meetingNo} ({classNameMap[journal.classId] || 'Kelas'}):
+                              </div>
+                              <div>
+                                <span className="italic font-medium">"{journal.learningObjective}"</span>
+                                {journal.activities && <span> — {journal.activities}</span>}
+                              </div>
+                              {absList.length > 0 ? (
+                                <div className="text-[9px] text-red-600 font-medium mt-0.5">
+                                  Ketidakhadiran: {absList.map(a => `${a.name} (${a.status})`).join(', ')}
+                                </div>
+                              ) : (
+                                <div className="text-[9px] text-green-600 font-medium mt-0.5">Siswa: Hadir Semua</div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
+                    ) : (
+                      <div className="text-[10px] text-red-500 italic font-medium">Belum ada jurnal mengajar yang diisi pada periode bulan ini.</div>
                     )}
                   </td>
                 </tr>
@@ -2360,15 +2392,16 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
           <thead>
             <tr className="bg-gray-100 border border-gray-400">
               <th className="border border-gray-400 px-2 py-2 text-center w-8">No</th>
-              <th className="border border-gray-400 px-2 py-2 text-left w-36">Nama Kelas</th>
-              <th className="border border-gray-400 px-2 py-2 text-left w-40">Wali Kelas</th>
-              <th className="border border-gray-400 px-2 py-2 text-center w-36">Total Sesi KBM Terlaksana</th>
-              <th className="border border-gray-400 px-2 py-2 text-center">Rekap Absensi Siswa Bulanan</th>
+              <th className="border border-gray-400 px-2 py-2 text-left w-40">Nama Kelas & Wali</th>
+              <th className="border border-gray-400 px-2 py-2 text-center w-32">Statistik Sesi & Absensi</th>
+              <th className="border border-gray-400 px-2 py-2 text-left">Kronologi & Aktivitas Pembelajaran</th>
             </tr>
           </thead>
           <tbody>
             {classes.map((cls, index) => {
-              const classJournals = rekapJournals.filter(j => j.classId === cls.id);
+              const classJournals = rekapJournals
+                .filter(j => j.classId === cls.id)
+                .sort((a, b) => a.date.localeCompare(b.date) || a.meetingNo.localeCompare(b.meetingNo, undefined, { numeric: true }));
               const actualCount = classJournals.length;
               
               let totalSakit = 0;
@@ -2387,29 +2420,60 @@ const WakasekMonitoring: React.FC<WakasekMonitoringProps> = ({ user }) => {
               
               return (
                 <tr key={cls.id} className="border border-gray-400 break-inside-avoid">
-                  <td className="border border-gray-400 px-2 py-2 text-center align-middle">{index + 1}</td>
-                  <td className="border border-gray-400 px-2 py-2 align-middle">
+                  <td className="border border-gray-400 px-2 py-2 text-center align-top">{index + 1}</td>
+                  <td className="border border-gray-400 px-2 py-2 align-top">
                     <div className="font-bold text-gray-950">{cls.name}</div>
                     <div className="text-[10px] text-gray-500">{cls.studentCount} Siswa</div>
-                  </td>
-                  <td className="border border-gray-400 px-2 py-2 align-middle text-gray-800 font-medium">
-                    {cls.homeroomTeacherName || '-'}
-                  </td>
-                  <td className="border border-gray-400 px-2 py-2 text-center align-middle">
-                    <span className="font-bold text-gray-950">{actualCount}</span> Sesi KBM
-                  </td>
-                  <td className="border border-gray-400 px-2 py-2 align-middle">
-                    <div className="grid grid-cols-3 gap-2 text-center text-[10px]">
-                      <div className="bg-yellow-50 border border-yellow-200 p-1 rounded">
-                        <span className="font-bold text-yellow-800">Sakit: {totalSakit}</span>
-                      </div>
-                      <div className="bg-blue-50 border border-blue-200 p-1 rounded">
-                        <span className="font-bold text-blue-800">Izin: {totalIzin}</span>
-                      </div>
-                      <div className="bg-red-50 border border-red-200 p-1 rounded">
-                        <span className="font-bold text-red-800">Alfa: {totalAlfa}</span>
-                      </div>
+                    <div className="text-[10px] text-gray-700 mt-1">
+                      <span className="text-gray-400">Wali:</span> {cls.homeroomTeacherName || '-'}
                     </div>
+                  </td>
+                  <td className="border border-gray-400 px-2 py-2 align-top text-center">
+                    <div className="font-bold text-gray-950 mb-1">{actualCount} Sesi KBM</div>
+                    <div className="flex flex-col gap-1 text-[9px]">
+                      <span className="bg-yellow-50 text-yellow-800 border border-yellow-200 px-1 py-0.5 rounded font-bold">
+                        Sakit: {totalSakit}
+                      </span>
+                      <span className="bg-blue-50 text-blue-800 border border-blue-200 px-1 py-0.5 rounded font-bold">
+                        Izin: {totalIzin}
+                      </span>
+                      <span className="bg-red-50 text-red-800 border border-red-200 px-1 py-0.5 rounded font-bold">
+                        Alfa: {totalAlfa}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="border border-gray-400 px-2 py-2 align-top space-y-2">
+                    {classJournals.length > 0 ? (
+                      <div className="space-y-1.5">
+                        {classJournals.map(journal => {
+                          const absList = parseAbsentStudents(journal.absentStudents);
+                          const formattedDate = new Date(journal.date + 'T00:00:00').toLocaleDateString('id-ID', {
+                            day: 'numeric',
+                            month: 'short'
+                          });
+                          return (
+                            <div key={journal.id} className="text-[10px] text-gray-800 pl-2 border-l-2 border-blue-500 py-0.5">
+                              <div className="font-bold text-blue-950">
+                                [{formattedDate}] Jam ke-{journal.meetingNo} — {journal.subject || 'Mapel'} ({teacherNameMap[journal.userId] || 'Guru'}):
+                              </div>
+                              <div>
+                                <span className="italic font-medium">"{journal.learningObjective}"</span>
+                                {journal.activities && <span> — {journal.activities}</span>}
+                              </div>
+                              {absList.length > 0 ? (
+                                <div className="text-[9px] text-red-600 font-medium mt-0.5">
+                                  Ketidakhadiran: {absList.map(a => `${a.name} (${a.status})`).join(', ')}
+                                </div>
+                              ) : (
+                                <div className="text-[9px] text-green-600 font-medium mt-0.5">Kehadiran: Lengkap</div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="text-[10px] text-red-500 italic font-medium">Belum ada KBM yang tercatat untuk kelas ini pada periode bulan ini.</div>
+                    )}
                   </td>
                 </tr>
               );
