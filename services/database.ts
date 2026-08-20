@@ -9,7 +9,8 @@ import {
   EmailConfig, WhatsAppConfig, Notification, ApiKey, SystemSettings,
   BackupData, StudentWithDetails, LessonPlanRequest, DashboardStatsData, TeacherCalendarEvent, PasswordReset, ClassInventory, HomeVisit, ParentCall, LearningStyleAssessment,
   SupervisionAssignment, SupervisionResult, CbtExam, CbtQuestion, CbtAttempt, RfidLog,
-  MentoringJournal, GraduateProfileAssessment
+  MentoringJournal, GraduateProfileAssessment,
+  ExtracurricularMember, ExtracurricularJournal, ExtracurricularAchievement
 } from '../types';
 import { initTurso, pushToTurso, pullFromTurso, deleteFromTurso, deleteBatchFromTurso, clearRemoteTable, requestPasswordResetApi, verifyResetTokenApi, completePasswordResetApi } from './tursoService';
 import bcrypt from 'bcryptjs';
@@ -27,7 +28,25 @@ const uuidv4 = () => {
 
 export const initDatabase = async () => {
   if (!db.isOpen()) {
-    await db.open();
+    try {
+      await db.open();
+    } catch (err: any) {
+      if (
+        err?.name === 'VersionError' ||
+        err?.name === 'UpgradeError' ||
+        (err?.message && err.message.toLowerCase().includes('version'))
+      ) {
+        console.warn('Dexie version mismatch detected. Reopening database...', err);
+        try {
+          await db.delete();
+          await db.open();
+        } catch (delErr) {
+          console.error('Failed to reset and reopen database:', delErr);
+        }
+      } else {
+        throw err;
+      }
+    }
   }
   await initTurso();
 };
@@ -602,7 +621,8 @@ export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', logCall
             'eduadmin_password_resets', 'eduadmin_inventory', 'eduadmin_home_visits', 'eduadmin_parent_calls', 
             'eduadmin_learning_style_assessments', 'eduadmin_supervision_assignments', 'eduadmin_supervision_results',
             'eduadmin_cbt_exams', 'eduadmin_cbt_questions', 'eduadmin_cbt_attempts', 'eduadmin_rfid_logs',
-            'eduadmin_mentoring_journals', 'eduadmin_graduate_assessments'
+            'eduadmin_mentoring_journals', 'eduadmin_graduate_assessments',
+            'eduadmin_extracurricular_members', 'eduadmin_extracurricular_journals', 'eduadmin_extracurricular_achievements'
         ];
 
         const collections = targetCollections || allCollections;
@@ -644,7 +664,10 @@ export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', logCall
             'eduadmin_cbt_attempts': db.cbtAttempts,
             'eduadmin_rfid_logs': db.rfidLogs,
             'eduadmin_mentoring_journals': db.mentoringJournals,
-            'eduadmin_graduate_assessments': db.graduateProfileAssessments
+            'eduadmin_graduate_assessments': db.graduateProfileAssessments,
+            'eduadmin_extracurricular_members': db.extracurricularMembers,
+            'eduadmin_extracurricular_journals': db.extracurricularJournals,
+            'eduadmin_extracurricular_achievements': db.extracurricularAchievements
         };
 
         if (direction === 'PUSH' || direction === 'FULL') {
@@ -3233,4 +3256,167 @@ export const isSubjectMatching = (selectedSubject: string | undefined, journalSu
     const s = (journalSubject || '').trim().toLowerCase();
     return matchSubjectHelper(normSubject, s);
 };
+
+// ==========================================
+// --- EXTRACURRICULAR (EKSKUL) SERVICES ---
+// ==========================================
+
+export const getExtracurricularMembers = async (extracurricularName?: string, schoolNpsn?: string): Promise<ExtracurricularMember[]> => {
+    let query = db.extracurricularMembers.toCollection();
+    if (extracurricularName && extracurricularName !== 'ALL') {
+        query = db.extracurricularMembers.where('extracurricularName').equals(extracurricularName);
+    }
+    let members = await query.toArray();
+    if (schoolNpsn && schoolNpsn !== 'DEFAULT') {
+        members = members.filter(m => !m.schoolNpsn || m.schoolNpsn === 'DEFAULT' || m.schoolNpsn === schoolNpsn);
+    }
+    return members.sort((a, b) => a.studentName.localeCompare(b.studentName));
+};
+
+export const addExtracurricularMember = async (data: Omit<ExtracurricularMember, 'id' | 'lastModified' | 'isSynced'>): Promise<ExtracurricularMember> => {
+    const existing = await db.extracurricularMembers
+        .where({ extracurricularName: data.extracurricularName, studentId: data.studentId })
+        .first();
+    
+    if (existing) {
+        throw new Error(`Siswa ${data.studentName} sudah terdaftar di ekskul ${data.extracurricularName}`);
+    }
+
+    const newMember: ExtracurricularMember = {
+        ...data,
+        id: uuidv4(),
+        joinedDate: data.joinedDate || new Date().toISOString().split('T')[0],
+        lastModified: Date.now(),
+        isSynced: false
+    };
+
+    await db.extracurricularMembers.add(newMember);
+    triggerDebouncedSync();
+    return newMember;
+};
+
+export const saveExtracurricularMember = async (
+    member: Omit<ExtracurricularMember, 'lastModified' | 'isSynced'>
+): Promise<ExtracurricularMember> => {
+    const itemToSave: ExtracurricularMember = {
+        ...member,
+        id: member.id || uuidv4(),
+        joinedDate: member.joinedDate || new Date().toISOString().split('T')[0],
+        lastModified: Date.now(),
+        isSynced: false
+    };
+    await db.extracurricularMembers.put(itemToSave);
+    triggerDebouncedSync();
+    return itemToSave;
+};
+
+export const saveBulkExtracurricularMembers = async (
+    members: (Omit<ExtracurricularMember, 'lastModified' | 'isSynced'>)[]
+): Promise<boolean> => {
+    const itemsToSave: ExtracurricularMember[] = members.map(m => ({
+        ...m,
+        id: m.id || uuidv4(),
+        joinedDate: m.joinedDate || new Date().toISOString().split('T')[0],
+        lastModified: Date.now(),
+        isSynced: false
+    }));
+    await db.extracurricularMembers.bulkPut(itemsToSave);
+    triggerDebouncedSync();
+    return true;
+};
+
+export const updateExtracurricularMember = async (id: string, data: Partial<ExtracurricularMember>): Promise<boolean> => {
+    await db.extracurricularMembers.update(id, {
+        ...data,
+        lastModified: Date.now(),
+        isSynced: false
+    });
+    triggerDebouncedSync();
+    return true;
+};
+
+export const deleteExtracurricularMember = async (id: string): Promise<boolean> => {
+    await db.extracurricularMembers.delete(id);
+    pushToTurso('eduadmin_extracurricular_members', [{ id, deleted: true }]);
+    return true;
+};
+
+export const getExtracurricularJournals = async (
+    extracurricularName?: string, 
+    coachId?: string, 
+    semester?: string,
+    schoolNpsn?: string
+): Promise<ExtracurricularJournal[]> => {
+    let journals = await db.extracurricularJournals.toArray();
+    if (extracurricularName && extracurricularName !== 'ALL') {
+        journals = journals.filter(j => j.extracurricularName.toLowerCase() === extracurricularName.toLowerCase());
+    }
+    if (coachId) {
+        journals = journals.filter(j => j.coachId === coachId);
+    }
+    if (semester && semester !== 'ALL') {
+        journals = journals.filter(j => j.semester === semester);
+    }
+    if (schoolNpsn && schoolNpsn !== 'DEFAULT') {
+        journals = journals.filter(j => !j.schoolNpsn || j.schoolNpsn === 'DEFAULT' || j.schoolNpsn === schoolNpsn);
+    }
+    return journals.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+};
+
+export const saveExtracurricularJournal = async (
+    journal: Omit<ExtracurricularJournal, 'id' | 'lastModified' | 'isSynced'> & { id?: string }
+): Promise<ExtracurricularJournal> => {
+    const id = journal.id || uuidv4();
+    const itemToSave: ExtracurricularJournal = {
+        ...journal,
+        id,
+        lastModified: Date.now(),
+        isSynced: false
+    };
+    await db.extracurricularJournals.put(itemToSave);
+    triggerDebouncedSync();
+    return itemToSave;
+};
+
+export const deleteExtracurricularJournal = async (id: string): Promise<boolean> => {
+    await db.extracurricularJournals.delete(id);
+    pushToTurso('eduadmin_extracurricular_journals', [{ id, deleted: true }]);
+    return true;
+};
+
+export const getExtracurricularAchievements = async (
+    extracurricularName?: string,
+    schoolNpsn?: string
+): Promise<ExtracurricularAchievement[]> => {
+    let achievements = await db.extracurricularAchievements.toArray();
+    if (extracurricularName && extracurricularName !== 'ALL') {
+        achievements = achievements.filter(a => a.extracurricularName.toLowerCase() === extracurricularName.toLowerCase());
+    }
+    if (schoolNpsn && schoolNpsn !== 'DEFAULT') {
+        achievements = achievements.filter(a => !a.schoolNpsn || a.schoolNpsn === 'DEFAULT' || a.schoolNpsn === schoolNpsn);
+    }
+    return achievements.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+};
+
+export const saveExtracurricularAchievement = async (
+    achievement: Omit<ExtracurricularAchievement, 'id' | 'lastModified' | 'isSynced'> & { id?: string }
+): Promise<ExtracurricularAchievement> => {
+    const id = achievement.id || uuidv4();
+    const itemToSave: ExtracurricularAchievement = {
+        ...achievement,
+        id,
+        lastModified: Date.now(),
+        isSynced: false
+    };
+    await db.extracurricularAchievements.put(itemToSave);
+    triggerDebouncedSync();
+    return itemToSave;
+};
+
+export const deleteExtracurricularAchievement = async (id: string): Promise<boolean> => {
+    await db.extracurricularAchievements.delete(id);
+    pushToTurso('eduadmin_extracurricular_achievements', [{ id, deleted: true }]);
+    return true;
+};
+
 

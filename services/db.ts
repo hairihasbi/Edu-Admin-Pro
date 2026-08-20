@@ -9,7 +9,8 @@ import {
   TeacherCalendarEvent, PasswordReset, ClassInventory, HomeVisit, ParentCall, LearningStyleAssessment,
   SupervisionAssignment, SupervisionResult,
   CbtExam, CbtQuestion, CbtAttempt,
-  RfidLog, MentoringJournal, GraduateProfileAssessment
+  RfidLog, MentoringJournal, GraduateProfileAssessment,
+  ExtracurricularMember, ExtracurricularJournal, ExtracurricularAchievement
 } from '../types';
 
 export class EduAdminDatabase extends Dexie {
@@ -52,6 +53,9 @@ export class EduAdminDatabase extends Dexie {
   rfidLogs!: Table<RfidLog>;
   mentoringJournals!: Table<MentoringJournal>;
   graduateProfileAssessments!: Table<GraduateProfileAssessment>;
+  extracurricularMembers!: Table<ExtracurricularMember>;
+  extracurricularJournals!: Table<ExtracurricularJournal>;
+  extracurricularAchievements!: Table<ExtracurricularAchievement>;
 
   constructor() {
     super('EduAdminDB');
@@ -61,12 +65,12 @@ export class EduAdminDatabase extends Dexie {
     // * = Multi-entry index (not used here)
     // [field] = Indexed field for searching
     // Added schoolNpsn indexes for multi-tenancy filtering
-    // Bumped to version 34 to include RfidLog support and student rfid fields
-    (this as any).version(39).stores({
+    // Bumped to version 41 for extracurriculars
+    (this as any).version(41).stores({
       users: '&id, username, role, status, schoolNpsn, isRfidOfficer, isSynced',
       classes: '&id, userId, schoolNpsn, name, homeroomTeacherId, isSynced', 
       students: '&id, classId, schoolNpsn, name, nis, gender, rfidTag, guruWaliId, isSynced', 
-      attendanceRecords: '&id, userId, studentId, classId, date, status, isSynced, [studentId+date]', // Added studentId index (removed duplicate)
+      attendanceRecords: '&id, userId, studentId, classId, date, status, isSynced, [studentId+date], studentId', // Added studentId index
       scopeMaterials: '&id, classId, semester, userId, isSynced', 
       assessmentScores: '&id, userId, studentId, classId, semester, category, materialId, subject, isSynced',
       teachingJournals: '&id, userId, classId, date, isSynced',
@@ -99,7 +103,10 @@ export class EduAdminDatabase extends Dexie {
       cbtAttempts: '&id, examId, studentId, schoolNpsn, status, isSynced',
       rfidLogs: '&id, studentId, classId, schoolNpsn, timestamp, status, isSynced',
       mentoringJournals: '&id, guruWaliId, studentId, date, topic, schoolNpsn, isSynced',
-      graduateProfileAssessments: '&id, studentId, guruWaliId, date, schoolNpsn, isSynced'
+      graduateProfileAssessments: '&id, studentId, guruWaliId, date, schoolNpsn, isSynced',
+      extracurricularMembers: '&id, extracurricularName, schoolNpsn, studentId, studentClassId, isSynced',
+      extracurricularJournals: '&id, extracurricularName, schoolNpsn, coachId, date, semester, isSynced',
+      extracurricularAchievements: '&id, extracurricularName, schoolNpsn, coachId, date, level, isSynced'
     });
   }
 }
