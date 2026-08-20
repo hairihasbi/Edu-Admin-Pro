@@ -58,7 +58,8 @@ import {
   BarChart3,
   ExternalLink,
   IdCard,
-  ChevronRight
+  ChevronRight,
+  User as UserIcon
 } from './Icons';
 import * as XLSX from 'xlsx';
 
@@ -96,6 +97,37 @@ const RANKS: AchievementRank[] = [
   'Peserta'
 ];
 
+const MONTH_OPTIONS = [
+  { value: 'ALL', label: 'Semua Bulan (1 Semester Penuh)' },
+  { value: '01', label: 'Januari' },
+  { value: '02', label: 'Februari' },
+  { value: '03', label: 'Maret' },
+  { value: '04', label: 'April' },
+  { value: '05', label: 'Mei' },
+  { value: '06', label: 'Juni' },
+  { value: '07', label: 'Juli' },
+  { value: '08', label: 'Agustus' },
+  { value: '09', label: 'September' },
+  { value: '10', label: 'Oktober' },
+  { value: '11', label: 'November' },
+  { value: '12', label: 'Desember' }
+];
+
+const MONTH_NAMES: Record<string, string> = {
+  '01': 'Januari',
+  '02': 'Februari',
+  '03': 'Maret',
+  '04': 'April',
+  '05': 'Mei',
+  '06': 'Juni',
+  '07': 'Juli',
+  '08': 'Agustus',
+  '09': 'September',
+  '10': 'Oktober',
+  '11': 'November',
+  '12': 'Desember'
+};
+
 export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ user }) => {
   // Available extracurriculars list for current user
   const userEkskuls = useMemo(() => {
@@ -121,6 +153,9 @@ export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ 
     `${currentYear}/${currentYear + 1}`
   );
 
+  // Month filter for journals & reports
+  const [selectedMonth, setSelectedMonth] = useState<string>('ALL');
+
   const [activeTab, setActiveTab] = useState<'overview' | 'members' | 'journals' | 'achievements' | 'reports'>('overview');
 
   // Master Data
@@ -133,6 +168,15 @@ export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ 
   const [journals, setJournals] = useState<ExtracurricularJournal[]>([]);
   const [achievements, setAchievements] = useState<ExtracurricularAchievement[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+
+  // Validation / Signature Settings for Print and Official Reports
+  const [validationSettings, setValidationSettings] = useState({
+    principalName: '',
+    principalNip: '',
+    trainerName: '',
+    city: 'Jakarta',
+    reportDate: new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
+  });
 
   // Modals & UI Form States
   const [isAddMemberModalOpen, setIsAddMemberModalOpen] = useState(false);
@@ -149,6 +193,7 @@ export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ 
     startTime: string;
     endTime: string;
     location: string;
+    trainerName: string;
     topic: string;
     skillsTrained: string;
     isEventPrep: boolean;
@@ -160,6 +205,7 @@ export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ 
     startTime: '15:30',
     endTime: '17:00',
     location: 'Lapangan Utama / Ruang Ekskul',
+    trainerName: '',
     topic: '',
     skillsTrained: '',
     isEventPrep: false,
@@ -242,6 +288,39 @@ export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ 
     loadEkskulData();
   }, [selectedEkskul, selectedSemester, academicYear, user.schoolNpsn]);
 
+  // Sync validation signature settings with schoolSettings and journals
+  useEffect(() => {
+    if (schoolSettings) {
+      setValidationSettings(prev => ({
+        ...prev,
+        principalName: prev.principalName || schoolSettings.principalName || '',
+        principalNip: prev.principalNip || schoolSettings.principalNip || '',
+        city: prev.city && prev.city !== 'Jakarta' ? prev.city : (schoolSettings.city || 'Kota'),
+        reportDate: prev.reportDate || new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
+      }));
+    }
+  }, [schoolSettings]);
+
+  useEffect(() => {
+    const latestWithTrainer = journals.find(j => j.trainerName && j.trainerName.trim().length > 0);
+    if (latestWithTrainer?.trainerName && !validationSettings.trainerName) {
+      setValidationSettings(prev => ({
+        ...prev,
+        trainerName: latestWithTrainer.trainerName || ''
+      }));
+    }
+  }, [journals]);
+
+  // Filtered journals based on month selection
+  const displayedJournals = useMemo(() => {
+    if (selectedMonth === 'ALL') return journals;
+    return journals.filter(j => {
+      if (!j.date) return false;
+      const parts = j.date.split('-');
+      return parts[1] === selectedMonth;
+    });
+  }, [journals, selectedMonth]);
+
   // Statistics calculation
   const stats = useMemo(() => {
     const totalMembers = members.length;
@@ -321,6 +400,49 @@ export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ 
     return map;
   }, [members, journals]);
 
+  // Attendance rate map specifically for the selected month / period (used in Reports Tab)
+  const reportAttendanceMap = useMemo(() => {
+    const map: Record<string, { present: number; sakit: number; izin: number; alfa: number; totalMeetings: number; rate: number }> = {};
+    
+    members.forEach(m => {
+      map[m.studentId] = {
+        present: 0,
+        sakit: 0,
+        izin: 0,
+        alfa: 0,
+        totalMeetings: displayedJournals.length,
+        rate: 100
+      };
+    });
+
+    displayedJournals.forEach(j => {
+      const attMap = new Map((j.attendance || []).map(a => [a.studentId, a.status]));
+
+      members.forEach(m => {
+        const item = map[m.studentId];
+        if (!item) return;
+
+        const status = attMap.get(m.studentId) || 'H';
+        if (status === 'H') item.present += 1;
+        else if (status === 'S') item.sakit += 1;
+        else if (status === 'I') item.izin += 1;
+        else if (status === 'A') item.alfa += 1;
+      });
+    });
+
+    // Calculate rates
+    Object.keys(map).forEach(studentId => {
+      const item = map[studentId];
+      if (item.totalMeetings > 0) {
+        item.rate = Math.round((item.present / item.totalMeetings) * 100);
+      } else {
+        item.rate = 100;
+      }
+    });
+
+    return map;
+  }, [members, displayedJournals]);
+
   // Filtered members
   const filteredMembers = useMemo(() => {
     return members.filter(m => {
@@ -345,6 +467,42 @@ export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ 
       return notInEkskul && matchesClass && matchesSearch;
     });
   }, [allStudents, members, selectedClassForAdd, memberSearchTerm]);
+
+  // Is all visible/eligible students selected
+  const isAllEligibleSelected = useMemo(() => {
+    if (eligibleStudentsToAdd.length === 0) return false;
+    return eligibleStudentsToAdd.every(st => selectedStudentIdsToAdd.includes(st.id));
+  }, [eligibleStudentsToAdd, selectedStudentIdsToAdd]);
+
+  // Handle Toggle Select All Visible Students
+  const handleToggleSelectAll = () => {
+    if (isAllEligibleSelected) {
+      const eligibleSet = new Set(eligibleStudentsToAdd.map(st => st.id));
+      setSelectedStudentIdsToAdd(prev => prev.filter(id => !eligibleSet.has(id)));
+    } else {
+      const newSelectedSet = new Set(selectedStudentIdsToAdd);
+      eligibleStudentsToAdd.forEach(st => newSelectedSet.add(st.id));
+      setSelectedStudentIdsToAdd(Array.from(newSelectedSet));
+    }
+  };
+
+  // Handle Select All Eligible Students
+  const handleSelectAllEligible = () => {
+    const newSelectedSet = new Set(selectedStudentIdsToAdd);
+    eligibleStudentsToAdd.forEach(st => newSelectedSet.add(st.id));
+    setSelectedStudentIdsToAdd(Array.from(newSelectedSet));
+  };
+
+  // Handle Deselect All Eligible Students
+  const handleDeselectAllEligible = () => {
+    const eligibleSet = new Set(eligibleStudentsToAdd.map(st => st.id));
+    setSelectedStudentIdsToAdd(prev => prev.filter(id => !eligibleSet.has(id)));
+  };
+
+  // Handle Clear All Selections
+  const handleClearAllSelections = () => {
+    setSelectedStudentIdsToAdd([]);
+  };
 
   // Handle Add Members Bulk
   const handleSaveBulkMembers = async () => {
@@ -401,6 +559,7 @@ export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ 
         startTime: journal.startTime || '15:30',
         endTime: journal.endTime || '17:00',
         location: journal.location,
+        trainerName: journal.trainerName || '',
         topic: journal.topic,
         skillsTrained: journal.skillsTrained || '',
         isEventPrep: journal.isEventPrep || false,
@@ -419,7 +578,8 @@ export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ 
         date: new Date().toISOString().split('T')[0],
         startTime: '15:30',
         endTime: '17:00',
-        location: 'Lapangan / Ruang Ekskul',
+        location: 'Lapangan Utama / Ruang Ekskul',
+        trainerName: validationSettings.trainerName || '',
         topic: '',
         skillsTrained: '',
         isEventPrep: false,
@@ -455,6 +615,7 @@ export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ 
       extracurricularName: selectedEkskul,
       coachId: user.id,
       coachName: user.fullName,
+      trainerName: journalForm.trainerName?.trim() || undefined,
       semester: selectedSemester,
       academicYear: academicYear,
       date: journalForm.date,
@@ -582,8 +743,12 @@ export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ 
     XLSX.writeFile(wb, `Anggota_${selectedEkskul}_${academicYear.replace('/', '-')}.xlsx`);
   };
 
-  // Export Attendance & Report Card Recommendation to Excel
+  // Export Attendance & Report Card Recommendation to Excel (Support Monthly & Semester)
   const exportReportRecommendationsToExcel = () => {
+    const periodLabel = selectedMonth === 'ALL' 
+      ? `SEMESTER ${selectedSemester.toUpperCase()}` 
+      : `BULAN ${MONTH_NAMES[selectedMonth]?.toUpperCase() || selectedMonth}`;
+
     const headers = [
       'No', 
       'Nama Siswa', 
@@ -596,12 +761,12 @@ export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ 
       'Izin (I)', 
       'Alfa (A)', 
       '% Kehadiran', 
-      'Predikat Rapor', 
-      'Deskripsi Capaian Rapor'
+      'Predikat', 
+      'Deskripsi Capaian'
     ];
 
     const rows = members.map((m, idx) => {
-      const att = memberAttendanceMap[m.studentId] || { present: 0, sakit: 0, izin: 0, alfa: 0, totalMeetings: 0, rate: 100 };
+      const att = reportAttendanceMap[m.studentId] || { present: 0, sakit: 0, izin: 0, alfa: 0, totalMeetings: 0, rate: 100 };
       
       let predikat = 'Sangat Baik';
       let deskripsi = `Sangat aktif dan berdedikasi tinggi dalam mengikuti seluruh kegiatan ekstrakurikuler ${selectedEkskul}. Menunjukkan disiplin yang sangat baik.`;
@@ -638,17 +803,21 @@ export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ 
       ];
     });
 
-    const ws = XLSX.utils.aoa_to_sheet([
-      [`REKAP KEHADIRAN & REKOMENDASI NILAI RAPOR EKSTRAKURIKULER ${selectedEkskul.toUpperCase()}`],
-      [`SEMESTER ${selectedSemester.toUpperCase()} TAHUN AJARAN ${academicYear}`],
-      [`PEMBINA: ${user.fullName} | SEKOLAH: ${user.schoolName || 'EduAdmin'}`],
+    const titleRows = [
+      [`REKAP KEHADIRAN & LAPORAN EKSTRAKURIKULER ${selectedEkskul.toUpperCase()}`],
+      [`PERIODE: ${periodLabel} • TAHUN AJARAN ${academicYear}`],
+      [`PEMBINA: ${user.fullName} | PELATIH: ${validationSettings.trainerName || '-'} | KEPALA SEKOLAH: ${validationSettings.principalName || '-'}`],
+      [`SEKOLAH: ${user.schoolName || schoolSettings?.schoolName || 'EduAdmin'}`],
       [],
       headers,
       ...rows
-    ]);
+    ];
+
+    const ws = XLSX.utils.aoa_to_sheet(titleRows);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Rekap_Rapor');
-    XLSX.writeFile(wb, `Rekap_Nilai_Ekskul_${selectedEkskul}_${selectedSemester}_${academicYear.replace('/', '-')}.xlsx`);
+    XLSX.utils.book_append_sheet(wb, ws, 'Rekap_Ekskul');
+    const filenamePeriod = selectedMonth === 'ALL' ? selectedSemester : `Bulan_${MONTH_NAMES[selectedMonth] || selectedMonth}`;
+    XLSX.writeFile(wb, `Rekap_Nilai_Ekskul_${selectedEkskul}_${filenamePeriod}_${academicYear.replace('/', '-')}.xlsx`);
   };
 
   // Print function
@@ -658,62 +827,63 @@ export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ 
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
-      {/* Top Banner / Hero */}
-      <div className="relative overflow-hidden rounded-2xl bg-linear-to-r from-amber-600 via-amber-700 to-orange-800 p-6 sm:p-8 text-white shadow-lg">
+      {/* Top Banner / Hero - High Contrast, Clear, Professional */}
+      <div className="relative overflow-hidden rounded-2xl bg-linear-to-r from-slate-900 via-amber-950 to-slate-900 p-6 sm:p-8 text-white shadow-xl border border-amber-800/40">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20"></div>
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 backdrop-blur-xs text-xs font-semibold tracking-wide">
-              <Trophy size={14} className="text-yellow-300" />
-              <span>Portal Pembina Ekstrakurikuler</span>
+          <div className="space-y-2.5">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-400/30 text-amber-300 text-xs font-bold tracking-wide">
+              <Trophy size={14} className="text-yellow-400" />
+              <span>Portal Pembina & Pelatih Ekstrakurikuler</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight">
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white drop-shadow-sm">
               Manajemen & Jurnal Ekstrakurikuler
             </h1>
-            <p className="text-sm text-amber-100 max-w-2xl leading-relaxed">
-              Kelola anggota lintas kelas, rekam jurnal agenda & presensi latihan rutin, catat perolehan prestasi lomba, serta cetak laporan resmi dan rekomendasi nilai rapor.
+            <p className="text-sm text-slate-200 font-normal max-w-2xl leading-relaxed">
+              Kelola anggota lintas kelas, rekam jurnal agenda & presensi latihan rutin beserta nama pelatih, catat prestasi lomba, serta unduh rekap dan cetak laporan resmi per bulan atau per semester dengan validasi Kepala Sekolah.
             </p>
           </div>
 
           {/* Ekskul Selector Card */}
-          <div className="bg-white/10 backdrop-blur-md p-4 rounded-xl border border-white/20 min-w-[260px] space-y-3">
+          <div className="bg-slate-950/80 backdrop-blur-md p-4 rounded-xl border border-amber-500/30 min-w-[270px] space-y-3 shadow-lg">
             <div>
-              <label className="text-[11px] font-bold text-amber-200 uppercase tracking-wider block mb-1">
+              <label className="text-[11px] font-bold text-amber-300 uppercase tracking-wider block mb-1">
                 Pilih Ekstrakurikuler
               </label>
               <div className="relative">
                 <select
                   value={selectedEkskul}
                   onChange={(e) => setSelectedEkskul(e.target.value)}
-                  className="w-full bg-white text-gray-900 font-bold text-sm px-3 py-2 rounded-lg appearance-none cursor-pointer focus:ring-2 focus:ring-amber-300 outline-none shadow-sm pr-8"
+                  className="w-full bg-white text-gray-900 font-bold text-sm px-3 py-2 rounded-lg appearance-none cursor-pointer focus:ring-2 focus:ring-amber-400 outline-none shadow-sm pr-8"
                 >
                   {userEkskuls.map(e => (
                     <option key={e} value={e} className="font-semibold text-gray-900">{e}</option>
                   ))}
                 </select>
-                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" size={16} />
+                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-600 pointer-events-none" size={16} />
               </div>
             </div>
 
             {/* Academic Year & Semester Selector */}
             <div className="grid grid-cols-2 gap-2 pt-1 border-t border-white/10">
               <div>
-                <label className="text-[10px] text-amber-200 block">Semester</label>
+                <label className="text-[10px] font-semibold text-amber-200 block mb-0.5">Semester</label>
                 <select
                   value={selectedSemester}
                   onChange={(e) => setSelectedSemester(e.target.value as 'Ganjil' | 'Genap')}
-                  className="w-full bg-black/20 text-white text-xs font-semibold px-2 py-1 rounded border border-white/20 outline-none"
+                  className="w-full bg-slate-800 text-white text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-slate-700 outline-none focus:ring-1 focus:ring-amber-400 cursor-pointer"
                 >
-                  <option value="Ganjil" className="text-gray-900">Ganjil</option>
-                  <option value="Genap" className="text-gray-900">Genap</option>
+                  <option value="Ganjil" className="text-white bg-slate-800">Ganjil</option>
+                  <option value="Genap" className="text-white bg-slate-800">Genap</option>
                 </select>
               </div>
               <div>
-                <label className="text-[10px] text-amber-200 block">Tahun Ajaran</label>
+                <label className="text-[10px] font-semibold text-amber-200 block mb-0.5">Tahun Ajaran</label>
                 <input
                   type="text"
                   value={academicYear}
                   onChange={(e) => setAcademicYear(e.target.value)}
-                  className="w-full bg-black/20 text-white text-xs font-semibold px-2 py-1 rounded border border-white/20 outline-none"
+                  className="w-full bg-slate-800 text-white text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-slate-700 outline-none focus:ring-1 focus:ring-amber-400"
                 />
               </div>
             </div>
@@ -1108,35 +1278,58 @@ export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ 
                 Jurnal Pertemuan & Presensi Latihan Rutin
               </h2>
               <p className="text-xs text-gray-500">
-                Catat waktu, lokasi, agenda materi latihan, daftar presensi, dan evaluasi hasil latihan.
+                Catat waktu, lokasi, pelatih, agenda materi latihan, daftar presensi, dan evaluasi hasil latihan.
               </p>
             </div>
 
-            <button
-              onClick={() => handleOpenJournalModal()}
-              className="flex items-center gap-1.5 text-xs bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-xl font-bold shadow-xs transition"
-            >
-              <Plus size={16} /> Input Jurnal Pertemuan Baru
-            </button>
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Filter Bulan */}
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-700 bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-200">
+                <Filter size={14} className="text-amber-600" />
+                <span>Filter Bulan:</span>
+                <select
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  className="bg-white border border-gray-300 rounded-lg px-2 py-1 text-xs font-bold text-gray-800 outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer"
+                >
+                  {MONTH_OPTIONS.map(m => (
+                    <option key={m.value} value={m.value}>{m.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <button
+                onClick={() => handleOpenJournalModal()}
+                className="flex items-center gap-1.5 text-xs bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-xl font-bold shadow-xs transition"
+              >
+                <Plus size={16} /> Input Jurnal Pertemuan Baru
+              </button>
+            </div>
           </div>
 
-          {journals.length === 0 ? (
+          {displayedJournals.length === 0 ? (
             <div className="text-center py-16 bg-amber-50/40 rounded-2xl border border-dashed border-amber-200">
               <NotebookPen className="mx-auto text-amber-400 mb-2" size={36} />
-              <p className="font-bold text-sm text-gray-800">Belum ada jurnal latihan di semester {selectedSemester}</p>
+              <p className="font-bold text-sm text-gray-800">
+                {journals.length === 0 
+                  ? `Belum ada jurnal latihan di semester ${selectedSemester}` 
+                  : `Tidak ada jurnal latihan di ${selectedMonth === 'ALL' ? 'periode ini' : `bulan ${MONTH_NAMES[selectedMonth]}`}`}
+              </p>
               <p className="text-xs text-gray-500 max-w-sm mx-auto mt-1 mb-4">
-                Klik tombol di bawah untuk mencatat agenda latihan rutin dan presensi kehadiran anggota.
+                {journals.length === 0
+                  ? 'Klik tombol di bawah untuk mencatat agenda latihan rutin dan presensi kehadiran anggota.'
+                  : 'Ubah pilihan filter bulan atau tambahkan jurnal pertemuan baru.'}
               </p>
               <button
                 onClick={() => handleOpenJournalModal()}
                 className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition inline-flex items-center gap-1.5"
               >
-                <Plus size={14} /> Input Jurnal Pertama
+                <Plus size={14} /> Input Jurnal Baru
               </button>
             </div>
           ) : (
             <div className="space-y-4">
-              {journals.map((journal, idx) => {
+              {displayedJournals.map((journal, idx) => {
                 const presentCount = (journal.attendance || []).filter(a => a.status === 'H').length;
                 const absentList = (journal.attendance || []).filter(a => a.status !== 'H');
 
@@ -1155,7 +1348,7 @@ export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ 
                           <h3 className="font-bold text-gray-900 text-sm">
                             {journal.topic}
                           </h3>
-                          <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500 font-medium">
+                          <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500 font-medium mt-0.5">
                             <span className="flex items-center gap-1">
                               <CalendarCheck size={13} className="text-amber-600" />
                               {journal.date}
@@ -1168,6 +1361,12 @@ export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ 
                               <MapPin size={13} className="text-red-500" />
                               {journal.location}
                             </span>
+                            {journal.trainerName && (
+                              <span className="flex items-center gap-1 font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                <UserIcon size={12} className="text-emerald-600" />
+                                Pelatih: {journal.trainerName}
+                              </span>
+                            )}
                             {journal.isEventPrep && (
                               <span className="bg-yellow-100 text-yellow-800 text-[10px] font-bold px-2 py-0.5 rounded-full border border-yellow-200">
                                 Persiapan Lomba / Event
@@ -1376,31 +1575,112 @@ export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ 
       {/* TAB 5: REKAPITULASI & CETAK LAPORAN */}
       {activeTab === 'reports' && (
         <div className="space-y-6">
-          {/* Action Toolbar */}
-          <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div>
-              <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
-                <Printer className="text-amber-600" />
-                Format Cetak Buku Jurnal & Laporan Pembina Ekskul
-              </h2>
-              <p className="text-xs text-gray-500">
-                Laporan resmi lengkap dengan kop sekolah dan kolom tanda tangan Pembina serta Kepala Sekolah.
-              </p>
+          {/* Action Toolbar & Period Filter */}
+          <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
+                  <Printer className="text-amber-600" />
+                  Format Cetak Buku Jurnal & Laporan Ekstrakurikuler
+                </h2>
+                <p className="text-xs text-gray-500">
+                  Laporan resmi per bulan atau per semester lengkap dengan kop sekolah, nama pelatih, dan validasi Kepala Sekolah.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={exportReportRecommendationsToExcel}
+                  className="flex items-center gap-1.5 text-xs bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 px-3.5 py-2 rounded-xl font-bold transition cursor-pointer"
+                >
+                  <FileSpreadsheet size={15} /> Export Rekap ({selectedMonth === 'ALL' ? 'Semester' : MONTH_NAMES[selectedMonth]})
+                </button>
+                <button
+                  onClick={handlePrint}
+                  className="flex items-center gap-1.5 text-xs bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-xl font-bold shadow-xs transition cursor-pointer"
+                >
+                  <Printer size={15} /> Cetak / Simpan PDF
+                </button>
+              </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                onClick={exportReportRecommendationsToExcel}
-                className="flex items-center gap-1.5 text-xs bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 px-3.5 py-2 rounded-xl font-bold transition"
-              >
-                <FileSpreadsheet size={15} /> Export Nilai & Presensi (Excel)
-              </button>
-              <button
-                onClick={handlePrint}
-                className="flex items-center gap-1.5 text-xs bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-xl font-bold shadow-xs transition"
-              >
-                <Printer size={15} /> Cetak / Simpan PDF
-              </button>
+            {/* Controls: Month Filter & Validation Setup Form */}
+            <div className="pt-4 border-t border-gray-100 grid grid-cols-1 md:grid-cols-5 gap-3 text-xs bg-slate-50 p-4 rounded-xl border border-slate-200/80">
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">
+                  Periode Rekap / Laporan
+                </label>
+                <select
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  className="w-full bg-white border border-gray-300 rounded-lg p-2 font-bold text-amber-900 outline-none focus:ring-2 focus:ring-amber-500"
+                >
+                  {MONTH_OPTIONS.map(m => (
+                    <option key={m.value} value={m.value}>{m.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">
+                  Nama Kepala Sekolah
+                </label>
+                <input
+                  type="text"
+                  placeholder="Cth: Drs. H. Ahmad Fauzi, M.Pd"
+                  value={validationSettings.principalName}
+                  onChange={(e) => setValidationSettings({ ...validationSettings, principalName: e.target.value })}
+                  className="w-full bg-white border border-gray-300 rounded-lg p-2 font-medium text-gray-800 outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">
+                  NIP Kepala Sekolah
+                </label>
+                <input
+                  type="text"
+                  placeholder="Cth: 19750312 200003 1 002"
+                  value={validationSettings.principalNip}
+                  onChange={(e) => setValidationSettings({ ...validationSettings, principalNip: e.target.value })}
+                  className="w-full bg-white border border-gray-300 rounded-lg p-2 font-medium text-gray-800 outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">
+                  Nama Pelatih / Instruktur
+                </label>
+                <input
+                  type="text"
+                  placeholder="Cth: Coach Budi Santoso"
+                  value={validationSettings.trainerName}
+                  onChange={(e) => setValidationSettings({ ...validationSettings, trainerName: e.target.value })}
+                  className="w-full bg-white border border-gray-300 rounded-lg p-2 font-medium text-gray-800 outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">
+                  Kota & Tanggal Laporan
+                </label>
+                <div className="grid grid-cols-2 gap-1">
+                  <input
+                    type="text"
+                    placeholder="Kota"
+                    value={validationSettings.city}
+                    onChange={(e) => setValidationSettings({ ...validationSettings, city: e.target.value })}
+                    className="w-full bg-white border border-gray-300 rounded-lg p-2 font-medium text-gray-800 outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Tgl Laporan"
+                    value={validationSettings.reportDate}
+                    onChange={(e) => setValidationSettings({ ...validationSettings, reportDate: e.target.value })}
+                    className="w-full bg-white border border-gray-300 rounded-lg p-2 font-medium text-gray-800 outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1417,8 +1697,10 @@ export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ 
               <h3 className="text-sm sm:text-base font-bold uppercase tracking-wider mt-1 text-gray-800">
                 BUKU JURNAL & LAPORAN KEGIATAN EKSTRAKURIKULER {selectedEkskul.toUpperCase()}
               </h3>
-              <p className="text-xs text-gray-600 mt-1">
-                SEMESTER {selectedSemester.toUpperCase()} • TAHUN AJARAN {academicYear}
+              <p className="text-xs font-semibold text-gray-700 mt-1">
+                {selectedMonth === 'ALL' 
+                  ? `SEMESTER ${selectedSemester.toUpperCase()} • TAHUN AJARAN ${academicYear}`
+                  : `LAPORAN BULAN ${MONTH_NAMES[selectedMonth]?.toUpperCase() || selectedMonth} • SEMESTER ${selectedSemester.toUpperCase()} ${academicYear}`}
               </p>
               {user.schoolNpsn && (
                 <p className="text-[10px] text-gray-500">NPSN: {user.schoolNpsn}</p>
@@ -1426,40 +1708,42 @@ export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ 
             </div>
 
             {/* Meta Info */}
-            <div className="grid grid-cols-2 gap-4 text-xs mb-6 bg-gray-50 p-3 rounded-lg border border-gray-200 print:bg-transparent print:border-none print:p-0">
-              <div>
+            <div className="grid grid-cols-2 gap-4 text-xs mb-6 bg-gray-50 p-3.5 rounded-lg border border-gray-200 print:bg-transparent print:border-none print:p-0">
+              <div className="space-y-1">
                 <p><strong>Nama Ekstrakurikuler:</strong> {selectedEkskul}</p>
-                <p><strong>Pembina Ekstrakurikuler:</strong> {user.fullName}</p>
-                <p><strong>NIP:</strong> {user.nip || '-'}</p>
+                <p><strong>Pembina Ekstrakurikuler:</strong> {user.fullName} {user.nip ? `(NIP. ${user.nip})` : ''}</p>
+                <p><strong>Pelatih / Instruktur:</strong> {validationSettings.trainerName || '...........................................'}</p>
               </div>
-              <div>
+              <div className="space-y-1">
                 <p><strong>Total Anggota:</strong> {members.length} Siswa</p>
-                <p><strong>Total Pertemuan / Latihan:</strong> {journals.length} Kali</p>
-                <p><strong>Rata-rata Kehadiran:</strong> {stats.averageAttendanceRate}%</p>
+                <p><strong>Total Pertemuan Periode Ini:</strong> {displayedJournals.length} Pertemuan</p>
+                <p><strong>Periode Laporan:</strong> {selectedMonth === 'ALL' ? `1 Semester (${selectedSemester})` : `Bulan ${MONTH_NAMES[selectedMonth]}`}</p>
               </div>
             </div>
 
             {/* Bagian 1: Jurnal Pertemuan */}
             <div className="mb-8">
               <h4 className="font-bold text-sm uppercase text-gray-800 mb-2 border-b pb-1">
-                I. JURNAL KEGIATAN & AGENDA LATIHAN
+                I. JURNAL KEGIATAN & AGENDA LATIHAN {selectedMonth !== 'ALL' ? `(BULAN ${MONTH_NAMES[selectedMonth]?.toUpperCase()})` : ''}
               </h4>
-              {journals.length === 0 ? (
-                <p className="text-xs text-gray-400 italic py-2">Belum ada data jurnal pertemuan.</p>
+              {displayedJournals.length === 0 ? (
+                <p className="text-xs text-gray-400 italic py-2">
+                  Belum ada data jurnal pertemuan pada periode {selectedMonth === 'ALL' ? `semester ${selectedSemester}` : `bulan ${MONTH_NAMES[selectedMonth]}`}.
+                </p>
               ) : (
                 <table className="w-full text-[11px] border-collapse border border-gray-400 text-left">
                   <thead className="bg-gray-100 print:bg-gray-200">
                     <tr>
                       <th className="border border-gray-400 p-2 text-center w-8">No</th>
                       <th className="border border-gray-400 p-2 w-24">Hari/Tanggal</th>
-                      <th className="border border-gray-400 p-2 w-20">Jam & Tempat</th>
-                      <th className="border border-gray-400 p-2">Materi / Agenda Latihan</th>
+                      <th className="border border-gray-400 p-2 w-24">Waktu & Tempat</th>
+                      <th className="border border-gray-400 p-2">Materi / Agenda Latihan & Pelatih</th>
                       <th className="border border-gray-400 p-2 w-28 text-center">Presensi (H/S/I/A)</th>
                       <th className="border border-gray-400 p-2 w-44">Catatan / Evaluasi</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {journals.map((j, idx) => {
+                    {displayedJournals.map((j, idx) => {
                       const presentCount = (j.attendance || []).filter(a => a.status === 'H').length;
                       const sCount = (j.attendance || []).filter(a => a.status === 'S').length;
                       const iCount = (j.attendance || []).filter(a => a.status === 'I').length;
@@ -1468,13 +1752,18 @@ export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ 
                       return (
                         <tr key={j.id} className="align-top">
                           <td className="border border-gray-400 p-2 text-center font-bold">{idx + 1}</td>
-                          <td className="border border-gray-400 p-2">{j.date}</td>
+                          <td className="border border-gray-400 p-2 font-medium">{j.date}</td>
                           <td className="border border-gray-400 p-2">
                             {j.startTime}-{j.endTime}<br />
                             <span className="text-[10px] text-gray-600">{j.location}</span>
                           </td>
                           <td className="border border-gray-400 p-2">
                             <p className="font-semibold text-gray-900">{j.topic}</p>
+                            {j.trainerName && (
+                              <p className="text-[10px] text-emerald-800 font-bold mt-0.5">
+                                Pelatih: {j.trainerName}
+                              </p>
+                            )}
                             {j.skillsTrained && (
                               <p className="text-[10px] text-gray-600 mt-0.5">Target: {j.skillsTrained}</p>
                             )}
@@ -1534,7 +1823,7 @@ export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ 
             {/* Bagian 3: Rekap Keanggotaan & Nilai */}
             <div className="mb-8">
               <h4 className="font-bold text-sm uppercase text-gray-800 mb-2 border-b pb-1">
-                III. REKAPITULASI KEHADIRAN & NILAI RAPOR ANGGOTA
+                III. REKAPITULASI KEHADIRAN & CAPAIAN NILAI ANGGOTA
               </h4>
               <table className="w-full text-[11px] border-collapse border border-gray-400 text-left">
                 <thead className="bg-gray-100 print:bg-gray-200">
@@ -1551,7 +1840,7 @@ export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ 
                 </thead>
                 <tbody>
                   {members.map((m, idx) => {
-                    const att = memberAttendanceMap[m.studentId] || { present: 0, sakit: 0, izin: 0, alfa: 0, rate: 100 };
+                    const att = reportAttendanceMap[m.studentId] || { present: 0, sakit: 0, izin: 0, alfa: 0, rate: 100 };
                     return (
                       <tr key={m.id}>
                         <td className="border border-gray-400 p-1.5 text-center">{idx + 1}</td>
@@ -1571,19 +1860,36 @@ export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ 
               </table>
             </div>
 
-            {/* Signature Area */}
-            <div className="grid grid-cols-2 gap-8 text-xs pt-8 mt-12 border-t border-gray-300">
+            {/* Signature Area (3 Columns: Kepala Sekolah, Pelatih, Pembina) */}
+            <div className="grid grid-cols-3 gap-6 text-xs pt-8 mt-12 border-t border-gray-300">
+              {/* Column 1: Kepala Sekolah */}
               <div className="text-center space-y-16">
                 <p>Mengetahui,<br />Kepala Sekolah</p>
                 <div>
-                  <p className="font-bold underline uppercase">{schoolSettings?.principalName || '...........................................'}</p>
-                  <p>NIP. {schoolSettings?.principalNip || '...........................................'}</p>
+                  <p className="font-bold underline uppercase">
+                    {validationSettings.principalName || schoolSettings?.principalName || '...........................................'}
+                  </p>
+                  <p>
+                    NIP. {validationSettings.principalNip || schoolSettings?.principalNip || '...........................................'}
+                  </p>
                 </div>
               </div>
 
+              {/* Column 2: Pelatih / Instruktur */}
+              <div className="text-center space-y-16">
+                <p>Mengetahui / Memeriksa,<br />Pelatih / Instruktur</p>
+                <div>
+                  <p className="font-bold underline uppercase">
+                    {validationSettings.trainerName || '...........................................'}
+                  </p>
+                  <p>Pelatih Ekstrakurikuler</p>
+                </div>
+              </div>
+
+              {/* Column 3: Pembina Ekstrakurikuler */}
               <div className="text-center space-y-16">
                 <p>
-                  {schoolSettings?.city || 'Kota'}, {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}<br />
+                  {validationSettings.city || schoolSettings?.city || 'Kota'}, {validationSettings.reportDate}<br />
                   Pembina Ekstrakurikuler
                 </p>
                 <div>
@@ -1650,8 +1956,49 @@ export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ 
                 placeholder="Ketik nama atau NIS siswa..."
                 value={memberSearchTerm}
                 onChange={(e) => setMemberSearchTerm(e.target.value)}
-                className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg outline-none"
+                className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-amber-500 bg-white"
               />
+            </div>
+
+            {/* Quick Selection Bar: Select All / Deselect All */}
+            <div className="flex items-center justify-between bg-amber-50/80 p-2.5 rounded-xl border border-amber-200 text-xs">
+              <label className="flex items-center gap-2 cursor-pointer font-bold text-amber-950 select-none">
+                <input
+                  type="checkbox"
+                  checked={isAllEligibleSelected}
+                  onChange={handleToggleSelectAll}
+                  disabled={eligibleStudentsToAdd.length === 0}
+                  className="rounded text-amber-600 focus:ring-amber-500 h-4 w-4 cursor-pointer"
+                />
+                <span>
+                  {isAllEligibleSelected ? 'Batalkan Pilih Semua' : 'Pilih Semua Siswa'}
+                  {eligibleStudentsToAdd.length > 0 && (
+                    <span className="ml-1 text-[11px] font-semibold text-amber-700">
+                      ({eligibleStudentsToAdd.length} siswa sesuai filter)
+                    </span>
+                  )}
+                </span>
+              </label>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleSelectAllEligible}
+                  disabled={eligibleStudentsToAdd.length === 0 || isAllEligibleSelected}
+                  className="px-2.5 py-1 text-[11px] font-bold bg-amber-600 hover:bg-amber-700 disabled:opacity-40 text-white rounded-lg transition cursor-pointer"
+                >
+                  Pilih Semua
+                </button>
+                {selectedStudentIdsToAdd.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleDeselectAllEligible}
+                    className="px-2.5 py-1 text-[11px] font-bold bg-white hover:bg-gray-100 text-gray-700 border border-gray-300 rounded-lg transition cursor-pointer"
+                  >
+                    Batal Pilih
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Student List Checkbox */}
@@ -1669,7 +2016,7 @@ export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ 
                     <label
                       key={st.id}
                       className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition ${
-                        isSelected ? 'bg-amber-50 text-amber-900 font-semibold' : 'hover:bg-gray-50 text-gray-700'
+                        isSelected ? 'bg-amber-100/70 text-amber-950 font-semibold border border-amber-300/60' : 'hover:bg-gray-50 text-gray-700'
                       }`}
                     >
                       <div className="flex items-center gap-3">
@@ -1683,15 +2030,15 @@ export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ 
                               setSelectedStudentIdsToAdd(selectedStudentIdsToAdd.filter(id => id !== st.id));
                             }
                           }}
-                          className="rounded text-amber-600 focus:ring-amber-500 h-4 w-4"
+                          className="rounded text-amber-600 focus:ring-amber-500 h-4 w-4 cursor-pointer"
                         />
                         <div>
                           <p className="font-bold text-gray-900">{st.name}</p>
-                          <p className="text-[10px] text-gray-400">NIS: {st.nis || '-'} • Kelas: {cls?.name || '-'}</p>
+                          <p className="text-[10px] text-gray-500">NIS: {st.nis || '-'} • Kelas: {cls?.name || '-'}</p>
                         </div>
                       </div>
 
-                      <span className="text-[10px] bg-gray-100 px-2 py-0.5 rounded text-gray-600 font-medium">
+                      <span className="text-[10px] bg-white border border-gray-200 px-2 py-0.5 rounded text-gray-600 font-semibold shadow-2xs">
                         {cls?.name || 'Kelas'}
                       </span>
                     </label>
@@ -1702,15 +2049,29 @@ export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ 
 
             {/* Footer */}
             <div className="flex items-center justify-between pt-3 border-t text-xs">
-              <span className="font-bold text-gray-600">
-                {selectedStudentIdsToAdd.length} siswa dipilih
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="font-bold bg-amber-100 text-amber-900 px-2.5 py-1 rounded-lg border border-amber-300">
+                  {selectedStudentIdsToAdd.length} siswa dipilih
+                </span>
+                {selectedStudentIdsToAdd.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleClearAllSelections}
+                    className="text-[11px] text-gray-500 hover:text-red-600 underline font-medium cursor-pointer"
+                  >
+                    Reset Pilihan
+                  </button>
+                )}
+              </div>
 
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setIsAddMemberModalOpen(false)}
-                  className="px-4 py-2 font-bold text-gray-600 hover:bg-gray-100 rounded-xl transition"
+                  onClick={() => {
+                    setSelectedStudentIdsToAdd([]);
+                    setIsAddMemberModalOpen(false);
+                  }}
+                  className="px-4 py-2 font-bold text-gray-600 hover:bg-gray-100 rounded-xl transition cursor-pointer"
                 >
                   Batal
                 </button>
@@ -1718,9 +2079,9 @@ export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ 
                   type="button"
                   disabled={selectedStudentIdsToAdd.length === 0}
                   onClick={handleSaveBulkMembers}
-                  className="px-5 py-2 font-bold bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-xl shadow-xs transition"
+                  className="px-5 py-2 font-bold bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-xl shadow-xs transition cursor-pointer"
                 >
-                  Tambahkan ke Ekskul
+                  Tambahkan ke Ekskul {selectedStudentIdsToAdd.length > 0 ? `(${selectedStudentIdsToAdd.length})` : ''}
                 </button>
               </div>
             </div>
@@ -1784,8 +2145,8 @@ export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ 
                 </div>
               </div>
 
-              {/* Row 2: Location & Event Prep Checkbox */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Row 2: Location, Trainer Name & Event Prep Checkbox */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1">Tempat / Lokasi Latihan</label>
                   <input
@@ -1798,6 +2159,19 @@ export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ 
                   />
                 </div>
 
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">
+                    Nama Pelatih / Instruktur <span className="text-gray-400 font-normal">(opsional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Cth: Coach Budi / Pelatih Luar..."
+                    value={journalForm.trainerName || ''}
+                    onChange={(e) => setJournalForm({ ...journalForm, trainerName: e.target.value })}
+                    className="w-full p-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none"
+                  />
+                </div>
+
                 <div className="flex items-center pt-5">
                   <label className="flex items-center gap-2 text-xs font-bold text-amber-900 cursor-pointer">
                     <input
@@ -1806,7 +2180,7 @@ export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ 
                       onChange={(e) => setJournalForm({ ...journalForm, isEventPrep: e.target.checked })}
                       className="rounded text-amber-600 focus:ring-amber-500 h-4 w-4"
                     />
-                    <span>Persiapan Lomba / Kejuaraan Khusus</span>
+                    <span>Persiapan Lomba / Kejuaraan</span>
                   </label>
                 </div>
               </div>
