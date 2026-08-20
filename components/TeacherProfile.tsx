@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { User, UserRole, MasterSubject, ClassRoom } from '../types';
-import { User as UserIcon, School, IdCard, BookOpen, CheckCircle, AlertCircle, Save, Lock, Shield, Smartphone, DatabaseBackup, Info, Layout } from './Icons';
+import { User, UserRole, MasterSubject, ClassRoom, DEFAULT_EXTRACURRICULARS } from '../types';
+import { User as UserIcon, School, IdCard, BookOpen, CheckCircle, AlertCircle, Save, Lock, Shield, Smartphone, DatabaseBackup, Info, Layout, Trophy, Award, Plus, X, Trash2 } from './Icons';
 import { updateUserProfile, updateUserPassword, getMasterSubjects, getAvailableClassesForHomeroom, claimHomeroomClass, releaseHomeroomClass, checkWakasekExists, checkPrincipalExists } from '../services/database';
 import { db } from '../services/db';
 import WhatsAppSettings from './WhatsAppSettings';
@@ -27,8 +27,12 @@ const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onUpdateUser }) =
     teacherType: user.teacherType || 'SUBJECT',
     isMultiSubject: user.isMultiSubject || false,
     subjects: user.subjects || [],
-    additionalRole: user.additionalRole || null
+    additionalRole: user.additionalRole || null,
+    isExtracurricularAdvisor: user.isExtracurricularAdvisor || (user.extracurriculars && user.extracurriculars.length > 0) || false,
+    extracurriculars: user.extracurriculars || []
   });
+
+  const [customEkskulInput, setCustomEkskulInput] = useState('');
 
   // Master Data State
   const [availableSubjects, setAvailableSubjects] = useState<MasterSubject[]>([]);
@@ -61,7 +65,9 @@ const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onUpdateUser }) =
       teacherType: user.teacherType || 'SUBJECT',
       isMultiSubject: user.isMultiSubject || false,
       subjects: user.subjects || [],
-      additionalRole: user.additionalRole || null
+      additionalRole: user.additionalRole || null,
+      isExtracurricularAdvisor: user.isExtracurricularAdvisor || (user.extracurriculars && user.extracurriculars.length > 0) || false,
+      extracurriculars: user.extracurriculars || []
     });
   }, [user]);
 
@@ -495,6 +501,128 @@ const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onUpdateUser }) =
                                     }`}></div>
                                 </label>
                             </div>
+                        </div>
+
+                        {/* Pembina Ekstrakurikuler (Self-Assignment) */}
+                        <div className="p-4 rounded-lg border bg-amber-50/80 border-amber-200 transition">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-start gap-2.5">
+                                    <div className="p-2 bg-amber-100 text-amber-700 rounded-lg shrink-0 mt-0.5">
+                                        <Trophy size={16} />
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-bold text-amber-900">
+                                            Tugas Tambahan: Pembina Ekstrakurikuler
+                                        </p>
+                                        <p className="text-[11px] text-amber-700 leading-relaxed">
+                                            Kelola anggota, jadwal & jurnal latihan rutin, presensi, serta pencatatan prestasi ekskul binaan.
+                                        </p>
+                                    </div>
+                                </div>
+                                <label className="relative inline-flex items-center cursor-pointer shrink-0 ml-2">
+                                    <input 
+                                        type="checkbox" 
+                                        className="sr-only peer"
+                                        checked={formData.isExtracurricularAdvisor}
+                                        onChange={(e) => {
+                                            const isChecked = e.target.checked;
+                                            setFormData({ 
+                                                ...formData, 
+                                                isExtracurricularAdvisor: isChecked
+                                            });
+                                        }}
+                                    />
+                                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-amber-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-600"></div>
+                                </label>
+                            </div>
+
+                            {/* Pilihan Nama Ekskul yang Dibina */}
+                            {formData.isExtracurricularAdvisor && (
+                                <div className="mt-4 pt-3 border-t border-amber-200/80 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-xs font-bold text-amber-900">
+                                            Pilih Nama Ekstrakurikuler yang Dibina:
+                                        </label>
+                                        <span className="text-[10px] font-semibold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
+                                            {formData.extracurriculars.length} Dipilih
+                                        </span>
+                                    </div>
+
+                                    {/* Chips Pilihan Cepat Ekskul Umum */}
+                                    <div className="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto p-2 bg-white/90 rounded-lg border border-amber-200">
+                                        {Array.from(new Set([...DEFAULT_EXTRACURRICULARS, ...formData.extracurriculars])).map(ekskul => {
+                                            const isSelected = formData.extracurriculars.includes(ekskul);
+                                            return (
+                                                <button
+                                                    key={ekskul}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const next = isSelected 
+                                                            ? formData.extracurriculars.filter(e => e !== ekskul)
+                                                            : [...formData.extracurriculars, ekskul];
+                                                        setFormData({ ...formData, extracurriculars: next });
+                                                    }}
+                                                    className={`text-xs px-2.5 py-1 rounded-md font-medium transition flex items-center gap-1.5 ${
+                                                        isSelected 
+                                                            ? 'bg-amber-600 text-white shadow-xs font-semibold' 
+                                                            : 'bg-gray-100 text-gray-700 hover:bg-amber-100 hover:text-amber-800'
+                                                    }`}
+                                                >
+                                                    {isSelected && <CheckCircle size={12} />}
+                                                    {ekskul}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+
+                                    {/* Tambah Ekskul Baru/Custom */}
+                                    <div className="flex gap-2 items-center">
+                                        <input 
+                                            type="text"
+                                            value={customEkskulInput}
+                                            onChange={(e) => setCustomEkskulInput(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    if (customEkskulInput.trim()) {
+                                                        const clean = customEkskulInput.trim();
+                                                        if (!formData.extracurriculars.includes(clean)) {
+                                                            setFormData({
+                                                                ...formData,
+                                                                extracurriculars: [...formData.extracurriculars, clean]
+                                                            });
+                                                        }
+                                                        setCustomEkskulInput('');
+                                                    }
+                                                }
+                                            }}
+                                            placeholder="Tambah nama ekskul lain (cth: Taekwondo, Archery)..."
+                                            className="flex-1 text-xs px-3 py-2 bg-white border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                if (customEkskulInput.trim()) {
+                                                    const clean = customEkskulInput.trim();
+                                                    if (!formData.extracurriculars.includes(clean)) {
+                                                        setFormData({
+                                                            ...formData,
+                                                            extracurriculars: [...formData.extracurriculars, clean]
+                                                        });
+                                                    }
+                                                    setCustomEkskulInput('');
+                                                }
+                                            }}
+                                            className="text-xs bg-amber-700 hover:bg-amber-800 text-white px-3 py-2 rounded-lg font-medium transition flex items-center gap-1 shrink-0"
+                                        >
+                                            <Plus size={14} /> Tambah
+                                        </button>
+                                    </div>
+                                    <p className="text-[10px] text-amber-700/90 italic">
+                                        * Menu <strong>Pembina Ekskul</strong> di sidebar akan otomatis aktif setelah disimpan.
+                                    </p>
+                                </div>
+                            )}
                         </div>
                       </div>
                     )}
