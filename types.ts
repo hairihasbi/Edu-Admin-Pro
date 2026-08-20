@@ -46,6 +46,8 @@ export interface User extends Syncable {
   rppLastReset?: string;
   isSupervisor?: boolean;
   isRfidOfficer?: boolean;
+  isExtracurricularAdvisor?: boolean;
+  extracurriculars?: string[];
 }
 
 export interface SystemSettings extends Syncable {
@@ -677,3 +679,101 @@ export const MATH_SUBJECT_OPTIONS = [
   "Matematika Umum",
   "Matematika Tingkat Lanjut"
 ];
+
+// --- EXTRACURRICULAR (EKSKUL) TYPES ---
+export type ExtracurricularRole = 'Ketua' | 'Wakil Ketua' | 'Sekretaris' | 'Bendahara' | 'Koordinator Divisi' | 'Anggota';
+
+export interface ExtracurricularMember extends Syncable {
+  id: string;
+  extracurricularName: string;
+  schoolNpsn?: string;
+  studentId: string;
+  studentName: string;
+  studentNis: string;
+  studentClassId: string;
+  studentClassName: string;
+  role: ExtracurricularRole;
+  joinedDate?: string;
+  notes?: string;
+}
+
+export type ExtracurricularAttendanceStatus = 'H' | 'S' | 'I' | 'A';
+
+export interface ExtracurricularAttendanceItem {
+  memberId: string;
+  studentId: string;
+  studentName: string;
+  status: ExtracurricularAttendanceStatus;
+  note?: string;
+}
+
+export interface ExtracurricularJournal extends Syncable {
+  id: string;
+  extracurricularName: string;
+  schoolNpsn?: string;
+  coachId: string;
+  coachName: string;
+  academicYear?: string;
+  semester?: 'Ganjil' | 'Genap';
+  date: string; // YYYY-MM-DD
+  startTime: string; // HH:mm
+  endTime: string; // HH:mm
+  location: string;
+  topic: string;
+  skillsTrained?: string;
+  isEventPrep?: boolean;
+  attendance: ExtracurricularAttendanceItem[];
+  evaluationNotes?: string;
+  obstacles?: string;
+  documentationPhoto?: string;
+}
+
+export type AchievementLevel = 'Sekolah' | 'Kecamatan' | 'Kabupaten/Kota' | 'Provinsi' | 'Nasional' | 'Internasional';
+export type AchievementRank = 'Juara 1' | 'Juara 2' | 'Juara 3' | 'Harapan 1' | 'Harapan 2' | 'Harapan 3' | 'Juara Favorit' | 'Finalis' | 'Peserta';
+
+export interface ExtracurricularAchievementStudent {
+  studentId: string;
+  studentName: string;
+  studentClassName?: string;
+}
+
+export interface ExtracurricularAchievement extends Syncable {
+  id: string;
+  extracurricularName: string;
+  schoolNpsn?: string;
+  coachId: string;
+  coachName: string;
+  eventName: string;
+  date: string;
+  organizer: string;
+  level: AchievementLevel;
+  rank: AchievementRank;
+  studentParticipants: ExtracurricularAchievementStudent[];
+  description?: string;
+  certificateUrl?: string;
+}
+
+export const DEFAULT_EXTRACURRICULARS = [
+  'Pramuka',
+  'Paskibra',
+  'PMR (Palang Merah Remaja)',
+  'Futsal',
+  'Sepak Bola',
+  'Bola Basket',
+  'Bola Voli',
+  'Bulutangkis (Badminton)',
+  'Pencak Silat / Bela Diri',
+  'Rohis / Keagamaan Islam',
+  'Rokris / Keagamaan Kristen',
+  'Seni Musik / Band / Paduan Suara',
+  'Seni Tari Tradisional & Modern',
+  'English Club / Bahasa Asing',
+  'KIR (Karya Ilmiah Remaja)',
+  'Robotik & Coding',
+  'Jurnalistik & Fotografi',
+  'PMR & UKS',
+  'Teater & Seni Peran',
+  'OSN / Olimpiade Sains',
+  'Catur'
+];
+

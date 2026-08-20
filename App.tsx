@@ -56,6 +56,7 @@ import RfidOfficerManager from "./components/RfidOfficerManager";
 import RfidSecurityManager from "./components/RfidSecurityManager";
 import AttendanceMonitoring from "./components/AttendanceMonitoring";
 import ProposalPage from "./components/ProposalPage";
+import ExtracurricularManager from "./components/ExtracurricularManager";
 import Breadcrumbs from "./components/Breadcrumbs";
 import OnboardingTour from "./components/OnboardingTour";
 import ForgotPassword from "./components/ForgotPassword";
@@ -126,6 +127,7 @@ import {
   Moon,
   Clock,
   FileText,
+  Trophy,
 } from "./components/Icons";
 
 // Konstanta Timeout: 15 Menit
@@ -1314,6 +1316,11 @@ const AppContent: React.FC = () => {
                   label="Proposal & Fitur"
                 />
                 <NavLink
+                  to="/extracurricular"
+                  icon={Trophy}
+                  label="Pembina Ekskul"
+                />
+                <NavLink
                   to="/site-settings"
                   icon={Globe}
                   label="Pengaturan Situs"
@@ -1371,6 +1378,11 @@ const AppContent: React.FC = () => {
                       to="/supervision-results"
                       icon={ClipboardCheck}
                       label="Hasil Supervisi"
+                    />
+                    <NavLink
+                      to="/extracurricular"
+                      icon={Trophy}
+                      label="Pembina Ekskul"
                     />
                     <NavLink
                       to="/sync"
@@ -1522,6 +1534,16 @@ const AppContent: React.FC = () => {
                       icon={NotebookPen}
                       label="Jurnal Mengajar"
                     />
+                    {(currentUser.isExtracurricularAdvisor ||
+                      (currentUser.extracurriculars &&
+                        currentUser.extracurriculars.length > 0) ||
+                      currentUser.additionalRole === "WAKASEK_KURIKULUM") && (
+                      <NavLink
+                        to="/extracurricular"
+                        icon={Trophy}
+                        label="Pembina Ekskul"
+                      />
+                    )}
                     <NavLink
                       to="/summative"
                       icon={Calculator}
@@ -1775,6 +1797,10 @@ const AppContent: React.FC = () => {
                   path="/proposal"
                   element={<ProposalPage />}
                 />
+                <Route
+                  path="/extracurricular"
+                  element={<ExtracurricularManager user={currentUser} />}
+                />
                 <Route path="/site-settings" element={<AdminSiteSettings />} />
                 <Route path="/settings" element={<AdminSettings />} />
                 <Route path="/system-logs" element={<AdminSystemLogs />} />
@@ -1946,6 +1972,10 @@ const AppContent: React.FC = () => {
                 <Route
                   path="/journal"
                   element={<TeacherJournal user={currentUser} />}
+                />
+                <Route
+                  path="/extracurricular"
+                  element={<ExtracurricularManager user={currentUser} />}
                 />
                 <Route
                   path="/summative"
