@@ -828,15 +828,15 @@ export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
       {/* Top Banner / Hero - High Contrast, Clear, Professional */}
-      <div className="relative overflow-hidden rounded-2xl bg-linear-to-r from-slate-900 via-amber-950 to-slate-900 p-6 sm:p-8 text-white shadow-xl border border-amber-800/40">
+      <div className="relative overflow-hidden rounded-2xl bg-slate-900 bg-gradient-to-r from-slate-900 via-amber-950 to-slate-900 p-6 sm:p-8 text-white shadow-xl border border-amber-800/40">
         <div className="absolute top-0 right-0 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20"></div>
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2.5">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-400/30 text-amber-300 text-xs font-bold tracking-wide">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-400/40 text-amber-300 text-xs font-bold tracking-wide">
               <Trophy size={14} className="text-yellow-400" />
               <span>Portal Pembina & Pelatih Ekstrakurikuler</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white drop-shadow-sm">
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white drop-shadow-md">
               Manajemen & Jurnal Ekstrakurikuler
             </h1>
             <p className="text-sm text-slate-200 font-normal max-w-2xl leading-relaxed">
@@ -845,7 +845,7 @@ export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ 
           </div>
 
           {/* Ekskul Selector Card */}
-          <div className="bg-slate-950/80 backdrop-blur-md p-4 rounded-xl border border-amber-500/30 min-w-[270px] space-y-3 shadow-lg">
+          <div className="bg-slate-950/90 backdrop-blur-md p-4 rounded-xl border border-amber-500/40 min-w-[270px] space-y-3 shadow-2xl">
             <div>
               <label className="text-[11px] font-bold text-amber-300 uppercase tracking-wider block mb-1">
                 Pilih Ekstrakurikuler
@@ -1507,7 +1507,7 @@ export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ 
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {achievements.map((achv) => (
-                <div key={achv.id} className="p-5 rounded-2xl border border-yellow-200 bg-linear-to-br from-yellow-50/30 via-amber-50/20 to-white shadow-xs space-y-3">
+                <div key={achv.id} className="p-5 rounded-2xl border border-yellow-200 bg-gradient-to-br from-yellow-50/30 via-amber-50/20 to-white shadow-xs space-y-3">
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-yellow-100 text-yellow-900 border border-yellow-300 mb-1">
