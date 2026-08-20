@@ -1,10 +1,29 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { User, ClassRoom, Student, ScopeMaterial, AssessmentScore, SD_SUBJECTS_PHASE_A, SD_SUBJECTS_PHASE_BC, MATH_SUBJECT_OPTIONS } from '../types';
-import { getClasses, getStudents, getScopeMaterials, getAssessmentScores, saveBulkAssessmentScores, updateScopeMaterial } from '../services/database';
-import { Calculator, Save, Filter, FileSpreadsheet, AlertCircle, CheckCircle, ArrowRight, RefreshCcw, Settings, Plus, Trash2, X, ChevronDown, ChevronUp, User as UserIcon, Layout } from './Icons';
+import { User, ClassRoom, Student, ScopeMaterial, AssessmentScore, SD_SUBJECTS_PHASE_A, SD_SUBJECTS_PHASE_BC, MATH_SUBJECT_OPTIONS, TeachingJournal, AbsentStudent } from '../types';
+import { getClasses, getStudents, getScopeMaterials, getAssessmentScores, saveBulkAssessmentScores, updateScopeMaterial, getTeachingJournals, isSubjectMatching } from '../services/database';
+import { Calculator, Save, Filter, FileSpreadsheet, AlertCircle, CheckCircle, ArrowRight, RefreshCcw, Settings, Plus, Trash2, X, ChevronDown, ChevronUp, User as UserIcon, Layout, CalendarCheck, CalendarDays, ClipboardList } from './Icons';
 import * as XLSX from 'xlsx';
 import Skeleton from './Skeleton';
+
+export interface AbsentDetailItem {
+  date: string;
+  meetingNo: string;
+  status: 'S' | 'I' | 'A';
+  learningObjective: string;
+  activities?: string;
+  examAgenda?: string;
+}
+
+export interface StudentAttendanceSummary {
+  sakit: number;
+  izin: number;
+  alfa: number;
+  totalAbsent: number;
+  totalSessions: number;
+  attendanceRate: number;
+  absentHistory: AbsentDetailItem[];
+}
 
 interface TeacherSummativeProps {
   user: User;
@@ -16,6 +35,11 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
   const [students, setStudents] = useState<Student[]>([]);
   const [materials, setMaterials] = useState<ScopeMaterial[]>([]);
   
+  // Attendance from Teaching Journals State
+  const [attendanceSummaries, setAttendanceSummaries] = useState<Record<string, StudentAttendanceSummary>>({});
+  const [totalJournalSessions, setTotalJournalSessions] = useState<number>(0);
+  const [selectedStudentForAttendance, setSelectedStudentForAttendance] = useState<{ student: Student; summary: StudentAttendanceSummary } | null>(null);
+
   // Scores State
   const [scores, setScores] = useState<{[key: string]: number}>({}); 
   const [subScores, setSubScores] = useState<{[key: string]: number}>({});
@@ -158,13 +182,99 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
   const fetchData = async () => {
     if (!user.id) return;
     setLoading(true);
-    const [stData, matData, scoreData] = await Promise.all([
+    const [stData, matData, scoreData, journalData] = await Promise.all([
       getStudents(selectedClassId),
       getScopeMaterials(selectedClassId, selectedSemester, user.id, selectedSubject),
-      getAssessmentScores(selectedClassId, selectedSemester, selectedSubject)
+      getAssessmentScores(selectedClassId, selectedSemester, selectedSubject),
+      getTeachingJournals(user.id, selectedSubject)
     ]);
 
     setStudents(stData);
+
+    // Filter journals by selected class, subject, and semester
+    const relevantJournals = journalData.filter(j => {
+      if (j.classId !== selectedClassId) return false;
+      if (!isSubjectMatching(selectedSubject, j.subject || '')) return false;
+
+      let journalMonth = 0;
+      if (j.date && j.date.includes('-')) {
+        const parts = j.date.split('-');
+        journalMonth = parseInt(parts[1], 10) - 1;
+      } else {
+        journalMonth = new Date(j.date).getMonth();
+      }
+
+      if (selectedSemester === 'Ganjil') {
+        return journalMonth >= 6 && journalMonth <= 11;
+      } else if (selectedSemester === 'Genap') {
+        return journalMonth >= 0 && journalMonth <= 5;
+      }
+      return true;
+    });
+
+    relevantJournals.sort((a, b) => a.date.localeCompare(b.date) || (a.meetingNo || '').localeCompare(b.meetingNo || '', undefined, { numeric: true }));
+
+    const totalSessions = relevantJournals.length;
+    setTotalJournalSessions(totalSessions);
+
+    // Compute Student Attendance Map
+    const attMap: Record<string, StudentAttendanceSummary> = {};
+    stData.forEach(student => {
+      attMap[student.id] = {
+        sakit: 0,
+        izin: 0,
+        alfa: 0,
+        totalAbsent: 0,
+        totalSessions,
+        attendanceRate: 100,
+        absentHistory: []
+      };
+    });
+
+    relevantJournals.forEach(j => {
+      if (!j.absentStudents) return;
+      let absList: AbsentStudent[] = [];
+      try {
+        absList = typeof j.absentStudents === 'string' ? JSON.parse(j.absentStudents) : j.absentStudents;
+        if (typeof absList === 'string') absList = JSON.parse(absList);
+      } catch {
+        absList = [];
+      }
+      if (!Array.isArray(absList)) return;
+
+      absList.forEach(abs => {
+        const matched = stData.find(s => 
+          s.id === abs.studentId || 
+          (s.name && abs.name && s.name.trim().toLowerCase() === abs.name.trim().toLowerCase())
+        );
+        if (matched && attMap[matched.id]) {
+          const rec = attMap[matched.id];
+          if (abs.status === 'S') rec.sakit += 1;
+          else if (abs.status === 'I') rec.izin += 1;
+          else if (abs.status === 'A') rec.alfa += 1;
+          rec.totalAbsent += 1;
+          rec.absentHistory.push({
+            date: j.date,
+            meetingNo: j.meetingNo,
+            status: abs.status,
+            learningObjective: j.learningObjective || '',
+            activities: j.activities || '',
+            examAgenda: j.examAgenda
+          });
+        }
+      });
+    });
+
+    Object.values(attMap).forEach(rec => {
+      if (totalSessions > 0) {
+        const present = Math.max(0, totalSessions - rec.totalAbsent);
+        rec.attendanceRate = Math.round((present / totalSessions) * 100);
+      } else {
+        rec.attendanceRate = 100;
+      }
+    });
+
+    setAttendanceSummaries(attMap);
     
     const cleanMaterials = matData.map(m => ({
         ...m,
@@ -458,7 +568,7 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
   };
 
   const exportToExcel = () => {
-    const headers = ['No', 'Nama Siswa', 'NIS'];
+    const headers = ['No', 'Nama Siswa', 'NIS', 'Sakit', 'Izin', 'Alfa', '% Kehadiran'];
     materials.forEach(m => {
         if (m.subScopes && m.subScopes.length > 0) {
             m.subScopes.forEach(sub => headers.push(`${m.code} - ${sub}`));
@@ -470,7 +580,8 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
     headers.push('Rata LM', 'STS', 'SAS', 'Nilai Akhir');
 
     const rows = students.map((s, i) => {
-       const rowData = [i+1, s.name, s.nis];
+       const att = attendanceSummaries[s.id] || { sakit: 0, izin: 0, alfa: 0, attendanceRate: 100 };
+       const rowData = [i+1, s.name, s.nis, att.sakit, att.izin, att.alfa, `${att.attendanceRate}%`];
        let totalLM = 0;
        
        materials.forEach(m => {
@@ -645,16 +756,39 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
                    hasChanges ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-100 text-gray-400 cursor-not-allowed'
                 }`}
               >
-                 {saveStatus === 'saved' ? <CheckCircle size={16} /> : 
-                  saveStatus === 'error' ? <AlertCircle size={16} /> :
-                  saveStatus === 'saving' ? <RefreshCcw size={16} className="animate-spin" /> :
-                  <Save size={16} />}
-                 {saveStatus === 'saved' ? 'Tersimpan!' : 
-                  saveStatus === 'error' ? 'Gagal Simpan' : 
-                  saveStatus === 'saving' ? 'Menyimpan...' :
-                  'Simpan Nilai'}
+                 {saveStatus === 'saved' ? <CheckCircle size={16} /> :                   saveStatus === 'error' ? <AlertCircle size={16} /> :
+                   saveStatus === 'saving' ? <RefreshCcw size={16} className="animate-spin" /> :
+                   <Save size={16} />}
+                  {saveStatus === 'saved' ? 'Tersimpan!' : 
+                   saveStatus === 'error' ? 'Gagal Simpan' : 
+                   saveStatus === 'saving' ? 'Menyimpan...' :
+                   'Simpan Nilai'}
               </button>
            </div>
+        </div>
+
+        {/* ATTENDANCE RECAP HEADER INFO */}
+        <div className="pt-2">
+          {totalJournalSessions > 0 ? (
+            <div className="bg-blue-50/70 border border-blue-100 px-4 py-2.5 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs text-blue-900">
+              <div className="flex items-center gap-2">
+                <CalendarCheck className="text-blue-600 shrink-0" size={16} />
+                <span>
+                  Rekap Kehadiran Jurnal Mengajar: <strong>{totalJournalSessions} sesi KBM</strong> tercatat untuk kelas & mapel ini pada Semester {selectedSemester}.
+                </span>
+              </div>
+              <div className="flex items-center gap-3 text-[11px] font-medium text-gray-600">
+                <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500"></span> Hadir 100%</span>
+                <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-500"></span> Sakit/Izin</span>
+                <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-600"></span> Alfa (Tanpa Ket.)</span>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-gray-50 border border-gray-200 px-4 py-2 rounded-xl flex items-center gap-2 text-xs text-gray-500">
+              <CalendarDays size={15} className="text-gray-400 shrink-0" />
+              <span>Belum ada data Jurnal Mengajar guru untuk kelas, mapel, dan semester ini.</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -702,6 +836,7 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
                           {students.map(student => {
                               const isExpanded = expandedStudentIds.has(student.id);
                               const finalScore = calculateFinalScore(student.id);
+                              const attSummary = attendanceSummaries[student.id];
                               
                               return (
                                   <div key={student.id} className={`bg-white border rounded-xl overflow-hidden transition-all ${isExpanded ? 'border-blue-200 shadow-md' : 'border-gray-200 shadow-sm'}`}>
@@ -710,15 +845,45 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
                                           className="p-4 flex justify-between items-center cursor-pointer bg-white active:bg-gray-50"
                                       >
                                           <div className="flex items-center gap-3">
-                                              <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-sm border border-blue-100">
+                                              <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-sm border border-blue-100 shrink-0">
                                                   {student.name.substring(0,2).toUpperCase()}
                                               </div>
-                                              <div>
-                                                  <h4 className="font-bold text-gray-800 text-sm">{student.name}</h4>
+                                              <div className="min-w-0">
+                                                  <h4 className="font-bold text-gray-800 text-sm truncate">{student.name}</h4>
                                                   <p className="text-xs text-gray-500">{student.nis}</p>
+                                                  
+                                                  {/* Attendance Badge on Mobile */}
+                                                  {attSummary && totalJournalSessions > 0 && (
+                                                      <div className="mt-1">
+                                                          <button
+                                                              type="button"
+                                                              onClick={(e) => {
+                                                                  e.stopPropagation();
+                                                                  setSelectedStudentForAttendance({ student, summary: attSummary });
+                                                              }}
+                                                              className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold border transition ${
+                                                                  attSummary.alfa > 0
+                                                                      ? 'bg-red-50 text-red-700 border-red-200'
+                                                                      : (attSummary.izin > 0 || attSummary.sakit > 0)
+                                                                      ? 'bg-amber-50 text-amber-800 border-amber-200'
+                                                                      : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                                              }`}
+                                                          >
+                                                              <span className={`w-1.5 h-1.5 rounded-full ${
+                                                                  attSummary.alfa > 0 ? 'bg-red-600' :
+                                                                  (attSummary.izin > 0 || attSummary.sakit > 0) ? 'bg-amber-500' : 'bg-emerald-500'
+                                                              }`} />
+                                                              {attSummary.alfa > 0 && <span>A:{attSummary.alfa}</span>}
+                                                              {attSummary.izin > 0 && <span>I:{attSummary.izin}</span>}
+                                                              {attSummary.sakit > 0 && <span>S:{attSummary.sakit}</span>}
+                                                              {attSummary.totalAbsent === 0 && <span>Hadir 100%</span>}
+                                                              <span>({attSummary.attendanceRate}%)</span>
+                                                          </button>
+                                                      </div>
+                                                  )}
                                               </div>
                                           </div>
-                                          <div className="flex items-center gap-3">
+                                          <div className="flex items-center gap-3 shrink-0">
                                               <div className="text-right">
                                                   <span className="block text-[10px] text-gray-400 uppercase font-bold">Akhir</span>
                                                   <span className={`text-sm font-bold ${finalScore >= 75 ? 'text-green-600' : 'text-orange-500'}`}>{finalScore}</span>
@@ -829,6 +994,7 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
                           <div className="space-y-2">
                               {students.map((student, idx) => {
                                   const colDetails = getSelectedColumnDetails();
+                                  const attSummary = attendanceSummaries[student.id];
                                   let val: string | number = '';
                                   let onChange: (val: string) => void = () => {};
 
@@ -855,6 +1021,25 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
                                               </div>
                                               <div className="min-w-0">
                                                   <h4 className="font-bold text-gray-800 text-sm truncate">{student.name}</h4>
+                                                  {attSummary && totalJournalSessions > 0 && (
+                                                      <button
+                                                          type="button"
+                                                          onClick={() => setSelectedStudentForAttendance({ student, summary: attSummary })}
+                                                          className={`mt-0.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold border ${
+                                                              attSummary.alfa > 0
+                                                                  ? 'bg-red-50 text-red-700 border-red-200'
+                                                                  : (attSummary.izin > 0 || attSummary.sakit > 0)
+                                                                  ? 'bg-amber-50 text-amber-800 border-amber-200'
+                                                                  : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                                          }`}
+                                                      >
+                                                          {attSummary.alfa > 0 && <span>A:{attSummary.alfa}</span>}
+                                                          {attSummary.izin > 0 && <span>I:{attSummary.izin}</span>}
+                                                          {attSummary.sakit > 0 && <span>S:{attSummary.sakit}</span>}
+                                                          {attSummary.totalAbsent === 0 && <span>Hadir 100%</span>}
+                                                          <span>({attSummary.attendanceRate}%)</span>
+                                                      </button>
+                                                  )}
                                               </div>
                                           </div>
                                           <div className="w-20 shrink-0">
@@ -889,7 +1074,10 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
                  {/* ROW 1: MATERI GROUPS */}
                  <tr className="bg-gray-50 text-gray-700 border-b border-gray-200">
                    <th className="p-3 border-r border-gray-200 sticky left-0 bg-gray-50 z-20 w-10" rowSpan={2}>No</th>
-                   <th className="p-3 border-r border-gray-200 sticky left-10 bg-gray-50 z-20 min-w-[200px]" rowSpan={2}>Nama Siswa</th>
+                   <th className="p-3 border-r border-gray-200 sticky left-10 bg-gray-50 z-20 min-w-[220px]" rowSpan={2}>
+                      <div>Nama Siswa</div>
+                      <div className="text-[10px] font-normal text-gray-400 mt-0.5">Rekap Kehadiran Jurnal</div>
+                   </th>
                    
                    {materials.map((m) => {
                       const subCols = m.subScopes || [];
@@ -957,16 +1145,58 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
                        if (v !== undefined) { totalLM += v; countLM++; }
                     });
                     const avgLM = countLM > 0 ? (totalLM / countLM).toFixed(0) : '-';
+                    const attSummary = attendanceSummaries[student.id];
 
                     return (
                        <tr key={student.id} className="hover:bg-gray-50 border-b border-gray-100">
                           <td className="p-3 text-center border-r border-gray-100 sticky left-0 bg-white z-10">{rowIdx+1}</td>
                           <td className="p-3 border-r border-gray-100 sticky left-10 bg-white z-10 font-medium text-gray-800 group">
-                              <div className="flex items-center justify-between gap-2">
-                                  <span className="truncate">{student.name}</span>
+                              <div className="flex items-start justify-between gap-2">
+                                  <div className="min-w-0">
+                                      <div className="truncate font-semibold text-gray-900">{student.name}</div>
+                                      <div className="text-[11px] text-gray-400 font-normal">{student.nis}</div>
+                                      
+                                      {/* Attendance Badge on Desktop Table */}
+                                      <div className="mt-1">
+                                          {totalJournalSessions === 0 ? (
+                                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] bg-gray-50 text-gray-400 border border-gray-200">
+                                                  KBM: 0 sesi
+                                              </span>
+                                          ) : attSummary ? (
+                                              <button
+                                                  type="button"
+                                                  onClick={() => setSelectedStudentForAttendance({ student, summary: attSummary })}
+                                                  className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold border transition cursor-pointer shadow-2xs hover:shadow ${
+                                                      attSummary.alfa > 0
+                                                          ? 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100 hover:border-red-300'
+                                                          : (attSummary.izin > 0 || attSummary.sakit > 0)
+                                                          ? 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100 hover:border-amber-300'
+                                                          : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 hover:border-emerald-300'
+                                                  }`}
+                                                  title="Klik untuk melihat rincian tanggal ketidakhadiran & topik KBM"
+                                              >
+                                                  <span className={`w-1.5 h-1.5 rounded-full ${
+                                                      attSummary.alfa > 0 ? 'bg-red-600 animate-pulse' :
+                                                      (attSummary.izin > 0 || attSummary.sakit > 0) ? 'bg-amber-500' : 'bg-emerald-500'
+                                                  }`} />
+                                                  {attSummary.alfa > 0 && <span className="font-black text-red-800">A: {attSummary.alfa}</span>}
+                                                  {attSummary.izin > 0 && <span>I: {attSummary.izin}</span>}
+                                                  {attSummary.sakit > 0 && <span>S: {attSummary.sakit}</span>}
+                                                  {attSummary.totalAbsent === 0 && <span>Hadir 100%</span>}
+                                                  <span className={`text-[9px] font-black ${
+                                                      attSummary.alfa > 0 ? 'text-red-900' :
+                                                      (attSummary.izin > 0 || attSummary.sakit > 0) ? 'text-amber-900' : 'text-emerald-900'
+                                                  }`}>
+                                                      ({attSummary.attendanceRate}%)
+                                                  </span>
+                                              </button>
+                                          ) : null}
+                                      </div>
+                                  </div>
+                                  
                                   <button 
                                       onClick={() => handleResetStudent(student.id)}
-                                      className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition p-1 rounded hover:bg-red-50"
+                                      className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition p-1 rounded hover:bg-red-50 shrink-0 mt-0.5"
                                       title="Reset Nilai Siswa Ini"
                                   >
                                       <Trash2 size={14} />
@@ -1054,6 +1284,195 @@ const TeacherSummative: React.FC<TeacherSummativeProps> = ({ user }) => {
            </div>
         )}
       </div>
+
+      {/* ATTENDANCE DETAIL MODAL */}
+      {selectedStudentForAttendance && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-blue-50/70 to-indigo-50/70">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-sm">
+                  <CalendarCheck size={20} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-900 text-base leading-tight">
+                    {selectedStudentForAttendance.student.name}
+                  </h3>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    NIS: {selectedStudentForAttendance.student.nis} • {classes.find(c => c.id === selectedClassId)?.name} • {selectedSubject} (Semester {selectedSemester})
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setSelectedStudentForAttendance(null)} 
+                className="text-gray-400 hover:text-gray-600 p-1.5 rounded-full hover:bg-gray-200/60 transition"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto space-y-6">
+              {/* Stat Cards Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 text-center">
+                  <div className="text-[11px] font-bold text-blue-600 uppercase">Total Sesi KBM</div>
+                  <div className="text-xl font-black text-blue-900 mt-0.5">{selectedStudentForAttendance.summary.totalSessions}</div>
+                  <div className="text-[10px] text-blue-500">Pertemuan</div>
+                </div>
+
+                <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-center">
+                  <div className="text-[11px] font-bold text-emerald-600 uppercase">Kehadiran</div>
+                  <div className="text-xl font-black text-emerald-800 mt-0.5">{selectedStudentForAttendance.summary.attendanceRate}%</div>
+                  <div className="text-[10px] text-emerald-600">
+                    {selectedStudentForAttendance.summary.totalSessions - selectedStudentForAttendance.summary.totalAbsent} Hadir
+                  </div>
+                </div>
+
+                <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 text-center">
+                  <div className="text-[11px] font-bold text-amber-700 uppercase">Sakit & Izin</div>
+                  <div className="text-xl font-black text-amber-800 mt-0.5">
+                    {selectedStudentForAttendance.summary.sakit + selectedStudentForAttendance.summary.izin}
+                  </div>
+                  <div className="text-[10px] text-amber-600">
+                    S: {selectedStudentForAttendance.summary.sakit} | I: {selectedStudentForAttendance.summary.izin}
+                  </div>
+                </div>
+
+                <div className="bg-red-50 border border-red-100 rounded-xl p-3 text-center">
+                  <div className="text-[11px] font-bold text-red-700 uppercase">Alfa (Tanpa Ket.)</div>
+                  <div className="text-xl font-black text-red-800 mt-0.5">{selectedStudentForAttendance.summary.alfa}</div>
+                  <div className="text-[10px] text-red-600">Pertemuan</div>
+                </div>
+              </div>
+
+              {/* Attendance Bar */}
+              <div>
+                <div className="flex justify-between text-xs font-semibold text-gray-700 mb-1.5">
+                  <span>Persentase Presensi Siswa</span>
+                  <span className={selectedStudentForAttendance.summary.attendanceRate >= 85 ? 'text-emerald-700' : selectedStudentForAttendance.summary.attendanceRate >= 70 ? 'text-amber-700' : 'text-red-700'}>
+                    {selectedStudentForAttendance.summary.attendanceRate}%
+                  </span>
+                </div>
+                <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden flex">
+                  <div 
+                    style={{ width: `${selectedStudentForAttendance.summary.attendanceRate}%` }} 
+                    className={`h-full transition-all duration-500 ${
+                      selectedStudentForAttendance.summary.alfa > 0 
+                        ? 'bg-gradient-to-r from-amber-500 to-red-500' 
+                        : (selectedStudentForAttendance.summary.sakit > 0 || selectedStudentForAttendance.summary.izin > 0)
+                        ? 'bg-amber-500' 
+                        : 'bg-emerald-500'
+                    }`}
+                  />
+                </div>
+              </div>
+
+              {/* Absence Timeline / List */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-gray-800 text-sm flex items-center gap-1.5">
+                    <ClipboardList size={16} className="text-blue-600" />
+                    Riwayat Ketidakhadiran di Jurnal Mengajar
+                  </h4>
+                  <span className="text-xs text-gray-500">
+                    {selectedStudentForAttendance.summary.absentHistory.length} catatan
+                  </span>
+                </div>
+
+                {selectedStudentForAttendance.summary.absentHistory.length === 0 ? (
+                  <div className="bg-emerald-50/60 border border-emerald-200 rounded-xl p-5 text-center text-emerald-800">
+                    <CheckCircle className="mx-auto text-emerald-500 mb-1" size={24} />
+                    <p className="font-bold text-sm">Siswa Hadir Penuh!</p>
+                    <p className="text-xs text-emerald-600 mt-0.5">
+                      Tidak ada catatan ketidakhadiran (S/I/A) di seluruh jurnal mengajar ({selectedStudentForAttendance.summary.totalSessions} pertemuan).
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1">
+                    {selectedStudentForAttendance.summary.absentHistory.map((item, idx) => {
+                      const formattedDate = (() => {
+                        try {
+                          return new Date(item.date + 'T00:00:00').toLocaleDateString('id-ID', {
+                            weekday: 'short',
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric'
+                          });
+                        } catch {
+                          return item.date;
+                        }
+                      })();
+
+                      return (
+                        <div 
+                          key={idx} 
+                          className={`p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs transition ${
+                            item.status === 'A' 
+                              ? 'bg-red-50/50 border-red-200' 
+                              : item.status === 'I' 
+                              ? 'bg-blue-50/50 border-blue-200' 
+                              : 'bg-amber-50/50 border-amber-200'
+                          }`}
+                        >
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-gray-800">{formattedDate}</span>
+                              {item.meetingNo && (
+                                <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 text-[10px] font-semibold">
+                                  Jam / Pertemuan ke-{item.meetingNo}
+                                </span>
+                              )}
+                            </div>
+                            {item.learningObjective && (
+                              <p className="text-gray-600 text-[11px] line-clamp-2">
+                                <span className="font-semibold text-gray-700">Materi/TP:</span> {item.learningObjective}
+                              </p>
+                            )}
+                            {item.activities && (
+                              <p className="text-gray-500 text-[10px] line-clamp-1 italic">
+                                Aktivitas: {item.activities}
+                              </p>
+                            )}
+                            {item.examAgenda && (
+                              <span className="inline-block px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 text-[9px] font-bold">
+                                Agenda Ujian: {item.examAgenda}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="shrink-0 self-start sm:self-center">
+                            <span className={`px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider ${
+                              item.status === 'A' 
+                                ? 'bg-red-600 text-white shadow-xs' 
+                                : item.status === 'I' 
+                                ? 'bg-blue-600 text-white shadow-xs' 
+                                : 'bg-amber-600 text-white shadow-xs'
+                            }`}>
+                              {item.status === 'A' ? 'Alfa' : item.status === 'I' ? 'Izin' : 'Sakit'}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-3 bg-gray-50 border-t border-gray-100 flex justify-end">
+              <button 
+                onClick={() => setSelectedStudentForAttendance(null)}
+                className="px-5 py-2 bg-gray-800 text-white hover:bg-gray-900 rounded-xl text-xs font-bold transition shadow-xs"
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MANAGE STRUCTURE MODAL */}
       {isManageModalOpen && manageMaterial && (
