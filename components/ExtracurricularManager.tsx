@@ -345,7 +345,7 @@ export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ 
 
     const averageAttendanceRate = totalPossibleAttendance > 0 
       ? Math.round((totalActualPresent / totalPossibleAttendance) * 100)
-      : 100;
+      : 0;
 
     return {
       totalMembers,
@@ -368,7 +368,7 @@ export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ 
         izin: 0,
         alfa: 0,
         totalMeetings: journals.length,
-        rate: 100
+        rate: 0
       };
     });
 
@@ -393,7 +393,7 @@ export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ 
       if (item.totalMeetings > 0) {
         item.rate = Math.round((item.present / item.totalMeetings) * 100);
       } else {
-        item.rate = 100;
+        item.rate = 0;
       }
     });
 
@@ -411,7 +411,7 @@ export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ 
         izin: 0,
         alfa: 0,
         totalMeetings: displayedJournals.length,
-        rate: 100
+        rate: 0
       };
     });
 
@@ -436,7 +436,7 @@ export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ 
       if (item.totalMeetings > 0) {
         item.rate = Math.round((item.present / item.totalMeetings) * 100);
       } else {
-        item.rate = 100;
+        item.rate = 0;
       }
     });
 
@@ -766,24 +766,26 @@ export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ 
     ];
 
     const rows = members.map((m, idx) => {
-      const att = reportAttendanceMap[m.studentId] || { present: 0, sakit: 0, izin: 0, alfa: 0, totalMeetings: 0, rate: 100 };
+      const att = reportAttendanceMap[m.studentId] || { present: 0, sakit: 0, izin: 0, alfa: 0, totalMeetings: 0, rate: 0 };
       
-      let predikat = 'Sangat Baik';
-      let deskripsi = `Sangat aktif dan berdedikasi tinggi dalam mengikuti seluruh kegiatan ekstrakurikuler ${selectedEkskul}. Menunjukkan disiplin yang sangat baik.`;
+      let predikat = '-';
+      let deskripsi = 'Belum ada data pelaksanaan kegiatan / jurnal latihan.';
 
-      if (att.rate >= 85) {
-        predikat = 'Sangat Baik';
-        deskripsi = `Sangat aktif dalam kegiatan ekstrakurikuler ${selectedEkskul}, menunjukkan kedisiplinan dan penguasaan materi latihan dengan sangat baik.`;
-      } else if (att.rate >= 70) {
-        predikat = 'Baik';
-        deskripsi = `Aktif mengikuti latihan ekstrakurikuler ${selectedEkskul} dengan baik dan berpartisipasi cukup antusias dalam kegiatan.`;
-      } else {
-        predikat = 'Cukup';
-        deskripsi = `Cukup mengikuti kegiatan ekstrakurikuler ${selectedEkskul}, perlu ditingkatkan frekuensi kehadiran dan keaktifannya.`;
-      }
+      if (att.totalMeetings > 0) {
+        if (att.rate >= 85) {
+          predikat = 'Sangat Baik';
+          deskripsi = `Sangat aktif dalam kegiatan ekstrakurikuler ${selectedEkskul}, menunjukkan kedisiplinan dan penguasaan materi latihan dengan sangat baik.`;
+        } else if (att.rate >= 70) {
+          predikat = 'Baik';
+          deskripsi = `Aktif mengikuti latihan ekstrakurikuler ${selectedEkskul} dengan baik dan berpartisipasi cukup antusias dalam kegiatan.`;
+        } else {
+          predikat = 'Cukup';
+          deskripsi = `Cukup mengikuti kegiatan ekstrakurikuler ${selectedEkskul}, perlu ditingkatkan frekuensi kehadiran dan keaktifannya.`;
+        }
 
-      if (m.role === 'Ketua' || m.role === 'Wakil Ketua' || m.role === 'Sekretaris' || m.role === 'Bendahara') {
-        deskripsi += ` Berperan aktif sebagai pengurus (${m.role}) organisasi ekskul.`;
+        if (m.role === 'Ketua' || m.role === 'Wakil Ketua' || m.role === 'Sekretaris' || m.role === 'Bendahara') {
+          deskripsi += ` Berperan aktif sebagai pengurus (${m.role}) organisasi ekskul.`;
+        }
       }
 
       return [
@@ -797,7 +799,7 @@ export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ 
         att.sakit,
         att.izin,
         att.alfa,
-        `${att.rate}%`,
+        att.totalMeetings > 0 ? `${att.rate}%` : '-',
         predikat,
         deskripsi
       ];
@@ -987,8 +989,12 @@ export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ 
               </div>
               <div>
                 <p className="text-xs font-semibold text-gray-500">Rata-rata Kehadiran</p>
-                <h3 className="text-2xl font-black text-emerald-600">{stats.averageAttendanceRate}%</h3>
-                <p className="text-[11px] text-gray-400">Keaktifan latihan</p>
+                <h3 className="text-2xl font-black text-emerald-600">
+                  {stats.totalMeetings > 0 && stats.totalMembers > 0 ? `${stats.averageAttendanceRate}%` : '-'}
+                </h3>
+                <p className="text-[11px] text-gray-400">
+                  {stats.totalMeetings > 0 ? 'Keaktifan latihan' : 'Belum ada data'}
+                </p>
               </div>
             </div>
 
@@ -1244,10 +1250,14 @@ export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ 
                           </select>
                         </td>
                         <td className="py-3 px-4 text-center">
-                          <div className="inline-flex items-center gap-1.5 font-bold">
-                            <span className="text-emerald-700">{att.present}/{att.totalMeetings}</span>
-                            <span className="text-gray-400">({att.rate}%)</span>
-                          </div>
+                          {att.totalMeetings > 0 ? (
+                            <div className="inline-flex items-center gap-1.5 font-bold">
+                              <span className="text-emerald-700">{att.present}/{att.totalMeetings}</span>
+                              <span className="text-gray-500">({att.rate}%)</span>
+                            </div>
+                          ) : (
+                            <span className="text-gray-400 text-[11px] font-normal italic">-</span>
+                          )}
                         </td>
                         <td className="py-3 px-4 text-center">
                           <button
@@ -1840,7 +1850,7 @@ export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ 
                 </thead>
                 <tbody>
                   {members.map((m, idx) => {
-                    const att = reportAttendanceMap[m.studentId] || { present: 0, sakit: 0, izin: 0, alfa: 0, rate: 100 };
+                    const att = reportAttendanceMap[m.studentId] || { present: 0, sakit: 0, izin: 0, alfa: 0, totalMeetings: 0, rate: 0 };
                     return (
                       <tr key={m.id}>
                         <td className="border border-gray-400 p-1.5 text-center">{idx + 1}</td>
@@ -1849,9 +1859,15 @@ export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ 
                         <td className="border border-gray-400 p-1.5">{m.role}</td>
                         <td className="border border-gray-400 p-1.5 text-center font-bold">{att.present}</td>
                         <td className="border border-gray-400 p-1.5 text-center">{att.sakit}/{att.izin}/{att.alfa}</td>
-                        <td className="border border-gray-400 p-1.5 text-center font-bold">{att.rate}%</td>
                         <td className="border border-gray-400 p-1.5 text-center font-bold">
-                          {att.rate >= 85 ? 'Sangat Baik' : att.rate >= 70 ? 'Baik' : 'Cukup'}
+                          {att.totalMeetings > 0 ? `${att.rate}%` : '-'}
+                        </td>
+                        <td className="border border-gray-400 p-1.5 text-center font-bold">
+                          {att.totalMeetings > 0 ? (
+                            att.rate >= 85 ? 'Sangat Baik' : att.rate >= 70 ? 'Baik' : 'Cukup'
+                          ) : (
+                            <span className="text-gray-500 font-normal italic">-</span>
+                          )}
                         </td>
                       </tr>
                     );
