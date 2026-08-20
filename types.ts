@@ -713,6 +713,7 @@ export interface ExtracurricularJournal extends Syncable {
   schoolNpsn?: string;
   coachId: string;
   coachName: string;
+  trainerName?: string; // Nama Pelatih / Instruktur Luar / Mitra Ekskul
   academicYear?: string;
   semester?: 'Ganjil' | 'Genap';
   date: string; // YYYY-MM-DD
