@@ -1104,8 +1104,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     let currentUser;
-    // Allow public access for password reset flow and student assessments
-    const publicActions = ['init', 'check', 'request_password_reset', 'verify_reset_token', 'complete_password_reset', 'get_public_assessment_data', 'submit_public_assessment', 'verify_student'];
+    // Allow public access for password reset flow, login authentication, and student assessments
+    const publicActions = ['init', 'check', 'login', 'request_password_reset', 'verify_reset_token', 'complete_password_reset', 'get_public_assessment_data', 'submit_public_assessment', 'verify_student'];
     
     if (!publicActions.includes(action)) {
         try {
