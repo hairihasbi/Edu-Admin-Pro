@@ -1082,8 +1082,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(400).json({ error: 'Action is required' });
     }
 
-    let rawUrl = cleanEnv(dbUrl) || cleanEnv(process.env.TURSO_DB_URL);
-    const authToken = cleanEnv(dbToken) || cleanEnv(process.env.TURSO_AUTH_TOKEN);
+    let rawUrl = cleanEnv(dbUrl) || cleanEnv(process.env.TURSO_DB_URL) || cleanEnv(process.env.TURSO_DATABASE_URL) || cleanEnv(process.env.LIBSQL_URL);
+    const authToken = cleanEnv(dbToken) || cleanEnv(process.env.TURSO_AUTH_TOKEN) || cleanEnv(process.env.TURSO_TOKEN) || cleanEnv(process.env.LIBSQL_AUTH_TOKEN);
 
     console.log(`[DEBUG] Connection Init - URL: ${rawUrl ? rawUrl.substring(0, 15) + '...' : 'MISSING'}, Token: ${authToken ? 'PRESENT' : 'MISSING'}`);
 
@@ -1205,6 +1205,103 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         } catch (e: any) {
             console.error("Public Assessment Submission Error:", e);
             return res.status(500).json({ error: "Gagal mengirim hasil asesmen." });
+        }
+    }
+
+    // --- HANDLE DIRECT LOGIN AUTHENTICATION ---
+    if (action === 'login') {
+        const { username, password } = body || {};
+        if (!username || !password) {
+            return res.status(400).json({ error: "Username dan Password wajib diisi" });
+        }
+
+        try {
+            const cleanUsername = String(username).trim();
+            const result = await client.execute({
+                sql: "SELECT * FROM users WHERE LOWER(TRIM(username)) = LOWER(?) OR username = ? OR LOWER(TRIM(email)) = LOWER(?) OR nip = ? LIMIT 1",
+                args: [cleanUsername, cleanUsername, cleanUsername, cleanUsername]
+            });
+
+            if (result.rows.length === 0) {
+                return res.status(401).json({ error: "Username tidak ditemukan." });
+            }
+
+            const userRow = result.rows[0];
+            if (userRow.deleted === 1) {
+                return res.status(403).json({ error: "Akun ini telah dihapus oleh Admin." });
+            }
+
+            const storedPassword = String(userRow.password || '').trim();
+            const inputPassword = String(password);
+            let isValid = false;
+
+            if (storedPassword.startsWith('$2')) {
+                try {
+                    isValid = await bcrypt.compare(inputPassword, storedPassword);
+                } catch {
+                    isValid = false;
+                }
+                if (!isValid && inputPassword !== inputPassword.trim()) {
+                    try {
+                        isValid = await bcrypt.compare(inputPassword.trim(), storedPassword);
+                    } catch {}
+                }
+                if (!isValid && storedPassword === inputPassword) {
+                    isValid = true;
+                }
+            } else {
+                isValid = storedPassword === inputPassword || storedPassword === inputPassword.trim();
+            }
+
+            if (!isValid) {
+                return res.status(401).json({ error: "Password salah." });
+            }
+
+            if (userRow.status !== 'ACTIVE') {
+                if (userRow.role === 'ADMIN') {
+                    await client.execute({
+                        sql: "UPDATE users SET status = 'ACTIVE' WHERE id = ?",
+                        args: [userRow.id]
+                    });
+                    userRow.status = 'ACTIVE';
+                } else {
+                    return res.status(403).json({ error: "Akun belum diaktifkan oleh Admin." });
+                }
+            }
+
+            const user = {
+                id: userRow.id,
+                username: userRow.username,
+                password: userRow.password,
+                fullName: userRow.full_name,
+                role: userRow.role,
+                status: userRow.status,
+                schoolName: userRow.school_name,
+                schoolNpsn: userRow.school_npsn,
+                nip: userRow.nip,
+                email: userRow.email,
+                phone: userRow.phone,
+                subject: userRow.subject,
+                secondarySubject: userRow.secondary_subject,
+                avatar: userRow.avatar,
+                additionalRole: userRow.additional_role,
+                homeroomClassId: userRow.homeroom_class_id,
+                homeroomClassName: userRow.homeroom_class_name,
+                rppUsageCount: userRow.rpp_usage_count,
+                rppLastReset: userRow.rpp_last_reset,
+                teacherType: userRow.teacher_type,
+                phase: userRow.phase,
+                isSupervisor: Boolean(userRow.is_supervisor),
+                isRfidOfficer: Boolean(userRow.is_rfid_officer),
+                lastModified: userRow.last_modified,
+                version: userRow.version,
+                isSynced: true
+            };
+
+            return res.status(200).json({ success: true, message: "Login berhasil", user });
+        } catch (e: any) {
+            console.error("Turso Login Action Error:", e);
+            return res.status(500).json({ error: "Terjadi kesalahan server saat login." });
         }
     }
 

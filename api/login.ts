@@ -13,18 +13,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  const { username, password } = req.body;
+  const { username, password } = req.body || {};
 
   if (!username || !password) {
       return res.status(400).json({ error: "Username dan Password wajib diisi" });
   }
 
-  let rawUrl = cleanEnv(process.env.TURSO_DB_URL);
+  let rawUrl = cleanEnv(process.env.TURSO_DB_URL) || cleanEnv(process.env.TURSO_DATABASE_URL) || cleanEnv(process.env.LIBSQL_URL);
   if (rawUrl && rawUrl.startsWith('libsql://')) {
       rawUrl = rawUrl.replace('libsql://', 'https://');
   }
   const url = rawUrl;
-  const authToken = cleanEnv(process.env.TURSO_AUTH_TOKEN);
+  const authToken = cleanEnv(process.env.TURSO_AUTH_TOKEN) || cleanEnv(process.env.TURSO_TOKEN) || cleanEnv(process.env.LIBSQL_AUTH_TOKEN);
 
   if (!url || !authToken) {
      return res.status(503).json({ error: "Database server belum dikonfigurasi (ENV Missing)" });
@@ -38,10 +38,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   });
 
   try {
-    // 1. Ambil user berdasarkan username (termasuk password hash)
+    // 1. Ambil user berdasarkan username, email, atau NIP (case-insensitive)
+    const cleanUsername = String(username).trim();
     const result = await client.execute({
-        sql: "SELECT * FROM users WHERE username = ? LIMIT 1",
-        args: [username]
+        sql: "SELECT * FROM users WHERE LOWER(TRIM(username)) = LOWER(?) OR username = ? OR LOWER(TRIM(email)) = LOWER(?) OR nip = ? LIMIT 1",
+        args: [cleanUsername, cleanUsername, cleanUsername, cleanUsername]
     });
 
     if (result.rows.length === 0) {
@@ -55,16 +56,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(403).json({ error: "Akun ini telah dihapus oleh Admin." });
     }
 
-    // 3. Verifikasi Password DULU (Sebelum cek status, untuk keamanan)
-    const storedPassword = (userRow.password as string) || '';
+    // 3. Verifikasi Password
+    const storedPassword = String(userRow.password || '').trim();
+    const inputPassword = String(password);
     let isValid = false;
 
     if (storedPassword.startsWith('$2')) {
         // Jika password ter-hash (bcrypt)
-        isValid = await bcrypt.compare(password, storedPassword);
+        try {
+            isValid = await bcrypt.compare(inputPassword, storedPassword);
+        } catch (err) {
+            console.error("Bcrypt compare error:", err);
+            isValid = false;
+        }
+
+        // Coba bandingkan dengan trim jika ada spasi input
+        if (!isValid && inputPassword !== inputPassword.trim()) {
+            try {
+                isValid = await bcrypt.compare(inputPassword.trim(), storedPassword);
+            } catch {}
+        }
+
+        // Fallback jika storedPassword ternyata sama persis secara literal
+        if (!isValid && storedPassword === inputPassword) {
+            isValid = true;
+        }
     } else {
-        // Jika password plain text (misal: admin default lama)
-        isValid = storedPassword === password;
+        // Jika password plain text (misal: admin default lama atau belum di-hash)
+        isValid = storedPassword === inputPassword || storedPassword === inputPassword.trim();
     }
 
     if (!isValid) {
@@ -80,9 +99,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 sql: "UPDATE users SET status = 'ACTIVE' WHERE id = ?",
                 args: [userRow.id]
             });
-            userRow.status = 'ACTIVE'; // Update object local agar login lanjut
+            userRow.status = 'ACTIVE';
         } else {
-            // Jika Guru biasa, tetap tolak
+            // Jika Guru / Tendik belum diaktifkan
             return res.status(403).json({ error: "Akun belum diaktifkan oleh Admin." });
         }
     }
@@ -101,6 +120,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         email: userRow.email,
         phone: userRow.phone,
         subject: userRow.subject,
+        secondarySubject: userRow.secondary_subject,
         avatar: userRow.avatar,
         additionalRole: userRow.additional_role,
         homeroomClassId: userRow.homeroom_class_id,
@@ -109,6 +129,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         rppLastReset: userRow.rpp_last_reset,
         teacherType: userRow.teacher_type,
         phase: userRow.phase,
+        isSupervisor: Boolean(userRow.is_supervisor),
+        isRfidOfficer: Boolean(userRow.is_rfid_officer),
         lastModified: userRow.last_modified,
         version: userRow.version,
         isSynced: true // Tandai bahwa data ini berasal dari server
