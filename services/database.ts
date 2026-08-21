@@ -48,7 +48,11 @@ export const initDatabase = async () => {
       }
     }
   }
-  await initTurso();
+  try {
+    await initTurso();
+  } catch (err) {
+    console.warn("Non-fatal background initTurso warning:", err);
+  }
 };
 
 // --- AUTH & USER ---

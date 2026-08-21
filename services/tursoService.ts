@@ -36,12 +36,12 @@ const getAuthHeader = () => {
     return userId ? { 'Authorization': `Bearer ${userId}` } : {};
 };
 
-// --- NEW: Helper to safely parse API responses ---
-const handleApiResponse = async (response: Response) => {
+// --- Helper to safely parse API responses ---
+const handleApiResponse = async (response: Response, isPublicOrInit = false) => {
     // 1. Intercept 401 (Unauthorized) - Session Expired / User Deleted
     if (response.status === 401) {
-        if (typeof window !== 'undefined') {
-            // Dispatch event for App.tsx to handle logout
+        if (!isPublicOrInit && typeof window !== 'undefined' && getCurrentUserId()) {
+            // Dispatch event for App.tsx to handle logout only if a user was previously logged in
             window.dispatchEvent(new CustomEvent('auth-error'));
         }
         throw new Error("Sesi kadaluarsa atau tidak valid. Silakan login ulang.");
@@ -86,20 +86,23 @@ export const initTurso = async () => {
   if (typeof navigator !== 'undefined' && !navigator.onLine) return false;
   
   try {
-    // Retry init logic to handle cold starts
+    // Retry init logic to handle cold starts (public action, without triggering auth error)
     await retryFetch(async () => {
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        const authH = getAuthHeader();
+        if (authH.Authorization) {
+            headers.Authorization = authH.Authorization;
+        }
+
         const response = await fetch('/api/turso', {
           method: 'POST',
-          headers: { 
-              'Content-Type': 'application/json',
-              ...getAuthHeader() // Add Auth
-          } as HeadersInit,
+          headers,
           body: JSON.stringify({ 
               action: 'init',
               userId: getCurrentUserId()
           })
         });
-        await handleApiResponse(response);
+        await handleApiResponse(response, true);
     });
     return true;
   } catch (e: any) {
