@@ -30,8 +30,8 @@ export async function authorize(req: VercelRequest, allowedRoles: string[] = [])
     throw { status: 401, message: 'Token not found' };
   }
 
-  let rawUrl = cleanEnv(process.env.TURSO_DB_URL);
-  const authToken = cleanEnv(process.env.TURSO_AUTH_TOKEN);
+  let rawUrl = cleanEnv(process.env.TURSO_DB_URL) || cleanEnv(process.env.TURSO_DATABASE_URL) || cleanEnv(process.env.LIBSQL_URL);
+  const authToken = cleanEnv(process.env.TURSO_AUTH_TOKEN) || cleanEnv(process.env.TURSO_TOKEN) || cleanEnv(process.env.LIBSQL_AUTH_TOKEN);
 
   if (rawUrl && rawUrl.startsWith('libsql://')) {
       rawUrl = rawUrl.replace('libsql://', 'https://');
