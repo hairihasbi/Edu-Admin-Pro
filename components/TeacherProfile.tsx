@@ -167,8 +167,7 @@ const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onUpdateUser }) =
         ...formData,
         additionalRole: formData.additionalRole || null
       };
-      const isRoleChanging = formData.additionalRole !== user.additionalRole;
-      const success = await updateUserProfile(user.id, dataToSave as any, isRoleChanging);
+      const success = await updateUserProfile(user.id, dataToSave as any, true);
 
       if (success) {
         onUpdateUser({ ...user, ...dataToSave as any });
