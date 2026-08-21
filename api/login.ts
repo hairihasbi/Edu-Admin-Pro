@@ -8,6 +8,16 @@ const cleanEnv = (val: string | undefined) => {
     return val.replace(/^["']|["']$/g, '').trim();
 };
 
+const parseJSONSafe = (val: any) => {
+    if (!val) return [];
+    try {
+        if (typeof val === 'string') return JSON.parse(val);
+        return val;
+    } catch {
+        return [];
+    }
+};
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
@@ -125,12 +135,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         additionalRole: userRow.additional_role,
         homeroomClassId: userRow.homeroom_class_id,
         homeroomClassName: userRow.homeroom_class_name,
+        classId: userRow.class_id,
         rppUsageCount: userRow.rpp_usage_count,
         rppLastReset: userRow.rpp_last_reset,
         teacherType: userRow.teacher_type,
         phase: userRow.phase,
         isSupervisor: Boolean(userRow.is_supervisor),
         isRfidOfficer: Boolean(userRow.is_rfid_officer),
+        isExtracurricularAdvisor: Boolean(userRow.is_extracurricular_advisor) || (parseJSONSafe(userRow.extracurriculars).length > 0),
+        extracurriculars: parseJSONSafe(userRow.extracurriculars),
+        isMultiSubject: Boolean(userRow.is_multi_subject),
+        subjects: parseJSONSafe(userRow.subjects),
         lastModified: userRow.last_modified,
         version: userRow.version,
         isSynced: true // Tandai bahwa data ini berasal dari server

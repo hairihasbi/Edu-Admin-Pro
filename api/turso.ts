@@ -47,6 +47,11 @@ const DB_SCHEMAS = [
         secondary_subject TEXT,
         is_supervisor INTEGER DEFAULT 0,
         is_rfid_officer INTEGER DEFAULT 0,
+        is_extracurricular_advisor INTEGER DEFAULT 0,
+        extracurriculars TEXT,
+        is_multi_subject INTEGER DEFAULT 0,
+        subjects TEXT,
+        class_id TEXT,
         last_modified INTEGER,
         version INTEGER DEFAULT 1,
         deleted INTEGER DEFAULT 0
@@ -717,7 +722,124 @@ const DB_SCHEMAS = [
     `ALTER TABLE students ADD COLUMN guru_wali_id TEXT`,
     `ALTER TABLE students ADD COLUMN guru_wali_name TEXT`,
     `ALTER TABLE journals ADD COLUMN absent_students TEXT`,
-    `ALTER TABLE journals ADD COLUMN subject TEXT`
+    `ALTER TABLE journals ADD COLUMN subject TEXT`,
+    
+    // 36. EXTRACURRICULAR MEMBERS
+    `CREATE TABLE IF NOT EXISTS extracurricular_members (
+        id TEXT PRIMARY KEY,
+        extracurricular_name TEXT,
+        school_npsn TEXT,
+        student_id TEXT,
+        student_name TEXT,
+        student_nis TEXT,
+        student_class_id TEXT,
+        student_class_name TEXT,
+        role TEXT,
+        joined_date TEXT,
+        notes TEXT,
+        last_modified INTEGER,
+        version INTEGER DEFAULT 1,
+        deleted INTEGER DEFAULT 0
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_em_npsn ON extracurricular_members(school_npsn)`,
+    `CREATE INDEX IF NOT EXISTS idx_em_name ON extracurricular_members(extracurricular_name)`,
+    `CREATE INDEX IF NOT EXISTS idx_em_student ON extracurricular_members(student_id)`,
+
+    // 37. EXTRACURRICULAR JOURNALS
+    `CREATE TABLE IF NOT EXISTS extracurricular_journals (
+        id TEXT PRIMARY KEY,
+        extracurricular_name TEXT,
+        school_npsn TEXT,
+        coach_id TEXT,
+        coach_name TEXT,
+        trainer_name TEXT,
+        academic_year TEXT,
+        semester TEXT,
+        date TEXT,
+        start_time TEXT,
+        end_time TEXT,
+        location TEXT,
+        topic TEXT,
+        skills_trained TEXT,
+        is_event_prep INTEGER DEFAULT 0,
+        attendance TEXT, -- JSON Array
+        evaluation_notes TEXT,
+        obstacles TEXT,
+        documentation_photo TEXT,
+        last_modified INTEGER,
+        version INTEGER DEFAULT 1,
+        deleted INTEGER DEFAULT 0
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_ej_npsn ON extracurricular_journals(school_npsn)`,
+    `CREATE INDEX IF NOT EXISTS idx_ej_coach ON extracurricular_journals(coach_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_ej_date ON extracurricular_journals(date)`,
+
+    // 38. EXTRACURRICULAR ACHIEVEMENTS
+    `CREATE TABLE IF NOT EXISTS extracurricular_achievements (
+        id TEXT PRIMARY KEY,
+        extracurricular_name TEXT,
+        school_npsn TEXT,
+        coach_id TEXT,
+        coach_name TEXT,
+        event_name TEXT,
+        date TEXT,
+        organizer TEXT,
+        level TEXT,
+        rank TEXT,
+        student_participants TEXT, -- JSON Array
+        description TEXT,
+        certificate_url TEXT,
+        last_modified INTEGER,
+        version INTEGER DEFAULT 1,
+        deleted INTEGER DEFAULT 0
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_ea_npsn ON extracurricular_achievements(school_npsn)`,
+    `CREATE INDEX IF NOT EXISTS idx_ea_coach ON extracurricular_achievements(coach_id)`,
+
+    // 39. MENTORING JOURNALS
+    `CREATE TABLE IF NOT EXISTS mentoring_journals (
+        id TEXT PRIMARY KEY,
+        guru_wali_id TEXT,
+        student_id TEXT,
+        student_name TEXT,
+        date TEXT,
+        topic TEXT,
+        notes TEXT,
+        action_plan TEXT,
+        action_status TEXT,
+        is_private INTEGER DEFAULT 0,
+        school_npsn TEXT,
+        last_modified INTEGER,
+        version INTEGER DEFAULT 1,
+        deleted INTEGER DEFAULT 0
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_mj_npsn ON mentoring_journals(school_npsn)`,
+    `CREATE INDEX IF NOT EXISTS idx_mj_wali ON mentoring_journals(guru_wali_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_mj_student ON mentoring_journals(student_id)`,
+
+    // 40. GRADUATE ASSESSMENTS
+    `CREATE TABLE IF NOT EXISTS graduate_assessments (
+        id TEXT PRIMARY KEY,
+        student_id TEXT,
+        guru_wali_id TEXT,
+        date TEXT,
+        scores TEXT, -- JSON Object
+        notes TEXT,
+        school_npsn TEXT,
+        last_modified INTEGER,
+        version INTEGER DEFAULT 1,
+        deleted INTEGER DEFAULT 0
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_ga_npsn ON graduate_assessments(school_npsn)`,
+    `CREATE INDEX IF NOT EXISTS idx_ga_student ON graduate_assessments(student_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_ga_wali ON graduate_assessments(guru_wali_id)`,
+
+    // User table migrations for extracurricular and subjects
+    `ALTER TABLE users ADD COLUMN is_extracurricular_advisor INTEGER DEFAULT 0`,
+    `ALTER TABLE users ADD COLUMN extracurriculars TEXT`,
+    `ALTER TABLE users ADD COLUMN is_multi_subject INTEGER DEFAULT 0`,
+    `ALTER TABLE users ADD COLUMN subjects TEXT`,
+    `ALTER TABLE users ADD COLUMN class_id TEXT`
 ];
 
 // Helper to convert undefined to null for SQL
@@ -739,8 +861,17 @@ const getTableConfig = (collection: string) => {
   switch (collection) {
     case 'eduadmin_users': return { 
         table: 'users', 
-        columns: ['id', 'username', 'password', 'full_name', 'role', 'status', 'school_name', 'school_npsn', 'nip', 'email', 'phone', 'subject', 'secondary_subject', 'is_supervisor', 'is_rfid_officer', 'avatar', 'additional_role', 'homeroom_class_id', 'homeroom_class_name', 'rpp_usage_count', 'rpp_last_reset', 'teacher_type', 'phase', 'last_modified', 'version', 'deleted'], 
-        mapFn: (item: any) => [s(item.id), s(item.username), s(item.password), s(item.fullName), s(item.role), s(item.status), s(item.schoolName), s(item.schoolNpsn), s(item.nip), s(item.email), s(item.phone), s(item.subject), s(item.secondarySubject), item.isSupervisor ? 1 : 0, item.isRfidOfficer ? 1 : 0, s(item.avatar), s(item.additionalRole), s(item.homeroomClassId), s(item.homeroomClassName), item.rppUsageCount || 0, s(item.rppLastReset), s(item.teacherType), s(item.phase), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] 
+        columns: ['id', 'username', 'password', 'full_name', 'role', 'status', 'school_name', 'school_npsn', 'nip', 'email', 'phone', 'subject', 'secondary_subject', 'is_supervisor', 'is_rfid_officer', 'is_extracurricular_advisor', 'extracurriculars', 'is_multi_subject', 'subjects', 'class_id', 'avatar', 'additional_role', 'homeroom_class_id', 'homeroom_class_name', 'rpp_usage_count', 'rpp_last_reset', 'teacher_type', 'phase', 'last_modified', 'version', 'deleted'], 
+        mapFn: (item: any) => [
+            s(item.id), s(item.username), s(item.password), s(item.fullName), s(item.role), s(item.status), 
+            s(item.schoolName), s(item.schoolNpsn), s(item.nip), s(item.email), s(item.phone), s(item.subject), 
+            s(item.secondarySubject), item.isSupervisor ? 1 : 0, item.isRfidOfficer ? 1 : 0, 
+            item.isExtracurricularAdvisor ? 1 : 0, JSON.stringify(item.extracurriculars || []), 
+            item.isMultiSubject ? 1 : 0, JSON.stringify(item.subjects || []), s(item.classId),
+            s(item.avatar), s(item.additionalRole), s(item.homeroomClassId), s(item.homeroomClassName), 
+            item.rppUsageCount || 0, s(item.rppLastReset), s(item.teacherType), s(item.phase), 
+            s(item.lastModified), item.version || 1, item.deleted ? 1 : 0
+        ] 
     };
     case 'eduadmin_classes': return { table: 'classes', columns: ['id', 'user_id', 'school_npsn', 'name', 'description', 'student_count', 'homeroom_teacher_id', 'homeroom_teacher_name', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.userId), s(item.schoolNpsn || 'DEFAULT'), s(item.name), s(item.description), s(item.studentCount), s(item.homeroomTeacherId), s(item.homeroomTeacherName), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
     case 'eduadmin_students': return { table: 'students', columns: ['id', 'class_id', 'school_npsn', 'name', 'nis', 'gender', 'phone', 'rfid_tag', 'guru_wali_id', 'guru_wali_name', 'last_modified', 'version', 'deleted'], mapFn: (item: any) => [s(item.id), s(item.classId), s(item.schoolNpsn || 'DEFAULT'), s(item.name), s(item.nis), s(item.gender), s(item.phone || ''), s(item.rfidTag || ''), s(item.guruWaliId || null), s(item.guruWaliName || null), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] };
@@ -816,6 +947,31 @@ const getTableConfig = (collection: string) => {
         columns: ['id', 'student_id', 'student_name', 'class_id', 'class_name', 'school_npsn', 'timestamp', 'status', 'method', 'device_id', 'last_modified', 'version', 'deleted'],
         mapFn: (item: any) => [s(item.id), s(item.studentId), s(item.studentName), s(item.classId), s(item.className), s(item.schoolNpsn), s(item.timestamp), s(item.status), s(item.method), s(item.deviceId), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0]
     };
+    case 'eduadmin_extracurricular_members': return {
+        table: 'extracurricular_members',
+        columns: ['id', 'extracurricular_name', 'school_npsn', 'student_id', 'student_name', 'student_nis', 'student_class_id', 'student_class_name', 'role', 'joined_date', 'notes', 'last_modified', 'version', 'deleted'],
+        mapFn: (item: any) => [s(item.id), s(item.extracurricularName), s(item.schoolNpsn), s(item.studentId), s(item.studentName), s(item.studentNis), s(item.studentClassId), s(item.studentClassName), s(item.role), s(item.joinedDate), s(item.notes), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0]
+    };
+    case 'eduadmin_extracurricular_journals': return {
+        table: 'extracurricular_journals',
+        columns: ['id', 'extracurricular_name', 'school_npsn', 'coach_id', 'coach_name', 'trainer_name', 'academic_year', 'semester', 'date', 'start_time', 'end_time', 'location', 'topic', 'skills_trained', 'is_event_prep', 'attendance', 'evaluation_notes', 'obstacles', 'documentation_photo', 'last_modified', 'version', 'deleted'],
+        mapFn: (item: any) => [s(item.id), s(item.extracurricularName), s(item.schoolNpsn), s(item.coachId), s(item.coachName), s(item.trainerName), s(item.academicYear), s(item.semester), s(item.date), s(item.startTime), s(item.endTime), s(item.location), s(item.topic), s(item.skillsTrained), item.isEventPrep ? 1 : 0, JSON.stringify(item.attendance || []), s(item.evaluationNotes), s(item.obstacles), s(item.documentationPhoto), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0]
+    };
+    case 'eduadmin_extracurricular_achievements': return {
+        table: 'extracurricular_achievements',
+        columns: ['id', 'extracurricular_name', 'school_npsn', 'coach_id', 'coach_name', 'event_name', 'date', 'organizer', 'level', 'rank', 'student_participants', 'description', 'certificate_url', 'last_modified', 'version', 'deleted'],
+        mapFn: (item: any) => [s(item.id), s(item.extracurricularName), s(item.schoolNpsn), s(item.coachId), s(item.coachName), s(item.eventName), s(item.date), s(item.organizer), s(item.level), s(item.rank), JSON.stringify(item.studentParticipants || []), s(item.description), s(item.certificateUrl), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0]
+    };
+    case 'eduadmin_mentoring_journals': return {
+        table: 'mentoring_journals',
+        columns: ['id', 'guru_wali_id', 'student_id', 'student_name', 'date', 'topic', 'notes', 'action_plan', 'action_status', 'is_private', 'school_npsn', 'last_modified', 'version', 'deleted'],
+        mapFn: (item: any) => [s(item.id), s(item.guruWaliId), s(item.studentId), s(item.studentName), s(item.date), s(item.topic), s(item.notes), s(item.actionPlan), s(item.actionStatus), item.isPrivate ? 1 : 0, s(item.schoolNpsn), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0]
+    };
+    case 'eduadmin_graduate_assessments': return {
+        table: 'graduate_assessments',
+        columns: ['id', 'student_id', 'guru_wali_id', 'date', 'scores', 'notes', 'school_npsn', 'last_modified', 'version', 'deleted'],
+        mapFn: (item: any) => [s(item.id), s(item.studentId), s(item.guruWaliId), s(item.date), JSON.stringify(item.scores || {}), s(item.notes), s(item.schoolNpsn), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0]
+    };
     default:
       return null;
   }
@@ -843,12 +999,17 @@ const mapRowToJSON = (collection: string, row: any) => {
         additionalRole: row.additional_role,
         homeroomClassId: row.homeroom_class_id,
         homeroomClassName: row.homeroom_class_name,
+        classId: row.class_id,
         rppUsageCount: row.rpp_usage_count,
         rppLastReset: row.rpp_last_reset,
         teacherType: row.teacher_type,
         phase: row.phase,
         isSupervisor: Boolean(row.is_supervisor),
         isRfidOfficer: Boolean(row.is_rfid_officer),
+        isExtracurricularAdvisor: Boolean(row.is_extracurricular_advisor) || (parseJSONSafe(row.extracurriculars).length > 0),
+        extracurriculars: parseJSONSafe(row.extracurriculars),
+        isMultiSubject: Boolean(row.is_multi_subject),
+        subjects: parseJSONSafe(row.subjects),
         lastModified: row.last_modified,
         version: row.version,
         deleted: Boolean(row.deleted)
@@ -1057,6 +1218,44 @@ const mapRowToJSON = (collection: string, row: any) => {
         classId: row.class_id, className: row.class_name, schoolNpsn: row.school_npsn,
         timestamp: row.timestamp, status: row.status, method: row.method,
         deviceId: row.device_id, lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
+    };
+    case 'eduadmin_extracurricular_members': return {
+        id: row.id, extracurricularName: row.extracurricular_name, schoolNpsn: row.school_npsn,
+        studentId: row.student_id, studentName: row.student_name, studentNis: row.student_nis,
+        studentClassId: row.student_class_id, studentClassName: row.student_class_name,
+        role: row.role, joinedDate: row.joined_date, notes: row.notes,
+        lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
+    };
+    case 'eduadmin_extracurricular_journals': return {
+        id: row.id, extracurricularName: row.extracurricular_name, schoolNpsn: row.school_npsn,
+        coachId: row.coach_id, coachName: row.coach_name, trainerName: row.trainer_name,
+        academicYear: row.academic_year, semester: row.semester, date: row.date,
+        startTime: row.start_time, endTime: row.end_time, location: row.location,
+        topic: row.topic, skillsTrained: row.skills_trained, isEventPrep: Boolean(row.is_event_prep),
+        attendance: parseJSONSafe(row.attendance), evaluationNotes: row.evaluation_notes,
+        obstacles: row.obstacles, documentationPhoto: row.documentation_photo,
+        lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
+    };
+    case 'eduadmin_extracurricular_achievements': return {
+        id: row.id, extracurricularName: row.extracurricular_name, schoolNpsn: row.school_npsn,
+        coachId: row.coach_id, coachName: row.coach_name, eventName: row.event_name,
+        date: row.date, organizer: row.organizer, level: row.level, rank: row.rank,
+        studentParticipants: parseJSONSafe(row.student_participants), description: row.description,
+        certificateUrl: row.certificate_url,
+        lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
+    };
+    case 'eduadmin_mentoring_journals': return {
+        id: row.id, guruWaliId: row.guru_wali_id, studentId: row.student_id,
+        studentName: row.student_name, date: row.date, topic: row.topic,
+        notes: row.notes, actionPlan: row.action_plan, actionStatus: row.action_status,
+        isPrivate: Boolean(row.is_private), schoolNpsn: row.school_npsn,
+        lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
+    };
+    case 'eduadmin_graduate_assessments': return {
+        id: row.id, studentId: row.student_id, guruWaliId: row.guru_wali_id,
+        date: row.date, scores: parseJSONSafe(row.scores), notes: row.notes,
+        schoolNpsn: row.school_npsn,
+        lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
     };
     default:
         return row; 
@@ -1287,12 +1486,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 additionalRole: userRow.additional_role,
                 homeroomClassId: userRow.homeroom_class_id,
                 homeroomClassName: userRow.homeroom_class_name,
+                classId: userRow.class_id,
                 rppUsageCount: userRow.rpp_usage_count,
                 rppLastReset: userRow.rpp_last_reset,
                 teacherType: userRow.teacher_type,
                 phase: userRow.phase,
                 isSupervisor: Boolean(userRow.is_supervisor),
                 isRfidOfficer: Boolean(userRow.is_rfid_officer),
+                isExtracurricularAdvisor: Boolean(userRow.is_extracurricular_advisor) || (parseJSONSafe(userRow.extracurriculars).length > 0),
+                extracurriculars: parseJSONSafe(userRow.extracurriculars),
+                isMultiSubject: Boolean(userRow.is_multi_subject),
+                subjects: parseJSONSafe(userRow.subjects),
                 lastModified: userRow.last_modified,
                 version: userRow.version,
                 isSynced: true
