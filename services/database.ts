@@ -54,23 +54,107 @@ export const initDatabase = async () => {
 // --- AUTH & USER ---
 
 export const loginUser = async (username: string, password: string): Promise<User | null> => {
-    try {
-        if (navigator.onLine) {
+    const cleanUsername = (username || '').trim();
+    if (!cleanUsername || !password) return null;
+
+    if (navigator.onLine) {
+        let serverErrorMsg = '';
+
+        // 1. Coba login melalui endpoint utama /api/login
+        try {
             const res = await fetch('/api/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, password })
+                body: JSON.stringify({ username: cleanUsername, password })
             });
-            if (res.ok) {
+
+            const contentType = res.headers.get("content-type") || "";
+            if (contentType.includes("application/json")) {
                 const data = await res.json();
-                await db.users.put(data.user);
-                return data.user;
+                if (res.ok && data?.user) {
+                    await db.users.put(data.user);
+                    return data.user;
+                } else if (data?.error) {
+                    serverErrorMsg = data.error;
+                }
             }
-        } else {
-            const user = await db.users.where('username').equals(username).first();
-            return user || null;
+        } catch (e: any) {
+            console.warn("Direct /api/login fetch failed, trying fallback:", e);
         }
-    } catch (e) { console.error(e); }
+
+        // Jika endpoint mengembalikan pesan error spesifik (misal: "Password salah", "Akun belum diaktifkan", "Username tidak ditemukan")
+        if (serverErrorMsg) {
+            throw new Error(serverErrorMsg);
+        }
+
+        // 2. Fallback melalui /api/turso dengan action 'login'
+        try {
+            const res = await fetch('/api/turso', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'login', username: cleanUsername, password })
+            });
+
+            const contentType = res.headers.get("content-type") || "";
+            if (contentType.includes("application/json")) {
+                const data = await res.json();
+                if (res.ok && data?.user) {
+                    await db.users.put(data.user);
+                    return data.user;
+                } else if (data?.error) {
+                    throw new Error(data.error);
+                }
+            }
+        } catch (e: any) {
+            if (e?.message && !e.message.includes('fetch') && !e.message.includes('JSON')) {
+                throw e;
+            }
+            console.warn("/api/turso login fallback failed:", e);
+        }
+    }
+
+    // 3. Mode Offline / Database Lokal (Dexie IndexedDB)
+    try {
+        const lowerUser = cleanUsername.toLowerCase();
+        const allUsers = await db.users.toArray();
+        const user = allUsers.find(u => 
+            (u.username || '').toLowerCase() === lowerUser ||
+            (u.email || '').toLowerCase() === lowerUser ||
+            (u.nip || '') === cleanUsername
+        );
+
+        if (user && user.password) {
+            const storedPass = String(user.password).trim();
+            const inputPass = String(password);
+            let valid = false;
+
+            if (storedPass.startsWith('$2')) {
+                try {
+                    valid = await bcrypt.compare(inputPass, storedPass);
+                } catch {
+                    valid = false;
+                }
+                if (!valid && inputPass !== inputPass.trim()) {
+                    try {
+                        valid = await bcrypt.compare(inputPass.trim(), storedPass);
+                    } catch {}
+                }
+                if (!valid && storedPass === inputPass) valid = true;
+            } else {
+                valid = storedPass === inputPass || storedPass === inputPass.trim();
+            }
+
+            if (valid) {
+                if (user.status !== 'ACTIVE' && user.role !== 'ADMIN') {
+                    throw new Error("Akun belum diaktifkan oleh Admin.");
+                }
+                return user;
+            }
+        }
+    } catch (e: any) {
+        if (e?.message) throw e;
+    }
+
     return null;
 };
 
