@@ -31,12 +31,18 @@ export const initDatabase = async () => {
     try {
       await db.open();
     } catch (err: any) {
+      const errMsg = (err?.message || '').toLowerCase();
+      const errName = err?.name || '';
       if (
-        err?.name === 'VersionError' ||
-        err?.name === 'UpgradeError' ||
-        (err?.message && err.message.toLowerCase().includes('version'))
+        errName === 'VersionError' ||
+        errName === 'UpgradeError' ||
+        errName === 'ConstraintError' ||
+        errName === 'SchemaError' ||
+        errMsg.includes('version') ||
+        errMsg.includes('createindex') ||
+        errMsg.includes('already exists')
       ) {
-        console.warn('Dexie version mismatch detected. Reopening database...', err);
+        console.warn('Dexie schema/index mismatch detected. Resetting and reopening database...', err);
         try {
           await db.delete();
           await db.open();
