@@ -143,14 +143,15 @@ const RfidSecurityManager: React.FC<RfidSecurityManagerProps> = ({ user }) => {
     if (!pairingStudentId || !newTagId) return;
     setSaving(true);
     try {
+      const cleanTag = normalizeRfid(newTagId);
       const success = await updateStudentRfid(
         pairingStudentId,
-        newTagId.trim(),
+        cleanTag,
       );
       if (success) {
         setStudents((prev) =>
           prev.map((s) =>
-            s.id === pairingStudentId ? { ...s, rfidTag: newTagId.trim() } : s,
+            s.id === pairingStudentId ? { ...s, rfidTag: cleanTag } : s,
           ),
         );
         setPairingStudentId(null);
@@ -717,7 +718,7 @@ const RfidSecurityManager: React.FC<RfidSecurityManagerProps> = ({ user }) => {
                 placeholder="Scan atau ketik ID Kartu..."
                 className="w-full p-3 border border-gray-200 rounded-xl font-mono text-center text-lg font-bold text-blue-600 focus:ring-2 focus:ring-blue-500 outline-none"
                 value={newTagId}
-                onChange={(e) => setNewTagId(normalizeRfid(e.target.value))}
+                onChange={(e) => setNewTagId(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handlePairCard()}
               />
               <p className="text-[10px] text-gray-400 mt-2 italic text-center italic">

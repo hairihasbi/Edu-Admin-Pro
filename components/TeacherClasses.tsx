@@ -4,7 +4,7 @@ import { User, ClassRoom, Student } from '../types';
 import { 
   getClasses, addClass, deleteClass, 
   getStudents, addStudent, deleteStudent, bulkDeleteStudents, importStudentsFromCSV,
-  updateStudentRfid
+  updateStudentRfid, normalizeRfid
 } from '../services/database';
 import { 
   Plus, Search, Trash2, Users, ChevronLeft, Upload, 
@@ -268,9 +268,10 @@ const TeacherClasses: React.FC<TeacherClassesProps> = ({ user }) => {
 
   const handleRegisterRfid = async () => {
     if (!rfidStudent || !tempRfid) return;
-    const success = await updateStudentRfid(rfidStudent.id, tempRfid);
+    const cleanTag = normalizeRfid(tempRfid);
+    const success = await updateStudentRfid(rfidStudent.id, cleanTag);
     if (success) {
-      setStudents(prev => prev.map(s => s.id === rfidStudent.id ? { ...s, rfidTag: tempRfid } : s));
+      setStudents(prev => prev.map(s => s.id === rfidStudent.id ? { ...s, rfidTag: cleanTag } : s));
       setRfidStatus('SUCCESS');
       setTimeout(() => setIsRfidModalOpen(false), 1500);
     } else {
