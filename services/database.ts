@@ -2626,9 +2626,10 @@ export const normalizeRfid = (tag: string): string => {
   if (!tag) return '';
   let clean = tag.trim();
   
-  // Deteksi masalah karakter ganda (seperti pada gambar user: 0010887833 -> 00001100888877883333)
-  // Jika setiap karakter ganjil sama dengan karakter genap setelahnya, maka ini adalah input ganda
-  if (clean.length > 0 && clean.length % 2 === 0) {
+  // Deteksi masalah karakter ganda hardware/driver (contoh: scanner USB yang mengirim duplikasi tombol sehingga kartu 10 digit 0010887833 terbaca 20 karakter 00001100888877883333).
+  // Catatan penting: Duplikasi HANYA terjadi jika panjang string >= 16 karakter (karena kartu asli 8-10 digit berlipat ganda menjadi 16-20 digit).
+  // JANGAN PERNAH memotong kartu normal yang panjangnya <= 14 karakter (seperti 0011223344, 0088442299, 1122334455) karena karakter ganda pada kartu asli adalah nomor unik yang valid.
+  if (clean.length >= 16 && clean.length <= 32 && clean.length % 2 === 0) {
     let isDoubled = true;
     let simplified = "";
     for (let i = 0; i < clean.length; i += 2) {
@@ -2639,7 +2640,7 @@ export const normalizeRfid = (tag: string): string => {
       simplified += clean[i];
     }
     
-    if (isDoubled) {
+    if (isDoubled && simplified.length >= 8) {
       return simplified;
     }
   }
@@ -2648,8 +2649,9 @@ export const normalizeRfid = (tag: string): string => {
 };
 
 export const updateStudentRfid = async (studentId: string, rfidTag: string) => {
+  const normalized = normalizeRfid(rfidTag);
   await db.students.update(studentId, {
-    rfidTag: normalizeRfid(rfidTag),
+    rfidTag: normalized,
     lastModified: Date.now(),
     isSynced: false
   });
@@ -2659,16 +2661,39 @@ export const updateStudentRfid = async (studentId: string, rfidTag: string) => {
 
 export const getStudentByRfid = async (tagOrNis: string, schoolNpsn: string) => {
   const normalizedTag = normalizeRfid(tagOrNis);
-  // Try finding by RFID tag first
+  const cleanRaw = tagOrNis.trim();
+
+  // 1. Cari berdasarkan normalized RFID tag
   let student = await db.students
     .where('rfidTag').equals(normalizedTag)
     .filter(s => s.schoolNpsn === schoolNpsn)
     .first();
   
-  // If not found, try finding by NIS
+  // 2. Cari dengan raw tag jika berbeda
+  if (!student && cleanRaw !== normalizedTag) {
+    student = await db.students
+      .where('rfidTag').equals(cleanRaw)
+      .filter(s => s.schoolNpsn === schoolNpsn)
+      .first();
+  }
+
+  // 3. Dukungan leading zero (misal kartu 10 digit '0010887833' vs '10887833')
+  if (!student) {
+    const unpadded = normalizedTag.replace(/^0+/, '');
+    if (unpadded) {
+      student = await db.students
+        .filter(s => s.schoolNpsn === schoolNpsn && (
+          s.rfidTag === unpadded || 
+          (s.rfidTag ? s.rfidTag.replace(/^0+/, '') === unpadded : false)
+        ))
+        .first();
+    }
+  }
+
+  // 4. Jika tidak ditemukan, coba cari berdasarkan NIS siswa
   if (!student) {
     student = await db.students
-      .filter(s => s.nis === tagOrNis && s.schoolNpsn === schoolNpsn)
+      .filter(s => (s.nis === cleanRaw || s.nis === normalizedTag) && s.schoolNpsn === schoolNpsn)
       .first();
   }
   
