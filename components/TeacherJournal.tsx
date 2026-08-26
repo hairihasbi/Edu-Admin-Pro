@@ -659,8 +659,9 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
     const subjectName = selectedSubject === 'ALL' ? 'Semua Mata Pelajaran' : selectedSubject;
 
     // Sheet 1: Jurnal Mengajar Semester
-    const journalHeaders = ['No', 'Tanggal', 'Jam Ke', 'Lingkup Materi', 'Tujuan Pembelajaran', 'Kegiatan Pembelajaran', 'Siswa Tidak Hadir', 'Refleksi', 'Tindak Lanjut'];
+    const journalHeaders = ['No', 'Kelas', 'Tanggal', 'Jam Ke', 'Lingkup Materi', 'Tujuan Pembelajaran', 'Kegiatan Pembelajaran', 'Siswa Tidak Hadir', 'Refleksi', 'Tindak Lanjut'];
     const journalRows = semJournals.map((j, idx) => {
+      const cls = classes.find(c => c.id === j.classId);
       const mat = materialMap[j.materialId];
       const materialText = j.examAgenda ? `[AGENDA: ${j.examAgenda}]` : (mat ? `[${mat.code}] ${mat.content}` : j.materialId);
       const absents: AbsentStudent[] = j.absentStudents ? JSON.parse(j.absentStudents) : [];
@@ -668,6 +669,7 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
 
       return [
         idx + 1,
+        cls?.name || className,
         new Date(j.date).toLocaleDateString('id-ID'),
         j.examAgenda ? '-' : j.meetingNo,
         materialText,
@@ -750,6 +752,7 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
     const subjectName = selectedSubject === 'ALL' ? 'Semua Mata Pelajaran' : selectedSubject;
 
     const journalRowsHtml = semJournals.map((j, idx) => {
+      const cls = classes.find(c => c.id === j.classId);
       const mat = materialMap[j.materialId];
       const materialText = j.examAgenda ? `[AGENDA: ${j.examAgenda}]` : (mat ? `[${mat.code}] ${mat.content}` : j.materialId);
       const absents: AbsentStudent[] = j.absentStudents ? JSON.parse(j.absentStudents) : [];
@@ -758,6 +761,7 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
       return `
         <tr>
           <td class="text-center">${idx + 1}</td>
+          <td class="text-center font-bold">${cls?.name || className}</td>
           <td class="text-center">${new Date(j.date).toLocaleDateString('id-ID')}</td>
           <td class="text-center">${j.examAgenda ? '-' : j.meetingNo}</td>
           <td>${materialText}</td>
@@ -821,18 +825,19 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
             <thead>
               <tr>
                 <th width="30">No</th>
+                <th width="75">Kelas</th>
                 <th width="80">Tanggal</th>
-                <th width="40">Jam Ke</th>
+                <th width="45">Jam Ke</th>
                 <th width="140">Lingkup Materi</th>
-                <th width="160">Tujuan Pembelajaran</th>
+                <th width="150">Tujuan Pembelajaran</th>
                 <th>Kegiatan Pembelajaran</th>
                 <th width="120">Ketidakhadiran</th>
-                <th width="100">Refleksi</th>
-                <th width="100">Tindak Lanjut</th>
+                <th width="90">Refleksi</th>
+                <th width="90">Tindak Lanjut</th>
               </tr>
             </thead>
             <tbody>
-              ${semJournals.length === 0 ? '<tr><td colspan="9" class="text-center" style="padding: 15px; color: #666;">Tidak ada catatan jurnal mengajar pada semester ini.</td></tr>' : journalRowsHtml}
+              ${semJournals.length === 0 ? '<tr><td colspan="10" class="text-center" style="padding: 15px; color: #666;">Tidak ada catatan jurnal mengajar pada semester ini.</td></tr>' : journalRowsHtml}
             </tbody>
           </table>
 
@@ -893,9 +898,13 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
     const printWindow = window.open('', '', 'height=600,width=900');
     if (!printWindow) return;
 
+    const selectedClass = classes.find(c => c.id === filterClassId);
+    const classTitle = selectedClass ? selectedClass.name : 'Semua Kelas';
+
     const rows = data.map(d => `
       <tr>
         <td class="text-center">${d.no}</td>
+        <td class="text-center font-bold">${d.className}</td>
         <td class="text-center">${d.date}</td>
         <td class="text-center">${d.meeting}</td>
         <td>${d.lm}</td>
@@ -920,6 +929,7 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
             th, td { border: 1px solid #333; padding: 5px; vertical-align: top; }
             th { background-color: #f0f0f0; }
             .text-center { text-align: center; }
+            .font-bold { font-weight: bold; }
             h2, h4 { text-align: center; margin: 0; padding: 2px; }
             .header { margin-bottom: 20px; }
             .signature-container { margin-top: 50px; display: flex; justify-content: space-between; page-break-inside: avoid; }
@@ -930,26 +940,27 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
         <body>
           <div class="header">
             <h2>JURNAL KEGIATAN PEMBELAJARAN (JURNAL MENGAJAR)</h2>
-            <h4>Mata Pelajaran: ${selectedSubject === 'ALL' ? 'Semua Mata Pelajaran' : selectedSubject}</h4>
+            <h4>Kelas: <strong>${classTitle}</strong> | Mata Pelajaran: <strong>${selectedSubject === 'ALL' ? 'Semua Mata Pelajaran' : selectedSubject}</strong></h4>
             <h4>Periode: ${monthNames[filterMonth]} ${filterYear}</h4>
-            <h4>Guru: ${user.fullName}</h4>
+            <h4>Guru: <strong>${user.fullName}</strong></h4>
           </div>
           <table>
             <thead>
               <tr>
                 <th width="30">No</th>
+                <th width="75">Kelas</th>
                 <th width="80">Tanggal</th>
-                <th width="40">Jam Ke</th>
-                <th width="150">Lingkup Materi</th>
-                <th>Tujuan Pembelajaran</th>
+                <th width="45">Jam Ke</th>
+                <th width="140">Lingkup Materi</th>
+                <th width="150">Tujuan Pembelajaran</th>
                 <th>Kegiatan Pembelajaran</th>
-                <th>Ketidakhadiran</th>
-                <th>Refleksi</th>
-                <th>Tindak Lanjut</th>
+                <th width="120">Ketidakhadiran</th>
+                <th width="85">Refleksi</th>
+                <th width="85">Tindak Lanjut</th>
               </tr>
             </thead>
             <tbody>
-              ${rows}
+              ${rows.length === 0 ? '<tr><td colspan="10" class="text-center" style="padding: 15px; color: #666;">Tidak ada catatan jurnal mengajar pada periode ini.</td></tr>' : rows}
             </tbody>
           </table>
 
