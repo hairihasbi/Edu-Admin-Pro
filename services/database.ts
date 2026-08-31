@@ -3362,6 +3362,25 @@ export const updateMentoringActionStatus = async (id: string, status: 'OPEN' | '
     return true;
 };
 
+export const updateMentoringJournal = async (id: string, data: Partial<MentoringJournal>) => {
+    await db.mentoringJournals.update(id, { 
+        ...data, 
+        lastModified: Date.now(), 
+        isSynced: false 
+    });
+    const item = await db.mentoringJournals.get(id);
+    if (item) triggerDebouncedSync();
+    return item;
+};
+
+export const deleteMentoringJournal = async (id: string) => {
+    const item = await db.mentoringJournals.get(id);
+    await db.mentoringJournals.delete(id);
+    pushToTurso('eduadmin_mentoring_journals', [item ? { ...item, deleted: true } : { id, deleted: true }]);
+    triggerDebouncedSync();
+    return true;
+};
+
 export const saveGraduateProfileAssessment = async (data: Omit<GraduateProfileAssessment, 'id' | 'lastModified' | 'isSynced'>) => {
     const item: GraduateProfileAssessment = {
         ...data,
