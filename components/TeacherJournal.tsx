@@ -862,7 +862,6 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
 
           <div class="signature-container">
             <div class="signature-box">
-              <p>&nbsp;</p>
               <p>Mengetahui,</p>
               <p>Kepala Sekolah ${user.schoolName || '[Nama Sekolah]'}</p>
               <br><br><br><br>
@@ -870,7 +869,6 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
               <p>NIP. ${validationData.principalNip || '................................'}</p>
             </div>
             <div class="signature-box">
-              <p>&nbsp;</p>
               <p>${validationData.placeName || '................'}, ${formattedDate}</p>
               <p>Guru Mata Pelajaran</p>
               <br><br><br><br>
@@ -966,14 +964,13 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
 
           <div class="signature-container">
             <div class="signature-box">
-              <p>&nbsp;</p>
+              <p>Mengetahui,</p>
               <p>Kepala Sekolah ${user.schoolName || '[Nama Sekolah]'}</p>
               <br><br><br><br>
               <p style="white-space: nowrap;"><strong>${validationData.principalName || '................................'}</strong></p>
               <p>NIP. ${validationData.principalNip || '................................'}</p>
             </div>
             <div class="signature-box">
-              <p>Mengetahui,</p>
               <p>${validationData.placeName || '................'}, ${formattedDate}</p>
               <p>Guru Mata Pelajaran</p>
               <br><br><br><br>
