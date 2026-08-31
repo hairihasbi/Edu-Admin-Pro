@@ -3243,6 +3243,85 @@ export const getMenteesByGuruWali = async (guruWaliId: string) => {
     return await db.students.where('guruWaliId').equals(guruWaliId).toArray();
 };
 
+export const assignMenteesToGuruWali = async (teacher: User, studentIds: string[]) => {
+    try {
+        const now = Date.now();
+        const updates: Promise<any>[] = [];
+        for (const sId of studentIds) {
+            updates.push(db.students.update(sId, {
+                guruWaliId: teacher.id,
+                guruWaliName: teacher.fullName,
+                lastModified: now,
+                isSynced: false
+            }));
+        }
+        await Promise.all(updates);
+        addSystemLog('AUDIT', teacher.fullName, 'GURU_WALI', 'Pilih Siswa Bimbingan', 
+            `Menambahkan ${studentIds.length} siswa ke dalam bimbingan mandiri.`);
+        triggerDebouncedSync();
+        return { success: true, count: studentIds.length };
+    } catch (e: any) {
+        console.error(e);
+        return { success: false, message: e.message };
+    }
+};
+
+export const removeMenteeFromGuruWali = async (teacher: User, studentId: string) => {
+    try {
+        await db.students.update(studentId, {
+            guruWaliId: null,
+            guruWaliName: null,
+            lastModified: Date.now(),
+            isSynced: false
+        });
+        addSystemLog('AUDIT', teacher.fullName, 'GURU_WALI', 'Lepas Siswa Bimbingan', 
+            `Melepas siswa dari daftar bimbingan Guru Wali.`);
+        triggerDebouncedSync();
+        return { success: true };
+    } catch (e: any) {
+        console.error(e);
+        return { success: false, message: e.message };
+    }
+};
+
+export const bulkUpdateTeacherMentees = async (
+    teacher: User, 
+    toAssignIds: string[], 
+    toRemoveIds: string[]
+) => {
+    try {
+        const now = Date.now();
+        const ops: Promise<any>[] = [];
+        
+        for (const sId of toAssignIds) {
+            ops.push(db.students.update(sId, {
+                guruWaliId: teacher.id,
+                guruWaliName: teacher.fullName,
+                lastModified: now,
+                isSynced: false
+            }));
+        }
+        
+        for (const sId of toRemoveIds) {
+            ops.push(db.students.update(sId, {
+                guruWaliId: null,
+                guruWaliName: null,
+                lastModified: now,
+                isSynced: false
+            }));
+        }
+
+        await Promise.all(ops);
+        addSystemLog('AUDIT', teacher.fullName, 'GURU_WALI', 'Update Siswa Bimbingan', 
+            `Memperbarui siswa bimbingan (+${toAssignIds.length}, -${toRemoveIds.length}).`);
+        triggerDebouncedSync();
+        return { success: true };
+    } catch (e: any) {
+        console.error(e);
+        return { success: false, message: e.message };
+    }
+};
+
 export const saveMentoringJournal = async (data: Omit<MentoringJournal, 'id' | 'lastModified' | 'isSynced'>) => {
     const item: MentoringJournal = {
         ...data,
