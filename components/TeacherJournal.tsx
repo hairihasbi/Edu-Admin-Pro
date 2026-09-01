@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { User, ClassRoom, ScopeMaterial, TeachingJournal, SD_SUBJECTS_PHASE_A, SD_SUBJECTS_PHASE_BC, MATH_SUBJECT_OPTIONS, AbsentStudent, TeachingSchedule, Student } from '../types';
-import { getClasses, getScopeMaterials, getTeachingJournals, addTeachingJournal, updateTeachingJournal, deleteTeachingJournal, bulkDeleteTeachingJournals, getStudents, getTeachingSchedules, getLocalDate, isSubjectMatching } from '../services/database';
-import { Plus, Save, Trash2, Filter, Printer, FileSpreadsheet, NotebookPen, CalendarDays, ChevronLeft, ChevronRight, UserMinus, Pencil, Copy, Search, X, Sparkles } from './Icons';
+import { getClasses, getScopeMaterials, getTeachingJournals, addTeachingJournal, updateTeachingJournal, deleteTeachingJournal, bulkDeleteTeachingJournals, getStudents, getTeachingSchedules, getLocalDate, isSubjectMatching, getAbsentAttendanceRecords } from '../services/database';
+import { Plus, Save, Trash2, Filter, Printer, FileSpreadsheet, NotebookPen, CalendarDays, ChevronLeft, ChevronRight, UserMinus, Pencil, Copy, Search, X, Sparkles, Check, CheckSquare, Square, RefreshCcw, ClipboardList, Zap, AlertCircle, CheckCircle } from './Icons';
 import Skeleton from './Skeleton';
 import * as XLSX from 'xlsx';
 import { GeminiActivityAssistantModal } from './GeminiActivityAssistantModal';
@@ -44,6 +44,12 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
   const [absentStudents, setAbsentStudents] = useState<AbsentStudent[]>([]);
   const [selectedAbsentStudentId, setSelectedAbsentStudentId] = useState('');
   const [editingJournalId, setEditingJournalId] = useState<string | null>(null);
+
+  // States for Siswa Tidak Hadir (Two Methods: Manual & Auto from Attendance)
+  const [absentInputMode, setAbsentInputMode] = useState<'MANUAL' | 'AUTO'>('MANUAL');
+  const [attendanceAbsentList, setAttendanceAbsentList] = useState<{ studentId: string; name: string; status: 'S' | 'I' | 'A'; selected: boolean }[]>([]);
+  const [isLoadingAttendanceAbsents, setIsLoadingAttendanceAbsents] = useState(false);
+  const [attendanceAbsentChecked, setAttendanceAbsentChecked] = useState(false);
 
   // 2. Filter & UI States
   const [filterClassId, setFilterClassId] = useState('');
@@ -87,6 +93,91 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
       setAbsentStudents([]);
     }
   }, [formData.classId]);
+
+  // Fetch absent students from attendance records (Alfa, Sakit, Ijin)
+  const handleFetchAbsentFromAttendance = async (targetClassId?: string, targetDate?: string) => {
+    const cId = targetClassId || formData.classId;
+    const dt = targetDate || formData.date;
+    if (!cId || !dt) {
+      return;
+    }
+    setIsLoadingAttendanceAbsents(true);
+    setAttendanceAbsentChecked(true);
+    try {
+      const records = await getAbsentAttendanceRecords(cId, dt);
+      
+      let students = classStudents;
+      if (students.length === 0 || students[0]?.classId !== cId) {
+        students = await getStudents(cId);
+        setClassStudents(students);
+      }
+      const studentMap = new Map(students.map(s => [s.id, s.name]));
+
+      const seen = new Set<string>();
+      const absents: { studentId: string; name: string; status: 'S' | 'I' | 'A'; selected: boolean }[] = [];
+      
+      for (const r of records) {
+        if (!seen.has(r.studentId)) {
+          seen.add(r.studentId);
+          const name = studentMap.get(r.studentId) || 'Siswa';
+          absents.push({
+            studentId: r.studentId,
+            name,
+            status: (r.status === 'S' || r.status === 'I' || r.status === 'A') ? r.status : 'A',
+            selected: true
+          });
+        }
+      }
+
+      setAttendanceAbsentList(absents);
+    } catch (err) {
+      console.error('Error fetching absent records from attendance', err);
+    } finally {
+      setIsLoadingAttendanceAbsents(false);
+    }
+  };
+
+  // Trigger auto-fetch when in AUTO mode or when classId / date changes
+  useEffect(() => {
+    if (absentInputMode === 'AUTO' && formData.classId && formData.date) {
+      handleFetchAbsentFromAttendance(formData.classId, formData.date);
+    } else {
+      setAttendanceAbsentChecked(false);
+    }
+  }, [absentInputMode, formData.classId, formData.date]);
+
+  const handleToggleAutoAbsentSelect = (studentId: string) => {
+    setAttendanceAbsentList(prev => prev.map(item => item.studentId === studentId ? { ...item, selected: !item.selected } : item));
+  };
+
+  const handleToggleSelectAllAutoAbsents = () => {
+    const allSelected = attendanceAbsentList.length > 0 && attendanceAbsentList.every(item => item.selected);
+    setAttendanceAbsentList(prev => prev.map(item => ({ ...item, selected: !allSelected })));
+  };
+
+  const handleChangeAutoAbsentStatus = (studentId: string, newStatus: 'S' | 'I' | 'A') => {
+    setAttendanceAbsentList(prev => prev.map(item => item.studentId === studentId ? { ...item, status: newStatus } : item));
+  };
+
+  const handleApplyAutoAbsents = () => {
+    const selectedItems = attendanceAbsentList.filter(item => item.selected);
+    if (selectedItems.length === 0) {
+      alert('Silakan pilih minimal 1 siswa tidak hadir untuk dimasukkan ke jurnal.');
+      return;
+    }
+
+    setAbsentStudents(prev => {
+      const map = new Map(prev.map(item => [item.studentId, item]));
+      selectedItems.forEach(item => {
+        map.set(item.studentId, {
+          studentId: item.studentId,
+          name: item.name,
+          status: item.status
+        });
+      });
+      return Array.from(map.values());
+    });
+  };
 
   // Fetch Students for Class Filter (For Print/Export Semester Recap)
   useEffect(() => {
@@ -1230,92 +1321,352 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
 
             {/* Section: Siswa Tidak Hadir */}
             <div className="border-t border-gray-100 pt-6">
-               <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2 mb-4">
-                  <UserMinus className="text-red-500" />
-                  Siswa Tidak Hadir
-               </h3>
-               
-               <div className="flex flex-col md:flex-row gap-4 mb-4">
-                  <div className="flex-1">
-                     <label className="block text-sm font-semibold text-blue-700 mb-1">Pilih Siswa</label>
-                     <select 
-                        value={selectedAbsentStudentId}
-                        onChange={(e) => setSelectedAbsentStudentId(e.target.value)}
-                        className="w-full border border-gray-300 rounded-lg p-2.5 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition"
-                        disabled={!formData.classId}
-                     >
-                        <option value="">-- Pilih Nama Siswa --</option>
-                        {classStudents
-                           .filter(s => !absentStudents.find(as => as.studentId === s.id))
-                           .map(s => <option key={s.id} value={s.id}>{s.name}</option>)
-                        }
-                     </select>
+               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                  <div>
+                     <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                        <UserMinus className="text-red-500" />
+                        Siswa Tidak Hadir
+                     </h3>
+                     <p className="text-xs text-gray-500 mt-0.5">
+                        Pilih metode pengisian siswa yang berhalangan hadir (Sakit, Ijin, Alfa).
+                     </p>
                   </div>
-                  <div className="flex items-end">
-                     <button 
+
+                  {/* Mode Selector Tabs */}
+                  <div className="inline-flex p-1 bg-gray-100 rounded-lg border border-gray-200 self-start sm:self-auto">
+                     <button
+                        type="button"
+                        onClick={() => setAbsentInputMode('MANUAL')}
+                        className={`px-3 py-1.5 text-xs font-semibold rounded-md transition flex items-center gap-1.5 ${
+                           absentInputMode === 'MANUAL'
+                              ? 'bg-white text-blue-700 shadow-sm'
+                              : 'text-gray-600 hover:text-gray-900'
+                        }`}
+                     >
+                        <Pencil size={14} />
+                        Cara 1: Manual (Pilih Siswa)
+                     </button>
+                     <button
                         type="button"
                         onClick={() => {
-                           if (!selectedAbsentStudentId) return;
-                           const student = classStudents.find(s => s.id === selectedAbsentStudentId);
-                           if (student) {
-                              setAbsentStudents([...absentStudents, { studentId: student.id, name: student.name, status: 'A' }]);
-                              setSelectedAbsentStudentId('');
+                           setAbsentInputMode('AUTO');
+                           if (formData.classId && formData.date) {
+                              handleFetchAbsentFromAttendance(formData.classId, formData.date);
                            }
                         }}
-                        className="px-6 py-2.5 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition flex items-center gap-2"
-                        disabled={!selectedAbsentStudentId}
+                        className={`px-3 py-1.5 text-xs font-semibold rounded-md transition flex items-center gap-1.5 ${
+                           absentInputMode === 'AUTO'
+                              ? 'bg-blue-600 text-white shadow-sm'
+                              : 'text-gray-600 hover:text-gray-900'
+                        }`}
                      >
-                        <Plus size={18} />
-                        Tambah
+                        <ClipboardList size={14} />
+                        Cara 2: Otomatis dari Daftar Hadir
                      </button>
                   </div>
                </div>
 
-               {absentStudents.length > 0 && (
-                  <div className="overflow-x-auto border border-gray-200 rounded-lg">
-                     <table className="w-full text-sm text-left">
-                        <thead className="bg-gray-50 text-gray-700 uppercase text-xs">
-                           <tr>
-                              <th className="px-4 py-3 w-16">No</th>
-                              <th className="px-4 py-3">Nama Siswa</th>
-                              <th className="px-4 py-3 w-40">Keterangan</th>
-                              <th className="px-4 py-3 w-16">Aksi</th>
-                           </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-200">
-                           {absentStudents.map((s, idx) => (
-                              <tr key={s.studentId}>
-                                 <td className="px-4 py-3 text-center">{idx + 1}</td>
-                                 <td className="px-4 py-3 font-medium text-gray-900">{s.name}</td>
-                                 <td className="px-4 py-3">
-                                    <select 
-                                       value={s.status}
-                                       onChange={(e) => {
-                                          const newStatus = e.target.value as 'S' | 'I' | 'A';
-                                          setAbsentStudents(absentStudents.map(as => as.studentId === s.studentId ? { ...as, status: newStatus } : as));
-                                       }}
-                                       className="w-full border border-gray-300 rounded-md p-1.5 focus:ring-2 focus:ring-blue-500 outline-none"
-                                    >
-                                       <option value="S">Sakit</option>
-                                       <option value="I">Ijin</option>
-                                       <option value="A">Alfa</option>
-                                    </select>
-                                 </td>
-                                 <td className="px-4 py-3 text-center">
-                                    <button 
-                                       type="button"
-                                       onClick={() => setAbsentStudents(absentStudents.filter(as => as.studentId !== s.studentId))}
-                                       className="text-red-500 hover:text-red-700 transition"
-                                    >
-                                       <Trash2 size={18} />
-                                    </button>
-                                 </td>
-                              </tr>
-                           ))}
-                        </tbody>
-                     </table>
+               {/* PILIHAN 1: MANUAL (CARA LAMA) */}
+               {absentInputMode === 'MANUAL' && (
+                  <div className="bg-gray-50/70 border border-gray-200 rounded-xl p-4 mb-4">
+                     <div className="flex flex-col md:flex-row gap-3">
+                        <div className="flex-1">
+                           <label className="block text-xs font-semibold text-gray-700 mb-1">
+                              Pilih Nama Siswa dari Kelas Ini:
+                           </label>
+                           <select 
+                              value={selectedAbsentStudentId}
+                              onChange={(e) => setSelectedAbsentStudentId(e.target.value)}
+                              className="w-full border border-gray-300 rounded-lg p-2.5 bg-white focus:ring-2 focus:ring-blue-500 outline-none transition text-sm"
+                              disabled={!formData.classId}
+                           >
+                              <option value="">-- Pilih Nama Siswa --</option>
+                              {classStudents
+                                 .filter(s => !absentStudents.find(as => as.studentId === s.id))
+                                 .map(s => <option key={s.id} value={s.id}>{s.name}</option>)
+                              }
+                           </select>
+                        </div>
+                        <div className="flex items-end gap-2">
+                           <button 
+                              type="button"
+                              onClick={() => {
+                                 if (!selectedAbsentStudentId) return;
+                                 const student = classStudents.find(s => s.id === selectedAbsentStudentId);
+                                 if (student) {
+                                    setAbsentStudents([...absentStudents, { studentId: student.id, name: student.name, status: 'A' }]);
+                                    setSelectedAbsentStudentId('');
+                                 }
+                              }}
+                              className="px-5 py-2.5 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition flex items-center gap-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                              disabled={!selectedAbsentStudentId}
+                           >
+                              <Plus size={16} />
+                              Tambah Siswa
+                           </button>
+                           
+                           <button
+                              type="button"
+                              onClick={() => {
+                                 setAbsentInputMode('AUTO');
+                                 if (formData.classId && formData.date) {
+                                    handleFetchAbsentFromAttendance(formData.classId, formData.date);
+                                 }
+                              }}
+                              className="px-3.5 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg font-medium transition flex items-center gap-1.5 text-sm"
+                              title="Tarik data siswa yang tidak hadir dari daftar presensi tanggal ini"
+                           >
+                              <Zap size={16} className="text-indigo-600" />
+                              <span className="hidden sm:inline">Tarik dari Presensi</span>
+                           </button>
+                        </div>
+                     </div>
                   </div>
                )}
+
+               {/* PILIHAN 2: OTOMATIS DARI DAFTAR HADIR */}
+               {absentInputMode === 'AUTO' && (
+                  <div className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-4 mb-4">
+                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-indigo-100">
+                        <div>
+                           <div className="flex items-center gap-2">
+                              <span className="inline-flex items-center justify-center p-1 bg-indigo-100 text-indigo-700 rounded-md">
+                                 <ClipboardList size={16} />
+                              </span>
+                              <h4 className="text-sm font-bold text-gray-900">
+                                 Data Ketidakhadiran dari Daftar Hadir
+                              </h4>
+                           </div>
+                           <p className="text-xs text-gray-600 mt-0.5">
+                              Memindai status <b>Alfa (A)</b>, <b>Sakit (S)</b>, dan <b>Ijin (I)</b> pada tanggal <b>{formData.date || '-'}</b>
+                           </p>
+                        </div>
+
+                        <button
+                           type="button"
+                           onClick={() => handleFetchAbsentFromAttendance(formData.classId, formData.date)}
+                           disabled={isLoadingAttendanceAbsents || !formData.classId}
+                           className="px-3 py-1.5 bg-white hover:bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 self-start sm:self-auto disabled:opacity-50"
+                        >
+                           <RefreshCcw size={14} className={isLoadingAttendanceAbsents ? 'animate-spin' : ''} />
+                           Muat Ulang Presensi
+                        </button>
+                     </div>
+
+                     <div className="mt-3">
+                        {isLoadingAttendanceAbsents ? (
+                           <div className="py-6 text-center text-sm text-gray-500 flex flex-col items-center justify-center gap-2">
+                              <RefreshCcw size={20} className="animate-spin text-indigo-600" />
+                              <span>Memuat data ketidakhadiran dari daftar hadir...</span>
+                           </div>
+                        ) : attendanceAbsentList.length > 0 ? (
+                           <div>
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                                 <span className="text-xs font-semibold text-indigo-900 bg-indigo-100/70 px-2.5 py-1 rounded-full w-fit">
+                                    Ditemukan {attendanceAbsentList.length} siswa tidak hadir pada tanggal ini
+                                 </span>
+                                 <div className="flex items-center gap-2">
+                                    <button
+                                       type="button"
+                                       onClick={handleToggleSelectAllAutoAbsents}
+                                       className="text-xs text-indigo-600 hover:text-indigo-800 font-medium underline"
+                                    >
+                                       {attendanceAbsentList.every(a => a.selected) ? 'Batalkan Semua' : 'Pilih Semua'}
+                                    </button>
+                                    <button
+                                       type="button"
+                                       onClick={handleApplyAutoAbsents}
+                                       className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+                                    >
+                                       <Check size={14} />
+                                       Masukkan Siswa Terpilih ke Jurnal ({attendanceAbsentList.filter(a => a.selected).length})
+                                    </button>
+                                 </div>
+                              </div>
+
+                              <div className="overflow-hidden border border-indigo-100 rounded-lg bg-white">
+                                 <table className="w-full text-xs text-left">
+                                    <thead className="bg-indigo-50/60 text-indigo-950 uppercase font-semibold border-b border-indigo-100">
+                                       <tr>
+                                          <th className="px-3 py-2 w-10 text-center">
+                                             <input
+                                                type="checkbox"
+                                                checked={attendanceAbsentList.length > 0 && attendanceAbsentList.every(a => a.selected)}
+                                                onChange={handleToggleSelectAllAutoAbsents}
+                                                className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                             />
+                                          </th>
+                                          <th className="px-3 py-2 w-12 text-center">No</th>
+                                          <th className="px-3 py-2">Nama Siswa</th>
+                                          <th className="px-3 py-2 w-44">Status di Presensi</th>
+                                          <th className="px-3 py-2 w-28 text-center">Aksi Cepat</th>
+                                       </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                       {attendanceAbsentList.map((item, idx) => {
+                                          const isAlreadyInJournal = absentStudents.some(as => as.studentId === item.studentId);
+                                          return (
+                                             <tr key={item.studentId} className={`hover:bg-indigo-50/30 transition ${item.selected ? 'bg-indigo-50/20' : ''}`}>
+                                                <td className="px-3 py-2 text-center">
+                                                   <input
+                                                      type="checkbox"
+                                                      checked={item.selected}
+                                                      onChange={() => handleToggleAutoAbsentSelect(item.studentId)}
+                                                      className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                                   />
+                                                </td>
+                                                <td className="px-3 py-2 text-center text-gray-500 font-medium">{idx + 1}</td>
+                                                <td className="px-3 py-2 font-medium text-gray-900">
+                                                   <div className="flex items-center gap-1.5">
+                                                      <span>{item.name}</span>
+                                                      {isAlreadyInJournal && (
+                                                         <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-semibold">
+                                                            Sudah di Jurnal
+                                                         </span>
+                                                      )}
+                                                   </div>
+                                                </td>
+                                                <td className="px-3 py-2">
+                                                   <select
+                                                      value={item.status}
+                                                      onChange={(e) => handleChangeAutoAbsentStatus(item.studentId, e.target.value as 'S' | 'I' | 'A')}
+                                                      className="border border-gray-300 rounded p-1 text-xs focus:ring-2 focus:ring-indigo-500 outline-none bg-white font-medium"
+                                                   >
+                                                      <option value="S">🟡 Sakit (S)</option>
+                                                      <option value="I">🔵 Ijin (I)</option>
+                                                      <option value="A">🔴 Alfa (A)</option>
+                                                   </select>
+                                                </td>
+                                                <td className="px-3 py-2 text-center">
+                                                   <button
+                                                      type="button"
+                                                      onClick={() => {
+                                                         setAbsentStudents(prev => {
+                                                            const filtered = prev.filter(as => as.studentId !== item.studentId);
+                                                            return [...filtered, { studentId: item.studentId, name: item.name, status: item.status }];
+                                                         });
+                                                      }}
+                                                      className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded text-[11px] font-semibold transition"
+                                                   >
+                                                      {isAlreadyInJournal ? 'Perbarui' : '+ Masukkan'}
+                                                   </button>
+                                                </td>
+                                             </tr>
+                                          );
+                                       })}
+                                    </tbody>
+                                 </table>
+                              </div>
+                           </div>
+                        ) : (
+                           <div className="bg-white border border-gray-200 rounded-lg p-4 text-center">
+                              <div className="w-10 h-10 bg-gray-100 text-gray-500 rounded-full flex items-center justify-center mx-auto mb-2">
+                                 <CheckCircle size={20} className="text-emerald-500" />
+                              </div>
+                              <p className="text-xs font-semibold text-gray-800">
+                                 Tidak Ada Siswa Tercatat Sakit, Izin, atau Alfa
+                              </p>
+                              <p className="text-[11px] text-gray-500 mt-1 max-w-md mx-auto">
+                                 Semua siswa pada tanggal <b>{formData.date || '-'}</b> tercatat Hadir di daftar hadir, atau data presensi belum diinput.
+                              </p>
+                              <div className="mt-3 flex justify-center gap-2">
+                                 <button
+                                    type="button"
+                                    onClick={() => setAbsentInputMode('MANUAL')}
+                                    className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-medium transition"
+                                 >
+                                    Beralih ke Input Manual
+                                 </button>
+                                 <button
+                                    type="button"
+                                    onClick={() => handleFetchAbsentFromAttendance(formData.classId, formData.date)}
+                                    className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-medium transition flex items-center gap-1"
+                                 >
+                                    <RefreshCcw size={12} />
+                                    Cek Ulang
+                                 </button>
+                              </div>
+                           </div>
+                        )}
+                     </div>
+                  </div>
+               )}
+
+               {/* TABEL FINAL: SISWA TIDAK HADIR PADA JURNAL */}
+               <div className="mt-4">
+                  <div className="flex items-center justify-between mb-2">
+                     <span className="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
+                        <span>Daftar Siswa Tidak Hadir pada Jurnal Ini</span>
+                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                           absentStudents.length > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
+                        }`}>
+                           {absentStudents.length} Siswa
+                        </span>
+                     </span>
+
+                     {absentStudents.length > 0 && (
+                        <button
+                           type="button"
+                           onClick={() => setAbsentStudents([])}
+                           className="text-xs text-red-600 hover:text-red-800 font-medium hover:underline flex items-center gap-1"
+                        >
+                           <Trash2 size={12} />
+                           Hapus Semua
+                        </button>
+                     )}
+                  </div>
+
+                  {absentStudents.length > 0 ? (
+                     <div className="overflow-x-auto border border-gray-200 rounded-lg shadow-sm">
+                        <table className="w-full text-sm text-left">
+                           <thead className="bg-gray-50 text-gray-700 uppercase text-xs border-b border-gray-200">
+                              <tr>
+                                 <th className="px-4 py-2.5 w-16 text-center">No</th>
+                                 <th className="px-4 py-2.5">Nama Siswa</th>
+                                 <th className="px-4 py-2.5 w-44">Keterangan</th>
+                                 <th className="px-4 py-2.5 w-16 text-center">Aksi</th>
+                              </tr>
+                           </thead>
+                           <tbody className="divide-y divide-gray-200 bg-white">
+                              {absentStudents.map((s, idx) => (
+                                 <tr key={s.studentId} className="hover:bg-gray-50/80 transition">
+                                    <td className="px-4 py-2.5 text-center text-gray-500 font-medium">{idx + 1}</td>
+                                    <td className="px-4 py-2.5 font-medium text-gray-900">{s.name}</td>
+                                    <td className="px-4 py-2.5">
+                                       <select 
+                                          value={s.status}
+                                          onChange={(e) => {
+                                             const newStatus = e.target.value as 'S' | 'I' | 'A';
+                                             setAbsentStudents(absentStudents.map(as => as.studentId === s.studentId ? { ...as, status: newStatus } : as));
+                                          }}
+                                          className="w-full border border-gray-300 rounded-md p-1.5 text-xs font-semibold focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                                       >
+                                          <option value="S">🟡 Sakit (S)</option>
+                                          <option value="I">🔵 Ijin (I)</option>
+                                          <option value="A">🔴 Alfa (A)</option>
+                                       </select>
+                                    </td>
+                                    <td className="px-4 py-2.5 text-center">
+                                       <button 
+                                          type="button"
+                                          onClick={() => setAbsentStudents(absentStudents.filter(as => as.studentId !== s.studentId))}
+                                          className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition"
+                                          title="Hapus dari daftar"
+                                       >
+                                          <Trash2 size={16} />
+                                       </button>
+                                    </td>
+                                 </tr>
+                              ))}
+                           </tbody>
+                        </table>
+                     </div>
+                  ) : (
+                     <div className="p-3 bg-gray-50 rounded-lg border border-dashed border-gray-200 text-center text-xs text-gray-500">
+                        Belum ada siswa tidak hadir yang dimasukkan ke jurnal. Semua siswa dianggap hadir.
+                     </div>
+                  )}
+               </div>
             </div>
 
             <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">

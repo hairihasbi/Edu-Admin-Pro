@@ -126,7 +126,9 @@ import {
   Sparkles,
   Sliders,
   Lightbulb,
-  CheckSquare
+  CheckSquare,
+  Square,
+  UserX
 } from 'lucide-react';
 
 export {
@@ -255,5 +257,7 @@ export {
   Sparkles,
   Sliders,
   Lightbulb,
-  CheckSquare
+  CheckSquare,
+  Square,
+  UserX
 };
