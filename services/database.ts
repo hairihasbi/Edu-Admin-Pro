@@ -1944,6 +1944,11 @@ export const getAttendanceRecordsByRange = async (classId: string, startDate: st
     });
 };
 
+export const getAbsentAttendanceRecords = async (classId: string, date: string): Promise<AttendanceRecord[]> => {
+    const all = await db.attendanceRecords.where('classId').equals(classId).toArray();
+    return all.filter(r => !r.deleted && r.date === date && (r.status === 'S' || r.status === 'I' || r.status === 'A'));
+};
+
 // --- SCOPE MATERIALS ---
 export const addScopeMaterial = async (data: Omit<ScopeMaterial, 'id'|'lastModified'|'isSynced'>) => {
     const item = { ...data, id: uuidv4(), lastModified: Date.now(), isSynced: false };
