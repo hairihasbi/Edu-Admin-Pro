@@ -123,7 +123,10 @@ import {
   Play,
   QrCode,
   Camera,
-  Sparkles
+  Sparkles,
+  Sliders,
+  Lightbulb,
+  CheckSquare
 } from 'lucide-react';
 
 export {
@@ -249,5 +252,8 @@ export {
   QrCode,
   Camera,
   Award,
-  Sparkles
+  Sparkles,
+  Sliders,
+  Lightbulb,
+  CheckSquare
 };

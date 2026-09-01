@@ -2,9 +2,10 @@
 import React, { useState, useEffect } from 'react';
 import { User, ClassRoom, ScopeMaterial, TeachingJournal, SD_SUBJECTS_PHASE_A, SD_SUBJECTS_PHASE_BC, MATH_SUBJECT_OPTIONS, AbsentStudent, TeachingSchedule, Student } from '../types';
 import { getClasses, getScopeMaterials, getTeachingJournals, addTeachingJournal, updateTeachingJournal, deleteTeachingJournal, bulkDeleteTeachingJournals, getStudents, getTeachingSchedules, getLocalDate, isSubjectMatching } from '../services/database';
-import { Plus, Save, Trash2, Filter, Printer, FileSpreadsheet, NotebookPen, CalendarDays, ChevronLeft, ChevronRight, UserMinus, Pencil, Copy, Search, X } from './Icons';
+import { Plus, Save, Trash2, Filter, Printer, FileSpreadsheet, NotebookPen, CalendarDays, ChevronLeft, ChevronRight, UserMinus, Pencil, Copy, Search, X, Sparkles } from './Icons';
 import Skeleton from './Skeleton';
 import * as XLSX from 'xlsx';
+import { GeminiActivityAssistantModal } from './GeminiActivityAssistantModal';
 
 const ABSENT_STATUS_MAP: Record<string, string> = { S: 'Sakit', I: 'Ijin', A: 'Alfa' };
 
@@ -60,6 +61,7 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
   const [copyNotice, setCopyNotice] = useState<string | null>(null);
   const [showCopyModal, setShowCopyModal] = useState<boolean>(false);
   const [copySearch, setCopySearch] = useState<string>('');
+  const [isGeminiModalOpen, setIsGeminiModalOpen] = useState(false);
 
   const [validationData, setValidationData] = useState({
     placeName: localStorage.getItem('journal_place_name') || '',
@@ -1159,16 +1161,43 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
 
             {/* Baris 3: Kegiatan */}
             <div>
-               <label className="block text-sm font-semibold text-blue-700 mb-1">Kegiatan Pembelajaran *</label>
+               <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-sm font-semibold text-blue-700">Kegiatan Pembelajaran *</label>
+                  <button
+                    type="button"
+                    onClick={() => setIsGeminiModalOpen(true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-bold rounded-lg shadow-sm hover:shadow transition-all"
+                  >
+                    <Sparkles size={14} className="text-yellow-300" />
+                    <span>Bantuan Gemini AI</span>
+                  </button>
+               </div>
                <textarea 
                   name="activities"
                   rows={3}
                   value={formData.activities}
                   onChange={handleInputChange}
-                  placeholder="Uraikan kegiatan pembelajaran yang dilakukan..."
-                  className="w-full border border-gray-300 rounded-lg p-3 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition resize-none"
+                  placeholder="Uraikan kegiatan pembelajaran yang dilakukan (Pendahuluan, Inti, Penutup)..."
+                  className="w-full border border-gray-300 rounded-lg p-3 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition resize-none leading-relaxed"
                   required
                />
+               <div className="flex items-center justify-between mt-1 text-xs text-gray-500">
+                  <span>Klik <strong>Bantuan Gemini AI</strong> untuk merancang skenario kegiatan dengan opsi Cepat atau Kustom.</span>
+                  {formData.learningObjective && !formData.activities && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormData({
+                          ...formData,
+                          activities: `1. Pendahuluan: Berdoa, presensi, apersepsi & pertanyaan pemantik.\n2. Kegiatan Inti: Eksplorasi materi (${formData.learningObjective}), diskusi interaktif, dan penugasan kolaboratif.\n3. Penutup: Refleksi bersama siswa dan asesmen formatif singkat.`
+                        });
+                      }}
+                      className="text-blue-600 hover:text-blue-800 font-semibold hover:underline"
+                    >
+                      + Isi Template Cepat
+                    </button>
+                  )}
+               </div>
             </div>
 
              {/* Baris 4: Refleksi */}
@@ -1937,6 +1966,25 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
           </div>
         </div>
       )}
+
+      {/* Gemini Activity Assistant Modal */}
+      <GeminiActivityAssistantModal
+        isOpen={isGeminiModalOpen}
+        onClose={() => setIsGeminiModalOpen(false)}
+        subjectName={formSubject || user.subject || ''}
+        className={classes.find(c => c.id === formData.classId)?.name || ''}
+        materialTopic={
+          formData.examAgenda 
+            ? `Agenda Ujian: ${formData.examAgenda}`
+            : (formData.materialId && materialMap[formData.materialId] 
+                ? `[${materialMap[formData.materialId].code}] ${materialMap[formData.materialId].content}`
+                : (formData.learningObjective || formData.materialId || ''))
+        }
+        onApplyText={(text) => {
+          setFormData(prev => ({ ...prev, activities: text }));
+          setIsGeminiModalOpen(false);
+        }}
+      />
     </div>
   );
 };
