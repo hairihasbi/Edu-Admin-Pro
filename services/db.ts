@@ -10,7 +10,8 @@ import {
   SupervisionAssignment, SupervisionResult,
   CbtExam, CbtQuestion, CbtAttempt,
   RfidLog, MentoringJournal, GraduateProfileAssessment,
-  ExtracurricularMember, ExtracurricularJournal, ExtracurricularAchievement
+  ExtracurricularMember, ExtracurricularJournal, ExtracurricularAchievement,
+  HomeroomGuidanceSession
 } from '../types';
 
 export class EduAdminDatabase extends Dexie {
@@ -32,6 +33,7 @@ export class EduAdminDatabase extends Dexie {
   pointReductions!: Table<StudentPointReduction>; // Added
   achievements!: Table<StudentAchievement>;
   counselingSessions!: Table<CounselingSession>;
+  homeroomGuidanceSessions!: Table<HomeroomGuidanceSession>;
   whatsappConfigs!: Table<WhatsAppConfig>;
   notifications!: Table<Notification>;
   apiKeys!: Table<ApiKey>;
@@ -65,8 +67,8 @@ export class EduAdminDatabase extends Dexie {
     // * = Multi-entry index (not used here)
     // [field] = Indexed field for searching
     // Added schoolNpsn indexes for multi-tenancy filtering
-    // Bumped to version 42 to fix duplicate index
-    (this as any).version(42).stores({
+    // Bumped to version 43
+    (this as any).version(43).stores({
       users: '&id, username, role, status, schoolNpsn, isRfidOfficer, isSynced',
       classes: '&id, userId, schoolNpsn, name, homeroomTeacherId, isSynced', 
       students: '&id, classId, schoolNpsn, name, nis, gender, rfidTag, guruWaliId, isSynced', 
@@ -83,6 +85,7 @@ export class EduAdminDatabase extends Dexie {
       pointReductions: '&id, studentId, date, isSynced',
       achievements: '&id, studentId, date, isSynced',
       counselingSessions: '&id, studentId, date, status, isSynced',
+      homeroomGuidanceSessions: '&id, studentId, classId, schoolNpsn, userId, date, status, isSynced',
       whatsappConfigs: '&userId, isSynced',
       notifications: '&id, targetRole, isRead, isPopup, createdAt, isSynced',
       apiKeys: '&id, key, status, isSynced',

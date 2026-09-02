@@ -10,7 +10,8 @@ import {
   BackupData, StudentWithDetails, LessonPlanRequest, DashboardStatsData, TeacherCalendarEvent, PasswordReset, ClassInventory, HomeVisit, ParentCall, LearningStyleAssessment,
   SupervisionAssignment, SupervisionResult, CbtExam, CbtQuestion, CbtAttempt, RfidLog,
   MentoringJournal, GraduateProfileAssessment,
-  ExtracurricularMember, ExtracurricularJournal, ExtracurricularAchievement
+  ExtracurricularMember, ExtracurricularJournal, ExtracurricularAchievement,
+  HomeroomGuidanceSession
 } from '../types';
 import { initTurso, pushToTurso, pullFromTurso, deleteFromTurso, deleteBatchFromTurso, clearRemoteTable, requestPasswordResetApi, verifyResetTokenApi, completePasswordResetApi } from './tursoService';
 import bcrypt from 'bcryptjs';
@@ -645,7 +646,7 @@ export const getSyncStats = async (user: User) => {
         'emailConfig', 'masterSubjects', 'tickets', 'violations', 'pointReductions',
         'achievements', 'counselingSessions', 'whatsappConfigs', 'notifications', 'apiKeys', 'systemSettings',
         'teacherCalendar', 'dailyPickets', 'studentIncidents', 'donations', 'passwordResets',
-        'classInventory', 'homeVisits', 'parentCalls', 'learningStyleAssessments',
+        'classInventory', 'homeVisits', 'parentCalls', 'learningStyleAssessments', 'homeroomGuidanceSessions',
         'supervisionAssignments', 'supervisionResults', 'cbtExams', 'cbtQuestions', 'cbtAttempts', 'rfidLogs',
         'mentoringJournals', 'graduateProfileAssessments'
     ];
@@ -713,7 +714,7 @@ export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', logCall
             'eduadmin_wa_configs', 'eduadmin_notifications', 'eduadmin_api_keys', 'eduadmin_system_settings',
             'eduadmin_pickets', 'eduadmin_incidents', 'eduadmin_donations', 'eduadmin_teacher_calendar',
             'eduadmin_password_resets', 'eduadmin_inventory', 'eduadmin_home_visits', 'eduadmin_parent_calls', 
-            'eduadmin_learning_style_assessments', 'eduadmin_supervision_assignments', 'eduadmin_supervision_results',
+            'eduadmin_learning_style_assessments', 'eduadmin_homeroom_guidance', 'eduadmin_supervision_assignments', 'eduadmin_supervision_results',
             'eduadmin_cbt_exams', 'eduadmin_cbt_questions', 'eduadmin_cbt_attempts', 'eduadmin_rfid_logs',
             'eduadmin_mentoring_journals', 'eduadmin_graduate_assessments',
             'eduadmin_extracurricular_members', 'eduadmin_extracurricular_journals', 'eduadmin_extracurricular_achievements'
@@ -751,6 +752,7 @@ export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', logCall
             'eduadmin_home_visits': db.homeVisits,
             'eduadmin_parent_calls': db.parentCalls,
             'eduadmin_learning_style_assessments': db.learningStyleAssessments,
+            'eduadmin_homeroom_guidance': db.homeroomGuidanceSessions,
             'eduadmin_supervision_assignments': db.supervisionAssignments,
             'eduadmin_supervision_results': db.supervisionResults,
             'eduadmin_cbt_exams': db.cbtExams,
@@ -870,7 +872,7 @@ export const createBackup = async (user: User, semesterFilter?: string) => {
         const userFilteredTables = [
             'classes', 'scopeMaterials', 'assessmentScores', 'teachingJournals', 
             'teachingSchedules', 'whatsappConfigs', 'teacherCalendar', 
-            'classInventory', 'homeVisits', 'parentCalls', 'learningStyleAssessments',
+            'classInventory', 'homeVisits', 'parentCalls', 'learningStyleAssessments', 'homeroomGuidanceSessions',
             'supervisionAssignments', 'supervisionResults', 'cbtExams'
         ];
 
@@ -939,7 +941,7 @@ export const resetSystemData = async (scope: 'SEMESTER' | 'ALL', semester?: stri
                 'assessmentScores', 'teachingJournals', 'violations', 'pointReductions', 
                 'achievements', 'counselingSessions', 'cbtExams', 'cbtQuestions', 
                 'cbtAttempts', 'rfidLogs', 'dailyPickets', 'studentIncidents',
-                'homeVisits', 'parentCalls', 'classInventory'
+                'homeVisits', 'parentCalls', 'classInventory', 'homeroomGuidanceSessions'
             ];
             
             await Promise.all(yearResetTables.map(tableName => {
@@ -2368,6 +2370,36 @@ export const deleteHomeVisit = async (id: string) => {
     pushToTurso('eduadmin_home_visits', [{id, deleted: true}]);
 };
 
+// --- HOMEROOM GUIDANCE SESSIONS (PEMBINAAN WALI KELAS) ---
+export const getHomeroomGuidanceSessions = async (schoolNpsn: string, classId?: string) => {
+    let query = db.homeroomGuidanceSessions.where('schoolNpsn').equals(schoolNpsn);
+    if (classId) {
+        return await query.and(g => g.classId === classId).toArray();
+    }
+    return await query.toArray();
+};
+
+export const getHomeroomGuidanceSessionsByStudent = async (studentId: string) => {
+    return await db.homeroomGuidanceSessions.where('studentId').equals(studentId).toArray();
+};
+
+export const saveHomeroomGuidanceSession = async (session: Omit<HomeroomGuidanceSession, 'id'|'lastModified'|'isSynced'> & { id?: string }) => {
+    const item: HomeroomGuidanceSession = {
+        ...session,
+        id: session.id || uuidv4(),
+        lastModified: Date.now(),
+        isSynced: false
+    };
+    await db.homeroomGuidanceSessions.put(item);
+    triggerDebouncedSync();
+    return item;
+};
+
+export const deleteHomeroomGuidanceSession = async (id: string) => {
+    await db.homeroomGuidanceSessions.delete(id);
+    pushToTurso('eduadmin_homeroom_guidance', [{id, deleted: true}]);
+};
+
 // --- PARENT CALLS ---
 export const getParentCalls = async (schoolNpsn: string) => {
     return await db.parentCalls.where('schoolNpsn').equals(schoolNpsn).toArray();
@@ -2897,7 +2929,7 @@ export const processGraduation = async (schoolNpsn: string) => {
     // 4. Delete students and all their portfolio data PERMANENTLY
     await db.transaction('rw', [
       db.students, db.attendanceRecords, db.violations, db.pointReductions,
-      db.achievements, db.counselingSessions, db.homeVisits, db.parentCalls,
+      db.achievements, db.counselingSessions, db.homeVisits, db.parentCalls, db.homeroomGuidanceSessions,
       db.rfidLogs, db.assessmentScores, db.cbtAttempts, db.learningStyleAssessments,
       db.scopeMaterials, db.teachingJournals
     ], async () => {
@@ -2909,6 +2941,7 @@ export const processGraduation = async (schoolNpsn: string) => {
       await db.counselingSessions.where('studentId').anyOf(studentIds).delete();
       await db.homeVisits.where('studentId').anyOf(studentIds).delete();
       await db.parentCalls.where('studentId').anyOf(studentIds).delete();
+      await db.homeroomGuidanceSessions.where('studentId').anyOf(studentIds).delete();
       await db.rfidLogs.where('studentId').anyOf(studentIds).delete();
       await db.assessmentScores.where('studentId').anyOf(studentIds).delete();
       await db.cbtAttempts.where('studentId').anyOf(studentIds).delete();
