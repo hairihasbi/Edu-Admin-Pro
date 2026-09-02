@@ -1,13 +1,14 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, Student, MasterSubject, AssessmentScore, ClassRoom, StudentViolation, StudentAchievement, CounselingSession, ClassInventory, HomeVisit, ParentCall, StudentPointReduction } from '../types';
+import { User, Student, MasterSubject, AssessmentScore, ClassRoom, StudentViolation, StudentAchievement, CounselingSession, ClassInventory, HomeVisit, ParentCall, StudentPointReduction, HomeroomGuidanceSession } from '../types';
 import { 
   getStudents, getMasterSubjects, getAssessmentScores, getAllClasses, 
   getStudentViolations, getStudentAchievements, getCounselingSessions,
   getClassInventory, saveClassInventory, deleteClassInventory, getSystemSettings,
   getHomeVisits, getParentCalls, getAttendanceRecordsByRange, getRfidLogs,
   getStudentPointReductions, addStudentViolation, addStudentPointReduction,
-  deleteStudentViolation, deleteStudentPointReduction, updateStudentViolation, updateStudentPointReduction
+  deleteStudentViolation, deleteStudentPointReduction, updateStudentViolation, updateStudentPointReduction,
+  getHomeroomGuidanceSessions, saveHomeroomGuidanceSession, deleteHomeroomGuidanceSession
 } from '../services/database';
 import { 
   UserCheck, Users, GraduationCap, AlertTriangle, FileSpreadsheet, 
@@ -163,6 +164,7 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
   const [sessions, setSessions] = useState<CounselingSession[]>([]);
   const [homeVisits, setHomeVisits] = useState<HomeVisit[]>([]);
   const [parentCalls, setParentCalls] = useState<ParentCall[]>([]);
+  const [homeroomGuidances, setHomeroomGuidances] = useState<HomeroomGuidanceSession[]>([]);
 
   // Simple Form Modal for Wali Kelas (Point Recording)
   const [showViolationModal, setShowViolationModal] = useState(false);
@@ -175,6 +177,33 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
     points: 5,
     description: '',
     date: new Date().toISOString().split('T')[0]
+  });
+
+  // Homeroom Guidance Follow-up State
+  const [guidanceSubTab, setGuidanceSubTab] = useState<'DISCIPLINE_OVERVIEW' | 'GUIDANCE_RECORDS'>('DISCIPLINE_OVERVIEW');
+  const [showGuidanceModal, setShowGuidanceModal] = useState(false);
+  const [selectedStudentForGuidance, setSelectedStudentForGuidance] = useState<Student | null>(null);
+  const [editingGuidanceId, setEditingGuidanceId] = useState<string | null>(null);
+  const [guidanceSearchQuery, setGuidanceSearchQuery] = useState('');
+  const [guidanceStatusFilter, setGuidanceStatusFilter] = useState<string>('ALL');
+  const [guidanceForm, setGuidanceForm] = useState<{
+    date: string;
+    violationSummary: string;
+    guidanceType: string;
+    notes: string;
+    studentCommitment: string;
+    status: 'Selesai/Membaik' | 'Dalam Pantauan' | 'Perlu Eskalasi ke BK';
+    followUpDate: string;
+    parentInformed: boolean;
+  }>({
+    date: new Date().toISOString().split('T')[0],
+    violationSummary: '',
+    guidanceType: 'Konseling Pribadi',
+    notes: '',
+    studentCommitment: '',
+    status: 'Dalam Pantauan',
+    followUpDate: '',
+    parentInformed: false
   });
 
   // Workplan & LPJ State
@@ -312,7 +341,7 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
       if (!user.homeroomClassId) return;
       setIsLoading(true);
 
-      const [allClasses, studentData, scoreData, violationData, reductionData, achievementData, sessionData, inventoryData, settings, homeVisitData, parentCallData] = await Promise.all([
+      const [allClasses, studentData, scoreData, violationData, reductionData, achievementData, sessionData, inventoryData, settings, homeVisitData, parentCallData, guidanceData] = await Promise.all([
         getAllClasses(),
         getStudents(user.homeroomClassId),
         getAssessmentScores(user.homeroomClassId, selectedSemester),
@@ -323,7 +352,8 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
         getClassInventory(user.homeroomClassId),
         getSystemSettings(),
         getHomeVisits(user.schoolNpsn || 'DEFAULT'),
-        getParentCalls(user.schoolNpsn || 'DEFAULT')
+        getParentCalls(user.schoolNpsn || 'DEFAULT'),
+        getHomeroomGuidanceSessions(user.schoolNpsn || 'DEFAULT', user.homeroomClassId)
       ]);
 
       const cls = allClasses.find(c => c.id === user.homeroomClassId);
@@ -343,6 +373,7 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
       setSessions(sessionData.filter(s => studentIds.has(s.studentId)));
       setHomeVisits(homeVisitData.filter(hv => studentIds.has(hv.studentId)));
       setParentCalls(parentCallData.filter(pc => studentIds.has(pc.studentId)));
+      setHomeroomGuidances(guidanceData.filter(g => studentIds.has(g.studentId)));
 
       // Initialize Inventory if empty with defaults
       if (inventoryData.length === 0) {
@@ -806,7 +837,8 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
             achievements: achievements.filter(a => a.studentId === s.id),
             sessions: sessions.filter(sess => sess.studentId === s.id),
             homeVisits: homeVisits.filter(hv => hv.studentId === s.id),
-            parentCalls: parentCalls.filter(pc => pc.studentId === s.id)
+            parentCalls: parentCalls.filter(pc => pc.studentId === s.id),
+            guidances: homeroomGuidances.filter(g => g.studentId === s.id)
         }
     }))
     .filter(s => s.stats.totalPoints > 0)
@@ -957,9 +989,427 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
     }
   };
 
+  // --- HOMEROOM GUIDANCE HANDLERS ---
+  const handleOpenGuidanceModal = (student?: Student, guidanceToEdit?: HomeroomGuidanceSession) => {
+    if (guidanceToEdit) {
+      const studentObj = students.find(s => s.id === guidanceToEdit.studentId) || null;
+      setSelectedStudentForGuidance(studentObj);
+      setEditingGuidanceId(guidanceToEdit.id);
+      setGuidanceForm({
+        date: guidanceToEdit.date || new Date().toISOString().split('T')[0],
+        violationSummary: guidanceToEdit.violationSummary || '',
+        guidanceType: guidanceToEdit.guidanceType || 'Konseling Pribadi',
+        notes: guidanceToEdit.notes || '',
+        studentCommitment: guidanceToEdit.studentCommitment || '',
+        status: (guidanceToEdit.status as any) || 'Dalam Pantauan',
+        followUpDate: guidanceToEdit.followUpDate || '',
+        parentInformed: guidanceToEdit.parentInformed || false
+      });
+    } else if (student) {
+      setSelectedStudentForGuidance(student);
+      setEditingGuidanceId(null);
+      const studentViols = violations.filter(v => v.studentId === student.id);
+      const recentViolSummary = studentViols.length > 0 
+        ? studentViols.slice(-3).map(v => v.violationName).join(', ')
+        : '';
+      setGuidanceForm({
+        date: new Date().toISOString().split('T')[0],
+        violationSummary: recentViolSummary,
+        guidanceType: 'Konseling Pribadi',
+        notes: '',
+        studentCommitment: '',
+        status: 'Dalam Pantauan',
+        followUpDate: '',
+        parentInformed: false
+      });
+    } else {
+      setSelectedStudentForGuidance(students[0] || null);
+      setEditingGuidanceId(null);
+      setGuidanceForm({
+        date: new Date().toISOString().split('T')[0],
+        violationSummary: '',
+        guidanceType: 'Konseling Pribadi',
+        notes: '',
+        studentCommitment: '',
+        status: 'Dalam Pantauan',
+        followUpDate: '',
+        parentInformed: false
+      });
+    }
+    setShowGuidanceModal(true);
+  };
+
+  const handleSaveGuidance = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedStudentForGuidance || !user.homeroomClassId) {
+      alert('Pilih siswa terlebih dahulu!');
+      return;
+    }
+
+    try {
+      const payload: any = {
+        studentId: selectedStudentForGuidance.id,
+        classId: user.homeroomClassId,
+        schoolNpsn: user.schoolNpsn || 'DEFAULT',
+        userId: user.id,
+        date: guidanceForm.date,
+        violationSummary: guidanceForm.violationSummary,
+        guidanceType: guidanceForm.guidanceType,
+        notes: guidanceForm.notes,
+        studentCommitment: guidanceForm.studentCommitment,
+        status: guidanceForm.status,
+        followUpDate: guidanceForm.followUpDate || undefined,
+        parentInformed: guidanceForm.parentInformed
+      };
+
+      if (editingGuidanceId) {
+        payload.id = editingGuidanceId;
+      }
+
+      await saveHomeroomGuidanceSession(payload);
+
+      // Refresh guidance list
+      const gData = await getHomeroomGuidanceSessions(user.schoolNpsn || 'DEFAULT', user.homeroomClassId);
+      const studentIds = new Set(students.map(s => s.id));
+      setHomeroomGuidances(gData.filter(g => studentIds.has(g.studentId)));
+
+      setShowGuidanceModal(false);
+      setSelectedStudentForGuidance(null);
+      setEditingGuidanceId(null);
+    } catch (err) {
+      console.error('Error saving homeroom guidance:', err);
+      alert('Gagal menyimpan data pembinaan.');
+    }
+  };
+
+  const handleDeleteGuidance = async (id: string) => {
+    if (!window.confirm('Apakah Anda yakin ingin menghapus data tindak lanjut pembinaan ini?')) return;
+    try {
+      await deleteHomeroomGuidanceSession(id);
+      const gData = await getHomeroomGuidanceSessions(user.schoolNpsn || 'DEFAULT', user.homeroomClassId || undefined);
+      const studentIds = new Set(students.map(s => s.id));
+      setHomeroomGuidances(gData.filter(g => studentIds.has(g.studentId)));
+    } catch (err) {
+      console.error('Error deleting homeroom guidance:', err);
+    }
+  };
+
+  const handlePrintGuidanceReport = (student: any) => {
+    const printWindow = window.open('', '', 'height=850,width=850');
+    if (!printWindow) return;
+
+    const studentGuidances = (student.details?.guidances || homeroomGuidances.filter(g => g.studentId === student.id))
+      .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const bStats = student.stats || getStudentBehaviorStats(student.id);
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Lembar Pembinaan Siswa - ${student.name}</title>
+          <style>
+            @page { size: A4; margin: 15mm; }
+            body { font-family: 'Times New Roman', Times, serif; color: #111; line-height: 1.5; font-size: 11pt; padding: 0; margin: 0; }
+            .header { text-align: center; margin-bottom: 20px; border-bottom: 2.5px double #000; padding-bottom: 10px; }
+            .header h1 { margin: 0; font-size: 14pt; text-transform: uppercase; font-weight: bold; }
+            .header h2 { margin: 4px 0 0 0; font-size: 12pt; text-transform: uppercase; font-weight: bold; }
+            .header p { margin: 2px 0 0 0; font-size: 10pt; font-style: italic; color: #333; }
+            
+            .student-info { margin-bottom: 20px; border: 1px solid #999; padding: 10px 14px; background: #fafafa; }
+            .student-info table { width: 100%; border-collapse: collapse; font-size: 10.5pt; }
+            .student-info td { padding: 3px 6px; vertical-align: top; }
+            
+            .badge { display: inline-block; padding: 2px 6px; font-size: 9pt; font-weight: bold; border-radius: 3px; border: 1px solid #ccc; }
+            .badge-green { background: #dcfce7; color: #15803d; border-color: #86efac; }
+            .badge-yellow { background: #fef9c3; color: #854d0e; border-color: #fde047; }
+            .badge-red { background: #fee2e2; color: #b91c1c; border-color: #fca5a5; }
+
+            .session-card { border: 1px solid #000; margin-bottom: 15px; page-break-inside: avoid; }
+            .session-header { background: #f0f0f0; border-bottom: 1px solid #000; padding: 6px 10px; font-weight: bold; display: flex; justify-content: space-between; }
+            .session-body { padding: 10px; }
+            .session-row { margin-bottom: 8px; }
+            .session-label { font-weight: bold; color: #333; font-size: 10pt; margin-bottom: 2px; }
+            .session-val { background: #fff; padding: 4px 8px; border: 1px dashed #ccc; font-size: 10pt; min-height: 24px; white-space: pre-line; }
+
+            .signature-grid { margin-top: 35px; display: grid; grid-template-columns: 1fr 1fr; gap: 30px; page-break-inside: avoid; text-align: center; font-size: 10.5pt; }
+            .sign-box { min-height: 90px; display: flex; flex-direction: column; justify-content: space-between; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>${user.schoolName || 'PEMERINTAH DAERAH PROVINSI / KABUPATEN'}</h1>
+            <h2>LEMBAR CATATAN TINDAK LANJUT PEMBINAAN SISWA OLEH WALI KELAS</h2>
+            <p>Tahun Pelajaran ${printSettings.date ? printSettings.date.split('-')[0] : new Date().getFullYear()} / Kelas: ${className}</p>
+          </div>
+
+          <div class="student-info">
+            <table>
+              <tr>
+                <td width="20%"><strong>Nama Siswa</strong></td>
+                <td width="2%">:</td>
+                <td width="48%"><strong>${student.name}</strong></td>
+                <td width="15%"><strong>Total Poin Aktif</strong></td>
+                <td width="2%">:</td>
+                <td width="13%"><strong>${bStats.totalPoints} Poin</strong></td>
+              </tr>
+              <tr>
+                <td><strong>NIS / NISN</strong></td>
+                <td>:</td>
+                <td>${student.nis} / ${student.nisn || '-'}</td>
+                <td><strong>Status / Rekomendasi</strong></td>
+                <td>:</td>
+                <td><span class="badge ${bStats.totalPoints > 20 ? 'badge-red' : 'badge-yellow'}">${bStats.recommendation}</span></td>
+              </tr>
+              <tr>
+                <td><strong>Kelas</strong></td>
+                <td>:</td>
+                <td>${className}</td>
+                <td><strong>Wali Kelas</strong></td>
+                <td>:</td>
+                <td>${user.fullName}</td>
+              </tr>
+            </table>
+          </div>
+
+          <div style="font-weight: bold; text-transform: uppercase; font-size: 11pt; border-bottom: 1.5px solid #000; padding-bottom: 3px; margin-bottom: 12px;">
+            RIWAYAT & TINDAK LANJUT PEMBINAAN WALI KELAS (${studentGuidances.length} Kegiatan)
+          </div>
+
+          ${studentGuidances.length === 0 ? `
+            <div style="text-align: center; padding: 25px; border: 1px dashed #999; font-style: italic; color: #666;">
+              Belum ada catatan pembinaan khusus yang tersimpan untuk siswa ini.
+            </div>
+          ` : studentGuidances.map((g: any, i: number) => `
+            <div class="session-card">
+              <div class="session-header">
+                <span>Pembinaan #${studentGuidances.length - i} — Tanggal: ${g.date}</span>
+                <span>Bentuk: ${g.guidanceType}</span>
+              </div>
+              <div class="session-body">
+                ${g.violationSummary ? `
+                  <div class="session-row">
+                    <div class="session-label">1. Masalah / Pelanggaran Terkait:</div>
+                    <div class="session-val">${g.violationSummary}</div>
+                  </div>
+                ` : ''}
+                <div class="session-row">
+                  <div class="session-label">2. Uraian Proses Pembinaan & Nasihat Wali Kelas:</div>
+                  <div class="session-val">${g.notes || '-'}</div>
+                </div>
+                ${g.studentCommitment ? `
+                  <div class="session-row">
+                    <div class="session-label">3. Komitmen / Kesepakatan / Janji Perbaikan Siswa:</div>
+                    <div class="session-val" style="font-style: italic; background: #fdfdfd;">"${g.studentCommitment}"</div>
+                  </div>
+                ` : ''}
+                <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 9.5pt; background: #f9f9f9; padding: 6px 8px; border: 1px solid #eee;">
+                  <div><strong>Status Hasil:</strong> <span class="badge ${g.status === 'Selesai/Membaik' ? 'badge-green' : g.status === 'Perlu Eskalasi ke BK' ? 'badge-red' : 'badge-yellow'}">${g.status}</span></div>
+                  <div><strong>Rencana Pantauan Lanjutan:</strong> ${g.followUpDate || '-'}</div>
+                  <div><strong>Koordinasi Ortu:</strong> ${g.parentInformed ? 'Sudah Diberitahu' : 'Belum / Tidak Perlu'}</div>
+                </div>
+              </div>
+            </div>
+          `).join('')}
+
+          <div class="signature-grid">
+            <div class="sign-box">
+              <div>Siswa Yang Dibina,</div>
+              <div style="margin-top: 45px; font-weight: bold; text-decoration: underline;">${student.name}</div>
+            </div>
+            <div class="sign-box">
+              <div>Orang Tua / Wali Siswa,</div>
+              <div style="margin-top: 45px; font-weight: bold; text-decoration: underline;">( .................................................. )</div>
+            </div>
+            <div class="sign-box">
+              <div>Guru Bimbingan Konseling (BK),</div>
+              <div style="margin-top: 45px; font-weight: bold; text-decoration: underline;">( .................................................. )</div>
+            </div>
+            <div class="sign-box">
+              <div>${printSettings.place}, ${printSettings.date || new Date().toLocaleDateString('id-ID')}<br/>Wali Kelas ${className},</div>
+              <div style="margin-top: 45px; font-weight: bold; text-decoration: underline;">${user.fullName}</div>
+              <div style="font-size: 9pt;">NIP. ${user.nip || '...........................................'}</div>
+            </div>
+          </div>
+
+          <div style="margin-top: 25px; text-align: center; page-break-inside: avoid;">
+            <div>Mengetahui,</div>
+            <div><strong>Kepala Sekolah</strong></div>
+            <div style="margin-top: 50px; font-weight: bold; text-decoration: underline;">( ................................................................ )</div>
+            <div style="font-size: 9.5pt;">NIP. .........................................................</div>
+          </div>
+
+          <script>window.onload = function() { window.print(); }</script>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+  };
+
+  const handlePrintAllGuidanceReport = () => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    const allRecords = homeroomGuidances
+      .map(g => {
+        const s = students.find(st => st.id === g.studentId);
+        return {
+          ...g,
+          studentName: s ? s.name : 'Siswa Tidak Ditemukan',
+          studentNis: s ? s.nis : '-',
+          gender: s ? s.gender : '-'
+        };
+      })
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    const completedCount = allRecords.filter(r => r.status === 'Selesai/Membaik').length;
+    const monitoringCount = allRecords.filter(r => r.status === 'Dalam Pantauan').length;
+    const escalatedCount = allRecords.filter(r => r.status === 'Perlu Eskalasi ke BK').length;
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Rekapitulasi Tindak Lanjut Pembinaan Siswa - Kelas ${className}</title>
+          <style>
+            @page { size: A4 landscape; margin: 12mm; }
+            body { font-family: 'Times New Roman', Times, serif; color: #111; line-height: 1.35; font-size: 9.5pt; padding: 0; margin: 0; }
+            
+            .header { text-align: center; margin-bottom: 14px; border-bottom: 2px solid #000; padding-bottom: 6px; }
+            .header h1 { margin: 0; font-size: 13pt; text-transform: uppercase; font-weight: bold; }
+            .header h2 { margin: 2px 0 0 0; font-size: 11pt; text-transform: uppercase; font-weight: bold; }
+            .header p { margin: 2px 0 0 0; font-size: 9pt; font-style: italic; color: #333; }
+
+            .stat-box { display: flex; justify-content: space-around; border: 1px solid #000; background: #f9f9f9; padding: 6px; margin-bottom: 12px; font-size: 9pt; text-align: center; }
+            .stat-item strong { display: block; font-size: 11pt; }
+
+            table { width: 100%; border-collapse: collapse; font-size: 8.5pt; margin-bottom: 15px; }
+            th, td { border: 1px solid #000; padding: 4.5px 5px; vertical-align: top; }
+            th { background: #ececec; font-weight: bold; text-align: center; }
+
+            .badge { display: inline-block; padding: 1px 4px; font-size: 7.5pt; font-weight: bold; border-radius: 2px; }
+            .badge-green { background: #dcfce7; color: #15803d; }
+            .badge-yellow { background: #fef9c3; color: #854d0e; }
+            .badge-red { background: #fee2e2; color: #b91c1c; }
+
+            .signature-box { margin-top: 25px; display: flex; justify-content: space-between; page-break-inside: avoid; font-size: 9.5pt; }
+            .sign-col { text-align: center; width: 250px; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>${user.schoolName || 'LEMBAGA PENDIDIKAN & KEMENTERIAN PENDIDIKAN'}</h1>
+            <h2>LAPORAN REKAPITULASI TINDAK LANJUT PEMBINAAN SISWA WALI KELAS</h2>
+            <p>Kelas: ${className} • Wali Kelas: ${user.fullName} • Semester: ${selectedSemester} • Tahun Ajaran: ${printSettings.date ? printSettings.date.split('-')[0] : new Date().getFullYear()}</p>
+          </div>
+
+          <div class="stat-box">
+            <div class="stat-item">Total Kegiatan Pembinaan: <strong>${allRecords.length}</strong></div>
+            <div class="stat-item">Selesai / Membaik: <strong style="color: #15803d;">${completedCount}</strong></div>
+            <div class="stat-item">Dalam Pemantauan: <strong style="color: #854d0e;">${monitoringCount}</strong></div>
+            <div class="stat-item">Perlu Eskalasi ke BK: <strong style="color: #b91c1c;">${escalatedCount}</strong></div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th width="3%">No</th>
+                <th width="8%">Tanggal</th>
+                <th width="14%">Nama Siswa (NIS)</th>
+                <th width="12%">Bentuk Pembinaan</th>
+                <th width="15%">Masalah / Pelanggaran</th>
+                <th width="20%">Uraian & Nasihat Wali Kelas</th>
+                <th width="16%">Komitmen Siswa</th>
+                <th width="12%">Status & Tindak Lanjut</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${allRecords.length === 0 ? `
+                <tr><td colspan="8" style="text-align: center; padding: 15px;">Tidak ada data catatan pembinaan wali kelas.</td></tr>
+              ` : allRecords.map((r, i) => `
+                <tr>
+                  <td style="text-align: center;">${i + 1}</td>
+                  <td style="text-align: center;">${r.date}</td>
+                  <td><strong>${r.studentName}</strong><br/><span style="font-size: 7.5pt; color: #555;">NIS: ${r.studentNis} (${r.gender || '-'})</span></td>
+                  <td><strong>${r.guidanceType}</strong></td>
+                  <td>${r.violationSummary || '-'}</td>
+                  <td>${r.notes || '-'}</td>
+                  <td>${r.studentCommitment ? `<em>"${r.studentCommitment}"</em>` : '-'}</td>
+                  <td>
+                    <span class="badge ${r.status === 'Selesai/Membaik' ? 'badge-green' : r.status === 'Perlu Eskalasi ke BK' ? 'badge-red' : 'badge-yellow'}">${r.status}</span>
+                    ${r.followUpDate ? `<div style="font-size: 7.5pt; color: #555; margin-top: 2px;">Pantau: ${r.followUpDate}</div>` : ''}
+                    ${r.parentInformed ? `<div style="font-size: 7.5pt; color: #1e40af; font-weight: bold;">(Ortu Diberitahu)</div>` : ''}
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+
+          <div class="signature-box">
+            <div class="sign-col">
+              <p>Mengetahui,<br/><strong>Kepala Sekolah</strong></p>
+              <br/><br/><br/>
+              <p style="font-weight: bold; text-decoration: underline;">( ..................................................... )</p>
+              <p style="font-size: 8.5pt;">NIP. .................................................</p>
+            </div>
+            <div class="sign-col">
+              <p>${printSettings.place}, ${printSettings.date || new Date().toLocaleDateString('id-ID')}<br/><strong>Wali Kelas ${className}</strong></p>
+              <br/><br/><br/>
+              <p style="font-weight: bold; text-decoration: underline;">${user.fullName}</p>
+              <p style="font-size: 8.5pt;">NIP. ${user.nip || '.................................................'}</p>
+            </div>
+          </div>
+
+          <script>window.onload = function() { window.print(); }</script>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+  };
+
+  const handleExportGuidanceExcel = () => {
+    const wb = XLSX.utils.book_new();
+
+    // Sheet 1: Rekap Pembinaan
+    const guidanceRows = homeroomGuidances.map((g, i) => {
+      const st = students.find(s => s.id === g.studentId);
+      return {
+        No: i + 1,
+        Tanggal: g.date,
+        NIS: st ? st.nis : '-',
+        NamaSiswa: st ? st.name : g.studentId,
+        Gender: st ? st.gender || '-' : '-',
+        BentukPembinaan: g.guidanceType,
+        PelanggaranTerkait: g.violationSummary || '-',
+        UraianPembinaan: g.notes || '-',
+        KomitmenSiswa: g.studentCommitment || '-',
+        StatusHasil: g.status,
+        TanggalEvaluasiLanjutan: g.followUpDate || '-',
+        KoordinasiOrangTua: g.parentInformed ? 'Ya' : 'Tidak'
+      };
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(guidanceRows.length ? guidanceRows : [{ Info: "Tidak ada data pembinaan" }]), "Rekap Pembinaan");
+
+    // Sheet 2: Ringkasan Status
+    const summaryStatus = [
+      { Status: 'Selesai / Membaik', Jumlah: homeroomGuidances.filter(g => g.status === 'Selesai/Membaik').length },
+      { Status: 'Dalam Pantauan', Jumlah: homeroomGuidances.filter(g => g.status === 'Dalam Pantauan').length },
+      { Status: 'Perlu Eskalasi ke BK', Jumlah: homeroomGuidances.filter(g => g.status === 'Perlu Eskalasi ke BK').length },
+      { Status: 'Total Kegiatan', Jumlah: homeroomGuidances.length }
+    ];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summaryStatus), "Ringkasan Status");
+
+    XLSX.writeFile(wb, `Rekap_Pembinaan_WaliKelas_${className.replace(/\s+/g, '_')}.xlsx`);
+  };
+
   const handlePrintBKReport = (student: any) => {
     const printWindow = window.open('', '', 'height=800,width=800');
     if (!printWindow) return;
+
+    const studentGuidances = student.details?.guidances || homeroomGuidances.filter(g => g.studentId === student.id);
 
     const html = `
       <html>
@@ -1073,6 +1523,37 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
             </table>
           </div>
 
+          <div class="section">
+            <div class="section-title">D. TINDAK LANJUT PEMBINAAN WALI KELAS</div>
+            <table>
+              <thead>
+                <tr>
+                  <th width="5%">No</th>
+                  <th width="12%">Tanggal</th>
+                  <th width="18%">Bentuk Pembinaan</th>
+                  <th width="25%">Uraian Pembinaan</th>
+                  <th width="22%">Komitmen Siswa</th>
+                  <th width="18%">Status & Evaluasi</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${studentGuidances.map((g: any, i: number) => `
+                  <tr>
+                    <td>${i + 1}</td>
+                    <td>${g.date}</td>
+                    <td><strong>${g.guidanceType}</strong></td>
+                    <td>${g.notes || '-'}</td>
+                    <td>${g.studentCommitment ? `<em>"${g.studentCommitment}"</em>` : '-'}</td>
+                    <td>
+                      <span style="font-weight: bold; color: ${g.status === 'Selesai/Membaik' ? '#15803d' : g.status === 'Perlu Eskalasi ke BK' ? '#b91c1c' : '#854d0e'};">${g.status}</span>
+                      ${g.followUpDate ? `<div style="font-size: 10px; color: #666;">Pantau: ${g.followUpDate}</div>` : ''}
+                    </td>
+                  </tr>
+                `).join('') || '<tr><td colspan="6" style="text-align:center">Tidak ada catatan pembinaan khusus</td></tr>'}
+              </tbody>
+            </table>
+          </div>
+
           <div style="margin-top: 40px; float: right; text-align: center; width: 250px; font-size: 14px;">
              <p>${printSettings.place}, ${printSettings.date}</p>
              <p>Wali Kelas,</p>
@@ -1126,6 +1607,21 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
       Keterangan: pc.notes || '-'
     }));
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(pcRows.length ? pcRows : [{Info: "Tidak ada data"}]), "Panggilan Ortu");
+
+    // Homeroom Guidance
+    const studentGuidances = student.details?.guidances || homeroomGuidances.filter(g => g.studentId === student.id);
+    const gRows = studentGuidances.map((g: any, i: number) => ({
+      No: i + 1,
+      Tanggal: g.date,
+      BentukPembinaan: g.guidanceType,
+      PelanggaranTerkait: g.violationSummary || '-',
+      UraianPembinaan: g.notes || '-',
+      KomitmenSiswa: g.studentCommitment || '-',
+      Status: g.status,
+      EvaluasiLanjutan: g.followUpDate || '-',
+      KoordinasiOrtu: g.parentInformed ? 'Ya' : 'Tidak'
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(gRows.length ? gRows : [{Info: "Tidak ada data"}]), "Pembinaan Wali Kelas");
 
     XLSX.writeFile(wb, `Laporan_BK_${student.name.replace(/\s+/g, '_')}.xlsx`);
   };
@@ -1486,6 +1982,26 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
       };
     });
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(pcRows.length ? pcRows : [{ Info: "Tidak ada data" }]), "Detail Panggilan Ortu");
+
+    // Sheet 6: Detail Pembinaan Wali Kelas
+    const guidanceRows = homeroomGuidances.map((g, i) => {
+      const st = students.find(s => s.id === g.studentId);
+      return {
+        No: i + 1,
+        Tanggal: g.date,
+        NIS: st ? st.nis : '-',
+        NamaSiswa: st ? st.name : g.studentId,
+        Gender: st ? st.gender || '-' : '-',
+        BentukPembinaan: g.guidanceType,
+        PelanggaranTerkait: g.violationSummary || '-',
+        UraianPembinaan: g.notes || '-',
+        KomitmenSiswa: g.studentCommitment || '-',
+        StatusHasil: g.status,
+        TanggalEvaluasiLanjutan: g.followUpDate || '-',
+        KoordinasiOrangTua: g.parentInformed ? 'Ya' : 'Tidak'
+      };
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(guidanceRows.length ? guidanceRows : [{ Info: "Tidak ada data" }]), "Pembinaan Wali Kelas");
 
     XLSX.writeFile(wb, `Laporan_BK_Seluruh_Siswa_${className.replace(/\s+/g, '_')}.xlsx`);
   };
@@ -2799,24 +3315,45 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                   <div>
                      <h3 className="font-bold text-red-800 text-base">Manajemen Kedisiplinan & Bimbingan (BK)</h3>
                      <p className="text-xs sm:text-sm text-red-700 mt-0.5">
-                        Wali Kelas dapat mencatatkan pelanggaran (+) maupun pengurangan poin (-). Data disinkronkan secara real-time dengan Guru BK.
+                        Wali Kelas dapat mencatatkan pelanggaran (+), pemulihan poin (-), serta tindak lanjut pembinaan siswa secara terintegrasi dengan Guru BK.
                      </p>
                   </div>
                </div>
                <div className="flex flex-wrap items-center gap-2 shrink-0">
                   <button
+                     onClick={() => handleOpenGuidanceModal()}
+                     className="px-3.5 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700 transition flex items-center gap-1.5 shadow-sm active:scale-95"
+                     title="Catat Pembinaan Baru Untuk Siswa Walian"
+                  >
+                     <Pencil size={15} /> Catat Pembinaan
+                  </button>
+                  <button
+                     onClick={handlePrintAllGuidanceReport}
+                     className="px-3.5 py-2 bg-amber-600 text-white rounded-lg text-xs font-bold hover:bg-amber-700 transition flex items-center gap-1.5 shadow-sm active:scale-95"
+                     title="Cetak Rekap Laporan Tindak Lanjut Pembinaan Seluruh Siswa"
+                  >
+                     <Printer size={15} /> Cetak Rekap Pembinaan
+                  </button>
+                  <button
+                     onClick={handleExportGuidanceExcel}
+                     className="px-3.5 py-2 bg-teal-600 text-white rounded-lg text-xs font-bold hover:bg-teal-700 transition flex items-center gap-1.5 shadow-sm active:scale-95"
+                     title="Export File Excel Rekap Pembinaan Wali Kelas"
+                  >
+                     <FileSpreadsheet size={15} /> Excel Pembinaan
+                  </button>
+                  <button
                      onClick={handlePrintAllBKReport}
                      className="px-3.5 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 transition flex items-center gap-1.5 shadow-sm active:scale-95"
                      title="Cetak Laporan Rekapitulasi BK & Kedisiplinan Seluruh Siswa Dalam Satu File"
                   >
-                     <Printer size={15} /> Cetak Laporan Seluruh Siswa
+                     <Printer size={15} /> Cetak BK Keseluruhan
                   </button>
                   <button
                      onClick={handleExcelAllBKReport}
                      className="px-3.5 py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition flex items-center gap-1.5 shadow-sm active:scale-95"
                      title="Export File Excel Rekap BK & Detail Pelanggaran Seluruh Siswa"
                   >
-                     <FileSpreadsheet size={15} /> Export Excel Seluruh Siswa
+                     <FileSpreadsheet size={15} /> Excel BK Keseluruhan
                   </button>
                </div>
             </div>
@@ -2840,7 +3377,7 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                                         <div className="font-extrabold text-gray-800 truncate text-sm group-hover:text-red-600 transition-colors">{student.name}</div>
                                         <div className="text-[11px] text-gray-500">NIS: {student.nis} • {student.gender === 'L' ? 'Laki-laki' : 'Perempuan'}</div>
                                     </div>
-                                    <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-2">
                                         <div className="text-right">
                                             <span className={`px-2 py-0.5 rounded-lg text-xs font-bold ${
                                                 bStats.totalPoints > 50 
@@ -2855,6 +3392,13 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                                             </span>
                                         </div>
                                         <button
+                                            onClick={() => handleOpenGuidanceModal(student)}
+                                            className="bg-indigo-50 text-indigo-700 hover:bg-indigo-600 hover:text-white px-2 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-all duration-200"
+                                            title="Catat Pembinaan Siswa"
+                                        >
+                                            <Pencil size={13} /> Bina
+                                        </button>
+                                        <button
                                             onClick={() => {
                                                 setSelectedStudentForForm(student);
                                                 setViolationFormType('VIOLATION');
@@ -2863,7 +3407,7 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                                             className="bg-red-50 text-red-600 hover:bg-red-600 hover:text-white px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-all duration-200"
                                             title="Catat Pelanggaran / Pengurangan Poin"
                                         >
-                                            <Plus size={14} /> Catat Poin
+                                            <Plus size={14} /> Poin
                                         </button>
                                     </div>
                                 </div>
@@ -2899,11 +3443,12 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                             <table className="w-full text-xs text-left">
                                 <thead className="bg-gray-50 text-gray-600 font-semibold border-b border-gray-200">
                                     <tr>
-                                        <th className="p-3 w-10 text-center">No</th>
+                                        <th className="p-3 w-8 text-center">No</th>
                                         <th className="p-3">Siswa</th>
                                         <th className="p-3 text-center">Poin</th>
                                         <th className="p-3">Rekomendasi</th>
-                                        <th className="p-3 w-10"></th>
+                                        <th className="p-3 text-center">Tindakan</th>
+                                        <th className="p-3 w-8"></th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
@@ -2926,13 +3471,31 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                                                         {s.stats.recommendation}
                                                     </span>
                                                 </td>
+                                                <td className="p-3 text-center" onClick={e => e.stopPropagation()}>
+                                                    <div className="flex items-center justify-center gap-1.5">
+                                                        <button
+                                                            onClick={() => handleOpenGuidanceModal(s)}
+                                                            className="px-2 py-1 bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white rounded text-[11px] font-bold transition flex items-center gap-1 border border-indigo-200"
+                                                            title="Catat Tindak Lanjut Pembinaan Wali Kelas"
+                                                        >
+                                                            <Pencil size={12} /> Catat Pembinaan
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handlePrintGuidanceReport(s)}
+                                                            className="p-1 text-gray-600 hover:text-blue-700 hover:bg-blue-50 rounded transition"
+                                                            title="Cetak Lembar Catatan Pembinaan Siswa"
+                                                        >
+                                                            <Printer size={14} />
+                                                        </button>
+                                                    </div>
+                                                </td>
                                                 <td className="p-3 text-center text-gray-400">
                                                     {expandedStudentId === s.id ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                                                 </td>
                                             </tr>
                                             {expandedStudentId === s.id && (
                                                 <tr className="bg-gray-50 border-b border-gray-200">
-                                                    <td colSpan={5} className="p-4 cursor-default">
+                                                    <td colSpan={6} className="p-4 cursor-default">
                                                         <div className="space-y-4">
                                                             <div>
                                                                 <h4 className="font-bold text-gray-800 flex items-center gap-2 mb-2 text-xs">
@@ -3014,6 +3577,89 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                                                                 </div>
                                                             )}
 
+                                                            {/* SECTION: HOMEROOM GUIDANCE HISTORY */}
+                                                            <div className="bg-white p-3.5 rounded-xl border border-indigo-100 shadow-sm">
+                                                                <div className="flex items-center justify-between mb-2">
+                                                                    <h4 className="font-bold text-indigo-900 flex items-center gap-2 text-xs">
+                                                                        <BookOpen size={14} className="text-indigo-600" /> Riwayat Pembinaan Wali Kelas
+                                                                        <span className="bg-indigo-100 text-indigo-800 text-[10px] px-1.5 py-0.5 rounded font-extrabold">
+                                                                            {s.details.guidances ? s.details.guidances.length : 0}
+                                                                        </span>
+                                                                    </h4>
+                                                                    <button
+                                                                        onClick={() => handleOpenGuidanceModal(s)}
+                                                                        className="px-2 py-1 bg-indigo-600 text-white rounded text-[10px] font-bold hover:bg-indigo-700 transition flex items-center gap-1 shadow-sm"
+                                                                    >
+                                                                        <Plus size={11} /> Catat Pembinaan Baru
+                                                                    </button>
+                                                                </div>
+
+                                                                {(!s.details.guidances || s.details.guidances.length === 0) ? (
+                                                                    <p className="text-[11px] text-gray-400 italic pl-2 py-1">
+                                                                        Belum ada catatan pembinaan khusus oleh wali kelas untuk siswa ini.
+                                                                    </p>
+                                                                ) : (
+                                                                    <div className="space-y-2 mt-2">
+                                                                        {s.details.guidances.map((g: HomeroomGuidanceSession) => (
+                                                                            <div key={g.id} className="p-2.5 rounded-lg border border-gray-100 bg-gray-50/70 hover:bg-white hover:border-indigo-200 transition text-[11px] text-gray-700">
+                                                                                <div className="flex justify-between items-start gap-2 mb-1">
+                                                                                    <div className="flex flex-wrap items-center gap-1.5">
+                                                                                        <span className="font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded text-[10px]">{g.date}</span>
+                                                                                        <span className="font-bold text-gray-900">{g.guidanceType}</span>
+                                                                                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                                                                            g.status === 'Selesai/Membaik' ? 'bg-green-100 text-green-700' :
+                                                                                            g.status === 'Perlu Eskalasi ke BK' ? 'bg-red-100 text-red-700' :
+                                                                                            'bg-amber-100 text-amber-700'
+                                                                                        }`}>
+                                                                                            {g.status}
+                                                                                        </span>
+                                                                                        {g.parentInformed && (
+                                                                                            <span className="text-[9px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-semibold">
+                                                                                                Ortu Diberitahu
+                                                                                            </span>
+                                                                                        )}
+                                                                                    </div>
+                                                                                    <div className="flex items-center gap-1 shrink-0">
+                                                                                        <button
+                                                                                            onClick={() => handleOpenGuidanceModal(s, g)}
+                                                                                            className="p-1 text-blue-600 hover:bg-blue-100 rounded transition"
+                                                                                            title="Edit Catatan Pembinaan"
+                                                                                        >
+                                                                                            <Pencil size={12} />
+                                                                                        </button>
+                                                                                        <button
+                                                                                            onClick={() => handleDeleteGuidance(g.id)}
+                                                                                            className="p-1 text-red-600 hover:bg-red-100 rounded transition"
+                                                                                            title="Hapus Catatan Pembinaan"
+                                                                                        >
+                                                                                            <Trash2 size={12} />
+                                                                                        </button>
+                                                                                    </div>
+                                                                                </div>
+                                                                                {g.violationSummary && (
+                                                                                    <div className="text-gray-600 mt-0.5">
+                                                                                        <span className="font-semibold text-gray-800">Masalah:</span> {g.violationSummary}
+                                                                                    </div>
+                                                                                )}
+                                                                                <div className="text-gray-800 mt-1 bg-white p-2 rounded border border-gray-100">
+                                                                                    <span className="font-semibold text-gray-900">Uraian Pembinaan:</span> {g.notes}
+                                                                                </div>
+                                                                                {g.studentCommitment && (
+                                                                                    <div className="text-gray-700 mt-1 italic pl-2 border-l-2 border-indigo-300">
+                                                                                        <span className="font-semibold not-italic text-gray-900">Komitmen Siswa:</span> "{g.studentCommitment}"
+                                                                                    </div>
+                                                                                )}
+                                                                                {g.followUpDate && (
+                                                                                    <div className="text-[10px] text-gray-500 mt-1 font-medium">
+                                                                                        📅 Rencana Pantauan: <span className="font-bold text-gray-700">{g.followUpDate}</span>
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+
                                                             {s.details.homeVisits.length > 0 && (
                                                                 <div>
                                                                     <h4 className="font-bold text-gray-800 flex items-center gap-2 mb-2 text-xs">
@@ -3044,18 +3690,24 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                                                                 </div>
                                                             )}
 
-                                                            <div className="flex gap-2 pt-3 border-t border-gray-200">
+                                                            <div className="flex flex-wrap gap-2 pt-3 border-t border-gray-200">
+                                                                <button 
+                                                                    onClick={() => handlePrintGuidanceReport(s)}
+                                                                    className="flex items-center gap-1.5 bg-indigo-600 text-white px-2.5 py-1.5 rounded text-[11px] font-bold hover:bg-indigo-700 transition shadow-sm"
+                                                                >
+                                                                    <Printer size={12} /> Cetak Lembar Pembinaan Siswa
+                                                                </button>
                                                                 <button 
                                                                     onClick={() => handlePrintBKReport(s)}
                                                                     className="flex items-center gap-1.5 bg-blue-600 text-white px-2.5 py-1.5 rounded text-[11px] font-bold hover:bg-blue-700 transition"
                                                                 >
-                                                                    <Printer size={12} /> Cetak Laporan
+                                                                    <Printer size={12} /> Cetak Laporan BK Siswa
                                                                 </button>
                                                                 <button 
                                                                     onClick={() => handleExcelBKReport(s)}
                                                                     className="flex items-center gap-1.5 bg-green-600 text-white px-2.5 py-1.5 rounded text-[11px] font-bold hover:bg-green-700 transition"
                                                                 >
-                                                                    <FileSpreadsheet size={12} /> Export Excel
+                                                                    <FileSpreadsheet size={12} /> Export Excel BK
                                                                 </button>
                                                             </div>
                                                         </div>
@@ -3238,6 +3890,189 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                                     }`}
                                 >
                                     {editingRecord ? 'Update Catatan' : 'Simpan Catatan'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* POPUP MODAL FOR WALI KELAS GUIDANCE RECORDING */}
+            {showGuidanceModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 max-w-xl w-full overflow-hidden animate-in zoom-in-95 duration-200">
+                        <div className="p-6 bg-gradient-to-r from-indigo-700 to-indigo-900 text-white flex justify-between items-center">
+                            <div>
+                                <h3 className="text-lg font-extrabold flex items-center gap-2">
+                                    <BookOpen size={20} className="text-indigo-300" />
+                                    {editingGuidanceId ? 'Edit Tindak Lanjut Pembinaan' : 'Catat Tindak Lanjut Pembinaan Wali Kelas'}
+                                </h3>
+                                <p className="text-xs text-indigo-200 mt-1 font-medium">
+                                    {selectedStudentForGuidance ? `Siswa: ${selectedStudentForGuidance.name} (NIS: ${selectedStudentForGuidance.nis})` : 'Pilih siswa yang akan dibina'}
+                                </p>
+                            </div>
+                            <button 
+                                type="button"
+                                onClick={() => {
+                                    setShowGuidanceModal(false);
+                                    setSelectedStudentForGuidance(null);
+                                    setEditingGuidanceId(null);
+                                }}
+                                className="p-1.5 hover:bg-white/20 rounded-lg transition text-indigo-100 hover:text-white"
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <form onSubmit={handleSaveGuidance} className="p-6 space-y-4 text-left max-h-[80vh] overflow-y-auto">
+                            {/* Student selector if not set or allow change */}
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 mb-1">Pilih Siswa Walian</label>
+                                <select 
+                                    className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-indigo-500 text-gray-800 font-medium"
+                                    value={selectedStudentForGuidance?.id || ''}
+                                    onChange={e => {
+                                        const s = students.find(st => st.id === e.target.value);
+                                        setSelectedStudentForGuidance(s || null);
+                                    }}
+                                    required
+                                >
+                                    <option value="">-- Pilih Siswa --</option>
+                                    {students.map(s => {
+                                        const pts = getStudentBehaviorStats(s.id).totalPoints;
+                                        return (
+                                            <option key={s.id} value={s.id}>
+                                                {s.name} ({s.nis}) {pts > 0 ? `— [${pts} Poin Aktif]` : ''}
+                                            </option>
+                                        );
+                                    })}
+                                </select>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-700 mb-1">Tanggal Pembinaan</label>
+                                    <input 
+                                        type="date" 
+                                        required 
+                                        className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-indigo-500 text-gray-800" 
+                                        value={guidanceForm.date} 
+                                        onChange={e => setGuidanceForm({ ...guidanceForm, date: e.target.value })} 
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-700 mb-1">Bentuk / Jenis Pembinaan</label>
+                                    <select 
+                                        className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-indigo-500 text-gray-800"
+                                        value={guidanceForm.guidanceType}
+                                        onChange={e => setGuidanceForm({ ...guidanceForm, guidanceType: e.target.value })}
+                                        required
+                                    >
+                                        <option value="Konseling Pribadi">Konseling Pribadi</option>
+                                        <option value="Pemberian Tugas Positif">Pemberian Tugas Positif / Edukatif</option>
+                                        <option value="Pembuatan Surat Perjanjian">Pembuatan Surat Perjanjian Siswa</option>
+                                        <option value="Kesepakatan Wali Kelas">Kesepakatan / Kontrak Perilaku</option>
+                                        <option value="Restitusi Disiplin Positif">Restitusi Disiplin Positif</option>
+                                        <option value="Bimbingan Karakter">Bimbingan Karakter & Motivasi</option>
+                                        <option value="Lainnya">Lainnya</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 mb-1">
+                                    Masalah / Pelanggaran Terkait <span className="text-gray-400 font-normal">(Opsional / Ringkasan)</span>
+                                </label>
+                                <input 
+                                    type="text" 
+                                    placeholder="Misal: Sering terlambat masuk sekolah, bermain HP di kelas"
+                                    className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-indigo-500 text-gray-800" 
+                                    value={guidanceForm.violationSummary} 
+                                    onChange={e => setGuidanceForm({ ...guidanceForm, violationSummary: e.target.value })} 
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 mb-1">
+                                    Uraian Pembinaan & Nasihat Wali Kelas <span className="text-red-500">*</span>
+                                </label>
+                                <textarea 
+                                    required 
+                                    rows={3}
+                                    placeholder="Tuliskan uraian proses pembinaan, alasan dari siswa, nasihat dan arahan wali kelas..."
+                                    className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-indigo-500 text-gray-800" 
+                                    value={guidanceForm.notes} 
+                                    onChange={e => setGuidanceForm({ ...guidanceForm, notes: e.target.value })} 
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 mb-1">
+                                    Komitmen & Janji Perbaikan Siswa <span className="text-gray-400 font-normal">(Pernyataan siswa)</span>
+                                </label>
+                                <textarea 
+                                    rows={2}
+                                    placeholder="Misal: Siswa berjanji akan bangun lebih pagi, tidak membawa HP ke kelas, dan siap ditegur jika mengulangi..."
+                                    className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-indigo-500 text-gray-800" 
+                                    value={guidanceForm.studentCommitment} 
+                                    onChange={e => setGuidanceForm({ ...guidanceForm, studentCommitment: e.target.value })} 
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-700 mb-1">Status / Hasil Pembinaan</label>
+                                    <select 
+                                        className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-indigo-500 text-gray-800 font-medium"
+                                        value={guidanceForm.status}
+                                        onChange={e => setGuidanceForm({ ...guidanceForm, status: e.target.value as any })}
+                                    >
+                                        <option value="Dalam Pantauan">Dalam Pantauan Wali Kelas</option>
+                                        <option value="Selesai/Membaik">Selesai / Perilaku Membaik</option>
+                                        <option value="Perlu Eskalasi ke BK">Perlu Eskalasi / Koordinasi ke Guru BK</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-700 mb-1">
+                                        Tanggal Evaluasi Lanjutan <span className="text-gray-400 font-normal">(Opsional)</span>
+                                    </label>
+                                    <input 
+                                        type="date" 
+                                        className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-indigo-500 text-gray-800" 
+                                        value={guidanceForm.followUpDate} 
+                                        onChange={e => setGuidanceForm({ ...guidanceForm, followUpDate: e.target.value })} 
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="pt-2">
+                                <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-gray-700 select-none">
+                                    <input 
+                                        type="checkbox" 
+                                        checked={guidanceForm.parentInformed} 
+                                        onChange={e => setGuidanceForm({ ...guidanceForm, parentInformed: e.target.checked })} 
+                                        className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4"
+                                    />
+                                    <span>Telah menginformasikan / mengoordinasikan hal ini dengan Orang Tua Siswa</span>
+                                </label>
+                            </div>
+
+                            <div className="flex justify-end gap-2 pt-4 border-t border-gray-100">
+                                <button 
+                                    type="button" 
+                                    onClick={() => {
+                                        setShowGuidanceModal(false);
+                                        setSelectedStudentForGuidance(null);
+                                        setEditingGuidanceId(null);
+                                    }}
+                                    className="px-4 py-2 text-xs font-bold text-gray-500 hover:bg-gray-100 rounded-lg transition"
+                                >
+                                    Batal
+                                </button>
+                                <button 
+                                    type="submit" 
+                                    className="px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition shadow-md flex items-center gap-1.5"
+                                >
+                                    <Check size={15} /> {editingGuidanceId ? 'Update Pembinaan' : 'Simpan Pembinaan'}
                                 </button>
                             </div>
                         </form>
