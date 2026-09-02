@@ -408,6 +408,22 @@ export interface LearningStyleAssessment extends Syncable {
   method: 'MANUAL' | 'DIGITAL';
 }
 
+export interface HomeroomGuidanceSession extends Syncable {
+  id: string;
+  studentId: string;
+  classId: string;
+  schoolNpsn: string;
+  userId: string; // Homeroom Teacher / Wali Kelas ID
+  date: string; // YYYY-MM-DD
+  violationSummary: string; // Ringkasan pelanggaran / masalah yang dibina
+  guidanceType: 'Konseling Pribadi' | 'Pemberian Tugas Positif' | 'Pembuatan Surat Perjanjian' | 'Kesepakatan Wali Kelas' | 'Restitusi & Refleksi' | 'Panggilan/Koordinasi Ortu' | 'Lainnya' | string;
+  notes: string; // Uraian pembinaan / proses bimbingan wali kelas
+  studentCommitment: string; // Komitmen & janji perbaikan siswa
+  status: 'Selesai/Membaik' | 'Dalam Pantauan' | 'Perlu Eskalasi ke BK';
+  followUpDate?: string; // Tanggal pemantauan lanjutan
+  parentInformed?: boolean;
+}
+
 // Backup API Key
 export interface PasswordReset extends Syncable {
   id: string;
