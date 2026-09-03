@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Student, 
   User, 
@@ -37,7 +37,10 @@ import {
   ArrowUpDown,
   Filter,
   Eye,
-  FileCheck
+  FileCheck,
+  Wand2,
+  Lightbulb,
+  Check
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format } from 'date-fns';
@@ -66,6 +69,208 @@ const GUIDANCE_CATEGORIES: GuidanceCategory[] = [
   'Kedisiplinan & Karakter',
   'Mandiri & Stabil'
 ];
+
+export interface SmartSuggestionItem {
+  id: string;
+  category: GuidanceCategory;
+  title: string;
+  summaryText: string;
+  recommendationText: string;
+}
+
+/**
+ * Otomatisasi Sintesis Diagnostik 4 Pilar
+ * Menganalisis data dari tab Akademik, Keterampilan, Prestasi, dan Karakter
+ * untuk menghasilkan kategori bimbingan, rangkuman kesimpulan, dan saran rekomendasi.
+ */
+export function generateInitialAssessmentSynthesis(
+  formData: {
+    academic: {
+      favoriteSubjects?: string;
+      difficultSubjects?: string;
+      studyHabitSchedule?: string;
+      studyMethod?: string;
+      previousGpa?: string;
+    };
+    skills: {
+      masteredSkills?: string;
+      extracurriculars?: string;
+      skillInterests?: string;
+    };
+    achievements: {
+      academicAchievements?: string;
+      nonAcademicAchievements?: string;
+      personalGoals?: string;
+    };
+    character: {
+      prominentTraits?: string;
+      traitsToDevelop?: string;
+      positiveHabits?: string;
+      habitsToImprove?: string;
+    };
+  },
+  studentName: string = 'Siswa'
+) {
+  const { academic, skills, achievements, character } = formData;
+
+  const fav = academic.favoriteSubjects?.trim() || '';
+  const diff = academic.difficultSubjects?.trim() || '';
+  const study = academic.studyHabitSchedule?.trim() || '';
+  const method = academic.studyMethod?.trim() || '';
+
+  const mastered = skills.masteredSkills?.trim() || '';
+  const extra = skills.extracurriculars?.trim() || '';
+  const interest = skills.skillInterests?.trim() || '';
+
+  const achAcad = achievements.academicAchievements?.trim() || '';
+  const achNon = achievements.nonAcademicAchievements?.trim() || '';
+  const goals = achievements.personalGoals?.trim() || '';
+
+  const traits = character.prominentTraits?.trim() || '';
+  const develop = character.traitsToDevelop?.trim() || '';
+  const posHabits = character.positiveHabits?.trim() || '';
+  const impHabits = character.habitsToImprove?.trim() || '';
+
+  // Hitung bobot untuk menentukan kategori yang paling tepat
+  let academicScore = 0;
+  let achievementScore = 0;
+  let characterScore = 0;
+
+  if (diff) academicScore += 4;
+  if (study && /kurang|jarang|malam|begadang|tidak teratur/i.test(study)) academicScore += 2;
+
+  if (achAcad || achNon) achievementScore += 3;
+  if (goals && /juara|osn|lomba|ptn|olimpiade|prestasi|target/i.test(goals)) achievementScore += 4;
+  if (mastered) achievementScore += 2;
+
+  if (impHabits) characterScore += 4;
+  if (develop && /percaya diri|disiplin|berani|bicara|fokus/i.test(develop)) characterScore += 2;
+
+  let recCategory: GuidanceCategory = 'Mandiri & Stabil';
+  if (academicScore >= achievementScore && academicScore >= characterScore && academicScore > 0) {
+    recCategory = 'Penguatan Akademik';
+  } else if (achievementScore >= academicScore && achievementScore >= characterScore && achievementScore > 0) {
+    recCategory = 'Potensi Prestasi';
+  } else if (characterScore > 0) {
+    recCategory = 'Kedisiplinan & Karakter';
+  } else {
+    recCategory = 'Mandiri & Stabil';
+  }
+
+  // Sintesis narasi kesimpulan kompas guru wali
+  const parts: string[] = [];
+
+  // 1. Profil Akademik
+  if (fav && diff) {
+    parts.push(`${studentName} memiliki ketertarikan tinggi pada mata pelajaran ${fav}, namun menghadapi kendala pemahaman pada mata pelajaran ${diff}.`);
+  } else if (fav) {
+    parts.push(`${studentName} menunjukkan minat belajar yang dominan pada bidang studi ${fav}.`);
+  } else if (diff) {
+    parts.push(`${studentName} memerlukan pendampingan belajar khusus pada mata pelajaran ${diff}.`);
+  } else {
+    parts.push(`${studentName} memiliki kesiapan belajar umum yang baik di kelas.`);
+  }
+
+  // 2. Keterampilan & Ekstrakurikuler
+  if (mastered && extra) {
+    parts.push(`Pada ranah keterampilan, siswa menguasai ${mastered} serta aktif menyalurkan minat melalui ekstrakurikuler ${extra}.`);
+  } else if (mastered) {
+    parts.push(`Memiliki modal keahlian praktis dalam ${mastered} yang berpotensi untuk dikembangkan.`);
+  } else if (extra) {
+    parts.push(`Aktif mengembangkan diri dan relasi sosial lewat kegiatan ekskul ${extra}.`);
+  }
+
+  // 3. Prestasi & Target Capaian
+  if (goals) {
+    parts.push(`Siswa memiliki motivasi target pribadi yaitu: "${goals}".`);
+  } else if (achAcad || achNon) {
+    const combined = [achAcad, achNon].filter(Boolean).join(' dan ');
+    parts.push(`Telah memiliki rekam jejak prestasi (${combined}) yang memperkuat kepercayaan dirinya.`);
+  }
+
+  // 4. Karakter & Fokus Guru Wali
+  if (traits && impHabits) {
+    parts.push(`Dengan karakter positif yang menonjol (${traits}), fokus pendampingan Guru Wali adalah mengarahkan perbaikan pada kebiasaan ${impHabits}.`);
+  } else if (impHabits) {
+    parts.push(`Fokus utama Guru Wali adalah pembinaan kebiasaan dan kedisiplinan belajar, khususnya terkait ${impHabits}.`);
+  } else if (traits) {
+    parts.push(`Karakter ${traits} menjadi kekuatan utama yang terus dirawat dan ditingkatkan sepanjang tahun ajaran.`);
+  } else {
+    parts.push(`Fokus utama Guru Wali adalah menjaga konsistensi motivasi belajar dan kematangan karakter siswa secara berkesinambungan.`);
+  }
+
+  const generatedSummary = parts.join(' ');
+
+  // Sintesis Rekomendasi Awal Tindak Lanjut
+  const recActions: string[] = [];
+  if (diff) {
+    recActions.push(`Mengagendakan bimbingan teman sebaya atau sesi konsultasi tambahan untuk mata pelajaran ${diff}.`);
+  }
+  if (goals || mastered || extra) {
+    const focusInterest = goals || extra || mastered;
+    recActions.push(`Memfasilitasi pembinaan minat dan target capaian siswa (${focusInterest}) bersama guru pembina/pelatih terkait.`);
+  }
+  if (impHabits || develop) {
+    const focusImprove = impHabits || develop;
+    recActions.push(`Memberikan konseling personal teratur dan pemantauan berkala terhadap progres perbaikan kebiasaan (${focusImprove}).`);
+  }
+  if (recActions.length === 0) {
+    recActions.push(`Melakukan pemantauan kemajuan belajar berkala dan evaluasi target setiap tengah semester.`);
+    recActions.push(`Membangun komunikasi aktif dengan orang tua terkait perkembangan akademik dan kepribadian siswa.`);
+  }
+
+  const generatedFollowUp = recActions.map((act, i) => `${i + 1}. ${act}`).join('\n');
+
+  // Saran-saran otomatis kontekstual yang dapat diklik (Suggestion Chips)
+  const suggestions: SmartSuggestionItem[] = [];
+
+  if (diff) {
+    suggestions.push({
+      id: 'sugg_academic',
+      category: 'Penguatan Akademik',
+      title: `Bimbingan Akademik & Tutor Sebaya (${diff})`,
+      summaryText: `Prioritas pendampingan pada peningkatan pemahaman konsep ${diff} melalui tutor sebaya dan latihan terbimbing agar ketuntasan belajar tercapai optimal.`,
+      recommendationText: `1. Koordinasi dengan guru pengampu ${diff} untuk identifikasi materi esensial yang belum tuntas.\n2. Pasangkan dengan rekan asuh berprestasi untuk belajar kelompok mingguan.`
+    });
+  }
+
+  if (goals || achAcad || achNon || mastered) {
+    const targetLabel = goals || mastered || 'Prestasi Unggulan';
+    suggestions.push({
+      id: 'sugg_prestasi',
+      category: 'Potensi Prestasi',
+      title: `Akselerasi Prestasi & Pembinaan Minat (${targetLabel})`,
+      summaryText: `Siswa memiliki motivasi dan bakat potensial (${targetLabel}). Guru Wali memfasilitasi peluang partisipasi kompetisi/olimpiade serta pemetaan jalur prestasi.`,
+      recommendationText: `1. Rencanakan target kompetisi/lomba tingkat sekolah/kabupaten.\n2. Jadwalkan bimbingan intensif berkala bersama pembina ekstrakurikuler/guru pembimbing.`
+    });
+  }
+
+  if (impHabits || develop) {
+    const habitLabel = impHabits || develop;
+    suggestions.push({
+      id: 'sugg_karakter',
+      category: 'Kedisiplinan & Karakter',
+      title: `Pembiasaan Disiplin & Manajemen Waktu`,
+      summaryText: `Pendampingan berfokus pada penguatan komitmen diri, kedisiplinan belajar, dan pengelolaan waktu sehari-hari untuk meminimalisasi kendala ${habitLabel}.`,
+      recommendationText: `1. Buat lembar komitmen belajar mandiri dan jadwal harian yang disepakati bersama.\n2. Refleksi evaluasi dua mingguan tentang progres kebiasaan positif.`
+    });
+  }
+
+  suggestions.push({
+    id: 'sugg_mandiri',
+    category: 'Mandiri & Stabil',
+    title: `Pengembangan Holistik & Orientasi Masa Depan`,
+    summaryText: `Profil siswa tergolong seimbang dan mandiri. Fokus pendampingan diarahkan pada penjajakan minat karier, perguruan tinggi, serta kematangan sosial-emosional.`,
+    recommendationText: `1. Diskusikan eksplorasi cita-cita dan rencana studi lanjut / karier.\n2. Dorong kepemimpinan aktif di kelas atau organisasi sekolah.`
+  });
+
+  return {
+    recommendedCategory: recCategory,
+    summaryNotes: generatedSummary,
+    followUpRecommendations: generatedFollowUp,
+    smartSuggestions: suggestions
+  };
+}
 
 export const GuruWaliInitialAssessmentView: React.FC<GuruWaliInitialAssessmentViewProps> = ({
   user,
@@ -146,6 +351,81 @@ export const GuruWaliInitialAssessmentView: React.FC<GuruWaliInitialAssessmentVi
     setTimeout(() => {
       setToast(null);
     }, 3500);
+  };
+
+  // Derived synthesis from the 4 pillars (calculated automatically in real-time)
+  const currentSynthesis = useMemo(() => {
+    return generateInitialAssessmentSynthesis(formData, activeStudent?.name || 'Siswa');
+  }, [
+    formData.academic,
+    formData.skills,
+    formData.achievements,
+    formData.character,
+    activeStudent?.name
+  ]);
+
+  const hasPillarsData = useMemo(() => {
+    return Boolean(
+      formData.academic.favoriteSubjects ||
+      formData.academic.difficultSubjects ||
+      formData.academic.studyHabitSchedule ||
+      formData.academic.studyMethod ||
+      formData.skills.masteredSkills ||
+      formData.skills.extracurriculars ||
+      formData.skills.skillInterests ||
+      formData.achievements.academicAchievements ||
+      formData.achievements.nonAcademicAchievements ||
+      formData.achievements.personalGoals ||
+      formData.character.prominentTraits ||
+      formData.character.traitsToDevelop ||
+      formData.character.positiveHabits ||
+      formData.character.habitsToImprove
+    );
+  }, [formData.academic, formData.skills, formData.achievements, formData.character]);
+
+  const handleApplyFullSynthesis = () => {
+    if (!hasPillarsData) {
+      showToast('Isi minimal salah satu data pada tab 1-4 (Akademik, Keterampilan, Prestasi, Karakter) untuk disimpulkan.', 'info');
+      return;
+    }
+    setFormData(prev => ({
+      ...prev,
+      conclusion: {
+        ...prev.conclusion,
+        guidanceCategory: currentSynthesis.recommendedCategory,
+        summaryNotes: currentSynthesis.summaryNotes,
+        followUpRecommendations: currentSynthesis.followUpRecommendations
+      }
+    }));
+    showToast(`Kesimpulan berhasil disimpulkan otomatis (${currentSynthesis.recommendedCategory})!`, 'success');
+  };
+
+  const handleApplySuggestion = (sugg: SmartSuggestionItem) => {
+    setFormData(prev => ({
+      ...prev,
+      conclusion: {
+        ...prev.conclusion,
+        guidanceCategory: sugg.category,
+        summaryNotes: sugg.summaryText,
+        followUpRecommendations: sugg.recommendationText
+      }
+    }));
+    showToast(`Saran "${sugg.title}" berhasil diterapkan!`, 'success');
+  };
+
+  const handleAppendFollowUp = (bulletText: string) => {
+    setFormData(prev => {
+      const current = (prev.conclusion.followUpRecommendations || '').trim();
+      const newText = current ? `${current}\n• ${bulletText}` : `• ${bulletText}`;
+      return {
+        ...prev,
+        conclusion: {
+          ...prev.conclusion,
+          followUpRecommendations: newText
+        }
+      };
+    });
+    showToast('Rekomendasi tindak lanjut ditambahkan!');
   };
 
   useEffect(() => {
@@ -1669,6 +1949,11 @@ export const GuruWaliInitialAssessmentView: React.FC<GuruWaliInitialAssessmentVi
               >
                 <Compass className="w-3.5 h-3.5" />
                 <span>5. Kesimpulan Kompas</span>
+                {hasPillarsData && !formData.conclusion.summaryNotes && (
+                  <span className="px-1.5 py-0.5 bg-amber-100 text-amber-800 text-[10px] font-extrabold rounded-md flex items-center gap-0.5">
+                    <Sparkles className="w-2.5 h-2.5" /> Auto
+                  </span>
+                )}
               </button>
             </div>
 
@@ -1978,6 +2263,22 @@ export const GuruWaliInitialAssessmentView: React.FC<GuruWaliInitialAssessmentVi
                         className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none"
                       />
                     </div>
+
+                    <div className="pt-2 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveTab('CONCLUSION');
+                          if (!formData.conclusion.summaryNotes && hasPillarsData) {
+                            handleApplyFullSynthesis();
+                          }
+                        }}
+                        className="px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-2xs"
+                      >
+                        <span>Lanjut ke Kesimpulan & Kompas</span>
+                        <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1985,24 +2286,93 @@ export const GuruWaliInitialAssessmentView: React.FC<GuruWaliInitialAssessmentVi
               {/* TAB 5: KESIMPULAN & KOMPAS GURU WALI */}
               {activeTab === 'CONCLUSION' && (
                 <div className="space-y-4">
-                  <div className="p-3.5 bg-indigo-50/70 border border-indigo-100 rounded-xl text-xs text-indigo-900 flex items-start gap-2">
-                    <Compass className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
-                    <div>
-                      <p className="font-bold">Kesimpulan & Kompas Pendampingan Guru Wali</p>
-                      <p className="text-[11px] text-indigo-700 mt-0.5">
-                        Menetapkan profil bimbingan utama dan strategi tindak lanjut awal sebagai kompas sepanjang tahun ajaran.
-                      </p>
+                  {/* Smart Synthesis Card */}
+                  <div className="p-4 bg-gradient-to-r from-indigo-50/90 via-purple-50/70 to-blue-50/80 border border-indigo-200/90 rounded-2xl shadow-xs">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-indigo-600 text-white rounded-md text-[10px] font-extrabold uppercase tracking-wider">
+                            <Sparkles className="w-3 h-3 text-amber-300" />
+                            Sintesis Diagnostik 4 Pilar
+                          </span>
+                          {hasPillarsData ? (
+                            <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-md flex items-center gap-1 border border-emerald-200">
+                              <Check className="w-3 h-3 text-emerald-600" /> Data 4 Pilar Terdeteksi
+                            </span>
+                          ) : (
+                            <span className="text-[11px] text-amber-700 bg-amber-100/70 px-2 py-0.5 rounded-md">
+                              Isi tab 1-4 untuk sintesis maksimal
+                            </span>
+                          )}
+                        </div>
+                        <h4 className="text-xs font-bold text-gray-900">
+                          Sintesis Otomatis Kesimpulan & Rekomendasi Guru Wali
+                        </h4>
+                        <p className="text-[11px] text-gray-600 leading-relaxed max-w-xl">
+                          Sistem menganalisis data Akademik, Keterampilan, Prestasi, dan Karakter siswa untuk merumuskan kategori bimbingan, rangkuman kesimpulan, dan tindak lanjut secara otomatis.
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleApplyFullSynthesis}
+                        disabled={!hasPillarsData}
+                        className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-sm shrink-0 ${
+                          hasPillarsData
+                            ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-200 hover:scale-[1.02] active:scale-[0.98]'
+                            : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                        }`}
+                        title="Rangkum otomatis dari 4 isian pilar"
+                      >
+                        <Wand2 className="w-4 h-4 text-amber-300" />
+                        <span>Simpulkan Otomatis</span>
+                      </button>
                     </div>
+
+                    {hasPillarsData && (
+                      <div className="mt-3 pt-3 border-t border-indigo-100/80 flex flex-wrap items-center justify-between gap-2 text-xs">
+                        <div className="flex items-center gap-1.5 text-gray-700">
+                          <span className="font-semibold text-gray-500">Kategori Terdeteksi:</span>
+                          <span className="font-extrabold text-indigo-700 bg-white/90 px-2 py-0.5 rounded-md border border-indigo-200 shadow-2xs">
+                            {currentSynthesis.recommendedCategory}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleApplyFullSynthesis}
+                          className="text-[11px] font-bold text-indigo-700 hover:text-indigo-900 hover:underline flex items-center gap-1"
+                        >
+                          <span>Terapkan Hasil Sintesis ke Form</span>
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   {/* Kategori Profil Bimbingan */}
                   <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
-                      Kategori Profil Bimbingan Siswa <span className="text-rose-500">*</span>
-                    </label>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider">
+                        Kategori Profil Bimbingan Siswa <span className="text-rose-500">*</span>
+                      </label>
+                      {hasPillarsData && formData.conclusion.guidanceCategory !== currentSynthesis.recommendedCategory && (
+                        <button
+                          type="button"
+                          onClick={() => setFormData({
+                            ...formData,
+                            conclusion: { ...formData.conclusion, guidanceCategory: currentSynthesis.recommendedCategory }
+                          })}
+                          className="text-[11px] font-semibold text-indigo-600 hover:underline flex items-center gap-1"
+                        >
+                          <Lightbulb className="w-3 h-3 text-amber-500" />
+                          <span>Pilih Saran Sistem: <b>{currentSynthesis.recommendedCategory}</b></span>
+                        </button>
+                      )}
+                    </div>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                       {GUIDANCE_CATEGORIES.map(cat => {
                         const isSelected = formData.conclusion.guidanceCategory === cat;
+                        const isRecommended = currentSynthesis.recommendedCategory === cat && hasPillarsData;
                         return (
                           <button
                             key={cat}
@@ -2011,12 +2381,17 @@ export const GuruWaliInitialAssessmentView: React.FC<GuruWaliInitialAssessmentVi
                               ...formData,
                               conclusion: { ...formData.conclusion, guidanceCategory: cat }
                             })}
-                            className={`p-3 rounded-xl border-2 text-left transition-all ${
+                            className={`p-3 rounded-xl border-2 text-left transition-all relative ${
                               isSelected
                                 ? 'border-indigo-600 bg-indigo-50/80 font-bold text-indigo-900 shadow-2xs'
                                 : 'border-gray-200 bg-gray-50/50 hover:bg-gray-100 text-gray-700'
                             }`}
                           >
+                            {isRecommended && (
+                              <span className="absolute -top-2 right-2 px-1.5 py-0.2 bg-amber-100 text-amber-800 text-[9px] font-extrabold rounded border border-amber-300 shadow-2xs">
+                                Saran Sistem
+                              </span>
+                            )}
                             <p className="text-xs">{cat}</p>
                           </button>
                         );
@@ -2024,10 +2399,30 @@ export const GuruWaliInitialAssessmentView: React.FC<GuruWaliInitialAssessmentVi
                     </div>
                   </div>
 
+                  {/* Kesimpulan Ringkas & Fokus Utama Pendampingan */}
                   <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
-                      Kesimpulan Ringkas & Fokus Utama Pendampingan <span className="text-rose-500">*</span>
-                    </label>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider">
+                        Kesimpulan Ringkas & Fokus Utama Pendampingan <span className="text-rose-500">*</span>
+                      </label>
+                      {hasPillarsData && (
+                        <button
+                          type="button"
+                          onClick={() => setFormData({
+                            ...formData,
+                            conclusion: {
+                              ...formData.conclusion,
+                              summaryNotes: currentSynthesis.summaryNotes,
+                              guidanceCategory: currentSynthesis.recommendedCategory
+                            }
+                          })}
+                          className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 hover:underline flex items-center gap-1"
+                        >
+                          <Wand2 className="w-3 h-3 text-indigo-500" />
+                          <span>Gunakan Sintesis Otomatis</span>
+                        </button>
+                      )}
+                    </div>
                     <textarea
                       rows={3}
                       required
@@ -2039,22 +2434,115 @@ export const GuruWaliInitialAssessmentView: React.FC<GuruWaliInitialAssessmentVi
                       })}
                       className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none leading-relaxed"
                     />
+
+                    {/* Smart Suggestion Chips */}
+                    {hasPillarsData && currentSynthesis.smartSuggestions.length > 0 && (
+                      <div className="mt-2.5 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-bold text-gray-700 flex items-center gap-1.5">
+                            <Lightbulb className="w-3.5 h-3.5 text-amber-500" />
+                            <span>Pilihan Saran Alternatif dari 4 Pilar (Klik untuk Terapkan):</span>
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {currentSynthesis.smartSuggestions.map(sugg => {
+                            const isCurrentlyApplied = formData.conclusion.summaryNotes === sugg.summaryText;
+                            return (
+                              <div
+                                key={sugg.id}
+                                onClick={() => handleApplySuggestion(sugg)}
+                                className={`p-2.5 rounded-xl border transition-all cursor-pointer group text-left shadow-2xs ${
+                                  isCurrentlyApplied
+                                    ? 'border-indigo-500 bg-indigo-50/60 ring-1 ring-indigo-400'
+                                    : 'border-gray-200 bg-white hover:border-indigo-300 hover:bg-indigo-50/20'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between gap-1 mb-1">
+                                  <span className="px-1.5 py-0.5 bg-gray-100 group-hover:bg-indigo-100 text-gray-700 group-hover:text-indigo-800 rounded text-[10px] font-bold">
+                                    {sugg.category}
+                                  </span>
+                                  <span className="text-[10px] font-bold text-indigo-600 flex items-center gap-0.5">
+                                    {isCurrentlyApplied ? (
+                                      <span className="text-emerald-600 flex items-center gap-0.5">
+                                        <Check className="w-3 h-3" /> Diterapkan
+                                      </span>
+                                    ) : (
+                                      <span className="opacity-70 group-hover:opacity-100 flex items-center gap-0.5">
+                                        Pilih Saran <ChevronRight className="w-3 h-3" />
+                                      </span>
+                                    )}
+                                  </span>
+                                </div>
+                                <p className="text-xs font-bold text-gray-800 group-hover:text-indigo-900 line-clamp-1">
+                                  {sugg.title}
+                                </p>
+                                <p className="text-[11px] text-gray-500 line-clamp-2 mt-0.5 leading-relaxed">
+                                  {sugg.summaryText}
+                                </p>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
+                  {/* Rekomendasi Awal Tindak Lanjut */}
                   <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
-                      Rekomendasi Awal Tindak Lanjut
-                    </label>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider">
+                        Rekomendasi Awal Tindak Lanjut
+                      </label>
+                      {hasPillarsData && (
+                        <button
+                          type="button"
+                          onClick={() => setFormData({
+                            ...formData,
+                            conclusion: {
+                              ...formData.conclusion,
+                              followUpRecommendations: currentSynthesis.followUpRecommendations
+                            }
+                          })}
+                          className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 hover:underline flex items-center gap-1"
+                        >
+                          <Wand2 className="w-3 h-3 text-indigo-500" />
+                          <span>Gunakan Rekomendasi Otomatis</span>
+                        </button>
+                      )}
+                    </div>
                     <textarea
-                      rows={2}
+                      rows={3}
                       placeholder="Contoh: Mengagendakan bimbingan teman sebaya untuk mata pelajaran Fisika, dorong ikut seleksi OSN"
                       value={formData.conclusion.followUpRecommendations || ''}
                       onChange={(e) => setFormData({
                         ...formData,
                         conclusion: { ...formData.conclusion, followUpRecommendations: e.target.value }
                       })}
-                      className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none leading-relaxed"
+                      className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none leading-relaxed font-sans"
                     />
+
+                    {/* Quick Action Suggestion Chips */}
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      <span className="text-[10px] font-semibold text-gray-500 mr-1 flex items-center gap-1">
+                        <Lightbulb className="w-3 h-3 text-amber-500" /> Tambah Aksi Cepat:
+                      </span>
+                      {[
+                        'Fasilitasi program bimbingan belajar sebaya mingguan',
+                        'Bimbingan persiapan seleksi kompetisi/lomba sekolah',
+                        'Penyusunan lembar komitmen belajar & pembatasan gawai',
+                        'Konsultasi minat bakat dan orientasi karier/studi lanjut',
+                        'Komunikasi koordinatif berkala bersama orang tua'
+                      ].map((actionText, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => handleAppendFollowUp(actionText)}
+                          className="px-2.5 py-1 bg-gray-100 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 border border-gray-200 text-gray-700 rounded-lg text-[10px] font-semibold transition-all flex items-center gap-1"
+                        >
+                          <span>+ {actionText}</span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
                   <div>
