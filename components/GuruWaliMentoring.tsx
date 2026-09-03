@@ -10,10 +10,11 @@ import {
   getGraduateProfileAssessments,
   getClasses,
   bulkUpdateTeacherMentees,
-  removeMenteeFromGuruWali
+  removeMenteeFromGuruWali,
+  getGuruWaliInitialAssessmentByStudent
 } from '../services/database';
 import { db } from '../services/db';
-import { Student, User, MentoringJournal, MentoringTopic, GraduateProfileAssessment, ClassRoom } from '../types';
+import { Student, User, MentoringJournal, MentoringTopic, GraduateProfileAssessment, ClassRoom, GuruWaliInitialAssessment } from '../types';
 import { 
   Users, 
   Plus, 
@@ -44,12 +45,17 @@ import {
   Edit3,
   Trash2,
   Settings,
-  FileText
+  FileText,
+  Compass,
+  ChevronDown,
+  ChevronUp,
+  Wrench
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format } from 'date-fns';
 import { id } from 'date-fns/locale';
+import { GuruWaliInitialAssessmentView } from './GuruWaliInitialAssessmentView';
 
 interface GuruWaliMentoringProps {
   user: User;
@@ -63,8 +69,14 @@ export const GuruWaliMentoring: React.FC<GuruWaliMentoringProps> = ({ user }) =>
   const [classes, setClasses] = useState<ClassRoom[]>([]);
   const [classMap, setClassMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<'LIST' | 'DETAIL' | 'FORM' | 'ASSESSMENT'>('LIST');
+  const [view, setView] = useState<'LIST' | 'INITIAL_ASSESSMENT' | 'DETAIL' | 'FORM' | 'ASSESSMENT'>('LIST');
+  const [mainTab, setMainTab] = useState<'MENTEES' | 'INITIAL_ASSESSMENT'>('MENTEES');
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Initial Assessment States
+  const [studentInitialAssessment, setStudentInitialAssessment] = useState<GuruWaliInitialAssessment | null>(null);
+  const [isCompassAccordionOpen, setIsCompassAccordionOpen] = useState(true);
+  const [initialAssessmentMap, setInitialAssessmentMap] = useState<Record<string, GuruWaliInitialAssessment>>({});
   
   // Modal Select Mentee States
   const [isSelectModalOpen, setIsSelectModalOpen] = useState(false);
@@ -123,9 +135,10 @@ export const GuruWaliMentoring: React.FC<GuruWaliMentoringProps> = ({ user }) =>
   const loadInitialData = async () => {
     setLoading(true);
     try {
-      const [menteeList, classList] = await Promise.all([
+      const [menteeList, classList, initialAssessments] = await Promise.all([
         getMenteesByGuruWali(user.id),
-        getClasses(user.id, user.schoolNpsn)
+        getClasses(user.id, user.schoolNpsn),
+        db.guruWaliInitialAssessments.where('guruWaliId').equals(user.id).toArray()
       ]);
       
       setMentees(menteeList);
@@ -136,6 +149,12 @@ export const GuruWaliMentoring: React.FC<GuruWaliMentoringProps> = ({ user }) =>
         cMap[c.id] = c.name;
       });
       setClassMap(cMap);
+
+      const aMap: Record<string, GuruWaliInitialAssessment> = {};
+      initialAssessments.forEach(a => {
+        aMap[a.studentId] = a;
+      });
+      setInitialAssessmentMap(aMap);
     } catch (e) {
       console.error('Failed to load initial guru wali data:', e);
     } finally {
@@ -249,12 +268,14 @@ export const GuruWaliMentoring: React.FC<GuruWaliMentoringProps> = ({ user }) =>
     setSelectedStudent(student);
     setLoading(true);
     try {
-      const [jData, aData] = await Promise.all([
+      const [jData, aData, initAssessment] = await Promise.all([
         getMentoringJournals(student.id, user),
-        getGraduateProfileAssessments(student.id)
+        getGraduateProfileAssessments(student.id),
+        getGuruWaliInitialAssessmentByStudent(student.id)
       ]);
       setJournals(jData.sort((a: MentoringJournal, b: MentoringJournal) => new Date(b.date).getTime() - new Date(a.date).getTime()));
       setAssessments(aData);
+      setStudentInitialAssessment(initAssessment || null);
       setView('DETAIL');
     } catch (e) {
       console.error(e);
@@ -866,8 +887,67 @@ export const GuruWaliMentoring: React.FC<GuruWaliMentoringProps> = ({ user }) =>
         )}
       </AnimatePresence>
 
+      {/* TOP NAVIGATION TABS (When no student is selected) */}
+      {!selectedStudent && (
+        <div className="flex items-center gap-2 border-b border-gray-200 pb-2 overflow-x-auto">
+          <button
+            onClick={() => {
+              setMainTab('MENTEES');
+              setView('LIST');
+            }}
+            className={`px-4 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2.5 transition-all ${
+              mainTab === 'MENTEES'
+                ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-100'
+                : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
+            }`}
+          >
+            <Users className="w-4 h-4" />
+            <span>Daftar Siswa Bimbingan</span>
+            <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+              mainTab === 'MENTEES' ? 'bg-indigo-500 text-white' : 'bg-gray-100 text-gray-700'
+            }`}>
+              {mentees.length}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setMainTab('INITIAL_ASSESSMENT')}
+            className={`px-4 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2.5 transition-all ${
+              mainTab === 'INITIAL_ASSESSMENT'
+                ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-100'
+                : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
+            }`}
+          >
+            <Compass className="w-4 h-4" />
+            <span>Identifikasi Awal Siswa Asuh</span>
+            <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+              mainTab === 'INITIAL_ASSESSMENT'
+                ? 'bg-indigo-500 text-white' 
+                : Object.keys(initialAssessmentMap).length === mentees.length && mentees.length > 0
+                  ? 'bg-emerald-100 text-emerald-800'
+                  : 'bg-amber-100 text-amber-800'
+            }`}>
+              {Object.keys(initialAssessmentMap).length}/{mentees.length}
+            </span>
+          </button>
+        </div>
+      )}
+
+      {/* TOP LEVEL: INITIAL ASSESSMENT VIEW */}
+      {!selectedStudent && mainTab === 'INITIAL_ASSESSMENT' && (
+        <GuruWaliInitialAssessmentView
+          user={user}
+          mentees={mentees}
+          classMap={classMap}
+          signatureData={signatureData}
+          onOpenSignatureSettings={() => setIsPrintModalOpen(true)}
+          onOpenMentoringForStudent={(st) => handleSelectStudent(st)}
+          onDataChanged={loadInitialData}
+        />
+      )}
+
       {/* VIEW: LIST OF MENTEES */}
-      {view === 'LIST' && (
+      {!selectedStudent && mainTab === 'MENTEES' && view === 'LIST' && (
         <>
           {/* Header Banner */}
           <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -977,6 +1057,19 @@ export const GuruWaliMentoring: React.FC<GuruWaliMentoringProps> = ({ user }) =>
                         <h4 className="font-bold text-gray-900 text-base group-hover:text-indigo-600 transition-colors line-clamp-1">
                           {student.name}
                         </h4>
+                        <div className="pt-1">
+                          {initialAssessmentMap[student.id] ? (
+                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-md text-[10px] font-semibold border border-emerald-100">
+                              <Compass className="w-3 h-3 text-emerald-600" />
+                              <span className="truncate max-w-[170px]">{initialAssessmentMap[student.id].conclusion?.guidanceCategory || 'Identifikasi Terdata'}</span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-amber-50 text-amber-700 rounded-md text-[10px] font-medium border border-amber-200">
+                              <Compass className="w-3 h-3 text-amber-500" />
+                              <span>Belum Asesmen Awal</span>
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       <button
@@ -1114,6 +1207,23 @@ export const GuruWaliMentoring: React.FC<GuruWaliMentoringProps> = ({ user }) =>
               <span>Evaluasi 8 Dimensi</span>
             </button>
 
+            <button 
+              onClick={() => setView('INITIAL_ASSESSMENT')} 
+              className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all whitespace-nowrap flex items-center gap-2 ${
+                view === 'INITIAL_ASSESSMENT' 
+                  ? 'bg-indigo-600 text-white shadow-sm' 
+                  : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+              }`}
+            >
+              <Compass className="w-4 h-4" /> 
+              <span>Identifikasi Awal Siswa</span>
+              {studentInitialAssessment ? (
+                <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+              ) : (
+                <span className="w-2 h-2 rounded-full bg-amber-400"></span>
+              )}
+            </button>
+
             <button
               onClick={handlePrintStudentReport}
               className="px-4 py-2 bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 rounded-xl text-sm font-semibold flex items-center gap-2 transition-all whitespace-nowrap"
@@ -1131,6 +1241,34 @@ export const GuruWaliMentoring: React.FC<GuruWaliMentoringProps> = ({ user }) =>
           </div>
 
           <AnimatePresence mode="wait">
+            {/* INITIAL ASSESSMENT VIEW FOR SELECTED STUDENT */}
+            {view === 'INITIAL_ASSESSMENT' && (
+              <motion.div
+                key="student_initial_assessment"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+              >
+                <GuruWaliInitialAssessmentView
+                  user={user}
+                  mentees={[selectedStudent]}
+                  classMap={classMap}
+                  signatureData={signatureData}
+                  onOpenSignatureSettings={() => setIsPrintModalOpen(true)}
+                  onOpenMentoringForStudent={(st) => {
+                    setSelectedStudent(st);
+                    setView('DETAIL');
+                  }}
+                  onDataChanged={async () => {
+                    loadInitialData();
+                    if (selectedStudent) {
+                      const updated = await getGuruWaliInitialAssessmentByStudent(selectedStudent.id);
+                      setStudentInitialAssessment(updated || null);
+                    }
+                  }}
+                />
+              </motion.div>
+            )}
             {/* DETAIL & HISTORY VIEW */}
             {view === 'DETAIL' && (
               <motion.div 
@@ -1287,6 +1425,61 @@ export const GuruWaliMentoring: React.FC<GuruWaliMentoringProps> = ({ user }) =>
                     </div>
                   </div>
 
+                  {/* Identifikasi Awal (Kompas) Card */}
+                  <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4">
+                    <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                      <h4 className="font-bold text-gray-900 text-sm flex items-center gap-2">
+                        <Compass className="w-4 h-4 text-indigo-600" />
+                        <span>Identifikasi Awal (Kompas)</span>
+                      </h4>
+                      <button
+                        onClick={() => setView('INITIAL_ASSESSMENT')}
+                        className="text-xs font-bold text-indigo-600 hover:underline"
+                      >
+                        {studentInitialAssessment ? 'Buka / Edit' : '+ Isi Sekarang'}
+                      </button>
+                    </div>
+
+                    {studentInitialAssessment ? (
+                      <div className="space-y-2.5 text-xs">
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-500 font-medium">Kategori:</span>
+                          <span className="font-bold text-indigo-700 px-2 py-0.5 bg-indigo-50 rounded-md border border-indigo-100">
+                            {studentInitialAssessment.conclusion?.guidanceCategory || 'Penguatan Akademik'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500 font-medium">Mapel Disukai:</span>
+                          <p className="font-semibold text-gray-800 line-clamp-1">{studentInitialAssessment.academic?.favoriteSubjects || '-'}</p>
+                        </div>
+                        <div>
+                          <span className="text-rose-500 font-medium">Mapel Sulit:</span>
+                          <p className="font-semibold text-rose-600 line-clamp-1">{studentInitialAssessment.academic?.difficultSubjects || '-'}</p>
+                        </div>
+                        <div>
+                          <span className="text-gray-500 font-medium">Keterampilan:</span>
+                          <p className="text-gray-700 line-clamp-1">{studentInitialAssessment.skills?.masteredSkills || '-'}</p>
+                        </div>
+                        {studentInitialAssessment.conclusion?.summaryNotes && (
+                          <div className="p-2.5 bg-indigo-50/70 rounded-xl text-indigo-950 text-[11px] leading-relaxed border border-indigo-100/60">
+                            <span className="font-bold">Fokus Guru Wali: </span>
+                            {studentInitialAssessment.conclusion.summaryNotes}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="py-4 text-center text-gray-400 text-xs space-y-2">
+                        <p>Belum ada data identifikasi awal untuk siswa ini.</p>
+                        <button
+                          onClick={() => setView('INITIAL_ASSESSMENT')}
+                          className="px-3 py-1.5 bg-indigo-50 text-indigo-700 font-bold rounded-lg hover:bg-indigo-100 transition-colors"
+                        >
+                          + Isi Identifikasi Awal
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
                   {/* 8 Dimensions Profil Lulusan Card */}
                   <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
                     <div className="flex items-center justify-between mb-5">
@@ -1427,6 +1620,121 @@ export const GuruWaliMentoring: React.FC<GuruWaliMentoringProps> = ({ user }) =>
                         </button>
                       ))}
                     </div>
+                  </div>
+
+                  {/* PATOKAN IDENTIFIKASI AWAL SISWA (KOMPAS BIMBINGAN ACCORDION) */}
+                  <div className="border border-indigo-100 bg-indigo-50/40 rounded-2xl overflow-hidden shadow-2xs">
+                    <button
+                      type="button"
+                      onClick={() => setIsCompassAccordionOpen(!isCompassAccordionOpen)}
+                      className="w-full p-3.5 flex items-center justify-between text-left hover:bg-indigo-50/70 transition-colors"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className="p-1.5 bg-indigo-600 text-white rounded-lg">
+                          <Compass className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-gray-900">
+                              Patokan Identifikasi Awal Siswa (Kompas Bimbingan)
+                            </span>
+                            {studentInitialAssessment ? (
+                              <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full text-[10px] font-bold">
+                                {studentInitialAssessment.conclusion?.guidanceCategory || 'Terdata'}
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded-full text-[10px] font-bold">
+                                Belum Diisi
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-gray-500">
+                            Gunakan preferensi akademik, bakat, target, dan karakter siswa sebagai panduan catatan sesi bimbingan.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="p-1 text-gray-400">
+                        {isCompassAccordionOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                      </div>
+                    </button>
+
+                    <AnimatePresence>
+                      {isCompassAccordionOpen && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          className="border-t border-indigo-100/80 p-4 bg-white text-xs space-y-3"
+                        >
+                          {studentInitialAssessment ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              <div className="p-3 bg-gray-50 rounded-xl space-y-1.5 border border-gray-100">
+                                <p className="font-bold text-gray-700 flex items-center gap-1.5">
+                                  <BookOpen className="w-3.5 h-3.5 text-blue-600" />
+                                  <span>Akademik & Belajar:</span>
+                                </p>
+                                <p className="text-gray-600">
+                                  <strong className="text-gray-700">Mapel Disukai:</strong> {studentInitialAssessment.academic?.favoriteSubjects || '-'}
+                                </p>
+                                <p className="text-rose-600">
+                                  <strong className="text-rose-700">Mapel Sulit:</strong> {studentInitialAssessment.academic?.difficultSubjects || '-'}
+                                </p>
+                                <p className="text-gray-600">
+                                  <strong className="text-gray-700">Kebiasaan Belajar:</strong> {studentInitialAssessment.academic?.studyHabitSchedule || '-'} ({studentInitialAssessment.academic?.studyMethod || '-'})
+                                </p>
+                              </div>
+
+                              <div className="p-3 bg-gray-50 rounded-xl space-y-1.5 border border-gray-100">
+                                <p className="font-bold text-gray-700 flex items-center gap-1.5">
+                                  <Wrench className="w-3.5 h-3.5 text-purple-600" />
+                                  <span>Keterampilan & Target:</span>
+                                </p>
+                                <p className="text-gray-600">
+                                  <strong className="text-gray-700">Keterampilan:</strong> {studentInitialAssessment.skills?.masteredSkills || '-'}
+                                </p>
+                                <p className="text-gray-600">
+                                  <strong className="text-gray-700">Ekskul:</strong> {studentInitialAssessment.skills?.extracurriculars || '-'}
+                                </p>
+                                <p className="text-amber-800">
+                                  <strong className="text-amber-900">Target Prestasi:</strong> {studentInitialAssessment.achievements?.personalGoals || '-'}
+                                </p>
+                              </div>
+
+                              <div className="p-3 bg-gray-50 rounded-xl space-y-1.5 border border-gray-100 md:col-span-2">
+                                <p className="font-bold text-gray-700 flex items-center gap-1.5">
+                                  <Compass className="w-3.5 h-3.5 text-indigo-600" />
+                                  <span>Karakter & Fokus Kompas Guru Wali:</span>
+                                </p>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-gray-600">
+                                  <div>
+                                    <span className="text-gray-500 font-medium">Karakter Menonjol:</span> {studentInitialAssessment.character?.prominentTraits || '-'}
+                                  </div>
+                                  <div>
+                                    <span className="text-rose-600 font-medium">Tantangan/Perlu Diperbaiki:</span> {studentInitialAssessment.character?.habitsToImprove || '-'}
+                                  </div>
+                                </div>
+                                {studentInitialAssessment.conclusion?.summaryNotes && (
+                                  <div className="mt-2 pt-2 border-t border-gray-200/60 text-indigo-900 font-medium bg-indigo-50/50 p-2 rounded-lg">
+                                    <span className="font-bold text-indigo-950">Fokus Pendampingan:</span> {studentInitialAssessment.conclusion.summaryNotes}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="text-center py-3 text-gray-500 space-y-2">
+                              <p className="text-xs">Siswa ini belum memiliki data asesmen identifikasi awal.</p>
+                              <button
+                                type="button"
+                                onClick={() => setView('INITIAL_ASSESSMENT')}
+                                className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-bold transition-colors"
+                              >
+                                + Isi Identifikasi Awal Sekarang
+                              </button>
+                            </div>
+                          )}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
 
                   {/* Catatan / Observasi */}
