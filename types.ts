@@ -485,6 +485,59 @@ export interface GraduateProfileAssessment extends Syncable {
   schoolNpsn: string;
 }
 
+// --- GURU WALI INITIAL ASSESSMENT (IDENTIFIKASI AWAL SISWA ASUH) ---
+export type GuidanceCategory = 'Penguatan Akademik' | 'Potensi Prestasi' | 'Kedisiplinan & Karakter' | 'Mandiri & Stabil';
+
+export interface GuruWaliInitialAssessment extends Syncable {
+  id: string;
+  studentId: string;
+  studentName?: string;
+  guruWaliId: string;
+  guruWaliName?: string;
+  schoolNpsn: string;
+  date: string; // YYYY-MM-DD
+  academicYear?: string;
+  status: 'Lengkap' | 'Belum Lengkap';
+
+  // Pilar A: Pendampingan Akademik
+  academic: {
+    favoriteSubjects: string; // Mata pelajaran yang disukai
+    difficultSubjects: string; // Mata pelajaran yang dirasa sulit
+    studyHabitSchedule: string; // Jadwal jam belajar di rumah
+    studyMethod: string; // Kebiasaan / metode belajar
+    previousGpa?: string; // Nilai rata-rata semester sebelumnya
+  };
+
+  // Pilar B: Pendampingan Keterampilan
+  skills: {
+    masteredSkills: string; // Keterampilan yang dikuasai
+    extracurriculars: string; // Kegiatan ekstrakurikuler yang diikuti
+    skillInterests: string; // Minat pengembangan keterampilan baru
+  };
+
+  // Pilar C: Pendampingan Prestasi
+  achievements: {
+    academicAchievements: string; // Prestasi akademik yang pernah diraih
+    nonAcademicAchievements: string; // Prestasi non-akademik yang pernah diraih
+    personalGoals: string; // Target prestasi pribadi di sekolah yang ingin dicapai
+  };
+
+  // Pilar D: Pendampingan Karakter
+  character: {
+    prominentTraits: string; // Nilai karakter yang dianggap paling menonjol
+    traitsToDevelop: string; // Nilai karakter yang ingin dikembangkan
+    positiveHabits: string; // Kebiasaan positif yang dimiliki
+    habitsToImprove: string; // Kebiasaan negatif yang ingin diperbaiki
+  };
+
+  // Pilar E: Kesimpulan Guru Wali
+  conclusion: {
+    guidanceCategory: GuidanceCategory; // Kategori profil bimbingan
+    summaryNotes: string; // Kesimpulan ringkas & fokus utama pendampingan
+    followUpRecommendations?: string; // Rekomendasi awal tindak lanjut
+  };
+}
+
 export interface StudentIncident extends Syncable {
   id: string;
   picketId: string; // FK to DailyPicket
