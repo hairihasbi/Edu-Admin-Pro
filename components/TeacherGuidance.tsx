@@ -13,7 +13,8 @@ import {
 import { 
   ShieldAlert, Trophy, MessageSquareHeart, Search, Plus, Trash2, 
   CalendarDays, FileWarning, User as UserIcon, AlertTriangle, Printer, FileSpreadsheet, FileText,
-  Heart, RefreshCcw, Home, Smartphone, Shield, PieChart, Activity, BarChart3, Clock, CheckCircle, AlertCircle
+  Heart, RefreshCcw, Home, Smartphone, Shield, PieChart, Activity, BarChart3, Clock, CheckCircle, AlertCircle,
+  ChevronDown, ChevronUp
 } from './Icons';
 import { db } from '../services/db';
 import * as XLSX from 'xlsx';
@@ -32,6 +33,42 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
   const [isLoadingPriority, setIsLoadingPriority] = useState(false);
   const [priorityFilter, setPriorityFilter] = useState<'ALL' | 'POINTS' | 'ABSENCE' | 'TARDY'>('ALL');
   const [prioritySearch, setPrioritySearch] = useState('');
+  const [expandedAttendanceIds, setExpandedAttendanceIds] = useState<Record<string, boolean>>({});
+
+  const toggleExpandAttendance = (studentId: string) => {
+    setExpandedAttendanceIds(prev => ({
+      ...prev,
+      [studentId]: !prev[studentId]
+    }));
+  };
+
+  const formatIndonesianDate = (dateStr: string) => {
+    if (!dateStr) return '-';
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr;
+      const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+      const dayName = days[d.getDay()];
+      const dateNum = String(d.getDate()).padStart(2, '0');
+      const monthName = months[d.getMonth()];
+      const year = d.getFullYear();
+      return `${dayName}, ${dateNum} ${monthName} ${year}`;
+    } catch {
+      return dateStr;
+    }
+  };
+
+  const formatShortDate = (dateStr: string) => {
+    if (!dateStr) return '';
+    const parts = dateStr.split('T')[0].split('-');
+    if (parts.length === 3) {
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+      const m = parseInt(parts[1], 10) - 1;
+      return `${parts[2]} ${months[m] || parts[1]}`;
+    }
+    return dateStr;
+  };
   const [classes, setClasses] = useState<ClassRoom[]>([]);
   const [allSchoolClasses, setAllSchoolClasses] = useState<ClassRoom[]>([]);
   const [students, setStudents] = useState<Student[]>([]); // For Dropdown (Filtered)
@@ -116,19 +153,35 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
   const loadPriorityData = async () => {
     setIsLoadingPriority(true);
     try {
-      // 1. Get current month range (30 days)
-      const now = new Date();
-      const thirtyDaysAgo = new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000));
-      const startOfMonth = thirtyDaysAgo.toISOString().split('T')[0];
-      const endOfMonth = now.toISOString().split('T')[0];
+      // 1. Determine classes and target students in this school
+      const schoolClasses = await getClasses('', user.schoolNpsn);
+      const schoolClassIds = new Set(schoolClasses.map(c => c.id));
 
-      // 2. We need all students, attendance, violations, and point reductions for this school
-      const [allStudents, attendance, allViolations, allReductions, allSessions, allHomeVisits, allParentCalls] = await Promise.all([
-        db.students.where('schoolNpsn').equals(user.schoolNpsn || 'DEFAULT').toArray(),
-        db.attendanceRecords
-          .where('date').between(startOfMonth, endOfMonth, true, true)
-          .filter((r: any) => (!user.schoolNpsn || r.schoolNpsn === user.schoolNpsn || r.schoolNpsn === 'DEFAULT') && (r.visibility === 'SHARED' || r.visibility === undefined))
-          .toArray(),
+      const allDbStudents = await db.students.toArray();
+      let targetStudents = allDbStudents.filter(s => {
+        if (s.schoolNpsn && user.schoolNpsn && s.schoolNpsn === user.schoolNpsn) return true;
+        if (s.classId && schoolClassIds.has(s.classId)) return true;
+        if (!user.schoolNpsn || s.schoolNpsn === 'DEFAULT') return true;
+        return false;
+      });
+
+      if (targetStudents.length === 0) {
+        targetStudents = allDbStudents;
+      }
+      const studentIdsSet = new Set(targetStudents.map(s => s.id));
+
+      // 2. Fetch all relevant tables in parallel
+      const [
+        allAttendanceRecords,
+        allRfidLogs,
+        allViolations,
+        allReductions,
+        allSessions,
+        allHomeVisits,
+        allParentCalls
+      ] = await Promise.all([
+        db.attendanceRecords.toArray(),
+        db.rfidLogs.toArray(),
         getStudentViolations(),
         getStudentPointReductions(),
         getCounselingSessions(),
@@ -142,35 +195,181 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
       setHomeVisits(allHomeVisits);
       setParentCalls(allParentCalls);
 
+      // Filter attendance records to relevant students or classes (no arbitrary 30-day cut-off or dropping empty schoolNpsn)
+      const schoolAttendance = allAttendanceRecords.filter(r => 
+        !r.deleted && 
+        (studentIdsSet.has(r.studentId) || (r.classId && schoolClassIds.has(r.classId)))
+      );
+
+      // Filter RFID logs
+      const schoolRfidLogs = allRfidLogs.filter(l => 
+        !l.deleted && 
+        (studentIdsSet.has(l.studentId) || (l.classId && schoolClassIds.has(l.classId)) || (!user.schoolNpsn || l.schoolNpsn === user.schoolNpsn))
+      );
+
       const prioritized: any[] = [];
 
-      allStudents.forEach((student: any) => {
-        const studentAtt = attendance.filter((a: any) => a.studentId === student.id).sort((a: any, b: any) => a.date.localeCompare(b.date));
-        
-        // 1. Check > 5 Tardies (T)
-        const tardies = studentAtt.filter((a: any) => a.status === 'T').length;
-        
-        // 2. Check 3 Consecutive Absences (A) - Alpha/Unexcused
-        let consecutiveAbsences = 0;
-        let maxConsecutive = 0;
-        studentAtt.forEach((record: any) => {
-          if (record.status === 'A') {
-            consecutiveAbsences++;
-            if (consecutiveAbsences > maxConsecutive) maxConsecutive = consecutiveAbsences;
-          } else {
-            consecutiveAbsences = 0;
+      targetStudents.forEach((student: any) => {
+        const studentAtt = schoolAttendance.filter((a: any) => a.studentId === student.id);
+        const studentRfid = schoolRfidLogs.filter((l: any) => l.studentId === student.id);
+        const sViolations = allViolations.filter((v: any) => v.studentId === student.id);
+        const sReductions = allReductions.filter((r: any) => r.studentId === student.id);
+
+        // --- TARDINESS PROCESSING ---
+        const tardyByDate: Record<string, { date: string; time: string; source: string; notes?: string }> = {};
+
+        // A. From manual attendance records
+        studentAtt.forEach((a: any) => {
+          const s = (a.status || '').toUpperCase().trim();
+          const isLate = s === 'T' || s === 'TERLAMBAT' || s === 'TELAT' || s === 'LATE' || (a.notes && a.notes.toLowerCase().includes('terlambat'));
+          if (isLate && a.date) {
+            tardyByDate[a.date] = {
+              date: a.date,
+              time: a.notes || 'Terlambat Masuk',
+              source: 'Presensi Guru / Mapel',
+              notes: a.notes
+            };
           }
         });
 
-        // 3. Check Points (> 20 Poin atau sudah prioritas SP-1 ke atas)
-        const sViolations = allViolations.filter((v: any) => v.studentId === student.id);
-        const sReductions = allReductions.filter((r: any) => r.studentId === student.id);
+        // B. From RFID Logs
+        studentRfid.forEach((l: any) => {
+          const date = l.timestamp ? l.timestamp.split('T')[0] : '';
+          const time = l.timestamp ? l.timestamp.split('T')[1]?.substring(0, 5) : '';
+          const isLate = l.status === 'TERLAMBAT' || (time && time > '07:30');
+          if (isLate && date) {
+            if (!tardyByDate[date]) {
+              tardyByDate[date] = {
+                date,
+                time: time ? `Pukul ${time} WIB` : 'Terlambat',
+                source: 'Tap Gate RFID / Elektronik',
+                notes: l.method ? `Metode: ${l.method}` : ''
+              };
+            } else {
+              tardyByDate[date].time = time ? `Pukul ${time} WIB` : tardyByDate[date].time;
+              tardyByDate[date].source = `${tardyByDate[date].source} & RFID`;
+            }
+          }
+        });
+
+        // C. From Disciplinary Violations
+        sViolations.forEach((v: any) => {
+          const isLateViolation = v.violationName?.toLowerCase().includes('terlambat') || v.violationName?.toLowerCase().includes('telat');
+          if (isLateViolation && v.date && !tardyByDate[v.date]) {
+            tardyByDate[v.date] = {
+              date: v.date,
+              time: `${v.points} Pts Pelanggaran`,
+              source: 'Buku Pelanggaran Guru Piket',
+              notes: v.violationName
+            };
+          }
+        });
+
+        const tardyDetailsList = Object.values(tardyByDate).sort((a, b) => b.date.localeCompare(a.date));
+        const totalTardies = tardyDetailsList.length;
+
+        // --- ABSENCE (ALFA) & ATTENDANCE SUMMARY PROCESSING ---
+        const statusByDate: Record<string, { statuses: string[]; notes?: string; source?: string }> = {};
+        let hadirCount = 0;
+        let sakitCount = 0;
+        let izinCount = 0;
+
+        studentAtt.forEach((a: any) => {
+          if (!a.date) return;
+          if (!statusByDate[a.date]) {
+            statusByDate[a.date] = { statuses: [], notes: a.notes, source: 'Presensi Guru' };
+          }
+          statusByDate[a.date].statuses.push((a.status || '').toUpperCase().trim());
+          if (a.notes) statusByDate[a.date].notes = a.notes;
+        });
+
+        studentRfid.forEach((l: any) => {
+          const date = l.timestamp ? l.timestamp.split('T')[0] : '';
+          if (date && (l.status === 'HADIR' || l.status === 'TERLAMBAT' || l.status === 'PULANG')) {
+            if (!statusByDate[date]) {
+              statusByDate[date] = { statuses: [], notes: l.method, source: 'Tap Gate RFID' };
+            }
+            statusByDate[date].statuses.push('H');
+          }
+        });
+
+        // Classify each date
+        const alfaDateList: { date: string; notes?: string; source: string }[] = [];
+        Object.entries(statusByDate).forEach(([date, data]) => {
+          const { statuses, notes, source } = data;
+          const hasHadir = statuses.some(s => s === 'H' || s === 'HADIR' || s === 'PRESENT');
+          const hasSakit = statuses.some(s => s === 'S' || s === 'SAKIT');
+          const hasIzin = statuses.some(s => s === 'I' || s === 'IZIN' || s === 'IJIN');
+          const hasAlfa = statuses.some(s => s === 'A' || s === 'ALFA' || s === 'ALPA' || s === 'ALPHA' || s === 'TK' || s === 'BOLOS' || s === 'ABSENT');
+
+          if (hasHadir) {
+            hadirCount++;
+          } else if (hasSakit) {
+            sakitCount++;
+          } else if (hasIzin) {
+            izinCount++;
+          } else if (hasAlfa) {
+            alfaDateList.push({ date, notes, source: source || 'Presensi Guru' });
+          }
+        });
+
+        // Check truant violations
+        sViolations.forEach((v: any) => {
+          const isTruant = v.violationName?.toLowerCase().includes('bolos') || 
+                           v.violationName?.toLowerCase().includes('alfa') || 
+                           v.violationName?.toLowerCase().includes('alpa') || 
+                           v.violationName?.toLowerCase().includes('tanpa keterangan');
+          if (isTruant && v.date && !alfaDateList.some(item => item.date === v.date)) {
+            alfaDateList.push({ date: v.date, notes: v.violationName, source: 'Buku Pelanggaran' });
+          }
+        });
+
+        // Sort alfa dates chronologically
+        alfaDateList.sort((a, b) => a.date.localeCompare(b.date));
+        const uniqueAlfaDateStrings = alfaDateList.map(a => a.date);
+
+        // Consecutive streak calculation
+        let currentStreak = 0;
+        let maxStreak = 0;
+        let currentStreakDates: string[] = [];
+        let maxStreakDates: string[] = [];
+
+        for (let i = 0; i < uniqueAlfaDateStrings.length; i++) {
+          if (i === 0) {
+            currentStreak = 1;
+            currentStreakDates = [uniqueAlfaDateStrings[0]];
+          } else {
+            const prevDate = new Date(uniqueAlfaDateStrings[i - 1]);
+            const currDate = new Date(uniqueAlfaDateStrings[i]);
+            const diffDays = Math.round(Math.abs(currDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24));
+            const prevDayOfWeek = prevDate.getDay(); // 5 = Friday
+
+            // Consecutive if 1 day apart or weekend span (Friday to Monday: 3 days apart)
+            const isConsecutive = diffDays === 1 || (diffDays <= 3 && (prevDayOfWeek === 5 || prevDayOfWeek === 6));
+
+            if (isConsecutive) {
+              currentStreak++;
+              currentStreakDates.push(uniqueAlfaDateStrings[i]);
+            } else {
+              currentStreak = 1;
+              currentStreakDates = [uniqueAlfaDateStrings[i]];
+            }
+          }
+          if (currentStreak > maxStreak) {
+            maxStreak = currentStreak;
+            maxStreakDates = [...currentStreakDates];
+          }
+        }
+
+        // --- DISCIPLINE POINTS PROCESSING ---
         const totalVPoints = sViolations.reduce((acc: number, v: any) => acc + (v.points || 0), 0);
         const totalRPoints = sReductions.reduce((acc: number, r: any) => acc + (r.pointsRemoved || 0), 0);
         const netPoints = Math.max(0, totalVPoints - totalRPoints);
 
-        const hasAbsenceIssue = maxConsecutive >= 3;
-        const hasTardyIssue = tardies >= 5;
+        const hasConsecutiveAbsence = maxStreak >= 3;
+        const hasAccumulatedAbsence = uniqueAlfaDateStrings.length >= 3;
+        const hasAbsenceIssue = hasConsecutiveAbsence || hasAccumulatedAbsence;
+        const hasTardyIssue = totalTardies >= 3;
         const hasPointIssue = netPoints > 20;
 
         if (hasAbsenceIssue || hasTardyIssue || hasPointIssue) {
@@ -178,7 +377,7 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
 
           if (hasPointIssue) {
             if (netPoints > 100) {
-              reasons.push(`Poin Kritis: ${netPoints} Poin (Prioritas SP-3 / DO)`);
+              reasons.push(`Poin Kritis: ${netPoints} Poin (Prioritas SP-3 / Sidang DO)`);
             } else if (netPoints > 50) {
               reasons.push(`Poin Tinggi: ${netPoints} Poin (Prioritas SP-2 / Panggilan Ortu)`);
             } else {
@@ -186,12 +385,14 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
             }
           }
 
-          if (hasAbsenceIssue) {
-            reasons.push(`Absen 3+ hari berturut-turut (${maxConsecutive} hari Alfa)`);
+          if (hasConsecutiveAbsence) {
+            reasons.push(`Absen ${maxStreak} Hari Berturut-turut (${maxStreakDates.map(formatShortDate).join(', ')})`);
+          } else if (hasAccumulatedAbsence) {
+            reasons.push(`Akumulasi ${uniqueAlfaDateStrings.length} Hari Alfa`);
           }
 
           if (hasTardyIssue) {
-            reasons.push(`Terlambat ${tardies} kali bulan ini`);
+            reasons.push(`Terlambat ${totalTardies} Kali (${tardyDetailsList.slice(0, 3).map(t => formatShortDate(t.date)).join(', ')}${totalTardies > 3 ? '...' : ''})`);
           }
 
           let spLevel: 'SP-3' | 'SP-2' | 'SP-1' | 'NORMAL' = 'NORMAL';
@@ -209,8 +410,16 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
 
           prioritized.push({
             student,
-            tardies,
-            maxConsecutive,
+            tardies: totalTardies,
+            tardyDetails: tardyDetailsList,
+            maxConsecutive: maxStreak,
+            maxConsecutiveDates: maxStreakDates,
+            totalAlfa: uniqueAlfaDateStrings.length,
+            alfaDetails: alfaDateList,
+            alfaDates: uniqueAlfaDateStrings,
+            hadirCount,
+            sakitCount,
+            izinCount,
             netPoints,
             totalVPoints,
             totalRPoints,
@@ -218,6 +427,8 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
             spTitle,
             reasons,
             hasAbsenceIssue,
+            hasConsecutiveAbsence,
+            hasAccumulatedAbsence,
             hasTardyIssue,
             hasPointIssue,
             violationsCount: sViolations.length,
@@ -236,7 +447,8 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
           else if (item.netPoints > 50) s += 500;
           else if (item.netPoints > 20) s += 250;
           s += item.netPoints * 2;
-          if (item.hasAbsenceIssue) s += 150 + (item.maxConsecutive * 15);
+          if (item.hasConsecutiveAbsence) s += 200 + (item.maxConsecutive * 20);
+          else if (item.hasAbsenceIssue) s += 120 + (item.totalAlfa * 10);
           if (item.hasTardyIssue) s += 80 + (item.tardies * 5);
           return s;
         };
@@ -332,8 +544,11 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
   };
 
   const loadFeatureData = async () => {
+    // Keep priority attendance data populated across all tabs
+    loadPriorityData();
+
     if (activeTab === 'priority') {
-       loadPriorityData();
+       // Loaded above
     } else if (activeTab === 'print' || activeTab === 'dashboard') {
        const [v, r, a, s, hv, pc] = await Promise.all([
           getStudentViolations(),
@@ -1604,7 +1819,7 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
                                 }`}
                               >
                                 <span className="w-1.5 h-1.5 rounded-full bg-orange-400" />
-                                Terlambat 5+ ({flaggedStudents.filter(f => f.hasTardyIssue).length})
+                                Terlambat ({flaggedStudents.filter(f => f.hasTardyIssue).length})
                               </button>
                             </div>
                           </div>
@@ -1624,7 +1839,31 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
                           ) : (
                             <div className="grid grid-cols-1 gap-3.5">
                               {filteredPriorityStudents.map((item) => {
-                                const { student, tardies, maxConsecutive, netPoints, totalVPoints, totalRPoints, spLevel, spTitle, reasons, hasPointIssue, hasAbsenceIssue, hasTardyIssue, violationsCount, sessionsCount, parentCallsCount, homeVisitsCount } = item;
+                                const { 
+                                  student, 
+                                  tardies, 
+                                  tardyDetails, 
+                                  maxConsecutive, 
+                                  maxConsecutiveDates, 
+                                  totalAlfa, 
+                                  alfaDetails, 
+                                  hadirCount, 
+                                  sakitCount, 
+                                  izinCount, 
+                                  netPoints, 
+                                  totalVPoints, 
+                                  totalRPoints, 
+                                  spLevel, 
+                                  spTitle, 
+                                  reasons, 
+                                  hasPointIssue, 
+                                  hasAbsenceIssue, 
+                                  hasTardyIssue, 
+                                  violationsCount, 
+                                  sessionsCount, 
+                                  parentCallsCount, 
+                                  homeVisitsCount 
+                                } = item;
                                 const stInfo = getStudentDisplay(student.id);
 
                                 return (
@@ -1711,7 +1950,7 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
                                           <div className="mt-2.5 flex flex-wrap gap-1.5">
                                             {reasons.map((reason: string, i: number) => {
                                               const isPointReason = reason.includes('Poin') || reason.includes('SP-');
-                                              const isAbsenceReason = reason.includes('Absen');
+                                              const isAbsenceReason = reason.includes('Absen') || reason.includes('Alfa');
                                               const isTardyReason = reason.includes('Terlambat');
 
                                               return (
@@ -1777,6 +2016,124 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
                                       </div>
                                     </div>
 
+                                    {/* Expandable Attendance Breakdown & Log */}
+                                    <div className="mt-3">
+                                      <button
+                                        type="button"
+                                        onClick={() => toggleExpandAttendance(student.id)}
+                                        className={`w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition border ${
+                                          hasAbsenceIssue || hasTardyIssue
+                                            ? 'bg-amber-50/70 border-amber-200 text-amber-950 hover:bg-amber-100/70'
+                                            : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'
+                                        }`}
+                                      >
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <CalendarDays size={14} className={hasAbsenceIssue ? "text-red-600 shrink-0" : "text-amber-600 shrink-0"} />
+                                          <span>
+                                            <strong>Rincian & Log Presensi:</strong>{' '}
+                                            <span className={totalAlfa > 0 ? "text-red-700 font-bold" : "text-gray-600"}>
+                                              {totalAlfa || 0} Hari Alfa
+                                            </span>
+                                            {maxConsecutive >= 3 && (
+                                              <span className="text-red-600 font-black ml-1">({maxConsecutive}x berturut-turut)</span>
+                                            )}
+                                            {' • '}
+                                            <span className={tardies > 0 ? "text-orange-700 font-bold" : "text-gray-600"}>
+                                              {tardies || 0}x Terlambat
+                                            </span>
+                                            {' • '}
+                                            <span className="text-gray-500 font-normal">
+                                              (Hadir: {hadirCount || 0}, Sakit: {sakitCount || 0}, Izin: {izinCount || 0})
+                                            </span>
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center gap-1 text-[11px] font-bold text-indigo-600 shrink-0">
+                                          <span>{expandedAttendanceIds[student.id] ? 'Tutup Rincian' : 'Buka Log Tanggal'}</span>
+                                          {expandedAttendanceIds[student.id] ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                                        </div>
+                                      </button>
+
+                                      {/* Expanded Attendance Details Box */}
+                                      {expandedAttendanceIds[student.id] && (
+                                        <div className="mt-2 p-3.5 bg-gray-50/90 border border-gray-200 rounded-xl space-y-3 text-xs animate-in fade-in duration-200">
+                                          {/* Alfa Log */}
+                                          <div>
+                                            <div className="flex items-center justify-between mb-1.5">
+                                              <span className="font-bold text-red-800 flex items-center gap-1.5">
+                                                <span className="w-2 h-2 rounded-full bg-red-600" />
+                                                Riwayat Tanggal Absen / Alfa ({totalAlfa || 0} Hari)
+                                              </span>
+                                              {maxConsecutive >= 3 && (
+                                                <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded text-[10px] font-extrabold">
+                                                  {maxConsecutive} Hari Berturut-turut
+                                                </span>
+                                              )}
+                                            </div>
+                                            {alfaDetails && alfaDetails.length > 0 ? (
+                                              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                                                {alfaDetails.map((alfa: any, idx: number) => {
+                                                  const isConsecutiveDate = maxConsecutiveDates && maxConsecutiveDates.includes(alfa.date);
+                                                  return (
+                                                    <div 
+                                                      key={idx} 
+                                                      className={`p-2 rounded-lg border text-[11px] flex flex-col justify-between ${
+                                                        isConsecutiveDate 
+                                                          ? 'bg-red-100/70 border-red-300 text-red-900 font-bold shadow-xs' 
+                                                          : 'bg-white border-red-100 text-gray-800'
+                                                      }`}
+                                                    >
+                                                      <div className="flex items-center justify-between">
+                                                        <span className="font-semibold">{formatIndonesianDate(alfa.date)}</span>
+                                                        {isConsecutiveDate && (
+                                                          <span className="text-[9px] bg-red-600 text-white px-1.5 py-0.2 rounded font-black">
+                                                            BERUNTUN
+                                                          </span>
+                                                        )}
+                                                      </div>
+                                                      <div className="text-[10px] text-gray-500 mt-1 flex justify-between">
+                                                        <span>{alfa.source}</span>
+                                                        {alfa.notes && <span className="italic truncate max-w-[120px]">{alfa.notes}</span>}
+                                                      </div>
+                                                    </div>
+                                                  );
+                                                })}
+                                              </div>
+                                            ) : (
+                                              <p className="text-gray-400 italic text-[11px]">Tidak ada catatan tanggal alfa / tanpa keterangan.</p>
+                                            )}
+                                          </div>
+
+                                          {/* Tardiness Log */}
+                                          <div className="pt-2.5 border-t border-gray-200">
+                                            <span className="font-bold text-orange-800 flex items-center gap-1.5 mb-1.5">
+                                              <span className="w-2 h-2 rounded-full bg-orange-500" />
+                                              Riwayat Tanggal Keterlambatan ({tardies || 0} Kali)
+                                            </span>
+                                            {tardyDetails && tardyDetails.length > 0 ? (
+                                              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                                                {tardyDetails.map((tardy: any, idx: number) => (
+                                                  <div key={idx} className="p-2 bg-white border border-orange-200 rounded-lg text-[11px]">
+                                                    <div className="flex items-center justify-between font-bold text-orange-950">
+                                                      <span>{formatIndonesianDate(tardy.date)}</span>
+                                                      <span className="text-[10px] bg-orange-100 text-orange-800 px-1.5 py-0.5 rounded">
+                                                        {tardy.time || 'Terlambat'}
+                                                      </span>
+                                                    </div>
+                                                    <div className="text-[10px] text-gray-500 mt-1 flex justify-between">
+                                                      <span>{tardy.source}</span>
+                                                      {tardy.notes && <span className="italic truncate max-w-[120px]">{tardy.notes}</span>}
+                                                    </div>
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            ) : (
+                                              <p className="text-gray-400 italic text-[11px]">Tidak ada catatan keterlambatan.</p>
+                                            )}
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+
                                     {/* Bottom Indicators & Link to Digital Folder */}
                                     <div className="mt-3.5 pt-3 border-t border-dashed border-gray-100 flex flex-wrap items-center justify-between gap-2">
                                       <div className="flex flex-wrap items-center gap-3 text-[11px] text-gray-500">
@@ -1784,6 +2141,15 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
                                           <div className={`w-1.5 h-1.5 rounded-full ${netPoints > 20 ? 'bg-purple-600' : 'bg-gray-400'}`} />
                                           Poin Bersih: <strong className={netPoints > 20 ? 'text-purple-800' : 'text-gray-700'}>{netPoints} Pts</strong>
                                           <span className="text-[10px] text-gray-400">({totalVPoints} Plg, -{totalRPoints} Pml)</span>
+                                        </span>
+                                        <span className="flex items-center gap-1 font-medium">
+                                          <div className={`w-1.5 h-1.5 rounded-full ${hasAbsenceIssue ? 'bg-red-600' : 'bg-gray-400'}`} />
+                                          Alfa: <strong className={hasAbsenceIssue ? 'text-red-700' : 'text-gray-700'}>{totalAlfa || 0} hari</strong>
+                                          {maxConsecutive >= 3 && <span className="text-[10px] text-red-600 font-bold">({maxConsecutive}x beruntun)</span>}
+                                        </span>
+                                        <span className="flex items-center gap-1 font-medium">
+                                          <div className={`w-1.5 h-1.5 rounded-full ${hasTardyIssue ? 'bg-orange-500' : 'bg-gray-400'}`} />
+                                          Terlambat: <strong className={hasTardyIssue ? 'text-orange-700' : 'text-gray-700'}>{tardies || 0}x</strong>
                                         </span>
                                         <span className="flex items-center gap-1 font-medium">
                                           <div className="w-1.5 h-1.5 bg-blue-500 rounded-full" />
@@ -1924,6 +2290,64 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
                                    ))}
                                 </ul>
                              ) : <p className="text-sm text-gray-400 italic">Tidak ada catatan panggilan orang tua.</p>}
+                          </div>
+
+                          <div>
+                             <h4 className="font-bold text-gray-800 mb-2 border-l-4 border-amber-500 pl-2">G. Presensi & Disiplin Kehadiran</h4>
+                             {(() => {
+                                const stPriority = flaggedStudents.find(f => f.student.id === selectedStudentId);
+                                if (!stPriority || (stPriority.totalAlfa === 0 && stPriority.tardies === 0)) {
+                                   return <p className="text-sm text-gray-400 italic">Tidak ada catatan ketidakhadiran alfa atau keterlambatan berulang.</p>;
+                                }
+                                return (
+                                   <div className="space-y-2 text-sm">
+                                      <div className="flex flex-wrap gap-4 p-3 bg-amber-50/70 border border-amber-200 rounded-lg text-xs">
+                                         <div>
+                                            <span className="text-gray-500 block">Total Alfa:</span>
+                                            <strong className="text-red-700 font-bold text-sm">{stPriority.totalAlfa} Hari</strong>
+                                            {stPriority.maxConsecutive >= 3 && (
+                                               <span className="text-red-600 block text-[11px] font-bold">({stPriority.maxConsecutive} hari berturut-turut)</span>
+                                            )}
+                                         </div>
+                                         <div>
+                                            <span className="text-gray-500 block">Total Terlambat:</span>
+                                            <strong className="text-orange-700 font-bold text-sm">{stPriority.tardies} Kali</strong>
+                                         </div>
+                                         <div>
+                                            <span className="text-gray-500 block">Status Presensi Lain:</span>
+                                            <span className="text-gray-700">{stPriority.hadirCount || 0} Hadir, {stPriority.sakitCount || 0} Sakit, {stPriority.izinCount || 0} Izin</span>
+                                         </div>
+                                      </div>
+
+                                      {stPriority.alfaDetails && stPriority.alfaDetails.length > 0 && (
+                                         <div>
+                                            <span className="font-semibold text-gray-700 text-xs block mb-1">Rincian Tanggal Alfa / Tanpa Keterangan:</span>
+                                            <ul className="list-disc pl-5 space-y-0.5 text-xs text-red-700">
+                                               {stPriority.alfaDetails.map((alfa: any, idx: number) => (
+                                                  <li key={idx}>
+                                                     {formatIndonesianDate(alfa.date)} ({alfa.source}){alfa.notes ? ` - ${alfa.notes}` : ''}
+                                                     {stPriority.maxConsecutiveDates && stPriority.maxConsecutiveDates.includes(alfa.date) ? ' [Berturut-turut]' : ''}
+                                                  </li>
+                                               ))}
+                                            </ul>
+                                         </div>
+                                      )}
+
+                                      {stPriority.tardyDetails && stPriority.tardyDetails.length > 0 && (
+                                         <div>
+                                            <span className="font-semibold text-gray-700 text-xs block mb-1">Rincian Tanggal Keterlambatan:</span>
+                                            <ul className="list-disc pl-5 space-y-0.5 text-xs text-orange-800">
+                                               {stPriority.tardyDetails.map((tardy: any, idx: number) => (
+                                                  <li key={idx}>
+                                                     {formatIndonesianDate(tardy.date)} - {tardy.time || 'Terlambat'} ({tardy.source}){tardy.notes ? ` - ${tardy.notes}` : ''}
+                                                  </li>
+                                               ))}
+                                            </ul>
+                                         </div>
+                                      )}
+                                   </div>
+                                );
+                             })()}
                           </div>
                        </div>
                     ) : (
