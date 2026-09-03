@@ -30,6 +30,8 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
   const [riskFilter, setRiskFilter] = useState('ALL');
   const [flaggedStudents, setFlaggedStudents] = useState<any[]>([]);
   const [isLoadingPriority, setIsLoadingPriority] = useState(false);
+  const [priorityFilter, setPriorityFilter] = useState<'ALL' | 'POINTS' | 'ABSENCE' | 'TARDY'>('ALL');
+  const [prioritySearch, setPrioritySearch] = useState('');
   const [classes, setClasses] = useState<ClassRoom[]>([]);
   const [allSchoolClasses, setAllSchoolClasses] = useState<ClassRoom[]>([]);
   const [students, setStudents] = useState<Student[]>([]); // For Dropdown (Filtered)
@@ -86,6 +88,7 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
       });
       
       setStudentMap(map);
+      loadPriorityData();
     };
     init();
   }, [user.id]);
@@ -96,7 +99,10 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
       const loadStudents = async () => {
         const sts = await getStudents(selectedClassId);
         setStudents(sts);
-        setSelectedStudentId(''); // Reset selected student when class changes
+        setSelectedStudentId(prev => {
+          if (prev && sts.some(s => s.id === prev)) return prev;
+          return '';
+        });
       };
       loadStudents();
     }
@@ -116,15 +122,25 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
       const startOfMonth = thirtyDaysAgo.toISOString().split('T')[0];
       const endOfMonth = now.toISOString().split('T')[0];
 
-      // 2. We need all students in this BK's managed classes
-      // Get all students for the school to be comprehensive if school-wide BK
-      const allStudents = await db.students.where('schoolNpsn').equals(user.schoolNpsn || 'DEFAULT').toArray();
-      
-      // Fetch shared attendance records for the school this month
-      const attendance = await db.attendanceRecords
-        .where('date').between(startOfMonth, endOfMonth, true, true)
-        .filter((r: any) => r.schoolNpsn === user.schoolNpsn && (r.visibility === 'SHARED' || r.visibility === undefined))
-        .toArray();
+      // 2. We need all students, attendance, violations, and point reductions for this school
+      const [allStudents, attendance, allViolations, allReductions, allSessions, allHomeVisits, allParentCalls] = await Promise.all([
+        db.students.where('schoolNpsn').equals(user.schoolNpsn || 'DEFAULT').toArray(),
+        db.attendanceRecords
+          .where('date').between(startOfMonth, endOfMonth, true, true)
+          .filter((r: any) => (!user.schoolNpsn || r.schoolNpsn === user.schoolNpsn || r.schoolNpsn === 'DEFAULT') && (r.visibility === 'SHARED' || r.visibility === undefined))
+          .toArray(),
+        getStudentViolations(),
+        getStudentPointReductions(),
+        getCounselingSessions(),
+        getHomeVisits(user.schoolNpsn || 'DEFAULT'),
+        getParentCalls(user.schoolNpsn || 'DEFAULT')
+      ]);
+
+      setViolations(allViolations);
+      setReductions(allReductions);
+      setSessions(allSessions);
+      setHomeVisits(allHomeVisits);
+      setParentCalls(allParentCalls);
 
       const prioritized: any[] = [];
 
@@ -142,22 +158,89 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
             consecutiveAbsences++;
             if (consecutiveAbsences > maxConsecutive) maxConsecutive = consecutiveAbsences;
           } else {
-            // Note: only reset on any status that is NOT Alpha
             consecutiveAbsences = 0;
           }
         });
 
-        if (maxConsecutive >= 3 || tardies >= 5) {
+        // 3. Check Points (> 20 Poin atau sudah prioritas SP-1 ke atas)
+        const sViolations = allViolations.filter((v: any) => v.studentId === student.id);
+        const sReductions = allReductions.filter((r: any) => r.studentId === student.id);
+        const totalVPoints = sViolations.reduce((acc: number, v: any) => acc + (v.points || 0), 0);
+        const totalRPoints = sReductions.reduce((acc: number, r: any) => acc + (r.pointsRemoved || 0), 0);
+        const netPoints = Math.max(0, totalVPoints - totalRPoints);
+
+        const hasAbsenceIssue = maxConsecutive >= 3;
+        const hasTardyIssue = tardies >= 5;
+        const hasPointIssue = netPoints > 20;
+
+        if (hasAbsenceIssue || hasTardyIssue || hasPointIssue) {
+          const reasons: string[] = [];
+
+          if (hasPointIssue) {
+            if (netPoints > 100) {
+              reasons.push(`Poin Kritis: ${netPoints} Poin (Prioritas SP-3 / DO)`);
+            } else if (netPoints > 50) {
+              reasons.push(`Poin Tinggi: ${netPoints} Poin (Prioritas SP-2 / Panggilan Ortu)`);
+            } else {
+              reasons.push(`Poin Disiplin: ${netPoints} Poin (Prioritas SP-1)`);
+            }
+          }
+
+          if (hasAbsenceIssue) {
+            reasons.push(`Absen 3+ hari berturut-turut (${maxConsecutive} hari Alfa)`);
+          }
+
+          if (hasTardyIssue) {
+            reasons.push(`Terlambat ${tardies} kali bulan ini`);
+          }
+
+          let spLevel: 'SP-3' | 'SP-2' | 'SP-1' | 'NORMAL' = 'NORMAL';
+          let spTitle = 'Prioritas SP-1';
+          if (netPoints > 100) {
+            spLevel = 'SP-3';
+            spTitle = 'SP-3 / Sidang DO';
+          } else if (netPoints > 50) {
+            spLevel = 'SP-2';
+            spTitle = 'SP-2 / Panggilan Ortu';
+          } else if (netPoints > 20) {
+            spLevel = 'SP-1';
+            spTitle = 'Prioritas SP-1';
+          }
+
           prioritized.push({
             student,
             tardies,
             maxConsecutive,
-            reasons: [
-              ...(maxConsecutive >= 3 ? [`Absen 3 hari berturut-turut (${maxConsecutive} hari)`] : []),
-              ...(tardies >= 5 ? [`Terlambat ${tardies} kali bulan ini`] : [])
-            ]
+            netPoints,
+            totalVPoints,
+            totalRPoints,
+            spLevel,
+            spTitle,
+            reasons,
+            hasAbsenceIssue,
+            hasTardyIssue,
+            hasPointIssue,
+            violationsCount: sViolations.length,
+            sessionsCount: allSessions.filter((s: any) => s.studentId === student.id).length,
+            parentCallsCount: allParentCalls.filter((pc: any) => pc.studentId === student.id).length,
+            homeVisitsCount: allHomeVisits.filter((hv: any) => hv.studentId === student.id).length
           });
         }
+      });
+
+      // Priority sort order: SP-3, SP-2, SP-1, then net points, then chronic absences
+      prioritized.sort((a, b) => {
+        const score = (item: any) => {
+          let s = 0;
+          if (item.netPoints > 100) s += 1000;
+          else if (item.netPoints > 50) s += 500;
+          else if (item.netPoints > 20) s += 250;
+          s += item.netPoints * 2;
+          if (item.hasAbsenceIssue) s += 150 + (item.maxConsecutive * 15);
+          if (item.hasTardyIssue) s += 80 + (item.tardies * 5);
+          return s;
+        };
+        return score(b) - score(a);
       });
 
       setFlaggedStudents(prioritized);
@@ -221,6 +304,30 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
         homeVisits: sHomeVisits,
         parentCalls: sParentCalls
       };
+    });
+  };
+
+  const getFilteredPriorityStudents = () => {
+    return flaggedStudents.filter((item) => {
+      // Filter by class if selected in sidebar
+      if (selectedClassId && item.student.classId !== selectedClassId) return false;
+
+      // Filter by category
+      if (priorityFilter === 'POINTS' && !item.hasPointIssue) return false;
+      if (priorityFilter === 'ABSENCE' && !item.hasAbsenceIssue) return false;
+      if (priorityFilter === 'TARDY' && !item.hasTardyIssue) return false;
+
+      // Filter by search query
+      if (prioritySearch.trim()) {
+        const q = prioritySearch.toLowerCase();
+        const stInfo = getStudentDisplay(item.student.id);
+        const nameMatch = item.student.name?.toLowerCase().includes(q);
+        const nisMatch = item.student.nis?.toLowerCase().includes(q);
+        const classMatch = (stInfo?.className || item.student.classId || '').toLowerCase().includes(q);
+        if (!nameMatch && !nisMatch && !classMatch) return false;
+      }
+
+      return true;
     });
   };
 
@@ -822,6 +929,11 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
             }`}
           >
             <AlertTriangle size={16} /> Monitor Prioritas
+            {flaggedStudents.length > 0 && (
+              <span className="px-1.5 py-0.5 text-[10px] font-extrabold rounded-full bg-red-600 text-white shadow-xs">
+                {flaggedStudents.length}
+              </span>
+            )}
           </button>
           <button
             onClick={() => setActiveTab('print')}
@@ -867,7 +979,7 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
                        {(activeTab === 'homeVisits' || activeTab === 'parentCalls' ? allSchoolClasses : classes).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                  </div>
-                 {activeTab !== 'dashboard' && (
+                 {activeTab !== 'dashboard' && activeTab !== 'priority' && (
                     <div>
                        <label className="block text-xs font-semibold text-gray-500 mb-1">Pilih Siswa</label>
                        <select 
@@ -925,23 +1037,78 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
               )}
 
               {activeTab === 'priority' && (
-                <div className="p-4 bg-red-50 rounded-lg border border-red-100 text-sm">
-                  <p className="text-red-700 font-medium mb-2 flex items-center gap-1">
-                    <AlertTriangle size={14} /> Sistem Deteksi BK
-                  </p>
-                  <p className="text-red-600 text-xs leading-relaxed">
-                    Sistem secara otomatis memindai seluruh data kehadiran bulan ini untuk menemukan pola ketidakhadiran yang mengkhawatirkan.
-                  </p>
-                  <div className="mt-4 pt-4 border-t border-red-200 space-y-2">
-                    <div className="flex items-center gap-2 text-xs text-red-800">
-                      <div className="w-2 h-2 rounded-full bg-red-500" />
-                      3+ Hari Absen Berturut-turut
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-red-800">
-                      <div className="w-2 h-2 rounded-full bg-orange-500" />
-                      5+ Kali Terlambat / Bulan
+                <div className="space-y-4">
+                  <div className="p-4 bg-gradient-to-br from-red-50 via-amber-50 to-orange-50 rounded-xl border border-red-200/80 text-sm">
+                    <p className="text-red-800 font-bold mb-1.5 flex items-center gap-1.5">
+                      <AlertTriangle size={15} className="text-red-600" /> Kriteria Deteksi Otomatis BK
+                    </p>
+                    <p className="text-gray-600 text-xs leading-relaxed">
+                      Sistem memindai rekam presensi harian (alfa & terlambat) serta siswa dengan akumulasi &gt; 20 poin (Prioritas SP-1 ke atas).
+                    </p>
+                    <div className="mt-3 pt-3 border-t border-red-200/60 space-y-2">
+                      <div className="flex items-start gap-2 text-xs text-purple-900">
+                        <div className="w-2.5 h-2.5 rounded-full bg-purple-600 mt-0.5 shrink-0" />
+                        <div>
+                          <span className="font-bold">Poin &gt; 20 / Prioritas SP-1+</span>
+                          <p className="text-[10px] text-gray-500">Poin sanksi aktif SP-1, SP-2, SP-3</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-2 text-xs text-red-900">
+                        <div className="w-2.5 h-2.5 rounded-full bg-red-600 mt-0.5 shrink-0" />
+                        <div>
+                          <span className="font-bold">3+ Hari Absen Berturut-turut</span>
+                          <p className="text-[10px] text-gray-500">Pola ketidakhadiran alfa/bolos</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-2 text-xs text-orange-900">
+                        <div className="w-2.5 h-2.5 rounded-full bg-orange-500 mt-0.5 shrink-0" />
+                        <div>
+                          <span className="font-bold">5+ Kali Terlambat / Bulan</span>
+                          <p className="text-[10px] text-gray-500">Keterlambatan berulang presensi</p>
+                        </div>
+                      </div>
                     </div>
                   </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 mb-1">Cari Siswa Terdeteksi</label>
+                    <div className="relative">
+                      <input 
+                        type="text" 
+                        placeholder="Ketik nama atau NIS..." 
+                        className="w-full border border-gray-300 rounded-lg p-2 pl-8 text-xs focus:ring-2 focus:ring-red-500 text-gray-800"
+                        value={prioritySearch}
+                        onChange={(e) => setPrioritySearch(e.target.value)}
+                      />
+                      <div className="absolute left-2.5 top-2.5 text-gray-400">
+                        <Search size={14} />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 mb-1">Filter Kategori Deteksi</label>
+                    <select
+                      className="w-full border border-gray-300 rounded-lg p-2 text-xs text-gray-700 font-medium"
+                      value={priorityFilter}
+                      onChange={(e) => setPriorityFilter(e.target.value as any)}
+                    >
+                      <option value="ALL">Semua Kriteria Prioritas ({flaggedStudents.length})</option>
+                      <option value="POINTS">Poin &gt; 20 / SP-1+ ({flaggedStudents.filter(f => f.hasPointIssue).length})</option>
+                      <option value="ABSENCE">Absen 3+ Hari Berturut-turut ({flaggedStudents.filter(f => f.hasAbsenceIssue).length})</option>
+                      <option value="TARDY">Terlambat 5+ Kali ({flaggedStudents.filter(f => f.hasTardyIssue).length})</option>
+                    </select>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={loadPriorityData}
+                    disabled={isLoadingPriority}
+                    className="w-full py-2 px-3 bg-red-600 text-white rounded-lg text-xs font-bold hover:bg-red-700 transition flex items-center justify-center gap-1.5 shadow-sm active:scale-95 disabled:opacity-50"
+                  >
+                    <RefreshCcw size={13} className={isLoadingPriority ? "animate-spin" : ""} />
+                    {isLoadingPriority ? 'Memindai Ulang...' : 'Pindai Ulang Sistem'}
+                  </button>
                 </div>
               )}
 
@@ -1347,110 +1514,318 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
                  <div className="divide-y divide-gray-100 max-h-[600px] overflow-y-auto">
                   
                   {/* MONITOR PRIORITAS TAB */}
-                  {activeTab === 'priority' && (
+                  {activeTab === 'priority' && (() => {
+                    const filteredPriorityStudents = getFilteredPriorityStudents();
+
+                    return (
                     <div className="p-4 space-y-4">
                       {isLoadingPriority ? (
-                        <div className="flex flex-col items-center justify-center py-12 text-gray-400">
-                          <RefreshCcw size={32} className="animate-spin mb-4 opacity-50" />
-                          <p>Menganalisis data kehadiran...</p>
+                        <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+                          <RefreshCcw size={36} className="animate-spin mb-4 text-red-500 opacity-70" />
+                          <p className="font-semibold text-gray-700 text-sm">Menganalisis data presensi & akumulasi poin kedisiplinan...</p>
+                          <p className="text-xs text-gray-400 mt-1">Memindai data presensi harian, buku pelanggaran siswa, dan ambang batas SP-1 (&gt; 20 poin)</p>
                         </div>
                       ) : flaggedStudents.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-12 text-emerald-500">
-                          <ShieldAlert size={48} className="mb-4 opacity-20" />
-                          <p className="font-medium text-center">Tidak ada siswa yang memerlukan tindakan prioritas saat ini.</p>
-                          <p className="text-xs text-gray-400 mt-1 uppercase tracking-wider font-bold">Safe Zone</p>
+                        <div className="flex flex-col items-center justify-center py-16 text-emerald-600 bg-emerald-50/50 rounded-2xl border border-emerald-100 m-2">
+                          <ShieldAlert size={52} className="mb-3 text-emerald-500 opacity-60" />
+                          <p className="font-bold text-base text-gray-800 text-center">Tidak ada siswa yang memerlukan tindakan prioritas saat ini.</p>
+                          <p className="text-xs text-emerald-700 mt-1 font-medium text-center max-w-md">
+                            Seluruh siswa dalam zona aman: tidak terdeteksi 3+ hari absen berturut-turut, 5+ kali terlambat sebulan, maupun siswa dengan akumulasi poin &gt; 20 (SP-1).
+                          </p>
+                          <span className="mt-3 px-3 py-1 bg-emerald-100 text-emerald-800 text-[11px] rounded-full uppercase tracking-wider font-extrabold">
+                            Safe Zone
+                          </span>
                         </div>
                       ) : (
                         <div className="space-y-4">
-                          <div className="flex items-center justify-between px-2">
-                            <h4 className="text-sm font-bold text-red-600 flex items-center gap-2">
-                              <AlertTriangle size={16} /> Siswa Perlu Perhatian Khusus ({flaggedStudents.length})
-                            </h4>
-                            <span className="text-[10px] text-gray-400 font-mono">Last updated: {new Date().toLocaleTimeString()}</span>
+                          {/* Header Summary & Filter Chips */}
+                          <div className="bg-gradient-to-r from-red-50/70 via-orange-50/50 to-purple-50/70 p-3.5 rounded-xl border border-red-100 flex flex-wrap items-center justify-between gap-3">
+                            <div className="flex items-center gap-2.5">
+                              <span className="p-2 bg-red-600 text-white rounded-lg shadow-xs">
+                                <AlertTriangle size={18} />
+                              </span>
+                              <div>
+                                <h4 className="text-sm font-extrabold text-gray-900 flex items-center gap-2">
+                                  Siswa Perlu Perhatian Khusus
+                                  <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs font-bold">
+                                    {filteredPriorityStudents.length} {filteredPriorityStudents.length !== flaggedStudents.length ? `dari ${flaggedStudents.length}` : 'Siswa'}
+                                  </span>
+                                </h4>
+                                <p className="text-[11px] text-gray-500">
+                                  Prioritas berdasarkan ketidakhadiran alfa, keterlambatan, dan akumulasi poin sanksi (&gt; 20 poin / SP-1 ke atas)
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Filter Chips */}
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => setPriorityFilter('ALL')}
+                                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 ${
+                                  priorityFilter === 'ALL'
+                                    ? 'bg-gray-900 text-white shadow-xs'
+                                    : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-100'
+                                }`}
+                              >
+                                Semua ({flaggedStudents.length})
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setPriorityFilter('POINTS')}
+                                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 ${
+                                  priorityFilter === 'POINTS'
+                                    ? 'bg-purple-700 text-white shadow-xs'
+                                    : 'bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100'
+                                }`}
+                              >
+                                <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
+                                Poin &gt; 20 / SP-1+ ({flaggedStudents.filter(f => f.hasPointIssue).length})
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setPriorityFilter('ABSENCE')}
+                                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 ${
+                                  priorityFilter === 'ABSENCE'
+                                    ? 'bg-red-600 text-white shadow-xs'
+                                    : 'bg-red-50 text-red-700 border border-red-200 hover:bg-red-100'
+                                }`}
+                              >
+                                <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
+                                Absen 3+ Hari ({flaggedStudents.filter(f => f.hasAbsenceIssue).length})
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setPriorityFilter('TARDY')}
+                                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 ${
+                                  priorityFilter === 'TARDY'
+                                    ? 'bg-orange-600 text-white shadow-xs'
+                                    : 'bg-orange-50 text-orange-700 border border-orange-200 hover:bg-orange-100'
+                                }`}
+                              >
+                                <span className="w-1.5 h-1.5 rounded-full bg-orange-400" />
+                                Terlambat 5+ ({flaggedStudents.filter(f => f.hasTardyIssue).length})
+                              </button>
+                            </div>
                           </div>
-                          <div className="grid grid-cols-1 gap-4">
-                            {flaggedStudents.map(({ student, tardies, maxConsecutive, reasons }) => {
-                              const stInfo = getStudentDisplay(student.id);
-                              return (
-                                <div key={student.id} className="bg-white border border-red-100 rounded-xl p-4 shadow-sm hover:shadow-md transition-all duration-300 group">
-                                  <div className="flex flex-col md:flex-row justify-between items-start gap-4">
-                                    <div className="flex gap-4">
-                                      <div className="relative">
-                                        <div className="w-12 h-12 bg-red-50 rounded-2xl flex items-center justify-center text-red-500 font-bold text-lg ring-2 ring-red-100">
-                                          {student.name.charAt(0)}
+
+                          {/* Student Cards */}
+                          {filteredPriorityStudents.length === 0 ? (
+                            <div className="p-8 text-center bg-white rounded-xl border border-gray-100 text-gray-400">
+                              <p className="text-sm font-medium">Tidak ada siswa yang sesuai kriteria filter saat ini.</p>
+                              <button
+                                type="button"
+                                onClick={() => { setPriorityFilter('ALL'); setPrioritySearch(''); }}
+                                className="mt-2 text-xs text-indigo-600 font-bold hover:underline"
+                              >
+                                Reset Filter & Pencarian
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-1 gap-3.5">
+                              {filteredPriorityStudents.map((item) => {
+                                const { student, tardies, maxConsecutive, netPoints, totalVPoints, totalRPoints, spLevel, spTitle, reasons, hasPointIssue, hasAbsenceIssue, hasTardyIssue, violationsCount, sessionsCount, parentCallsCount, homeVisitsCount } = item;
+                                const stInfo = getStudentDisplay(student.id);
+
+                                return (
+                                  <div 
+                                    key={student.id} 
+                                    className={`bg-white border rounded-xl p-4 shadow-sm hover:shadow-md transition-all duration-300 group ${
+                                      spLevel === 'SP-3' 
+                                        ? 'border-red-300 bg-red-50/20 ring-1 ring-red-200' 
+                                        : spLevel === 'SP-2' 
+                                        ? 'border-orange-200 bg-orange-50/15' 
+                                        : hasPointIssue 
+                                        ? 'border-purple-200 bg-purple-50/15' 
+                                        : 'border-red-100'
+                                    }`}
+                                  >
+                                    <div className="flex flex-col md:flex-row justify-between items-start gap-4">
+                                      <div className="flex gap-3.5 items-start flex-1 min-w-0">
+                                        <div className="relative shrink-0">
+                                          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-extrabold text-base ring-2 ${
+                                            spLevel === 'SP-3' 
+                                              ? 'bg-red-100 text-red-700 ring-red-300' 
+                                              : spLevel === 'SP-2' 
+                                              ? 'bg-orange-100 text-orange-700 ring-orange-300' 
+                                              : hasPointIssue 
+                                              ? 'bg-purple-100 text-purple-700 ring-purple-300' 
+                                              : 'bg-red-50 text-red-600 ring-red-100'
+                                          }`}>
+                                            {student.name.charAt(0)}
+                                          </div>
+                                          <div className={`absolute -top-1 -right-1 w-4 h-4 rounded-full border-2 border-white flex items-center justify-center ${
+                                            spLevel === 'SP-3' 
+                                              ? 'bg-red-600 animate-ping' 
+                                              : spLevel === 'SP-2' 
+                                              ? 'bg-orange-500' 
+                                              : hasPointIssue 
+                                              ? 'bg-purple-600' 
+                                              : 'bg-red-500'
+                                          }`}>
+                                            <AlertTriangle size={8} className="text-white" />
+                                          </div>
                                         </div>
-                                        <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-white flex items-center justify-center">
-                                          <AlertTriangle size={8} className="text-white" />
+
+                                        <div className="min-w-0 flex-1">
+                                          <div className="flex flex-wrap items-center gap-2 mb-1">
+                                            <h5 className="font-extrabold text-gray-900 group-hover:text-red-600 transition-colors text-sm truncate">
+                                              {student.name}
+                                            </h5>
+
+                                            {/* Status Badge SP */}
+                                            {spLevel === 'SP-3' && (
+                                              <span className="px-2 py-0.5 bg-red-100 text-red-800 border border-red-300 rounded-md text-[10px] font-black uppercase tracking-tight flex items-center gap-1">
+                                                <AlertTriangle size={10} className="text-red-600" /> SP-3 / Sidang DO ({netPoints} Pts)
+                                              </span>
+                                            )}
+                                            {spLevel === 'SP-2' && (
+                                              <span className="px-2 py-0.5 bg-orange-100 text-orange-800 border border-orange-300 rounded-md text-[10px] font-black uppercase tracking-tight flex items-center gap-1">
+                                                <AlertTriangle size={10} className="text-orange-600" /> SP-2 / Panggilan Ortu ({netPoints} Pts)
+                                              </span>
+                                            )}
+                                            {spLevel === 'SP-1' && (
+                                              <span className="px-2 py-0.5 bg-purple-100 text-purple-800 border border-purple-300 rounded-md text-[10px] font-black uppercase tracking-tight flex items-center gap-1">
+                                                <AlertCircle size={10} className="text-purple-600" /> Prioritas SP-1 ({netPoints} Pts)
+                                              </span>
+                                            )}
+                                            {netPoints <= 20 && netPoints > 0 && (
+                                              <span className="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-md text-[10px] font-semibold">
+                                                {netPoints} Pts Net
+                                              </span>
+                                            )}
+                                          </div>
+
+                                          <p className="text-xs text-gray-500 flex items-center gap-1.5 font-medium">
+                                            <Shield size={12} className="text-gray-400" />
+                                            <span>Kelas: <strong className="text-gray-700">{stInfo?.className || student.classId}</strong></span>
+                                            {student.nis && (
+                                              <>
+                                                <span>•</span>
+                                                <span>NIS: <strong className="text-gray-700">{student.nis}</strong></span>
+                                              </>
+                                            )}
+                                          </p>
+
+                                          {/* Reasons Badges */}
+                                          <div className="mt-2.5 flex flex-wrap gap-1.5">
+                                            {reasons.map((reason: string, i: number) => {
+                                              const isPointReason = reason.includes('Poin') || reason.includes('SP-');
+                                              const isAbsenceReason = reason.includes('Absen');
+                                              const isTardyReason = reason.includes('Terlambat');
+
+                                              return (
+                                                <span 
+                                                  key={i} 
+                                                  className={`px-2.5 py-1 text-[10px] rounded-lg font-bold border flex items-center gap-1 ${
+                                                    isPointReason
+                                                      ? spLevel === 'SP-3'
+                                                        ? 'bg-red-100 text-red-800 border-red-200 font-extrabold'
+                                                        : spLevel === 'SP-2'
+                                                        ? 'bg-orange-100 text-orange-800 border-orange-200 font-extrabold'
+                                                        : 'bg-purple-50 text-purple-800 border-purple-200'
+                                                      : isAbsenceReason
+                                                      ? 'bg-red-50 text-red-700 border-red-200'
+                                                      : 'bg-orange-50 text-orange-700 border-orange-200'
+                                                  }`}
+                                                >
+                                                  {isPointReason && <ShieldAlert size={11} className="shrink-0" />}
+                                                  {isAbsenceReason && <CalendarDays size={11} className="shrink-0" />}
+                                                  {isTardyReason && <AlertCircle size={11} className="shrink-0" />}
+                                                  {reason}
+                                                </span>
+                                              );
+                                            })}
+                                          </div>
                                         </div>
                                       </div>
-                                      <div>
-                                        <h5 className="font-bold text-gray-800 group-hover:text-red-600 transition-colors">{student.name}</h5>
-                                        <p className="text-xs text-gray-500 flex items-center gap-1 font-medium italic">
-                                          <Shield size={12} /> Kelas {stInfo?.className || student.classId}
-                                        </p>
-                                        <div className="mt-3 flex flex-wrap gap-2">
-                                          {reasons.map((reason: string, i: number) => (
-                                            <span key={i} className="px-2.5 py-1 bg-red-50 text-red-700 text-[10px] rounded-lg font-bold border border-red-100">
-                                              {reason}
-                                            </span>
-                                          ))}
-                                        </div>
+
+                                      {/* Quick Action Buttons */}
+                                      <div className="flex flex-row md:flex-col gap-1.5 w-full md:w-auto shrink-0">
+                                        <button 
+                                          type="button"
+                                          onClick={() => {
+                                            setSelectedClassId(student.classId);
+                                            setSelectedStudentId(student.id);
+                                            setActiveTab('parentCalls');
+                                          }}
+                                          className={`flex-1 text-[11px] px-3.5 py-1.5 rounded-lg font-bold transition-all shadow-xs flex items-center justify-center gap-1 ${
+                                            spLevel === 'SP-2' || spLevel === 'SP-3'
+                                              ? 'bg-red-600 text-white hover:bg-red-700 hover:scale-105'
+                                              : 'bg-red-50 text-red-700 hover:bg-red-600 hover:text-white'
+                                          }`}
+                                          title="Buat Surat Panggilan Orang Tua Siswa"
+                                        >
+                                          <Smartphone size={12} /> Panggilan Ortu
+                                        </button>
+                                        <button 
+                                          type="button"
+                                          onClick={() => {
+                                            setSelectedClassId(student.classId);
+                                            setSelectedStudentId(student.id);
+                                            setActiveTab('counseling');
+                                          }}
+                                          className={`flex-1 text-[11px] px-3.5 py-1.5 rounded-lg font-bold transition-all shadow-xs flex items-center justify-center gap-1 ${
+                                            spLevel === 'SP-1'
+                                              ? 'bg-indigo-600 text-white hover:bg-indigo-700 hover:scale-105'
+                                              : 'bg-white text-gray-700 border border-gray-200 hover:bg-indigo-50 hover:text-indigo-700'
+                                          }`}
+                                          title="Catat / Jadwalkan Sesi Konseling Siswa"
+                                        >
+                                          <MessageSquareHeart size={12} /> Jadwalkan Konseling
+                                        </button>
                                       </div>
                                     </div>
-                                    <div className="flex flex-row md:flex-col gap-2 w-full md:w-auto">
+
+                                    {/* Bottom Indicators & Link to Digital Folder */}
+                                    <div className="mt-3.5 pt-3 border-t border-dashed border-gray-100 flex flex-wrap items-center justify-between gap-2">
+                                      <div className="flex flex-wrap items-center gap-3 text-[11px] text-gray-500">
+                                        <span className="flex items-center gap-1 font-medium">
+                                          <div className={`w-1.5 h-1.5 rounded-full ${netPoints > 20 ? 'bg-purple-600' : 'bg-gray-400'}`} />
+                                          Poin Bersih: <strong className={netPoints > 20 ? 'text-purple-800' : 'text-gray-700'}>{netPoints} Pts</strong>
+                                          <span className="text-[10px] text-gray-400">({totalVPoints} Plg, -{totalRPoints} Pml)</span>
+                                        </span>
+                                        <span className="flex items-center gap-1 font-medium">
+                                          <div className="w-1.5 h-1.5 bg-blue-500 rounded-full" />
+                                          Konseling BK: <strong className="text-gray-700">{sessionsCount} sesi</strong>
+                                        </span>
+                                        {parentCallsCount > 0 && (
+                                          <span className="flex items-center gap-1 font-medium">
+                                            <div className="w-1.5 h-1.5 bg-pink-500 rounded-full" />
+                                            Panggilan: <strong className="text-gray-700">{parentCallsCount}x</strong>
+                                          </span>
+                                        )}
+                                        {homeVisitsCount > 0 && (
+                                          <span className="flex items-center gap-1 font-medium">
+                                            <div className="w-1.5 h-1.5 bg-orange-500 rounded-full" />
+                                            Home Visit: <strong className="text-gray-700">{homeVisitsCount}x</strong>
+                                          </span>
+                                        )}
+                                      </div>
+
                                       <button 
+                                        type="button"
                                         onClick={() => {
                                           setSelectedClassId(student.classId);
                                           setSelectedStudentId(student.id);
-                                          setActiveTab('parentCalls');
+                                          setActiveTab('print');
                                         }}
-                                        className="flex-1 text-[11px] bg-red-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-black hover:scale-105 transition-all shadow-sm"
+                                        className="text-[11px] text-indigo-600 font-extrabold flex items-center gap-1 hover:text-indigo-800 hover:underline transition-colors ml-auto"
+                                        title="Buka Folder Rekam Jejak Digital & Cetak Dokumen"
                                       >
-                                        Panggilan Ortu
-                                      </button>
-                                      <button 
-                                        onClick={() => {
-                                          setSelectedClassId(student.classId);
-                                          setSelectedStudentId(student.id);
-                                          setActiveTab('counseling');
-                                        }}
-                                        className="flex-1 text-[11px] bg-white text-gray-700 border border-gray-200 px-4 py-2 rounded-xl font-bold hover:bg-blue-50 hover:text-blue-600 hover:border-blue-100 transition-all shadow-sm"
-                                      >
-                                        Jadwalkan Konseling
+                                        <Search size={12} strokeWidth={2.5} /> Buka Folder Digital & Cetak
                                       </button>
                                     </div>
                                   </div>
-                                  
-                                  <div className="mt-5 pt-4 border-t border-dashed border-gray-100 flex items-center justify-between">
-                                    <div className="flex gap-4">
-                                      <div className="flex items-center gap-1.5 text-[10px] text-gray-500 font-medium">
-                                        <div className="w-1.5 h-1.5 bg-red-400 rounded-full" />
-                                        Pelanggaran: {violations.filter(v => v.studentId === student.id).length}
-                                      </div>
-                                      <div className="flex items-center gap-1.5 text-[10px] text-gray-500 font-medium">
-                                        <div className="w-1.5 h-1.5 bg-blue-400 rounded-full" />
-                                        Konseling: {sessions.filter(s => s.studentId === student.id).length}
-                                      </div>
-                                    </div>
-                                    <button 
-                                      onClick={() => {
-                                        setSelectedClassId(student.classId);
-                                        setSelectedStudentId(student.id);
-                                        setActiveTab('print');
-                                      }}
-                                      className="text-[10px] text-blue-600 font-black tracking-tighter uppercase flex items-center gap-1 hover:text-red-600 transition-colors"
-                                    >
-                                      <Search size={12} strokeWidth={3} /> Buka Folder Digital
-                                    </button>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
-                  )}
+                    );
+                  })()}
                  
                  {/* PRINT PREVIEW TAB */}
                  {activeTab === 'print' && (
