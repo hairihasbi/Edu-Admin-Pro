@@ -11,7 +11,7 @@ import {
   SupervisionAssignment, SupervisionResult, CbtExam, CbtQuestion, CbtAttempt, RfidLog,
   MentoringJournal, GraduateProfileAssessment,
   ExtracurricularMember, ExtracurricularJournal, ExtracurricularAchievement,
-  HomeroomGuidanceSession
+  HomeroomGuidanceSession, GuruWaliInitialAssessment
 } from '../types';
 import { initTurso, pushToTurso, pullFromTurso, deleteFromTurso, deleteBatchFromTurso, clearRemoteTable, requestPasswordResetApi, verifyResetTokenApi, completePasswordResetApi } from './tursoService';
 import bcrypt from 'bcryptjs';
@@ -648,7 +648,7 @@ export const getSyncStats = async (user: User) => {
         'teacherCalendar', 'dailyPickets', 'studentIncidents', 'donations', 'passwordResets',
         'classInventory', 'homeVisits', 'parentCalls', 'learningStyleAssessments', 'homeroomGuidanceSessions',
         'supervisionAssignments', 'supervisionResults', 'cbtExams', 'cbtQuestions', 'cbtAttempts', 'rfidLogs',
-        'mentoringJournals', 'graduateProfileAssessments'
+        'mentoringJournals', 'graduateProfileAssessments', 'guruWaliInitialAssessments'
     ];
     
     let totalUnsynced = 0;
@@ -717,7 +717,8 @@ export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', logCall
             'eduadmin_learning_style_assessments', 'eduadmin_homeroom_guidance', 'eduadmin_supervision_assignments', 'eduadmin_supervision_results',
             'eduadmin_cbt_exams', 'eduadmin_cbt_questions', 'eduadmin_cbt_attempts', 'eduadmin_rfid_logs',
             'eduadmin_mentoring_journals', 'eduadmin_graduate_assessments',
-            'eduadmin_extracurricular_members', 'eduadmin_extracurricular_journals', 'eduadmin_extracurricular_achievements'
+            'eduadmin_extracurricular_members', 'eduadmin_extracurricular_journals', 'eduadmin_extracurricular_achievements',
+            'eduadmin_guru_wali_initial_assessments'
         ];
 
         const collections = targetCollections || allCollections;
@@ -763,7 +764,8 @@ export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', logCall
             'eduadmin_graduate_assessments': db.graduateProfileAssessments,
             'eduadmin_extracurricular_members': db.extracurricularMembers,
             'eduadmin_extracurricular_journals': db.extracurricularJournals,
-            'eduadmin_extracurricular_achievements': db.extracurricularAchievements
+            'eduadmin_extracurricular_achievements': db.extracurricularAchievements,
+            'eduadmin_guru_wali_initial_assessments': db.guruWaliInitialAssessments
         };
 
         if (direction === 'PUSH' || direction === 'FULL') {
@@ -3433,6 +3435,70 @@ export const saveGraduateProfileAssessment = async (data: Omit<GraduateProfileAs
 
 export const getGraduateProfileAssessments = async (studentId: string) => {
     return await db.graduateProfileAssessments.where('studentId').equals(studentId).sortBy('date');
+};
+
+// --- GURU WALI INITIAL ASSESSMENTS (IDENTIFIKASI AWAL SISWA ASUH) ---
+
+export const saveGuruWaliInitialAssessment = async (data: Omit<GuruWaliInitialAssessment, 'id' | 'lastModified' | 'isSynced'> & { id?: string }) => {
+    const existing = data.id 
+        ? await db.guruWaliInitialAssessments.get(data.id)
+        : await db.guruWaliInitialAssessments.where('studentId').equals(data.studentId).first();
+
+    const id = existing?.id || data.id || uuidv4();
+    const item: GuruWaliInitialAssessment = {
+        ...data,
+        id,
+        date: data.date || (data as any).assessmentDate || new Date().toISOString().split('T')[0],
+        lastModified: Date.now(),
+        isSynced: false
+    };
+
+    await db.guruWaliInitialAssessments.put(item);
+    triggerDebouncedSync();
+    return item;
+};
+
+export const getGuruWaliInitialAssessmentByStudent = async (studentId: string): Promise<GuruWaliInitialAssessment | undefined> => {
+    return await db.guruWaliInitialAssessments.where('studentId').equals(studentId).first();
+};
+
+export const getGuruWaliInitialAssessmentsByGuruWali = async (guruWaliId: string): Promise<GuruWaliInitialAssessment[]> => {
+    return await db.guruWaliInitialAssessments.where('guruWaliId').equals(guruWaliId).toArray();
+};
+
+export const getGuruWaliInitialAssessmentsBySchool = async (schoolNpsn: string): Promise<GuruWaliInitialAssessment[]> => {
+    return await db.guruWaliInitialAssessments.where('schoolNpsn').equals(schoolNpsn).toArray();
+};
+
+export const deleteGuruWaliInitialAssessment = async (id: string): Promise<boolean> => {
+    const item = await db.guruWaliInitialAssessments.get(id);
+    await db.guruWaliInitialAssessments.delete(id);
+    pushToTurso('eduadmin_guru_wali_initial_assessments', [item ? { ...item, deleted: true } : { id, deleted: true }]);
+    triggerDebouncedSync();
+    return true;
+};
+
+export const bulkSaveGuruWaliInitialAssessments = async (items: (Omit<GuruWaliInitialAssessment, 'id' | 'lastModified' | 'isSynced'> & { id?: string })[]) => {
+    const now = Date.now();
+    const preparedItems: GuruWaliInitialAssessment[] = [];
+    
+    for (const rawItem of items) {
+        const existing = rawItem.id 
+            ? await db.guruWaliInitialAssessments.get(rawItem.id)
+            : await db.guruWaliInitialAssessments.where('studentId').equals(rawItem.studentId).first();
+            
+        preparedItems.push({
+            ...rawItem,
+            id: existing?.id || rawItem.id || uuidv4(),
+            date: rawItem.date || (rawItem as any).assessmentDate || new Date().toISOString().split('T')[0],
+            lastModified: now,
+            isSynced: false
+        });
+    }
+
+    await db.guruWaliInitialAssessments.bulkPut(preparedItems);
+    triggerDebouncedSync();
+    return preparedItems;
 };
 
 export const getStudent360Data = async (studentId: string) => {
