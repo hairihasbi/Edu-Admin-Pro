@@ -834,6 +834,30 @@ const DB_SCHEMAS = [
     `CREATE INDEX IF NOT EXISTS idx_ga_student ON graduate_assessments(student_id)`,
     `CREATE INDEX IF NOT EXISTS idx_ga_wali ON graduate_assessments(guru_wali_id)`,
 
+    // 41. GURU WALI INITIAL ASSESSMENTS (IDENTIFIKASI AWAL SISWA ASUH)
+    `CREATE TABLE IF NOT EXISTS guru_wali_initial_assessments (
+        id TEXT PRIMARY KEY,
+        student_id TEXT,
+        student_name TEXT,
+        guru_wali_id TEXT,
+        guru_wali_name TEXT,
+        school_npsn TEXT,
+        date TEXT,
+        academic_year TEXT,
+        status TEXT,
+        academic TEXT, -- JSON Object
+        skills TEXT, -- JSON Object
+        achievements TEXT, -- JSON Object
+        character TEXT, -- JSON Object
+        conclusion TEXT, -- JSON Object
+        last_modified INTEGER,
+        version INTEGER DEFAULT 1,
+        deleted INTEGER DEFAULT 0
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_gwia_npsn ON guru_wali_initial_assessments(school_npsn)`,
+    `CREATE INDEX IF NOT EXISTS idx_gwia_student ON guru_wali_initial_assessments(student_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_gwia_wali ON guru_wali_initial_assessments(guru_wali_id)`,
+
     // User table migrations for extracurricular and subjects
     `ALTER TABLE users ADD COLUMN is_extracurricular_advisor INTEGER DEFAULT 0`,
     `ALTER TABLE users ADD COLUMN extracurriculars TEXT`,
@@ -853,6 +877,16 @@ const parseJSONSafe = (val: any) => {
         return val;
     } catch {
         return [];
+    }
+};
+
+const parseJSONObjectSafe = (val: any) => {
+    if (!val) return {};
+    try {
+        if (typeof val === 'string') return JSON.parse(val);
+        return val || {};
+    } catch {
+        return {};
     }
 };
 
@@ -971,6 +1005,33 @@ const getTableConfig = (collection: string) => {
         table: 'graduate_assessments',
         columns: ['id', 'student_id', 'guru_wali_id', 'date', 'scores', 'notes', 'school_npsn', 'last_modified', 'version', 'deleted'],
         mapFn: (item: any) => [s(item.id), s(item.studentId), s(item.guruWaliId), s(item.date), JSON.stringify(item.scores || {}), s(item.notes), s(item.schoolNpsn), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0]
+    };
+    case 'eduadmin_guru_wali_initial_assessments': return {
+        table: 'guru_wali_initial_assessments',
+        columns: [
+            'id', 'student_id', 'student_name', 'guru_wali_id', 'guru_wali_name', 'school_npsn',
+            'date', 'academic_year', 'status', 'academic', 'skills', 'achievements', 'character', 'conclusion',
+            'last_modified', 'version', 'deleted'
+        ],
+        mapFn: (item: any) => [
+            s(item.id),
+            s(item.studentId),
+            s(item.studentName),
+            s(item.guruWaliId),
+            s(item.guruWaliName),
+            s(item.schoolNpsn),
+            s(item.date),
+            s(item.academicYear),
+            s(item.status || 'Lengkap'),
+            JSON.stringify(item.academic || {}),
+            JSON.stringify(item.skills || {}),
+            JSON.stringify(item.achievements || {}),
+            JSON.stringify(item.character || {}),
+            JSON.stringify(item.conclusion || {}),
+            s(item.lastModified),
+            item.version || 1,
+            item.deleted ? 1 : 0
+        ]
     };
     default:
       return null;
@@ -1256,6 +1317,25 @@ const mapRowToJSON = (collection: string, row: any) => {
         date: row.date, scores: parseJSONSafe(row.scores), notes: row.notes,
         schoolNpsn: row.school_npsn,
         lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
+    };
+    case 'eduadmin_guru_wali_initial_assessments': return {
+        id: row.id,
+        studentId: row.student_id,
+        studentName: row.student_name,
+        guruWaliId: row.guru_wali_id,
+        guruWaliName: row.guru_wali_name,
+        schoolNpsn: row.school_npsn,
+        date: row.date,
+        academicYear: row.academic_year,
+        status: row.status,
+        academic: parseJSONObjectSafe(row.academic),
+        skills: parseJSONObjectSafe(row.skills),
+        achievements: parseJSONObjectSafe(row.achievements),
+        character: parseJSONObjectSafe(row.character),
+        conclusion: parseJSONObjectSafe(row.conclusion),
+        lastModified: row.last_modified,
+        version: row.version,
+        deleted: Boolean(row.deleted)
     };
     default:
         return row; 
@@ -2296,6 +2376,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                         args = [userNpsn];
                     } else {
                         whereClauses.push("student_id = ?");
+                        args = [userId];
+                    }
+                }
+                else if (['guru_wali_initial_assessments', 'mentoring_journals', 'graduate_assessments'].includes(tableConfig.table)) {
+                    // Guru Wali or School Staff (Kepsek / Wakasek)
+                    if (userNpsn && userNpsn !== 'DEFAULT') {
+                        whereClauses.push("school_npsn = ?");
+                        args = [userNpsn];
+                    } else if (userId) {
+                        whereClauses.push("guru_wali_id = ?");
+                        args = [userId];
+                    }
+                }
+                else if (['extracurricular_members', 'extracurricular_journals', 'extracurricular_achievements'].includes(tableConfig.table)) {
+                    if (userNpsn && userNpsn !== 'DEFAULT') {
+                        whereClauses.push("school_npsn = ?");
+                        args = [userNpsn];
+                    } else if (userId) {
+                        whereClauses.push("coach_id = ?");
                         args = [userId];
                     }
                 }
