@@ -9,7 +9,8 @@ import {
   getGuruWaliInitialAssessmentsByGuruWali, 
   saveGuruWaliInitialAssessment, 
   deleteGuruWaliInitialAssessment,
-  bulkSaveGuruWaliInitialAssessments 
+  bulkSaveGuruWaliInitialAssessments,
+  recoverGuruWaliInitialAssessmentsFromLocalStorage
 } from '../services/database';
 import { 
   Users, 
@@ -40,7 +41,8 @@ import {
   FileCheck,
   Wand2,
   Lightbulb,
-  Check
+  Check,
+  RotateCcw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format } from 'date-fns';
@@ -430,16 +432,52 @@ export const GuruWaliInitialAssessmentView: React.FC<GuruWaliInitialAssessmentVi
 
   useEffect(() => {
     loadAssessments();
+
+    const handleSyncStatus = (e: any) => {
+      if (e.detail === 'success') {
+        loadAssessments(false);
+      }
+    };
+
+    window.addEventListener('sync-status', handleSyncStatus);
+    return () => {
+      window.removeEventListener('sync-status', handleSyncStatus);
+    };
   }, [user.id]);
 
-  const loadAssessments = async () => {
-    setLoading(true);
+  const loadAssessments = async (showLoading = true) => {
+    if (showLoading) setLoading(true);
     try {
-      const data = await getGuruWaliInitialAssessmentsByGuruWali(user.id);
+      let data = await getGuruWaliInitialAssessmentsByGuruWali(user.id);
+      if (data.length === 0) {
+        // Attempt recovery from localStorage backup automatically
+        const recovered = await recoverGuruWaliInitialAssessmentsFromLocalStorage();
+        if (recovered.recovered > 0) {
+          data = await getGuruWaliInitialAssessmentsByGuruWali(user.id);
+        }
+      }
       setAssessments(data);
     } catch (e) {
       console.error('Failed to load initial assessments:', e);
       showToast('Gagal memuat data identifikasi awal', 'error');
+    } finally {
+      if (showLoading) setLoading(false);
+    }
+  };
+
+  // Manual Recovery Button Handler
+  const handleManualRecovery = async () => {
+    try {
+      setLoading(true);
+      const res = await recoverGuruWaliInitialAssessmentsFromLocalStorage();
+      await loadAssessments(false);
+      if (res.recovered > 0) {
+        showToast(`Berhasil memulihkan ${res.recovered} data identifikasi awal dari cadangan lokal!`, 'success');
+      } else {
+        showToast('Pemeriksaan cadangan selesai. Semua data identifikasi lokal sudah tersinkronisasi.', 'info');
+      }
+    } catch (err: any) {
+      showToast('Gagal memulihkan cadangan: ' + err.message, 'error');
     } finally {
       setLoading(false);
     }
@@ -507,47 +545,74 @@ export const GuruWaliInitialAssessmentView: React.FC<GuruWaliInitialAssessmentVi
     });
   }, [mentees, searchTerm, selectedClassFilter, statusFilter, categoryFilter, assessmentMap, classMap]);
 
+  // Auto-save form draft per student in background so unsaved work is never lost
+  useEffect(() => {
+    if (!isFormOpen || !activeStudent) return;
+    const timer = setTimeout(() => {
+      try {
+        localStorage.setItem(`draft_initial_assessment_${activeStudent.id}`, JSON.stringify(formData));
+      } catch {}
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [formData, isFormOpen, activeStudent]);
+
   // Open Form for Student
   const handleOpenForm = (student: Student) => {
     setActiveStudent(student);
     const existing = assessmentMap.get(student.id);
 
-    if (existing) {
+    let draftData: any = null;
+    if (!existing) {
+      try {
+        const rawDraft = localStorage.getItem(`draft_initial_assessment_${student.id}`) ||
+                         localStorage.getItem(`eduadmin_gw_backup_${student.id}`);
+        if (rawDraft) {
+          draftData = JSON.parse(rawDraft);
+        }
+      } catch {}
+    }
+
+    const source = existing || draftData;
+
+    if (source) {
+      if (!existing && draftData) {
+        showToast(`Memulihkan data tersimpan untuk ${student.name}`, 'info');
+      }
       setFormData({
         studentId: student.id,
         studentName: student.name,
         guruWaliId: user.id,
         guruWaliName: user.fullName,
         schoolNpsn: user.schoolNpsn || 'DEFAULT',
-        date: existing.date || new Date().toISOString().split('T')[0],
-        status: existing.status || 'Lengkap',
+        date: source.date || new Date().toISOString().split('T')[0],
+        status: source.status || 'Lengkap',
         academic: {
-          favoriteSubjects: existing.academic?.favoriteSubjects || '',
-          difficultSubjects: existing.academic?.difficultSubjects || '',
-          studyHabitSchedule: existing.academic?.studyHabitSchedule || '',
-          studyMethod: existing.academic?.studyMethod || '',
-          previousGpa: existing.academic?.previousGpa || ''
+          favoriteSubjects: source.academic?.favoriteSubjects || '',
+          difficultSubjects: source.academic?.difficultSubjects || '',
+          studyHabitSchedule: source.academic?.studyHabitSchedule || '',
+          studyMethod: source.academic?.studyMethod || '',
+          previousGpa: source.academic?.previousGpa || ''
         },
         skills: {
-          masteredSkills: existing.skills?.masteredSkills || '',
-          extracurriculars: existing.skills?.extracurriculars || '',
-          skillInterests: existing.skills?.skillInterests || ''
+          masteredSkills: source.skills?.masteredSkills || '',
+          extracurriculars: source.skills?.extracurriculars || '',
+          skillInterests: source.skills?.skillInterests || ''
         },
         achievements: {
-          academicAchievements: existing.achievements?.academicAchievements || '',
-          nonAcademicAchievements: existing.achievements?.nonAcademicAchievements || '',
-          personalGoals: existing.achievements?.personalGoals || ''
+          academicAchievements: source.achievements?.academicAchievements || '',
+          nonAcademicAchievements: source.achievements?.nonAcademicAchievements || '',
+          personalGoals: source.achievements?.personalGoals || ''
         },
         character: {
-          prominentTraits: existing.character?.prominentTraits || '',
-          traitsToDevelop: existing.character?.traitsToDevelop || '',
-          positiveHabits: existing.character?.positiveHabits || '',
-          habitsToImprove: existing.character?.habitsToImprove || ''
+          prominentTraits: source.character?.prominentTraits || '',
+          traitsToDevelop: source.character?.traitsToDevelop || '',
+          positiveHabits: source.character?.positiveHabits || '',
+          habitsToImprove: source.character?.habitsToImprove || ''
         },
         conclusion: {
-          guidanceCategory: existing.conclusion?.guidanceCategory || 'Penguatan Akademik',
-          summaryNotes: existing.conclusion?.summaryNotes || '',
-          followUpRecommendations: existing.conclusion?.followUpRecommendations || ''
+          guidanceCategory: source.conclusion?.guidanceCategory || 'Penguatan Akademik',
+          summaryNotes: source.conclusion?.summaryNotes || '',
+          followUpRecommendations: source.conclusion?.followUpRecommendations || ''
         }
       });
     } else {
@@ -612,6 +677,9 @@ export const GuruWaliInitialAssessmentView: React.FC<GuruWaliInitialAssessmentVi
       });
 
       showToast(`Identifikasi awal untuk ${activeStudent.name} berhasil disimpan!`);
+      try {
+        localStorage.removeItem(`draft_initial_assessment_${activeStudent.id}`);
+      } catch {}
       setIsFormOpen(false);
       loadAssessments();
       onDataChanged?.();
@@ -1570,6 +1638,15 @@ export const GuruWaliInitialAssessmentView: React.FC<GuruWaliInitialAssessmentVi
 
           {/* Action Buttons: Import, Export, Print */}
           <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={handleManualRecovery}
+              className="px-3 py-2 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-2xs"
+              title="Pulihkan data identifikasi awal dari cadangan perangkat lokal"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-amber-600" />
+              <span>Pulihkan Cadangan</span>
+            </button>
+
             <button
               onClick={handleDownloadTemplate}
               className="px-3 py-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-2xs"
