@@ -1271,6 +1271,7 @@ export const getStudentPointReductions = async () => await db.pointReductions.to
 export const addStudentPointReduction = async (data: Omit<StudentPointReduction, 'id'|'lastModified'|'isSynced'>) => {
     const item = { ...data, id: uuidv4(), lastModified: Date.now(), isSynced: false };
     await db.pointReductions.add(item);
+    pushToTurso('eduadmin_bk_reductions', [item]);
     triggerDebouncedSync();
     return item;
 };
