@@ -344,6 +344,7 @@ export interface StudentPointReduction extends Syncable {
   activityName: string; // e.g. "Membersihkan Perpustakaan"
   pointsRemoved: number; // e.g. 10
   description?: string;
+  reportedBy?: string;
 }
 
 export interface StudentAchievement extends Syncable {
