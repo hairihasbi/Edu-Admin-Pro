@@ -170,7 +170,8 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
   const [showViolationModal, setShowViolationModal] = useState(false);
   const [selectedStudentForForm, setSelectedStudentForForm] = useState<Student | null>(null);
   const [violationFormType, setViolationFormType] = useState<'VIOLATION' | 'REDUCTION'>('VIOLATION');
-  const [editingRecord, setEditingRecord] = useState<{ type: 'VIOLATION' | 'REDUCTION', id: string } | null>(null);
+  const [editingRecord, setEditingRecord] = useState<{ type: 'VIOLATION' | 'REDUCTION', id: string, reportedBy?: string } | null>(null);
+  const [disciplineFilter, setDisciplineFilter] = useState<'ALL' | 'ACTIVE' | 'RESOLVED'>('ALL');
   const [formInput, setFormInput] = useState({
     category: 'Terlambat',
     customCategory: '',
@@ -817,9 +818,12 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
     } else if (totalPoints > 0) {
         recommendation = "Pembinaan Wali Kelas";
         statusColor = "bg-blue-50 text-blue-700";
+    } else if (violationPoints > 0 && totalPoints === 0) {
+        recommendation = "Poin Tuntas (Pemulihan)";
+        statusColor = "bg-emerald-100 text-emerald-800 font-bold";
     }
 
-    return { totalPoints, recommendation, statusColor };
+    return { totalPoints, violationPoints, reductionPoints, recommendation, statusColor };
   };
 
   const filteredStudents = students.filter(s => 
@@ -827,7 +831,7 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
     s.nis.includes(searchQuery)
   );
 
-  const problemStudents = filteredStudents
+  const recordedStudents = filteredStudents
     .map(s => ({ 
         ...s, 
         stats: getStudentBehaviorStats(s.id),
@@ -841,8 +845,25 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
             guidances: homeroomGuidances.filter(g => g.studentId === s.id)
         }
     }))
-    .filter(s => s.stats.totalPoints > 0)
-    .sort((a, b) => b.stats.totalPoints - a.stats.totalPoints);
+    .filter(s => 
+      s.stats.totalPoints > 0 || 
+      s.details.violations.length > 0 || 
+      s.details.reductions.length > 0 || 
+      s.details.sessions.length > 0 || 
+      s.details.guidances.length > 0 ||
+      s.details.homeVisits.length > 0 ||
+      s.details.parentCalls.length > 0
+    )
+    .sort((a, b) => b.stats.totalPoints - a.stats.totalPoints || b.details.violations.length - a.details.violations.length);
+
+  const problemStudents = recordedStudents.filter(s => s.stats.totalPoints > 0);
+  const resolvedStudents = recordedStudents.filter(s => s.stats.totalPoints === 0 && (s.details.violations.length > 0 || s.details.reductions.length > 0));
+
+  const displayedDisciplineStudents = disciplineFilter === 'ACTIVE'
+    ? problemStudents
+    : disciplineFilter === 'RESOLVED'
+    ? resolvedStudents
+    : recordedStudents;
 
   const exportLeger = () => {
     const headers = ['No', 'NIS', 'Nama Siswa', 'L/P', ...detectedSubjects, 'Rata-rata Total', 'Jml < KKM'];
@@ -867,7 +888,7 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
   };
 
   const handleEditRecord = (type: 'VIOLATION' | 'REDUCTION', record: any, student: Student) => {
-    setEditingRecord({ type, id: record.id });
+    setEditingRecord({ type, id: record.id, reportedBy: record.reportedBy });
     setSelectedStudentForForm(student);
     setViolationFormType(type);
     
@@ -932,7 +953,7 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
             violationName: finalCategory,
             points: Number(formInput.points),
             description: formInput.description || 'Dicatat oleh Wali Kelas',
-            reportedBy: (editingRecord as any).reportedBy || (user.fullName ? `Wali Kelas (${user.fullName})` : 'Wali Kelas')
+            reportedBy: editingRecord.reportedBy || (user.fullName ? `Wali Kelas (${user.fullName})` : 'Wali Kelas')
           });
         } else {
           await updateStudentPointReduction(editingRecord.id, {
@@ -940,6 +961,7 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
             activityName: finalCategory,
             pointsRemoved: Number(formInput.points),
             description: formInput.description || 'Pemulihan oleh Wali Kelas',
+            reportedBy: editingRecord.reportedBy || (user.fullName ? `Wali Kelas (${user.fullName})` : 'Wali Kelas')
           });
         }
       } else {
@@ -958,7 +980,8 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
             date: formInput.date,
             activityName: finalCategory,
             pointsRemoved: Number(formInput.points),
-            description: formInput.description || 'Pemulihan oleh Wali Kelas'
+            description: formInput.description || 'Pemulihan oleh Wali Kelas',
+            reportedBy: user.fullName ? `Wali Kelas (${user.fullName})` : 'Wali Kelas'
           });
         }
       }
@@ -1406,160 +1429,344 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
   };
 
   const handlePrintBKReport = (student: any) => {
-    const printWindow = window.open('', '', 'height=800,width=800');
+    const printWindow = window.open('', '_blank');
     if (!printWindow) return;
 
+    const sViolations = student.details?.violations || violations.filter(v => v.studentId === student.id);
+    const sReductions = student.details?.reductions || pointReductions.filter(r => r.studentId === student.id);
+    const sSessions = student.details?.sessions || sessions.filter(sess => sess.studentId === student.id);
+    const sHomeVisits = student.details?.homeVisits || homeVisits.filter(hv => hv.studentId === student.id);
+    const sParentCalls = student.details?.parentCalls || parentCalls.filter(pc => pc.studentId === student.id);
     const studentGuidances = student.details?.guidances || homeroomGuidances.filter(g => g.studentId === student.id);
 
+    const totalViolPoints = sViolations.reduce((sum: number, v: any) => sum + (v.points || 0), 0);
+    const totalReducPoints = sReductions.reduce((sum: number, r: any) => sum + (r.pointsRemoved || 0), 0);
+    const netPoints = Math.max(0, totalViolPoints - totalReducPoints);
+    const bStats = student.stats || getStudentBehaviorStats(student.id);
+
     const html = `
+      <!DOCTYPE html>
       <html>
         <head>
-          <title>Laporan BK - ${student.name}</title>
+          <title>Laporan BK & Kedisiplinan - ${student.name}</title>
           <style>
-            body { font-family: 'Inter', sans-serif; padding: 40px; color: #333; line-height: 1.6; }
-            .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 10px; }
-            .header h1 { margin: 0; font-size: 22px; text-transform: uppercase; }
-            .student-info { margin-bottom: 20px; display: grid; grid-template-columns: 120px 10px 1fr; gap: 5px; font-size: 14px; }
-            .section { margin-top: 25px; }
-            .section-title { font-weight: bold; background: #f3f4f6; padding: 5px 10px; border-left: 4px solid #333; margin-bottom: 10px; font-size: 14px; }
-            table { width: 100%; border-collapse: collapse; font-size: 12px; }
-            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-            th { background: #f9fafb; font-weight: bold; }
+            @page { size: A4; margin: 15mm; }
+            body { font-family: 'Times New Roman', Times, serif; color: #111; line-height: 1.45; font-size: 10.5pt; padding: 0; margin: 0; }
+            .header { text-align: center; margin-bottom: 18px; border-bottom: 2.5px solid #000; padding-bottom: 8px; }
+            .header h1 { margin: 0; font-size: 14pt; text-transform: uppercase; font-weight: bold; }
+            .header h2 { margin: 2px 0 0 0; font-size: 11.5pt; text-transform: uppercase; font-weight: bold; }
+            .header p { margin: 2px 0 0 0; font-size: 9.5pt; font-style: italic; color: #333; }
+            
+            .student-info-box { border: 1.5px solid #000; padding: 10px 14px; margin-bottom: 16px; background: #fafafa; display: flex; justify-content: space-between; align-items: flex-start; }
+            .student-info-table { border: none; font-size: 10pt; }
+            .student-info-table td { border: none; padding: 2px 5px; }
+            
+            .points-summary-badge { border: 1.5px solid #000; padding: 8px 12px; text-align: center; background: #fff; min-width: 170px; }
+            .points-summary-badge .total-num { font-size: 16pt; font-weight: bold; margin: 2px 0; }
+
+            .section { margin-top: 16px; page-break-inside: avoid; }
+            .section-title { font-weight: bold; font-size: 10.5pt; text-transform: uppercase; background: #f2f2f2; padding: 4px 8px; border-left: 4px solid #000; margin-bottom: 6px; }
+            table { width: 100%; border-collapse: collapse; font-size: 9.5pt; font-family: 'Times New Roman', Times, serif; }
+            th, td { border: 1px solid #000; padding: 4.5px 6.5px; text-align: left; vertical-align: top; }
+            th { background: #f5f5f5; font-weight: bold; text-align: center; }
+            .text-center { text-align: center; }
+            .text-right { text-align: right; }
+            
+            .signature-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 30px; text-align: center; font-size: 9.5pt; page-break-inside: avoid; }
+            .signature-box { display: flex; flex-direction: column; justify-content: space-between; height: 105px; }
           </style>
         </head>
         <body>
           <div class="header">
-            <h1>LAPORAN BIMBINGAN KONSELING & KEDISIPLINAN</h1>
-            <p>${user.schoolName || 'EduAdmin Pro'}</p>
+            <h1>LAPORAN BIMBINGAN KONSELING & KEDISIPLINAN SISWA</h1>
+            <h2>${user.schoolName || 'EduAdmin Pro'}</h2>
+            <p>Kelas ${className} • Semester ${selectedSemester.toUpperCase()} Tahun Ajaran 2025/2026 • Dicetak: ${printSettings.date}</p>
           </div>
 
-          <div class="student-info">
-            <div>Nama Siswa</div><div>:</div><div style="font-weight: bold;">${student.name}</div>
-            <div>NIS</div><div>:</div><div>${student.nis}</div>
-            <div>Kelas</div><div>:</div><div>${className}</div>
+          <div class="student-info-box">
+            <table class="student-info-table">
+              <tr>
+                <td width="130"><strong>Nama Siswa</strong></td>
+                <td width="10">:</td>
+                <td><strong>${student.name}</strong></td>
+              </tr>
+              <tr>
+                <td><strong>NIS / NISN</strong></td>
+                <td>:</td>
+                <td>${student.nis} / ${student.nisn || '-'}</td>
+              </tr>
+              <tr>
+                <td><strong>Kelas / Rombel</strong></td>
+                <td>:</td>
+                <td>${className}</td>
+              </tr>
+              <tr>
+                <td><strong>Jenis Kelamin</strong></td>
+                <td>:</td>
+                <td>${student.gender === 'L' ? 'Laki-laki' : student.gender === 'P' ? 'Perempuan' : student.gender || '-'}</td>
+              </tr>
+            </table>
+
+            <div class="points-summary-badge">
+              <div style="font-size: 8.5pt; text-transform: uppercase; font-weight: bold; color: #444;">Akumulasi Poin Aktif</div>
+              <div class="total-num" style="color: ${netPoints > 50 ? '#dc2626' : netPoints > 20 ? '#d97706' : netPoints > 0 ? '#2563eb' : '#16a34a'};">
+                ${netPoints} Pts
+              </div>
+              <div style="font-size: 8.5pt; font-weight: bold; margin-top: 2px;">
+                Status: ${bStats.recommendation}
+              </div>
+              <div style="font-size: 8pt; color: #666; margin-top: 2px;">
+                Pelanggaran: +${totalViolPoints} | Pemulihan: -${totalReducPoints}
+              </div>
+            </div>
           </div>
 
+          <!-- A. PELANGGARAN KEDISIPLINAN -->
           <div class="section">
-            <div class="section-title">A. PELANGGARAN KEDISIPLINAN</div>
+            <div class="section-title">A. CATATAN PELANGGARAN KEDISIPLINAN SISWA</div>
             <table>
               <thead>
                 <tr>
-                  <th width="5%">No</th>
+                  <th width="4%">No</th>
                   <th width="12%">Tanggal</th>
-                  <th width="23%">Jenis Pelanggaran</th>
-                  <th width="20%">Diinput Oleh</th>
-                  <th width="32%">Keterangan</th>
-                  <th width="8%">Poin</th>
+                  <th width="24%">Bentuk Pelanggaran</th>
+                  <th width="18%">Diinput Oleh</th>
+                  <th width="32%">Keterangan & Kejadian</th>
+                  <th width="10%">Poin (+)</th>
                 </tr>
               </thead>
               <tbody>
-                ${student.details.violations.map((v: any, i: number) => `
+                ${sViolations.length === 0 ? `
+                  <tr><td colspan="6" class="text-center" style="font-style: italic;">Tidak ada catatan pelanggaran siswa yang dibukukan.</td></tr>
+                ` : sViolations.map((v: any, i: number) => `
                   <tr>
-                    <td style="text-align:center">${i + 1}</td>
-                    <td style="text-align:center">${v.date}</td>
+                    <td class="text-center">${i + 1}</td>
+                    <td class="text-center">${v.date}</td>
                     <td><strong>${v.violationName}</strong></td>
-                    <td><span style="background:#e0e7ff; color:#3730a3; padding:2px 6px; border-radius:4px; font-weight:bold; font-size:10px;">${v.reportedBy || 'Guru BK / Wali Kelas'}</span></td>
+                    <td>${v.reportedBy || 'Guru BK / Wali Kelas'}</td>
                     <td>${v.description || '-'}</td>
-                    <td style="text-align:center; font-weight:bold; color:#dc2626;">+${v.points}</td>
+                    <td class="text-center" style="font-weight: bold; color: #dc2626;">+${v.points}</td>
                   </tr>
-                `).join('') || '<tr><td colspan="6" style="text-align:center">Tidak ada data</td></tr>'}
+                `).join('')}
               </tbody>
+              ${sViolations.length > 0 ? `
+                <tfoot>
+                  <tr style="font-weight: bold; background: #f9f9f9;">
+                    <td colspan="5" class="text-right">TOTAL POIN PELANGGARAN :</td>
+                    <td class="text-center" style="color: #dc2626;">+${totalViolPoints}</td>
+                  </tr>
+                </tfoot>
+              ` : ''}
             </table>
           </div>
 
+          <!-- B. PENGURANGAN / PEMULIHAN POIN -->
           <div class="section">
-            <div class="section-title">B. DAFTAR HOME VISIT</div>
+            <div class="section-title">B. CATATAN PENGURANGAN / PEMULIHAN POIN KEDISIPLINAN</div>
             <table>
               <thead>
                 <tr>
-                  <th width="5%">No</th>
+                  <th width="4%">No</th>
                   <th width="12%">Tanggal</th>
-                  <th width="18%">Alamat</th>
-                  <th width="20%">Alasan</th>
-                  <th width="25%">Hasil</th>
-                  <th width="20%">Tindak Lanjut</th>
+                  <th width="24%">Bentuk Kegiatan Pemulihan</th>
+                  <th width="18%">Penginput / Rekomendasi</th>
+                  <th width="32%">Keterangan & Catatan</th>
+                  <th width="10%">Poin (-)</th>
                 </tr>
               </thead>
               <tbody>
-                ${student.details.homeVisits.map((hv: any, i: number) => `
+                ${sReductions.length === 0 ? `
+                  <tr><td colspan="6" class="text-center" style="font-style: italic;">Belum ada catatan pengurangan / pemulihan poin untuk siswa ini.</td></tr>
+                ` : sReductions.map((r: any, i: number) => `
                   <tr>
-                    <td>${i + 1}</td>
-                    <td>${hv.date}</td>
-                    <td>${hv.address}</td>
-                    <td>${hv.reason}</td>
-                    <td>${hv.result}</td>
-                    <td>${hv.followUp}</td>
+                    <td class="text-center">${i + 1}</td>
+                    <td class="text-center">${r.date}</td>
+                    <td><strong>${r.activityName}</strong></td>
+                    <td>${r.reportedBy || 'Wali Kelas / Guru BK'}</td>
+                    <td>${r.description || '-'}</td>
+                    <td class="text-center" style="font-weight: bold; color: #16a34a;">-${r.pointsRemoved}</td>
                   </tr>
-                `).join('') || '<tr><td colspan="6" style="text-align:center">Tidak ada data</td></tr>'}
+                `).join('')}
               </tbody>
+              ${sReductions.length > 0 ? `
+                <tfoot>
+                  <tr style="font-weight: bold; background: #f9f9f9;">
+                    <td colspan="5" class="text-right">TOTAL PENGURANGAN / PEMULIHAN POIN :</td>
+                    <td class="text-center" style="color: #16a34a;">-${totalReducPoints}</td>
+                  </tr>
+                  <tr style="font-weight: bold; background: #e5e7eb;">
+                    <td colspan="5" class="text-right">AKUMULASI POIN BERSIH AKHIR (Pelanggaran - Pemulihan) :</td>
+                    <td class="text-center" style="color: #111;">${netPoints} Poin</td>
+                  </tr>
+                </tfoot>
+              ` : ''}
             </table>
           </div>
 
+          <!-- C. LAYANAN KONSELING GURU BK -->
           <div class="section">
-            <div class="section-title">C. PANGGILAN ORANG TUA</div>
+            <div class="section-title">C. CATATAN LAYANAN BIMBINGAN & KONSELING (INPUTAN GURU BK)</div>
             <table>
               <thead>
                 <tr>
-                  <th width="5%">No</th>
+                  <th width="4%">No</th>
                   <th width="12%">Tanggal</th>
-                  <th width="18%">Orang Tua</th>
-                  <th width="20%">Masalah</th>
-                  <th width="25%">Solusi</th>
-                  <th width="20%">Tindak Lanjut</th>
+                  <th width="25%">Pokok Masalah / Konseling</th>
+                  <th width="32%">Catatan Diagnosis & Konseling BK</th>
+                  <th width="17%">Rencana Tindak Lanjut</th>
+                  <th width="10%">Status</th>
                 </tr>
               </thead>
               <tbody>
-                ${student.details.parentCalls.map((pc: any, i: number) => `
+                ${sSessions.length === 0 ? `
+                  <tr><td colspan="6" class="text-center" style="font-style: italic;">Belum ada sesi bimbingan & konseling khusus yang dicatat oleh Guru BK.</td></tr>
+                ` : sSessions.map((sess: any, i: number) => `
                   <tr>
-                    <td>${i + 1}</td>
-                    <td>${pc.date}</td>
-                    <td>${pc.parentName}</td>
-                    <td>${pc.problem}</td>
-                    <td>${pc.solution}</td>
-                    <td>${pc.followUp}</td>
+                    <td class="text-center">${i + 1}</td>
+                    <td class="text-center">${sess.date}</td>
+                    <td><strong>${sess.issue}</strong></td>
+                    <td>${sess.notes}</td>
+                    <td>${sess.followUp || '-'}</td>
+                    <td class="text-center" style="font-weight: bold;">
+                      ${sess.status === 'CLOSED' ? '<span style="color:#16a34a">Tuntas</span>' : '<span style="color:#d97706">Proses (OPEN)</span>'}
+                    </td>
                   </tr>
-                `).join('') || '<tr><td colspan="6" style="text-align:center">Tidak ada data</td></tr>'}
+                `).join('')}
               </tbody>
             </table>
           </div>
 
+          <!-- D. TINDAK LANJUT PEMBINAAN WALI KELAS -->
           <div class="section">
-            <div class="section-title">D. TINDAK LANJUT PEMBINAAN WALI KELAS</div>
+            <div class="section-title">D. TINDAK LANJUT PEMBINAAN OLEH WALI KELAS</div>
             <table>
               <thead>
                 <tr>
-                  <th width="5%">No</th>
+                  <th width="4%">No</th>
                   <th width="12%">Tanggal</th>
-                  <th width="18%">Bentuk Pembinaan</th>
-                  <th width="25%">Uraian Pembinaan</th>
+                  <th width="20%">Bentuk Pembinaan</th>
+                  <th width="28%">Uraian Pembinaan Wali Kelas</th>
                   <th width="22%">Komitmen Siswa</th>
-                  <th width="18%">Status & Evaluasi</th>
+                  <th width="14%">Status & Evaluasi</th>
                 </tr>
               </thead>
               <tbody>
-                ${studentGuidances.map((g: any, i: number) => `
+                ${studentGuidances.length === 0 ? `
+                  <tr><td colspan="6" class="text-center" style="font-style: italic;">Tidak ada catatan pembinaan khusus wali kelas yang dibukukan.</td></tr>
+                ` : studentGuidances.map((g: any, i: number) => `
                   <tr>
-                    <td>${i + 1}</td>
-                    <td>${g.date}</td>
+                    <td class="text-center">${i + 1}</td>
+                    <td class="text-center">${g.date}</td>
                     <td><strong>${g.guidanceType}</strong></td>
                     <td>${g.notes || '-'}</td>
                     <td>${g.studentCommitment ? `<em>"${g.studentCommitment}"</em>` : '-'}</td>
                     <td>
-                      <span style="font-weight: bold; color: ${g.status === 'Selesai/Membaik' ? '#15803d' : g.status === 'Perlu Eskalasi ke BK' ? '#b91c1c' : '#854d0e'};">${g.status}</span>
-                      ${g.followUpDate ? `<div style="font-size: 10px; color: #666;">Pantau: ${g.followUpDate}</div>` : ''}
+                      <strong>${g.status}</strong>
+                      ${g.followUpDate ? `<div style="font-size: 8pt; color: #555;">Pantau: ${g.followUpDate}</div>` : ''}
                     </td>
                   </tr>
-                `).join('') || '<tr><td colspan="6" style="text-align:center">Tidak ada catatan pembinaan khusus</td></tr>'}
+                `).join('')}
               </tbody>
             </table>
           </div>
 
-          <div style="margin-top: 40px; float: right; text-align: center; width: 250px; font-size: 14px;">
-             <p>${printSettings.place}, ${printSettings.date}</p>
-             <p>Wali Kelas,</p>
-             <br/><br/><br/>
-             <p style="font-weight: bold; text-decoration: underline;">${user.fullName}</p>
+          <!-- E. HOME VISIT -->
+          <div class="section">
+            <div class="section-title">E. DAFTAR KUNJUNGAN RUMAH (HOME VISIT)</div>
+            <table>
+              <thead>
+                <tr>
+                  <th width="4%">No</th>
+                  <th width="12%">Tanggal</th>
+                  <th width="22%">Alamat Kunjungan</th>
+                  <th width="20%">Alasan Kunjungan</th>
+                  <th width="24%">Hasil Kunjungan</th>
+                  <th width="18%">Tindak Lanjut</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${sHomeVisits.length === 0 ? `
+                  <tr><td colspan="6" class="text-center" style="font-style: italic;">Tidak ada riwayat kunjungan rumah (home visit).</td></tr>
+                ` : sHomeVisits.map((hv: any, i: number) => `
+                  <tr>
+                    <td class="text-center">${i + 1}</td>
+                    <td class="text-center">${hv.date}</td>
+                    <td>${hv.address}</td>
+                    <td>${hv.reason}</td>
+                    <td>${hv.result}</td>
+                    <td>${hv.followUp || '-'}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
           </div>
+
+          <!-- F. PANGGILAN ORANG TUA -->
+          <div class="section">
+            <div class="section-title">F. DAFTAR PANGGILAN ORANG TUA / WALI</div>
+            <table>
+              <thead>
+                <tr>
+                  <th width="4%">No</th>
+                  <th width="12%">Tanggal</th>
+                  <th width="20%">Nama Orang Tua / Wali</th>
+                  <th width="22%">Permasalahan Dibahas</th>
+                  <th width="24%">Solusi & Kesepakatan</th>
+                  <th width="18%">Tindak Lanjut</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${sParentCalls.length === 0 ? `
+                  <tr><td colspan="6" class="text-center" style="font-style: italic;">Tidak ada riwayat surat / pemanggilan orang tua ke sekolah.</td></tr>
+                ` : sParentCalls.map((pc: any, i: number) => `
+                  <tr>
+                    <td class="text-center">${i + 1}</td>
+                    <td class="text-center">${pc.date}</td>
+                    <td><strong>${pc.parentName}</strong> <br/><span style="font-size: 8pt; color: #555;">${pc.parentPhone || ''}</span></td>
+                    <td>${pc.problem}</td>
+                    <td>${pc.solution}</td>
+                    <td>${pc.followUp || '-'}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="signature-grid">
+            <div class="signature-box">
+              <div>
+                <p>Mengetahui,</p>
+                <p><strong>Kepala Sekolah</strong></p>
+              </div>
+              <div>
+                <p><strong>${printSettings.headmasterName || '__________________________'}</strong></p>
+                <p>NIP. ${printSettings.headmasterNip || '.....................................'}</p>
+              </div>
+            </div>
+
+            <div class="signature-box">
+              <div>
+                <p>Mengetahui,</p>
+                <p><strong>Guru / Koordinator BK</strong></p>
+              </div>
+              <div>
+                <p>__________________________</p>
+                <p>NIP. .....................................</p>
+              </div>
+            </div>
+
+            <div class="signature-box">
+              <div>
+                <p>${printSettings.place}, ${printSettings.date}</p>
+                <p><strong>Wali Kelas ${className}</strong></p>
+              </div>
+              <div>
+                <p><strong>${user.fullName}</strong></p>
+                <p>NIP. ${user.nip || '-'}</p>
+              </div>
+            </div>
+          </div>
+
           <script>window.onload = function() { window.print(); }</script>
         </body>
       </html>
@@ -1572,8 +1779,15 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
   const handleExcelBKReport = (student: any) => {
     const wb = XLSX.utils.book_new();
 
-    // Violations
-    const vRows = student.details.violations.map((v: any, i: number) => ({
+    const sViolations = student.details?.violations || violations.filter(v => v.studentId === student.id);
+    const sReductions = student.details?.reductions || pointReductions.filter(r => r.studentId === student.id);
+    const sSessions = student.details?.sessions || sessions.filter(sess => sess.studentId === student.id);
+    const sHomeVisits = student.details?.homeVisits || homeVisits.filter(hv => hv.studentId === student.id);
+    const sParentCalls = student.details?.parentCalls || parentCalls.filter(pc => pc.studentId === student.id);
+    const studentGuidances = student.details?.guidances || homeroomGuidances.filter(g => g.studentId === student.id);
+
+    // Sheet 1: Pelanggaran
+    const vRows = sViolations.map((v: any, i: number) => ({
       No: i + 1,
       Tanggal: v.date,
       Pelanggaran: v.violationName,
@@ -1581,35 +1795,31 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
       Poin: v.points,
       Keterangan: v.description || '-'
     }));
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(vRows.length ? vRows : [{Info: "Tidak ada data"}]), "Pelanggaran");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(vRows.length ? vRows : [{ Info: "Tidak ada data pelanggaran" }]), "Pelanggaran");
 
-    // Home Visits
-    const hvRows = student.details.homeVisits.map((hv: any, i: number) => ({
+    // Sheet 2: Pemulihan Poin
+    const rRows = sReductions.map((r: any, i: number) => ({
       No: i + 1,
-      Tanggal: hv.date,
-      Alamat: hv.address,
-      Alasan: hv.reason,
-      Hasil: hv.result,
-      TindakLanjut: hv.followUp,
-      Keterangan: hv.notes || '-'
+      Tanggal: r.date,
+      KegiatanPemulihan: r.activityName,
+      'Penginput Data': r.reportedBy || 'Wali Kelas / Guru BK',
+      PoinDikurangi: r.pointsRemoved,
+      Keterangan: r.description || '-'
     }));
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(hvRows.length ? hvRows : [{Info: "Tidak ada data"}]), "Home Visit");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rRows.length ? rRows : [{ Info: "Tidak ada data pemulihan poin" }]), "Pemulihan Poin");
 
-    // Parent Calls
-    const pcRows = student.details.parentCalls.map((pc: any, i: number) => ({
+    // Sheet 3: Layanan Konseling Guru BK
+    const sessRows = sSessions.map((sess: any, i: number) => ({
       No: i + 1,
-      Tanggal: pc.date,
-      OrangTua: pc.parentName,
-      NoHP: pc.parentPhone,
-      Masalah: pc.problem,
-      Solusi: pc.solution,
-      TindakLanjut: pc.followUp,
-      Keterangan: pc.notes || '-'
+      Tanggal: sess.date,
+      PokokMasalah: sess.issue,
+      CatatanKonselingBK: sess.notes,
+      RencanaTindakLanjut: sess.followUp || '-',
+      Status: sess.status === 'CLOSED' ? 'Tuntas / Selesai' : 'Dalam Pemantauan (OPEN)'
     }));
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(pcRows.length ? pcRows : [{Info: "Tidak ada data"}]), "Panggilan Ortu");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sessRows.length ? sessRows : [{ Info: "Tidak ada data konseling BK" }]), "Konseling Guru BK");
 
-    // Homeroom Guidance
-    const studentGuidances = student.details?.guidances || homeroomGuidances.filter(g => g.studentId === student.id);
+    // Sheet 4: Pembinaan Wali Kelas
     const gRows = studentGuidances.map((g: any, i: number) => ({
       No: i + 1,
       Tanggal: g.date,
@@ -1621,7 +1831,32 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
       EvaluasiLanjutan: g.followUpDate || '-',
       KoordinasiOrtu: g.parentInformed ? 'Ya' : 'Tidak'
     }));
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(gRows.length ? gRows : [{Info: "Tidak ada data"}]), "Pembinaan Wali Kelas");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(gRows.length ? gRows : [{ Info: "Tidak ada data pembinaan" }]), "Pembinaan Wali Kelas");
+
+    // Sheet 5: Home Visits
+    const hvRows = sHomeVisits.map((hv: any, i: number) => ({
+      No: i + 1,
+      Tanggal: hv.date,
+      Alamat: hv.address,
+      Alasan: hv.reason,
+      Hasil: hv.result,
+      TindakLanjut: hv.followUp,
+      Keterangan: hv.notes || '-'
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(hvRows.length ? hvRows : [{ Info: "Tidak ada data" }]), "Home Visit");
+
+    // Sheet 6: Parent Calls
+    const pcRows = sParentCalls.map((pc: any, i: number) => ({
+      No: i + 1,
+      Tanggal: pc.date,
+      OrangTua: pc.parentName,
+      NoHP: pc.parentPhone,
+      Masalah: pc.problem,
+      Solusi: pc.solution,
+      TindakLanjut: pc.followUp,
+      Keterangan: pc.notes || '-'
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(pcRows.length ? pcRows : [{ Info: "Tidak ada data" }]), "Panggilan Ortu");
 
     XLSX.writeFile(wb, `Laporan_BK_${student.name.replace(/\s+/g, '_')}.xlsx`);
   };
@@ -1634,6 +1869,8 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
       const bStats = getStudentBehaviorStats(s.id);
       const sViolations = violations.filter(v => v.studentId === s.id);
       const sReductions = pointReductions.filter(r => r.studentId === s.id);
+      const sSessions = sessions.filter(sess => sess.studentId === s.id);
+      const sGuidances = homeroomGuidances.filter(g => g.studentId === s.id);
       const sHomeVisits = homeVisits.filter(hv => hv.studentId === s.id);
       const sParentCalls = parentCalls.filter(pc => pc.studentId === s.id);
       const totalViolPoints = sViolations.reduce((sum, v) => sum + v.points, 0);
@@ -1647,9 +1884,11 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
         reducPoints: totalReducPoints,
         violations: sViolations,
         reductions: sReductions,
+        sessions: sSessions,
+        guidances: sGuidances,
         homeVisits: sHomeVisits,
         parentCalls: sParentCalls,
-        hasRecords: sViolations.length > 0 || sReductions.length > 0 || sHomeVisits.length > 0 || sParentCalls.length > 0
+        hasRecords: sViolations.length > 0 || sReductions.length > 0 || sSessions.length > 0 || sGuidances.length > 0 || sHomeVisits.length > 0 || sParentCalls.length > 0
       };
     });
 
@@ -1664,27 +1903,27 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
             @page { size: A4; margin: 12mm; }
             body { font-family: 'Times New Roman', Times, serif; color: #111; line-height: 1.4; font-size: 10.5pt; padding: 0; margin: 0; }
             
-            .header { text-align: center; margin-bottom: 18px; border-bottom: 2px solid #000; padding-bottom: 8px; }
+            .header { text-align: center; margin-bottom: 16px; border-bottom: 2px solid #000; padding-bottom: 8px; }
             .header h1 { margin: 0; font-size: 14pt; text-transform: uppercase; font-weight: bold; }
             .header h2 { margin: 3px 0 0 0; font-size: 11.5pt; text-transform: uppercase; font-weight: bold; }
             .header p { margin: 3px 0 0 0; font-size: 9.5pt; font-style: italic; color: #333; }
 
-            .summary-box { border: 1px solid #000; padding: 8px; margin-bottom: 16px; background: #f9f9f9; display: flex; justify-content: space-around; font-size: 9.5pt; text-align: center; }
-            .summary-item strong { display: block; font-size: 12pt; margin-top: 2px; }
+            .summary-box { border: 1px solid #000; padding: 8px; margin-bottom: 16px; background: #f9f9f9; display: flex; justify-content: space-around; font-size: 9pt; text-align: center; }
+            .summary-item strong { display: block; font-size: 11.5pt; margin-top: 2px; }
 
-            .section-title { font-size: 11pt; font-weight: bold; text-transform: uppercase; border-bottom: 1.5px solid #000; padding-bottom: 3px; margin-top: 18px; margin-bottom: 8px; }
+            .section-title { font-size: 10.5pt; font-weight: bold; text-transform: uppercase; border-bottom: 1.5px solid #000; padding-bottom: 3px; margin-top: 18px; margin-bottom: 8px; }
 
-            table { width: 100%; border-collapse: collapse; margin-top: 6px; margin-bottom: 12px; font-size: 9.5pt; font-family: 'Times New Roman', Times, serif; }
+            table { width: 100%; border-collapse: collapse; margin-top: 6px; margin-bottom: 10px; font-size: 9pt; font-family: 'Times New Roman', Times, serif; }
             th, td { border: 1px solid #000; padding: 4px 6px; text-align: left; vertical-align: top; }
             th { background-color: #f2f2f2; font-weight: bold; text-align: center; }
             .text-center { text-align: center; }
             .text-right { text-align: right; }
 
-            .student-card { border: 1px solid #666; padding: 8px; margin-bottom: 12px; page-break-inside: avoid; background: #fff; }
-            .student-card-header { font-weight: bold; font-size: 10pt; background: #eee; padding: 4px 8px; margin: -8px -8px 6px -8px; border-bottom: 1px solid #666; display: flex; justify-content: space-between; }
+            .student-card { border: 1px solid #666; padding: 8px; margin-bottom: 14px; page-break-inside: avoid; background: #fff; }
+            .student-card-header { font-weight: bold; font-size: 9.5pt; background: #eee; padding: 4px 8px; margin: -8px -8px 6px -8px; border-bottom: 1px solid #666; display: flex; justify-content: space-between; }
 
             .signature-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-top: 25px; text-align: center; font-size: 10pt; page-break-inside: avoid; }
-            .signature-box { display: flex; flex-direction: column; justify-content: space-between; height: 110px; }
+            .signature-box { display: flex; flex-direction: column; justify-content: space-between; height: 105px; }
 
             @media print {
               body { padding: 0; }
@@ -1703,7 +1942,9 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
             <div class="summary-item">Total Siswa Kelas<strong>${students.length} Siswa</strong></div>
             <div class="summary-item">Siswa Berpoin Aktif<strong>${problemStudents.length} Siswa</strong></div>
             <div class="summary-item">Total Kasus Pelanggaran<strong>${violations.length} Kasus</strong></div>
-            <div class="summary-item">Home Visit & Panggilan Ortu<strong>${homeVisits.length + parentCalls.length} Kegiatan</strong></div>
+            <div class="summary-item">Pemulihan Poin<strong>${pointReductions.length} Kegiatan</strong></div>
+            <div class="summary-item">Layanan Konseling BK<strong>${sessions.length} Sesi</strong></div>
+            <div class="summary-item">Pembinaan Wali Kelas<strong>${homeroomGuidances.length} Sesi</strong></div>
           </div>
 
           <div class="section-title">BAGIAN I : REKAPITULASI AKUMULASI POIN KEDISIPLINAN SELURUH SISWA</div>
@@ -1711,13 +1952,13 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
             <thead>
               <tr>
                 <th width="30">NO</th>
-                <th width="80">NIS</th>
+                <th width="75">NIS</th>
                 <th>NAMA SISWA</th>
-                <th width="40">L/P</th>
-                <th width="75">POIN PELANGGARAN</th>
-                <th width="75">PEMULIHAN POIN</th>
-                <th width="75">POIN BERSIH</th>
-                <th width="140">STATUS / REKOMENDASI BK</th>
+                <th width="35">L/P</th>
+                <th width="80">PELANGGARAN</th>
+                <th width="80">PEMULIHAN</th>
+                <th width="80">POIN BERSIH</th>
+                <th width="150">STATUS / REKOMENDASI BK</th>
               </tr>
             </thead>
             <tbody>
@@ -1727,8 +1968,12 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                   <td class="text-center">${item.student.nis}</td>
                   <td><strong>${item.student.name}</strong></td>
                   <td class="text-center">${item.student.gender || '-'}</td>
-                  <td class="text-center">${item.violPoints > 0 ? `+${item.violPoints}` : '0'}</td>
-                  <td class="text-center">${item.reducPoints > 0 ? `-${item.reducPoints}` : '0'}</td>
+                  <td class="text-center" style="color: ${item.violPoints > 0 ? '#dc2626' : '#555'}; font-weight: ${item.violPoints > 0 ? 'bold' : 'normal'};">
+                    ${item.violPoints > 0 ? `+${item.violPoints}` : '0'}
+                  </td>
+                  <td class="text-center" style="color: ${item.reducPoints > 0 ? '#16a34a' : '#555'}; font-weight: ${item.reducPoints > 0 ? 'bold' : 'normal'};">
+                    ${item.reducPoints > 0 ? `-${item.reducPoints}` : '0'}
+                  </td>
                   <td class="text-center"><strong>${item.stats.totalPoints}</strong></td>
                   <td>${item.stats.recommendation}</td>
                 </tr>
@@ -1736,19 +1981,19 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
             </tbody>
           </table>
 
-          <div class="section-title">BAGIAN II : RINCIAN CATATAN KEDISIPLINAN & BK SISWA</div>
+          <div class="section-title">BAGIAN II : RINCIAN CATATAN KEDISIPLINAN, PEMULIHAN & BK SISWA</div>
           ${studentsWithRecords.length === 0 ? `
-            <p style="font-style: italic; color: #555;">Tidak ada siswa yang memiliki catatan pelanggaran, home visit, atau panggilan orang tua pada semester ini.</p>
+            <p style="font-style: italic; color: #555;">Tidak ada siswa yang memiliki catatan kedisiplinan, pemulihan poin, atau bimbingan konseling pada semester ini.</p>
           ` : `
             ${studentsWithRecords.map((item) => `
               <div class="student-card">
                 <div class="student-card-header">
                   <span>${item.student.name} (NIS: ${item.student.nis})</span>
-                  <span>Poin Aktif: ${item.stats.totalPoints} Poin • Status: ${item.stats.recommendation}</span>
+                  <span>Poin Bersih Aktif: ${item.stats.totalPoints} Poin (+${item.violPoints} / -${item.reducPoints}) • Status: ${item.stats.recommendation}</span>
                 </div>
 
                 ${item.violations.length > 0 ? `
-                  <p style="margin: 3px 0; font-weight: bold; font-size: 9pt;">• Catatan Pelanggaran (${item.violations.length} Kasus):</p>
+                  <p style="margin: 3px 0; font-weight: bold; font-size: 8.5pt;">• Catatan Pelanggaran Kedisiplinan (${item.violations.length} Kasus):</p>
                   <table style="margin-bottom: 6px;">
                     <thead>
                       <tr>
@@ -1757,7 +2002,7 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                         <th>Jenis Pelanggaran</th>
                         <th width="120">Diinput Oleh</th>
                         <th>Keterangan</th>
-                        <th width="35">Poin</th>
+                        <th width="40">Poin (+)</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1776,15 +2021,16 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                 ` : ''}
 
                 ${item.reductions.length > 0 ? `
-                  <p style="margin: 3px 0; font-weight: bold; font-size: 9pt;">• Catatan Pemulihan Poin (${item.reductions.length} Kegiatan):</p>
+                  <p style="margin: 3px 0; font-weight: bold; font-size: 8.5pt;">• Catatan Pengurangan / Pemulihan Poin (${item.reductions.length} Kegiatan):</p>
                   <table style="margin-bottom: 6px;">
                     <thead>
                       <tr>
                         <th width="25">No</th>
                         <th width="75">Tanggal</th>
-                        <th>Kegiatan Pemulihan</th>
-                        <th>Keterangan</th>
-                        <th width="35">Poin</th>
+                        <th>Bentuk Kegiatan Pemulihan</th>
+                        <th width="120">Diinput Oleh</th>
+                        <th>Keterangan & Catatan</th>
+                        <th width="40">Poin (-)</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1792,9 +2038,71 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                         <tr>
                           <td class="text-center">${i + 1}</td>
                           <td class="text-center">${r.date}</td>
-                          <td>${r.activityName}</td>
+                          <td><strong>${r.activityName}</strong></td>
+                          <td><span style="font-weight:600; color:#065f46;">${r.reportedBy || 'Wali Kelas / Guru BK'}</span></td>
                           <td>${r.description || '-'}</td>
-                          <td class="text-center">-${r.pointsRemoved}</td>
+                          <td class="text-center" style="font-weight:bold; color:#16a34a;">-${r.pointsRemoved}</td>
+                        </tr>
+                      `).join('')}
+                    </tbody>
+                  </table>
+                ` : ''}
+
+                ${item.sessions.length > 0 ? `
+                  <p style="margin: 3px 0; font-weight: bold; font-size: 8.5pt;">• Catatan Layanan Konseling Guru BK (${item.sessions.length} Sesi):</p>
+                  <table style="margin-bottom: 6px;">
+                    <thead>
+                      <tr>
+                        <th width="25">No</th>
+                        <th width="75">Tanggal</th>
+                        <th>Pokok Masalah / Konseling</th>
+                        <th>Catatan Diagnosis & Konseling BK</th>
+                        <th>Rencana Tindak Lanjut</th>
+                        <th width="75">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${item.sessions.map((sess, i) => `
+                        <tr>
+                          <td class="text-center">${i + 1}</td>
+                          <td class="text-center">${sess.date}</td>
+                          <td><strong>${sess.issue}</strong></td>
+                          <td>${sess.notes}</td>
+                          <td>${sess.followUp || '-'}</td>
+                          <td class="text-center" style="font-weight: bold;">
+                            ${sess.status === 'CLOSED' ? '<span style="color:#16a34a">Tuntas</span>' : '<span style="color:#d97706">Proses (OPEN)</span>'}
+                          </td>
+                        </tr>
+                      `).join('')}
+                    </tbody>
+                  </table>
+                ` : ''}
+
+                ${item.guidances.length > 0 ? `
+                  <p style="margin: 3px 0; font-weight: bold; font-size: 8.5pt;">• Catatan Pembinaan Khusus Wali Kelas (${item.guidances.length} Sesi):</p>
+                  <table style="margin-bottom: 6px;">
+                    <thead>
+                      <tr>
+                        <th width="25">No</th>
+                        <th width="75">Tanggal</th>
+                        <th>Bentuk Pembinaan</th>
+                        <th>Uraian Pembinaan Wali Kelas</th>
+                        <th>Komitmen Siswa</th>
+                        <th width="85">Status Evaluasi</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${item.guidances.map((g, i) => `
+                        <tr>
+                          <td class="text-center">${i + 1}</td>
+                          <td class="text-center">${g.date}</td>
+                          <td><strong>${g.guidanceType}</strong></td>
+                          <td>${g.notes || '-'}</td>
+                          <td>${g.studentCommitment ? `<em>"${g.studentCommitment}"</em>` : '-'}</td>
+                          <td class="text-center">
+                            <strong>${g.status}</strong>
+                            ${g.followUpDate ? `<div style="font-size: 7.5pt; color: #555;">Pantau: ${g.followUpDate}</div>` : ''}
+                          </td>
                         </tr>
                       `).join('')}
                     </tbody>
@@ -1802,14 +2110,14 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                 ` : ''}
 
                 ${item.homeVisits.length > 0 ? `
-                  <p style="margin: 3px 0; font-weight: bold; font-size: 9pt;">• Kunjungan Rumah / Home Visit (${item.homeVisits.length} Kali):</p>
+                  <p style="margin: 3px 0; font-weight: bold; font-size: 8.5pt;">• Kunjungan Rumah / Home Visit (${item.homeVisits.length} Kali):</p>
                   <table style="margin-bottom: 6px;">
                     <thead>
                       <tr>
                         <th width="25">No</th>
                         <th width="75">Tanggal</th>
-                        <th>Alamat</th>
-                        <th>Alasan</th>
+                        <th>Alamat Kunjungan</th>
+                        <th>Alasan Kunjungan</th>
                         <th>Hasil & Tindak Lanjut</th>
                       </tr>
                     </thead>
@@ -1828,14 +2136,14 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                 ` : ''}
 
                 ${item.parentCalls.length > 0 ? `
-                  <p style="margin: 3px 0; font-weight: bold; font-size: 9pt;">• Panggilan Orang Tua (${item.parentCalls.length} Kali):</p>
+                  <p style="margin: 3px 0; font-weight: bold; font-size: 8.5pt;">• Panggilan Orang Tua (${item.parentCalls.length} Kali):</p>
                   <table>
                     <thead>
                       <tr>
                         <th width="25">No</th>
                         <th width="75">Tanggal</th>
                         <th>Nama Orang Tua</th>
-                        <th>Permasalahan</th>
+                        <th>Permasalahan Dibahas</th>
                         <th>Solusi & Kesepakatan</th>
                       </tr>
                     </thead>
@@ -1942,48 +2250,30 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
         NIS: st ? st.nis : '-',
         NamaSiswa: st ? st.name : r.studentId,
         KegiatanPemulihan: r.activityName,
+        PenginputData: r.reportedBy || 'Wali Kelas / Guru BK',
         PoinDikurangi: r.pointsRemoved,
         Keterangan: r.description || '-'
       };
     });
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(reducRows.length ? reducRows : [{ Info: "Tidak ada data" }]), "Detail Pemulihan");
 
-    // Sheet 4: Detail Home Visit
-    const hvRows = homeVisits.map((hv, i) => {
-      const st = students.find(s => s.id === hv.studentId);
+    // Sheet 4: Detail Layanan Konseling Guru BK
+    const sessRows = sessions.map((sess, i) => {
+      const st = students.find(s => s.id === sess.studentId);
       return {
         No: i + 1,
-        Tanggal: hv.date,
+        Tanggal: sess.date,
         NIS: st ? st.nis : '-',
-        NamaSiswa: st ? st.name : hv.studentId,
-        Alamat: hv.address,
-        Alasan: hv.reason,
-        Hasil: hv.result,
-        TindakLanjut: hv.followUp,
-        Keterangan: hv.notes || '-'
+        NamaSiswa: st ? st.name : sess.studentId,
+        PokokMasalah: sess.issue,
+        CatatanKonselingBK: sess.notes,
+        RencanaTindakLanjut: sess.followUp || '-',
+        Status: sess.status === 'CLOSED' ? 'Tuntas / Selesai' : 'Dalam Pemantauan (OPEN)'
       };
     });
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(hvRows.length ? hvRows : [{ Info: "Tidak ada data" }]), "Detail Home Visit");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sessRows.length ? sessRows : [{ Info: "Tidak ada data konseling BK" }]), "Detail Konseling Guru BK");
 
-    // Sheet 5: Detail Panggilan Ortu
-    const pcRows = parentCalls.map((pc, i) => {
-      const st = students.find(s => s.id === pc.studentId);
-      return {
-        No: i + 1,
-        Tanggal: pc.date,
-        NIS: st ? st.nis : '-',
-        NamaSiswa: st ? st.name : pc.studentId,
-        OrangTua: pc.parentName,
-        NoHP: pc.parentPhone,
-        Masalah: pc.problem,
-        Solusi: pc.solution,
-        TindakLanjut: pc.followUp,
-        Keterangan: pc.notes || '-'
-      };
-    });
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(pcRows.length ? pcRows : [{ Info: "Tidak ada data" }]), "Detail Panggilan Ortu");
-
-    // Sheet 6: Detail Pembinaan Wali Kelas
+    // Sheet 5: Detail Pembinaan Wali Kelas
     const guidanceRows = homeroomGuidances.map((g, i) => {
       const st = students.find(s => s.id === g.studentId);
       return {
@@ -2002,6 +2292,41 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
       };
     });
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(guidanceRows.length ? guidanceRows : [{ Info: "Tidak ada data" }]), "Pembinaan Wali Kelas");
+
+    // Sheet 6: Detail Home Visit
+    const hvRows = homeVisits.map((hv, i) => {
+      const st = students.find(s => s.id === hv.studentId);
+      return {
+        No: i + 1,
+        Tanggal: hv.date,
+        NIS: st ? st.nis : '-',
+        NamaSiswa: st ? st.name : hv.studentId,
+        Alamat: hv.address,
+        Alasan: hv.reason,
+        Hasil: hv.result,
+        TindakLanjut: hv.followUp,
+        Keterangan: hv.notes || '-'
+      };
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(hvRows.length ? hvRows : [{ Info: "Tidak ada data" }]), "Detail Home Visit");
+
+    // Sheet 7: Detail Panggilan Ortu
+    const pcRows = parentCalls.map((pc, i) => {
+      const st = students.find(s => s.id === pc.studentId);
+      return {
+        No: i + 1,
+        Tanggal: pc.date,
+        NIS: st ? st.nis : '-',
+        NamaSiswa: st ? st.name : pc.studentId,
+        OrangTua: pc.parentName,
+        NoHP: pc.parentPhone,
+        Masalah: pc.problem,
+        Solusi: pc.solution,
+        TindakLanjut: pc.followUp,
+        Keterangan: pc.notes || '-'
+      };
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(pcRows.length ? pcRows : [{ Info: "Tidak ada data" }]), "Detail Panggilan Ortu");
 
     XLSX.writeFile(wb, `Laporan_BK_Seluruh_Siswa_${className.replace(/\s+/g, '_')}.xlsx`);
   };
@@ -3416,28 +3741,92 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                     </div>
                 </div>
 
-                {/* COLUMN 2: PROBLEM STUDENTS LIST (Leaderboard) */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden h-full text-left">
-                    <div className="p-6 border-b border-gray-100 flex items-center justify-between gap-2">
+                {/* COLUMN 2: PROBLEM STUDENTS LIST (Leaderboard & Filter) */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden h-full text-left flex flex-col">
+                    <div className="p-6 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div>
-                            <h3 className="font-bold text-gray-800 text-base">Peringkat Poin Pelanggaran Aktif</h3>
-                            <p className="text-xs text-gray-500 mt-1">Siswa yang memiliki akumulasi poin aktif saat ini.</p>
+                            <h3 className="font-bold text-gray-800 text-base">
+                                {disciplineFilter === 'ACTIVE' 
+                                    ? 'Peringkat Poin Pelanggaran Aktif' 
+                                    : disciplineFilter === 'RESOLVED' 
+                                    ? 'Daftar Siswa Poin Tuntas (Pemulihan)' 
+                                    : 'Rekapitulasi Kedisiplinan & Bimbingan'}
+                            </h3>
+                            <p className="text-xs text-gray-500 mt-0.5">
+                                {disciplineFilter === 'ACTIVE'
+                                    ? 'Siswa yang masih memiliki akumulasi poin pelanggaran aktif saat ini.'
+                                    : disciplineFilter === 'RESOLVED'
+                                    ? 'Siswa yang telah menyelesaikan/memulihkan seluruh poin pelanggarannya.'
+                                    : 'Seluruh siswa yang memiliki catatan kedisiplinan, pemulihan poin, atau konseling BK.'}
+                            </p>
                         </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                            <button
+                                onClick={handlePrintAllBKReport}
+                                className="px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg text-xs font-bold transition flex items-center gap-1 border border-blue-200"
+                                title="Cetak Laporan Rekapitulasi Seluruh Siswa Dalam 1 File"
+                            >
+                                <Printer size={13} /> Cetak Seluruh Siswa
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Filter Pills */}
+                    <div className="flex flex-wrap items-center gap-1.5 px-6 py-2.5 bg-gray-50/70 border-b border-gray-100 text-xs">
+                        <span className="text-gray-500 font-semibold mr-1">Filter Tampilan:</span>
                         <button
-                            onClick={handlePrintAllBKReport}
-                            className="px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg text-xs font-bold transition flex items-center gap-1 border border-blue-200 shrink-0"
-                            title="Cetak Laporan Rekapitulasi Seluruh Siswa Dalam 1 File"
+                            type="button"
+                            onClick={() => setDisciplineFilter('ALL')}
+                            className={`px-3 py-1 rounded-lg font-bold transition ${
+                                disciplineFilter === 'ALL'
+                                    ? 'bg-blue-600 text-white shadow-sm'
+                                    : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
+                            }`}
                         >
-                            <Printer size={13} /> Cetak Seluruh Siswa
+                            Semua ({recordedStudents.length})
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setDisciplineFilter('ACTIVE')}
+                            className={`px-3 py-1 rounded-lg font-bold transition ${
+                                disciplineFilter === 'ACTIVE'
+                                    ? 'bg-red-600 text-white shadow-sm'
+                                    : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
+                            }`}
+                        >
+                            Poin Aktif ({problemStudents.length})
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setDisciplineFilter('RESOLVED')}
+                            className={`px-3 py-1 rounded-lg font-bold transition ${
+                                disciplineFilter === 'RESOLVED'
+                                    ? 'bg-emerald-600 text-white shadow-sm'
+                                    : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
+                            }`}
+                        >
+                            Poin Tuntas / Pemulihan ({resolvedStudents.length})
                         </button>
                     </div>
 
-                    <div className="overflow-x-auto">
-                        {problemStudents.length === 0 ? (
+                    <div className="overflow-x-auto flex-1">
+                        {displayedDisciplineStudents.length === 0 ? (
                             <div className="p-16 text-center">
                                 <ShieldAlert size={48} className="mx-auto text-green-200 mb-4 animate-bounce" />
-                                <h4 className="text-base font-bold text-gray-800">Kelas Aman & Kondusif!</h4>
-                                <p className="text-xs text-gray-500 mt-1">Tidak ada siswa yang tercatat memiliki poin aktif saat ini.</p>
+                                <h4 className="text-base font-bold text-gray-800">
+                                    {disciplineFilter === 'ACTIVE'
+                                        ? 'Kelas Aman & Kondusif!'
+                                        : disciplineFilter === 'RESOLVED'
+                                        ? 'Belum Ada Siswa Pemulihan Poin'
+                                        : 'Belum Ada Catatan Kedisiplinan'}
+                                </h4>
+                                <p className="text-xs text-gray-500 mt-1">
+                                    {disciplineFilter === 'ACTIVE'
+                                        ? 'Tidak ada siswa yang tercatat memiliki poin aktif saat ini.'
+                                        : disciplineFilter === 'RESOLVED'
+                                        ? 'Tidak ada siswa dengan poin tuntas di kelas ini.'
+                                        : 'Tidak ada data kedisiplinan atau bimbingan yang tercatat.'}
+                                </p>
                             </div>
                         ) : (
                             <table className="w-full text-xs text-left">
@@ -3446,13 +3835,13 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                                         <th className="p-3 w-8 text-center">No</th>
                                         <th className="p-3">Siswa</th>
                                         <th className="p-3 text-center">Poin</th>
-                                        <th className="p-3">Rekomendasi</th>
+                                        <th className="p-3">Rekomendasi / Status</th>
                                         <th className="p-3 text-center">Tindakan</th>
                                         <th className="p-3 w-8"></th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
-                                    {problemStudents.map((s, idx) => (
+                                    {displayedDisciplineStudents.map((s, idx) => (
                                         <React.Fragment key={s.id}>
                                             <tr 
                                                 className={`hover:bg-gray-50 transition cursor-pointer ${expandedStudentId === s.id ? 'bg-blue-50/30' : ''}`}
@@ -3464,7 +3853,13 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                                                     <div className="text-[10px] text-gray-500">NIS: {s.nis}</div>
                                                 </td>
                                                 <td className="p-3 text-center">
-                                                    <span className="font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded">{s.stats.totalPoints}</span>
+                                                    <span className={`font-bold px-2 py-0.5 rounded text-xs ${
+                                                        s.stats.totalPoints > 0 
+                                                            ? 'text-red-600 bg-red-50 border border-red-200' 
+                                                            : 'text-emerald-700 bg-emerald-50 border border-emerald-200'
+                                                    }`}>
+                                                        {s.stats.totalPoints}
+                                                    </span>
                                                 </td>
                                                 <td className="p-3">
                                                     <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${s.stats.statusColor}`}>
@@ -3497,9 +3892,10 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                                                 <tr className="bg-gray-50 border-b border-gray-200">
                                                     <td colSpan={6} className="p-4 cursor-default">
                                                         <div className="space-y-4">
+                                                            {/* SECTION: VIOLATIONS */}
                                                             <div>
                                                                 <h4 className="font-bold text-gray-800 flex items-center gap-2 mb-2 text-xs">
-                                                                    <AlertCircle size={14} className="text-red-600" /> Rincian Pelanggaran
+                                                                    <AlertCircle size={14} className="text-red-600" /> Rincian Pelanggaran ({s.details.violations.length})
                                                                 </h4>
                                                                 {s.details.violations.length === 0 ? (
                                                                     <p className="text-[11px] text-gray-400 italic pl-5">Tidak ada catatan pelanggaran.</p>
@@ -3541,19 +3937,26 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                                                                 )}
                                                             </div>
 
+                                                            {/* SECTION: POINT REDUCTIONS */}
                                                             {s.details.reductions && s.details.reductions.length > 0 && (
                                                                 <div>
                                                                     <h4 className="font-bold text-gray-800 flex items-center gap-2 mb-2 text-xs">
-                                                                        <RefreshCcw size={14} className="text-green-600 animate-spin-slow" /> Rincian Pemulihan Poin
+                                                                        <RefreshCcw size={14} className="text-green-600 animate-spin-slow" /> Rincian Pemulihan Poin ({s.details.reductions.length})
                                                                     </h4>
                                                                     <div className="space-y-1.5 pl-2 border-l-2 border-green-200">
                                                                         {s.details.reductions.map(r => (
                                                                             <div key={r.id} className="group flex justify-between items-center p-2 rounded-lg hover:bg-green-50/50 transition">
                                                                                 <div className="text-[11px] text-gray-700">
-                                                                                    <span className="font-bold text-green-600 bg-green-50 px-1 py-0.5 rounded text-[10px] mr-1.5">{r.date}</span>
-                                                                                    <span className="font-semibold text-gray-900">{r.activityName}</span>
-                                                                                    <span className="ml-1 text-green-600 font-bold">(-{r.pointsRemoved} pts)</span>
-                                                                                    {r.description && <span className="text-gray-500 block mt-0.5 ml-2.5">— {r.description}</span>}
+                                                                                    <div className="flex flex-wrap items-center gap-1.5">
+                                                                                        <span className="font-bold text-green-600 bg-green-50 px-1 py-0.5 rounded text-[10px] mr-1">{r.date}</span>
+                                                                                        <span className="font-semibold text-gray-900">{r.activityName}</span>
+                                                                                        <span className="text-green-600 font-bold">(-{r.pointsRemoved} pts)</span>
+                                                                                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+                                                                                            <UserCheck size={11} className="text-emerald-600" />
+                                                                                            Penginput: <span className="font-bold">{r.reportedBy || 'Guru BK / Wali Kelas'}</span>
+                                                                                        </span>
+                                                                                    </div>
+                                                                                    {r.description && <span className="text-gray-500 block mt-0.5 ml-1">— {r.description}</span>}
                                                                                 </div>
                                                                                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                                                                     <button
@@ -3571,6 +3974,47 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                                                                                         <Trash2 size={12} />
                                                                                     </button>
                                                                                 </div>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+
+                                                            {/* SECTION: BK COUNSELING SESSIONS (FROM GURU BK) */}
+                                                            {s.details.sessions && s.details.sessions.length > 0 && (
+                                                                <div className="bg-white p-3.5 rounded-xl border border-sky-100 shadow-sm">
+                                                                    <div className="flex items-center justify-between mb-2">
+                                                                        <h4 className="font-bold text-sky-900 flex items-center gap-2 text-xs">
+                                                                            <MessageSquareHeart size={14} className="text-sky-600" /> Riwayat Konseling BK (Guru BK)
+                                                                            <span className="bg-sky-100 text-sky-800 text-[10px] px-1.5 py-0.5 rounded font-extrabold">
+                                                                                {s.details.sessions.length}
+                                                                            </span>
+                                                                        </h4>
+                                                                    </div>
+                                                                    <div className="space-y-2 mt-2">
+                                                                        {s.details.sessions.map((cs: CounselingSession) => (
+                                                                            <div key={cs.id} className="p-2.5 rounded-lg border border-sky-100 bg-sky-50/40 text-[11px] text-gray-700">
+                                                                                <div className="flex justify-between items-start gap-2 mb-1">
+                                                                                    <div className="flex flex-wrap items-center gap-1.5">
+                                                                                        <span className="font-bold text-sky-700 bg-sky-100 px-1.5 py-0.5 rounded text-[10px]">{cs.date}</span>
+                                                                                        <span className="font-bold text-gray-900">Masalah: {cs.issue}</span>
+                                                                                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                                                                            cs.status === 'CLOSED' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+                                                                                        }`}>
+                                                                                            {cs.status === 'CLOSED' ? 'Selesai' : 'Terbuka / Proses'}
+                                                                                        </span>
+                                                                                    </div>
+                                                                                </div>
+                                                                                {cs.notes && (
+                                                                                    <div className="text-gray-800 mt-1 bg-white p-2 rounded border border-gray-100">
+                                                                                        <span className="font-semibold text-gray-900">Catatan Konseling:</span> {cs.notes}
+                                                                                    </div>
+                                                                                )}
+                                                                                {cs.followUp && (
+                                                                                    <div className="text-gray-700 mt-1 pl-2 border-l-2 border-sky-300">
+                                                                                        <span className="font-semibold text-gray-900">Tindak Lanjut:</span> {cs.followUp}
+                                                                                    </div>
+                                                                                )}
                                                                             </div>
                                                                         ))}
                                                                     </div>

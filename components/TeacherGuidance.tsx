@@ -617,7 +617,8 @@ const TeacherGuidance: React.FC<TeacherGuidanceProps> = ({ user }) => {
       date: reductionForm.date,
       activityName: reductionForm.activityName,
       pointsRemoved: Number(reductionForm.pointsRemoved),
-      description: reductionForm.description
+      description: reductionForm.description,
+      reportedBy: user.fullName ? `Guru BK (${user.fullName})` : 'Guru BK'
     });
     setReductionForm({ activityName: '', pointsRemoved: 5, description: '', date: new Date().toISOString().split('T')[0] });
     loadFeatureData();
