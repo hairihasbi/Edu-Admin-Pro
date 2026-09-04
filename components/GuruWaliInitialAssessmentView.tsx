@@ -42,12 +42,18 @@ import {
   Wand2,
   Lightbulb,
   Check,
-  RotateCcw
+  RotateCcw,
+  FileText,
+  FileDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format } from 'date-fns';
 import { id } from 'date-fns/locale';
 import * as XLSX from 'xlsx';
+import { 
+  generateManualFillinAssessmentFormHtml, 
+  StudentManualFormItem 
+} from '../services/guruWaliPdfTemplate';
 
 interface GuruWaliInitialAssessmentViewProps {
   user: User;
@@ -344,6 +350,20 @@ export const GuruWaliInitialAssessmentView: React.FC<GuruWaliInitialAssessmentVi
   const [importFileName, setImportFileName] = useState('');
   const [isProcessingImport, setIsProcessingImport] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Manual Fill-in PDF Template Modal State
+  const [isManualPdfModalOpen, setIsManualPdfModalOpen] = useState(false);
+  const [manualPdfTarget, setManualPdfTarget] = useState<'ALL' | 'CLASS' | 'SINGLE' | 'BLANK'>('ALL');
+  const [manualPdfSelectedStudentId, setManualPdfSelectedStudentId] = useState<string>('');
+  const [manualPdfSelectedClassId, setManualPdfSelectedClassId] = useState<string>('ALL');
+
+  const menteeClassIds = useMemo(() => {
+    const set = new Set<string>();
+    mentees.forEach(m => {
+      if (m.classId) set.add(m.classId);
+    });
+    return Array.from(set);
+  }, [mentees]);
 
   // Notification Toast
   const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
@@ -1501,6 +1521,111 @@ export const GuruWaliInitialAssessmentView: React.FC<GuruWaliInitialAssessmentVi
     printWindow.document.close();
   };
 
+  // Cetak Formulir Isian Manual PDF untuk 1 Siswa (Lengkap Data Identitas)
+  const handlePrintManualFormForStudent = (student: Student) => {
+    const studentItem: StudentManualFormItem = {
+      id: student.id,
+      name: student.name,
+      nis: student.nis,
+      gender: student.gender,
+      className: classMap[student.classId] || 'Kelas'
+    };
+
+    const htmlContent = generateManualFillinAssessmentFormHtml({
+      schoolName: user.schoolName || 'SMA Negeri Indonesia',
+      signatureData,
+      students: [studentItem]
+    });
+
+    const printWin = window.open('', '_blank');
+    if (!printWin) {
+      alert('Pop-up terblokir oleh browser. Izinkan pop-up untuk mencetak atau mengunduh PDF.');
+      return;
+    }
+    printWin.document.open();
+    printWin.document.write(htmlContent);
+    printWin.document.close();
+  };
+
+  // Cetak Formulir Isian Manual PDF Kolektif / Berdasarkan Filter
+  const handlePrintBatchManualForm = (
+    targetMode: 'ALL' | 'CLASS' | 'SINGLE' | 'BLANK',
+    studentId?: string,
+    classId?: string
+  ) => {
+    let targetStudents: StudentManualFormItem[] = [];
+
+    if (targetMode === 'BLANK') {
+      targetStudents = []; // Akan membuat 1 formulir template isian kosong
+    } else if (targetMode === 'SINGLE') {
+      const targetId = studentId || manualPdfSelectedStudentId;
+      const found = mentees.find(m => m.id === targetId);
+      if (found) {
+        targetStudents = [{
+          id: found.id,
+          name: found.name,
+          nis: found.nis,
+          gender: found.gender,
+          className: classMap[found.classId] || 'Kelas'
+        }];
+      } else {
+        showToast('Silakan pilih siswa terlebih dahulu', 'info');
+        return;
+      }
+    } else if (targetMode === 'CLASS') {
+      const targetClass = classId || manualPdfSelectedClassId;
+      if (targetClass === 'ALL') {
+        targetStudents = mentees.map(m => ({
+          id: m.id,
+          name: m.name,
+          nis: m.nis,
+          gender: m.gender,
+          className: classMap[m.classId] || 'Kelas'
+        }));
+      } else {
+        targetStudents = mentees
+          .filter(m => m.classId === targetClass)
+          .map(m => ({
+            id: m.id,
+            name: m.name,
+            nis: m.nis,
+            gender: m.gender,
+            className: classMap[m.classId] || 'Kelas'
+          }));
+      }
+    } else {
+      // ALL
+      targetStudents = mentees.map(m => ({
+        id: m.id,
+        name: m.name,
+        nis: m.nis,
+        gender: m.gender,
+        className: classMap[m.classId] || 'Kelas'
+      }));
+    }
+
+    if (targetMode !== 'BLANK' && targetStudents.length === 0) {
+      showToast('Tidak ada siswa pada filter yang dipilih', 'info');
+      return;
+    }
+
+    const htmlContent = generateManualFillinAssessmentFormHtml({
+      schoolName: user.schoolName || 'SMA Negeri Indonesia',
+      signatureData,
+      students: targetStudents
+    });
+
+    const printWin = window.open('', '_blank');
+    if (!printWin) {
+      alert('Pop-up terblokir oleh browser. Izinkan pop-up untuk mencetak atau mengunduh PDF.');
+      return;
+    }
+    printWin.document.open();
+    printWin.document.write(htmlContent);
+    printWin.document.close();
+    setIsManualPdfModalOpen(false);
+  };
+
   const getCategoryBadgeClass = (category?: GuidanceCategory) => {
     switch (category) {
       case 'Penguatan Akademik':
@@ -1672,6 +1797,15 @@ export const GuruWaliInitialAssessmentView: React.FC<GuruWaliInitialAssessmentVi
             >
               <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
               <span>Export Excel</span>
+            </button>
+
+            <button
+              onClick={() => setIsManualPdfModalOpen(true)}
+              className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-2xs"
+              title="Unduh / Cetak Formulir Isian Manual Siswa Asuh (PDF Lengkap Identitas)"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>Form Isian PDF</span>
             </button>
 
             <button
@@ -1892,6 +2026,14 @@ export const GuruWaliInitialAssessmentView: React.FC<GuruWaliInitialAssessmentVi
                             <span>{isCompleted ? 'Edit' : 'Isi'}</span>
                           </button>
 
+                          <button
+                            onClick={() => handlePrintManualFormForStudent(student)}
+                            className="p-1.5 text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors border border-indigo-200"
+                            title={`Cetak Lembar Isian Manual untuk ${student.name} (PDF Lengkap Identitas)`}
+                          >
+                            <FileText className="w-3.5 h-3.5" />
+                          </button>
+
                           {isCompleted && (
                             <>
                               <button
@@ -1953,12 +2095,25 @@ export const GuruWaliInitialAssessmentView: React.FC<GuruWaliInitialAssessmentVi
                   </p>
                 </div>
               </div>
-              <button
-                onClick={() => setIsFormOpen(false)}
-                className="p-1.5 text-gray-400 hover:text-gray-700 rounded-lg hover:bg-gray-100"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handlePrintManualFormForStudent(activeStudent)}
+                  className="px-3 py-1.5 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-2xs"
+                  title="Cetak formulir isian manual PDF untuk siswa ini"
+                >
+                  <FileText className="w-3.5 h-3.5 text-indigo-600" />
+                  <span className="hidden sm:inline">Cetak Form Manual (PDF)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsFormOpen(false)}
+                  className="p-1.5 text-gray-400 hover:text-gray-700 rounded-lg hover:bg-gray-100"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             {/* Pillar Navigation Tabs */}
@@ -2839,18 +2994,29 @@ export const GuruWaliInitialAssessmentView: React.FC<GuruWaliInitialAssessmentVi
             </div>
 
             {/* Footer */}
-            <div className="p-4 border-t border-gray-100 flex items-center justify-between bg-gray-50/50">
-              <button
-                onClick={() => {
-                  const student = detailAssessment.student;
-                  setDetailAssessment(null);
-                  handleOpenForm(student);
-                }}
-                className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors border border-indigo-200"
-              >
-                <Edit3 className="w-3.5 h-3.5" />
-                <span>Edit Identifikasi</span>
-              </button>
+            <div className="p-4 border-t border-gray-100 flex items-center justify-between bg-gray-50/50 flex-wrap gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={() => {
+                    const student = detailAssessment.student;
+                    setDetailAssessment(null);
+                    handleOpenForm(student);
+                  }}
+                  className="px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors border border-indigo-200"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  <span>Edit Identifikasi</span>
+                </button>
+
+                <button
+                  onClick={() => handlePrintManualFormForStudent(detailAssessment.student)}
+                  className="px-3.5 py-2 bg-white hover:bg-gray-50 text-gray-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors border border-gray-200 shadow-2xs"
+                  title="Cetak lembar formulir manual untuk diisi siswa ini (PDF)"
+                >
+                  <FileText className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Cetak Form Isian Siswa (PDF)</span>
+                </button>
+              </div>
 
               <button
                 onClick={() => setDetailAssessment(null)}
@@ -2964,6 +3130,211 @@ export const GuruWaliInitialAssessmentView: React.FC<GuruWaliInitialAssessmentVi
                   {isProcessingImport ? 'Menyimpan...' : 'Simpan ke Database'}
                 </button>
               </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* MODAL UNDUH / CETAK FORMULIR ISIAN MANUAL SISWA (PDF) */}
+      {isManualPdfModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+          >
+            {/* Header */}
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-indigo-50/70 to-white">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-indigo-600 text-white rounded-xl shadow-xs">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-gray-900">
+                    Unduh Formulir Isian Siswa Asuh (PDF)
+                  </h3>
+                  <p className="text-xs text-gray-500">
+                    Formulir fisik 4 pilar lengkap dengan identitas siswa untuk diisi manual
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsManualPdfModalOpen(false)}
+                className="p-1.5 text-gray-400 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 space-y-4 overflow-y-auto">
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-2">
+                  Pilih Target Cetak / Unduh Formulir:
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {/* Pilihan 1: Semua Siswa */}
+                  <div
+                    onClick={() => setManualPdfTarget('ALL')}
+                    className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                      manualPdfTarget === 'ALL'
+                        ? 'border-indigo-600 bg-indigo-50/60 ring-2 ring-indigo-200'
+                        : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 font-bold text-xs text-gray-900">
+                      <Users className="w-4 h-4 text-indigo-600" />
+                      <span>Semua Siswa Asuh</span>
+                    </div>
+                    <p className="text-[11px] text-gray-500 mt-1">
+                      Kolektif {mentees.length} siswa, masing-masing memuat biodata lengkap siswa.
+                    </p>
+                  </div>
+
+                  {/* Pilihan 2: Per Kelas */}
+                  <div
+                    onClick={() => setManualPdfTarget('CLASS')}
+                    className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                      manualPdfTarget === 'CLASS'
+                        ? 'border-indigo-600 bg-indigo-50/60 ring-2 ring-indigo-200'
+                        : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 font-bold text-xs text-gray-900">
+                      <Filter className="w-4 h-4 text-indigo-600" />
+                      <span>Berdasarkan Kelas</span>
+                    </div>
+                    <p className="text-[11px] text-gray-500 mt-1">
+                      Cetak khusus siswa asuh pada kelas / rombel tertentu.
+                    </p>
+                  </div>
+
+                  {/* Pilihan 3: Satu Siswa */}
+                  <div
+                    onClick={() => {
+                      setManualPdfTarget('SINGLE');
+                      if (!manualPdfSelectedStudentId && mentees.length > 0) {
+                        setManualPdfSelectedStudentId(mentees[0].id);
+                      }
+                    }}
+                    className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                      manualPdfTarget === 'SINGLE'
+                        ? 'border-indigo-600 bg-indigo-50/60 ring-2 ring-indigo-200'
+                        : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 font-bold text-xs text-gray-900">
+                      <Search className="w-4 h-4 text-indigo-600" />
+                      <span>Satu Siswa Tertentu</span>
+                    </div>
+                    <p className="text-[11px] text-gray-500 mt-1">
+                      Cetak formulir individu untuk salah satu siswa asuh.
+                    </p>
+                  </div>
+
+                  {/* Pilihan 4: Format Blank */}
+                  <div
+                    onClick={() => setManualPdfTarget('BLANK')}
+                    className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                      manualPdfTarget === 'BLANK'
+                        ? 'border-indigo-600 bg-indigo-50/60 ring-2 ring-indigo-200'
+                        : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 font-bold text-xs text-gray-900">
+                      <FileSpreadsheet className="w-4 h-4 text-indigo-600" />
+                      <span>Format Kosongan</span>
+                    </div>
+                    <p className="text-[11px] text-gray-500 mt-1">
+                      Kolom identitas titik-titik (tanpa nama) untuk cadangan fisik.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Parameter Kelas jika pilih CLASS */}
+              {manualPdfTarget === 'CLASS' && (
+                <div className="p-3 bg-gray-50 rounded-xl border border-gray-200">
+                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                    Pilih Kelas / Rombel:
+                  </label>
+                  <select
+                    value={manualPdfSelectedClassId}
+                    onChange={e => setManualPdfSelectedClassId(e.target.value)}
+                    className="w-full text-xs py-2 px-3 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                  >
+                    <option value="ALL">Semua Kelas ({mentees.length} Siswa)</option>
+                    {menteeClassIds.map(cId => {
+                      const count = mentees.filter(m => m.classId === cId).length;
+                      return (
+                        <option key={cId} value={cId}>
+                          {classMap[cId] || cId} ({count} Siswa Asuh)
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+              )}
+
+              {/* Parameter Siswa jika pilih SINGLE */}
+              {manualPdfTarget === 'SINGLE' && (
+                <div className="p-3 bg-gray-50 rounded-xl border border-gray-200">
+                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                    Pilih Siswa Asuh:
+                  </label>
+                  <select
+                    value={manualPdfSelectedStudentId}
+                    onChange={e => setManualPdfSelectedStudentId(e.target.value)}
+                    className="w-full text-xs py-2 px-3 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                  >
+                    {mentees.map(m => (
+                      <option key={m.id} value={m.id}>
+                        {m.name} — NIS: {m.nis} ({classMap[m.classId] || 'Kelas'})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Ringkasan Fitur Formulir */}
+              <div className="p-3.5 bg-indigo-50/60 rounded-xl border border-indigo-100 text-xs text-indigo-950 space-y-1.5">
+                <div className="font-bold text-indigo-900 flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4 text-indigo-600" />
+                  <span>Struktur Dokumen Standar Resmi (2 Halaman A4 per Siswa):</span>
+                </div>
+                <ul className="list-disc pl-5 space-y-0.5 text-[11.5px] text-indigo-900/90">
+                  <li><strong>Kop Resmi & Biodata Lengkap:</strong> Nama, NIS, Kelas, Jenis Kelamin, Sekolah, dan Guru Wali sudah tercetak otomatis.</li>
+                  <li><strong>4 Pilar Isian Siswa:</strong> Bidang Akademik, Keterampilan/Minat Bakat, Prestasi, dan Karakter Diri.</li>
+                  <li><strong>Diagnosis Guru Wali:</strong> Kotak khusus bimbingan awal dan rekomendasi guru wali.</li>
+                  <li><strong>Pengesahan 3 Pihak:</strong> Tanda tangan Siswa, Orang Tua / Wali Murid, dan Guru Wali Pembimbing.</li>
+                </ul>
+              </div>
+
+              {/* Petunjuk Simpan PDF */}
+              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900 flex items-start gap-2">
+                <span className="text-base">💡</span>
+                <p className="leading-relaxed text-[11px]">
+                  <strong>Cara Menyimpan sebagai File PDF:</strong> Setelah jendela pratinjau cetak terbuka otomatis, ubah opsi <strong>Tujuan / Destination</strong> printer menjadi <strong>"Simpan sebagai PDF" (Save as PDF)</strong>, lalu klik Simpan.
+                </p>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-gray-100 flex items-center justify-between bg-gray-50/50">
+              <button
+                onClick={() => setIsManualPdfModalOpen(false)}
+                className="px-4 py-2 border border-gray-200 hover:bg-gray-100 text-gray-700 rounded-xl text-xs font-bold transition-colors"
+              >
+                Batal
+              </button>
+
+              <button
+                onClick={() => handlePrintBatchManualForm(manualPdfTarget, manualPdfSelectedStudentId, manualPdfSelectedClassId)}
+                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 transition-all shadow-sm"
+              >
+                <FileDown className="w-4 h-4" />
+                <span>Buka Dokumen & Unduh PDF</span>
+              </button>
             </div>
           </motion.div>
         </div>
