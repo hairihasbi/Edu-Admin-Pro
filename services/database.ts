@@ -804,13 +804,32 @@ export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', logCall
 
                     // USE TRANSACTION FOR ATOMIC UPDATE
                     await db.transaction('rw', table, async () => {
-                        await table.clear();
-                        // Use bulkPut instead of bulkAdd to safely overwrite existing keys
-                        // This fixes the ConstraintError when syncing
+                        // CRITICAL ANTI-DATA-LOSS GUARD:
+                        // If uniqueItems is empty but local had items, never wipe the local table!
+                        if (uniqueItems.length === 0 && localItems.length > 0) {
+                            console.warn(`[Sync Safety] Aborted clear for ${col}: incoming items empty, keeping ${localItems.length} local items.`);
+                            return;
+                        }
+
+                        // For protected collections, merge with bulkPut to ensure unsaved or local records are NEVER wiped
+                        const SAFE_MERGE_COLLECTIONS = [
+                            'eduadmin_guru_wali_initial_assessments',
+                            'eduadmin_mentoring_journals',
+                            'eduadmin_graduate_assessments'
+                        ];
+
+                        if (SAFE_MERGE_COLLECTIONS.includes(col)) {
+                            if (uniqueItems.length > 0) {
+                                await table.bulkPut(uniqueItems);
+                            }
+                        } else {
+                            await table.clear();
+                            await table.bulkPut(uniqueItems);
+                        }
+
                         if (col === 'eduadmin_materials') {
                             console.log('[Database Debug] Saving materials to local:', uniqueItems);
                         }
-                        await table.bulkPut(uniqueItems);
                     });
                 }
             }
@@ -908,6 +927,11 @@ export const createBackup = async (user: User, semesterFilter?: string) => {
         if (user.isRfidOfficer) {
             backup.data.rfidLogs = await db.rfidLogs.where('schoolNpsn').equals(user.schoolNpsn || '').toArray();
         }
+
+        // 5. Guru Wali Mentoring Data
+        backup.data.guruWaliInitialAssessments = await db.guruWaliInitialAssessments.where('guruWaliId').equals(user.id).toArray();
+        backup.data.mentoringJournals = await db.mentoringJournals.where('guruWaliId').equals(user.id).toArray();
+        backup.data.graduateProfileAssessments = await db.graduateProfileAssessments.where('guruWaliId').equals(user.id).toArray();
     }
 
     return backup;
@@ -3439,6 +3463,59 @@ export const getGraduateProfileAssessments = async (studentId: string) => {
 
 // --- GURU WALI INITIAL ASSESSMENTS (IDENTIFIKASI AWAL SISWA ASUH) ---
 
+const GW_LOCAL_BACKUP_KEY = 'eduadmin_backup_gw_assessments';
+
+export const recoverGuruWaliInitialAssessmentsFromLocalStorage = async (): Promise<{ recovered: number; items: GuruWaliInitialAssessment[] }> => {
+    if (typeof window === 'undefined') return { recovered: 0, items: [] };
+    const itemsToRecover: GuruWaliInitialAssessment[] = [];
+    
+    try {
+        // 1. Check master backup key
+        const raw = localStorage.getItem(GW_LOCAL_BACKUP_KEY);
+        if (raw) {
+            try {
+                const map = JSON.parse(raw);
+                if (map && typeof map === 'object') {
+                    Object.values(map).forEach((val: any) => {
+                        if (val && val.studentId && typeof val === 'object') {
+                            itemsToRecover.push(val);
+                        }
+                    });
+                }
+            } catch (e) {
+                console.warn("Failed to parse master initial assessment backup", e);
+            }
+        }
+
+        // 2. Check individual student keys & auto-drafts
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && (
+                key.startsWith('eduadmin_gw_backup_') || 
+                key.startsWith('draft_initial_assessment_') || 
+                key.startsWith('backup_initial_assessment_')
+            )) {
+                try {
+                    const itemData = JSON.parse(localStorage.getItem(key) || '{}');
+                    if (itemData && itemData.studentId && !itemsToRecover.some(x => x.studentId === itemData.studentId)) {
+                        itemsToRecover.push(itemData);
+                    }
+                } catch {}
+            }
+        }
+
+        if (itemsToRecover.length > 0) {
+            // Restore back into Dexie
+            await db.guruWaliInitialAssessments.bulkPut(itemsToRecover);
+            console.log(`[Auto-Recovery] Successfully restored ${itemsToRecover.length} initial assessments from browser storage!`);
+        }
+    } catch (err) {
+        console.error("[Auto-Recovery] Error during initial assessment restoration:", err);
+    }
+
+    return { recovered: itemsToRecover.length, items: itemsToRecover };
+};
+
 export const saveGuruWaliInitialAssessment = async (data: Omit<GuruWaliInitialAssessment, 'id' | 'lastModified' | 'isSynced'> & { id?: string }) => {
     const existing = data.id 
         ? await db.guruWaliInitialAssessments.get(data.id)
@@ -3454,25 +3531,103 @@ export const saveGuruWaliInitialAssessment = async (data: Omit<GuruWaliInitialAs
     };
 
     await db.guruWaliInitialAssessments.put(item);
+
+    // DUAL BACKUP IN LOCALSTORAGE: Prevents any data loss even if Dexie is flushed or sync hiccups
+    try {
+        if (typeof window !== 'undefined') {
+            const raw = localStorage.getItem(GW_LOCAL_BACKUP_KEY);
+            const backupMap: Record<string, GuruWaliInitialAssessment> = raw ? JSON.parse(raw) : {};
+            backupMap[item.studentId] = item;
+            localStorage.setItem(GW_LOCAL_BACKUP_KEY, JSON.stringify(backupMap));
+            localStorage.setItem(`eduadmin_gw_backup_${item.studentId}`, JSON.stringify(item));
+        }
+    } catch (e) {
+        console.warn("Failed to write localStorage backup for assessment:", e);
+    }
+
     triggerDebouncedSync();
     return item;
 };
 
 export const getGuruWaliInitialAssessmentByStudent = async (studentId: string): Promise<GuruWaliInitialAssessment | undefined> => {
-    return await db.guruWaliInitialAssessments.where('studentId').equals(studentId).first();
+    let item = await db.guruWaliInitialAssessments.where('studentId').equals(studentId).first();
+    
+    // Fallback: If not found in IndexedDB, look up in localStorage backup and restore
+    if (!item && typeof window !== 'undefined') {
+        try {
+            const perStudent = localStorage.getItem(`eduadmin_gw_backup_${studentId}`) || 
+                               localStorage.getItem(`draft_initial_assessment_${studentId}`);
+            if (perStudent) {
+                const parsed = JSON.parse(perStudent);
+                if (parsed && (parsed.studentId === studentId || parsed.studentName)) {
+                    const restoredItem: GuruWaliInitialAssessment = { ...parsed, studentId, isSynced: false, lastModified: Date.now() };
+                    await db.guruWaliInitialAssessments.put(restoredItem);
+                    item = restoredItem;
+                }
+            } else {
+                const raw = localStorage.getItem(GW_LOCAL_BACKUP_KEY);
+                if (raw) {
+                    const map = JSON.parse(raw);
+                    if (map[studentId]) {
+                        const restoredItem: GuruWaliInitialAssessment = map[studentId];
+                        await db.guruWaliInitialAssessments.put(restoredItem);
+                        item = restoredItem;
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn("Failed retrieving fallback assessment for student:", studentId, e);
+        }
+    }
+    
+    return item;
 };
 
 export const getGuruWaliInitialAssessmentsByGuruWali = async (guruWaliId: string): Promise<GuruWaliInitialAssessment[]> => {
-    return await db.guruWaliInitialAssessments.where('guruWaliId').equals(guruWaliId).toArray();
+    let list = await db.guruWaliInitialAssessments.where('guruWaliId').equals(guruWaliId).toArray();
+    
+    // Auto-Recovery Check: If Dexie list is empty, attempt restoring from browser storage
+    if (list.length === 0 && typeof window !== 'undefined') {
+        const { items } = await recoverGuruWaliInitialAssessmentsFromLocalStorage();
+        const matched = items.filter(x => !x.guruWaliId || x.guruWaliId === guruWaliId);
+        if (matched.length > 0) {
+            list = matched;
+        }
+    }
+    
+    return list;
 };
 
 export const getGuruWaliInitialAssessmentsBySchool = async (schoolNpsn: string): Promise<GuruWaliInitialAssessment[]> => {
-    return await db.guruWaliInitialAssessments.where('schoolNpsn').equals(schoolNpsn).toArray();
+    let list = await db.guruWaliInitialAssessments.where('schoolNpsn').equals(schoolNpsn).toArray();
+    if (list.length === 0 && typeof window !== 'undefined') {
+        const { items } = await recoverGuruWaliInitialAssessmentsFromLocalStorage();
+        const matched = items.filter(x => !x.schoolNpsn || x.schoolNpsn === schoolNpsn || x.schoolNpsn === 'DEFAULT');
+        if (matched.length > 0) {
+            list = matched;
+        }
+    }
+    return list;
 };
 
 export const deleteGuruWaliInitialAssessment = async (id: string): Promise<boolean> => {
     const item = await db.guruWaliInitialAssessments.get(id);
     await db.guruWaliInitialAssessments.delete(id);
+    
+    // Remove from localStorage backups
+    if (item?.studentId && typeof window !== 'undefined') {
+        try {
+            localStorage.removeItem(`eduadmin_gw_backup_${item.studentId}`);
+            localStorage.removeItem(`draft_initial_assessment_${item.studentId}`);
+            const raw = localStorage.getItem(GW_LOCAL_BACKUP_KEY);
+            if (raw) {
+                const map = JSON.parse(raw);
+                delete map[item.studentId];
+                localStorage.setItem(GW_LOCAL_BACKUP_KEY, JSON.stringify(map));
+            }
+        } catch {}
+    }
+
     pushToTurso('eduadmin_guru_wali_initial_assessments', [item ? { ...item, deleted: true } : { id, deleted: true }]);
     triggerDebouncedSync();
     return true;
@@ -3497,6 +3652,22 @@ export const bulkSaveGuruWaliInitialAssessments = async (items: (Omit<GuruWaliIn
     }
 
     await db.guruWaliInitialAssessments.bulkPut(preparedItems);
+
+    // Save to localStorage backup
+    try {
+        if (typeof window !== 'undefined') {
+            const raw = localStorage.getItem(GW_LOCAL_BACKUP_KEY);
+            const backupMap: Record<string, GuruWaliInitialAssessment> = raw ? JSON.parse(raw) : {};
+            preparedItems.forEach(pi => {
+                backupMap[pi.studentId] = pi;
+                localStorage.setItem(`eduadmin_gw_backup_${pi.studentId}`, JSON.stringify(pi));
+            });
+            localStorage.setItem(GW_LOCAL_BACKUP_KEY, JSON.stringify(backupMap));
+        }
+    } catch (e) {
+        console.warn("Failed bulk backup to localStorage:", e);
+    }
+
     triggerDebouncedSync();
     return preparedItems;
 };

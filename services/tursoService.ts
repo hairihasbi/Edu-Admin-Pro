@@ -458,26 +458,47 @@ export const pullFromTurso = async (collection: string, localItems: any[]): Prom
     // If an item in the local DB was previously successfully synchronized (isSynced === true or not isSynced === false),
     // but is completely absent from the remote pull results (remoteMap), it means it has been hard-deleted
     // from the Turso database. We must remove it locally to ensure consistency with the remote source of truth.
+    // CRITICAL SAFEGUARD: Never wipe local data if remote returned 0 items (e.g. empty table or query filter)
     const remoteKeys = new Set(Array.from(remoteMap.keys()).map(k => String(k)));
-    const filteredMergedItems = mergedItems.filter(localItem => {
-        const localIdStr = String(localItem.id || localItem.userId);
-        if (!localIdStr || remoteKeys.has(localIdStr)) {
-            return true; // Exists on remote, keep it
-        }
-        
-        // If the item is newly created or modified locally and pending push (isSynced === false), keep it!
-        if (localItem.isSynced === false || localItem.isSynced === 0) {
-            return true;
-        }
-        
-        // Synced item is missing from remote. Remove it from local database.
-        console.log(`[Sync Hard-Delete] Removing local item of collection ${collection} since it was hard-deleted from remote:`, localIdStr);
-        hasChanges = true;
-        return false;
-    });
+    
+    // Whitelist collections where hard-delete reconciliation by omission should NEVER delete local records
+    const PROTECTED_COLLECTIONS = [
+        'eduadmin_guru_wali_initial_assessments',
+        'eduadmin_mentoring_journals',
+        'eduadmin_graduate_assessments'
+    ];
 
-    mergedItems.length = 0;
-    mergedItems.push(...filteredMergedItems);
+    if (remoteMap.size === 0 && localItems.length > 0) {
+        // Remote has 0 items but local has data!
+        // DO NOT delete local items. Instead, preserve them and mark to push so data is safely backed up to remote!
+        console.warn(`[Sync Safety] Remote returned 0 items for ${collection}, but local has ${localItems.length} items. Preserving all local items.`);
+        mergedItems.forEach(item => {
+            if (item.isSynced) {
+                item.isSynced = false;
+                hasChanges = true;
+            }
+        });
+    } else if (!PROTECTED_COLLECTIONS.includes(collection)) {
+        const filteredMergedItems = mergedItems.filter(localItem => {
+            const localIdStr = String(localItem.id || localItem.userId);
+            if (!localIdStr || remoteKeys.has(localIdStr)) {
+                return true; // Exists on remote, keep it
+            }
+            
+            // If the item is newly created or modified locally and pending push (isSynced === false), keep it!
+            if (localItem.isSynced === false || localItem.isSynced === 0) {
+                return true;
+            }
+            
+            // Synced item is missing from remote. Remove it from local database.
+            console.log(`[Sync Hard-Delete] Removing local item of collection ${collection} since it was hard-deleted from remote:`, localIdStr);
+            hasChanges = true;
+            return false;
+        });
+
+        mergedItems.length = 0;
+        mergedItems.push(...filteredMergedItems);
+    }
 
     // --- DEDUPLICATION PASS FOR STUDENTS (BY NIS) ---
     // If multiple local records have the same NIS, we only keep the newest or the synced one.
