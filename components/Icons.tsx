@@ -29,6 +29,7 @@ import {
   ClipboardCheck,
   CreditCard as IdCard, // Aliased for missing export
   ClipboardList, 
+  Layers,
   Layout,
   Save,
   Plus,
@@ -160,6 +161,7 @@ export {
   ClipboardCheck,
   IdCard, 
   ClipboardList, 
+  Layers,
   Layout,
   Save,
   Plus,
