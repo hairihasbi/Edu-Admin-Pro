@@ -1,11 +1,12 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { User, ClassRoom, ScopeMaterial, TeachingJournal, SD_SUBJECTS_PHASE_A, SD_SUBJECTS_PHASE_BC, MATH_SUBJECT_OPTIONS, AbsentStudent, TeachingSchedule, Student } from '../types';
 import { getClasses, getScopeMaterials, getTeachingJournals, addTeachingJournal, updateTeachingJournal, deleteTeachingJournal, bulkDeleteTeachingJournals, getStudents, getTeachingSchedules, getLocalDate, isSubjectMatching, getAbsentAttendanceRecords } from '../services/database';
-import { Plus, Save, Trash2, Filter, Printer, FileSpreadsheet, NotebookPen, CalendarDays, ChevronLeft, ChevronRight, UserMinus, Pencil, Copy, Search, X, Sparkles, Check, CheckSquare, Square, RefreshCcw, ClipboardList, Zap, AlertCircle, CheckCircle } from './Icons';
+import { Plus, Save, Trash2, Filter, Printer, FileSpreadsheet, NotebookPen, CalendarDays, ChevronLeft, ChevronRight, UserMinus, Pencil, Copy, Search, X, Sparkles, Check, CheckSquare, Square, RefreshCcw, ClipboardList, Zap, AlertCircle, CheckCircle, Calculator } from './Icons';
 import Skeleton from './Skeleton';
 import * as XLSX from 'xlsx';
 import { GeminiActivityAssistantModal } from './GeminiActivityAssistantModal';
+import { MathView, MathFormulaToolbar, renderTextWithMathToHtml, hasMathFormula, normalizeGeminiMathText } from './MathRenderer';
 
 const ABSENT_STATUS_MAP: Record<string, string> = { S: 'Sakit', I: 'Ijin', A: 'Alfa' };
 
@@ -68,6 +69,44 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
   const [showCopyModal, setShowCopyModal] = useState<boolean>(false);
   const [copySearch, setCopySearch] = useState<string>('');
   const [isGeminiModalOpen, setIsGeminiModalOpen] = useState(false);
+
+  // States for Math & Exact Formula Support (KaTeX)
+  const [isMathToolbarOpen, setIsMathToolbarOpen] = useState(false);
+  const [activitiesViewMode, setActivitiesViewMode] = useState<'EDIT' | 'PREVIEW'>('EDIT');
+  const activitiesTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Check whether current subject is an exact/STEM subject
+  const isExactSubject = useMemo(() => {
+    const sub = (selectedSubject || formSubject || user.subject || '').toLowerCase();
+    return sub.includes('matematika') || sub.includes('fisika') || sub.includes('kimia') || sub.includes('ipa') || sub.includes('biologi');
+  }, [selectedSubject, formSubject, user.subject]);
+
+  const handleInsertMathSnippet = (snippet: string) => {
+    const textarea = activitiesTextareaRef.current;
+    if (!textarea) {
+      setFormData(prev => ({
+        ...prev,
+        activities: prev.activities ? `${prev.activities} ${snippet}` : snippet
+      }));
+      return;
+    }
+
+    const start = textarea.selectionStart ?? textarea.value.length;
+    const end = textarea.selectionEnd ?? textarea.value.length;
+    const text = textarea.value;
+    const newText = text.substring(0, start) + snippet + text.substring(end);
+
+    setFormData(prev => ({
+      ...prev,
+      activities: newText
+    }));
+
+    setTimeout(() => {
+      textarea.focus();
+      const newPos = start + snippet.length;
+      textarea.setSelectionRange(newPos, newPos);
+    }, 50);
+  };
 
   const [validationData, setValidationData] = useState({
     placeName: localStorage.getItem('journal_place_name') || '',
@@ -858,8 +897,8 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
           <td class="text-center">${new Date(j.date).toLocaleDateString('id-ID')}</td>
           <td class="text-center">${j.examAgenda ? '-' : j.meetingNo}</td>
           <td>${materialText}</td>
-          <td>${j.examAgenda ? '-' : j.learningObjective}</td>
-          <td>${j.activities}</td>
+          <td>${j.examAgenda ? '-' : renderTextWithMathToHtml(j.learningObjective)}</td>
+          <td>${renderTextWithMathToHtml(j.activities)}</td>
           <td>${absentText}</td>
           <td>${j.reflection || '-'}</td>
           <td>${j.followUp || '-'}</td>
@@ -887,8 +926,11 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
       <html>
         <head>
           <title>Rekap Jurnal & Presensi Semester ${printSemester} - ${className}</title>
+          <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" crossorigin="anonymous">
           <style>
             body { font-family: Arial, sans-serif; font-size: 11px; line-height: 1.4; color: #111; margin: 15px; }
+            .katex { font-size: 1.05em; font-family: 'KaTeX_Main', 'Times New Roman', serif; }
+            .katex-display { margin: 0.25em 0; }
             .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px; }
             .header h2 { margin: 0 0 5px 0; font-size: 16px; text-transform: uppercase; }
             .header h4 { margin: 3px 0; font-size: 12px; font-weight: normal; }
@@ -999,8 +1041,8 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
         <td class="text-center">${d.date}</td>
         <td class="text-center">${d.meeting}</td>
         <td>${d.lm}</td>
-        <td>${d.tp}</td>
-        <td>${d.activity}</td>
+        <td>${renderTextWithMathToHtml(d.tp)}</td>
+        <td>${renderTextWithMathToHtml(d.activity)}</td>
         <td>${d.absent}</td>
         <td>${d.reflection}</td>
         <td>${d.followUp}</td>
@@ -1014,8 +1056,11 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
       <html>
         <head>
           <title>Jurnal Mengajar - ${monthNames[filterMonth]} ${filterYear}</title>
+          <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" crossorigin="anonymous">
           <style>
             body { font-family: sans-serif; font-size: 11px; }
+            .katex { font-size: 1.05em; font-family: 'KaTeX_Main', 'Times New Roman', serif; }
+            .katex-display { margin: 0.25em 0; }
             table { width: 100%; border-collapse: collapse; margin-top: 10px; }
             th, td { border: 1px solid #333; padding: 5px; vertical-align: top; }
             th { background-color: #f0f0f0; }
@@ -1252,41 +1297,163 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
 
             {/* Baris 3: Kegiatan */}
             <div>
-               <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-sm font-semibold text-blue-700">Kegiatan Pembelajaran *</label>
-                  <button
-                    type="button"
-                    onClick={() => setIsGeminiModalOpen(true)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-bold rounded-lg shadow-sm hover:shadow transition-all"
-                  >
-                    <Sparkles size={14} className="text-yellow-300" />
-                    <span>Bantuan Gemini AI</span>
-                  </button>
-               </div>
-               <textarea 
-                  name="activities"
-                  rows={3}
-                  value={formData.activities}
-                  onChange={handleInputChange}
-                  placeholder="Uraikan kegiatan pembelajaran yang dilakukan (Pendahuluan, Inti, Penutup)..."
-                  className="w-full border border-gray-300 rounded-lg p-3 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition resize-none leading-relaxed"
-                  required
-               />
-               <div className="flex items-center justify-between mt-1 text-xs text-gray-500">
-                  <span>Klik <strong>Bantuan Gemini AI</strong> untuk merancang skenario kegiatan dengan opsi Cepat atau Kustom.</span>
-                  {formData.learningObjective && !formData.activities && (
+               <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
+                  <div className="flex items-center gap-2">
+                    <label className="block text-sm font-semibold text-blue-700">Kegiatan Pembelajaran *</label>
+                    {isExactSubject && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-100 text-indigo-800 text-[10px] font-bold rounded-full border border-indigo-200">
+                        <Calculator size={11} />
+                        Mendukung Rumus KaTeX
+                      </span>
+                    )}
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => {
-                        setFormData({
-                          ...formData,
-                          activities: `1. Pendahuluan: Berdoa, presensi, apersepsi & pertanyaan pemantik.\n2. Kegiatan Inti: Eksplorasi materi (${formData.learningObjective}), diskusi interaktif, dan penugasan kolaboratif.\n3. Penutup: Refleksi bersama siswa dan asesmen formatif singkat.`
-                        });
-                      }}
-                      className="text-blue-600 hover:text-blue-800 font-semibold hover:underline"
+                      onClick={() => setIsMathToolbarOpen(!isMathToolbarOpen)}
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold rounded-lg border transition-all ${
+                        isMathToolbarOpen
+                          ? 'bg-indigo-600 text-white border-indigo-700 shadow-sm'
+                          : 'bg-white hover:bg-indigo-50 text-indigo-700 border-indigo-200 shadow-2xs'
+                      }`}
+                      title="Buka toolbar simbol & rumus matematika, fisika, kimia, sains (KaTeX)"
                     >
-                      + Isi Template Cepat
+                      <Calculator size={13} className={isMathToolbarOpen ? 'text-yellow-300' : 'text-indigo-600'} />
+                      <span>{isMathToolbarOpen ? 'Tutup Toolbar Rumus' : 'Rumus Eksakta'}</span>
                     </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setIsGeminiModalOpen(true)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-bold rounded-lg shadow-sm hover:shadow transition-all"
+                    >
+                      <Sparkles size={14} className="text-yellow-300" />
+                      <span>Bantuan Gemini AI</span>
+                    </button>
+
+                    {formData.activities && (
+                      <div className="inline-flex rounded-lg border border-gray-200 bg-gray-100 p-0.5 text-xs">
+                        <button
+                          type="button"
+                          onClick={() => setActivitiesViewMode('EDIT')}
+                          className={`px-2.5 py-0.5 rounded-md font-medium transition ${activitiesViewMode === 'EDIT' ? 'bg-white shadow-2xs text-gray-900 font-bold' : 'text-gray-600 hover:text-gray-900'}`}
+                        >
+                          Tulis
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setActivitiesViewMode('PREVIEW')}
+                          className={`px-2.5 py-0.5 rounded-md font-medium transition ${activitiesViewMode === 'PREVIEW' ? 'bg-white shadow-2xs text-blue-700 font-bold' : 'text-gray-600 hover:text-gray-900'}`}
+                        >
+                          Pratinjau
+                        </button>
+                      </div>
+                    )}
+                  </div>
+               </div>
+
+               {/* KaTeX Formula Toolbar */}
+               {isMathToolbarOpen && (
+                 <div className="mb-2.5">
+                   <MathFormulaToolbar
+                     isOpen={isMathToolbarOpen}
+                     onToggle={() => setIsMathToolbarOpen(false)}
+                     onInsert={handleInsertMathSnippet}
+                   />
+                 </div>
+               )}
+
+               {activitiesViewMode === 'EDIT' ? (
+                 <>
+                   <textarea 
+                      ref={activitiesTextareaRef}
+                      name="activities"
+                      rows={3}
+                      value={formData.activities}
+                      onChange={handleInputChange}
+                      placeholder="Uraikan kegiatan pembelajaran yang dilakukan. Untuk rumus eksakta, apit dengan tanda dollar (contoh: $f(x) = 2x^2 + 5x$ atau $\frac{a}{b}$)..."
+                      className="w-full border border-gray-300 rounded-lg p-3 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition resize-none leading-relaxed"
+                      required
+                   />
+
+                   {/* Live Math Preview if math formula detected */}
+                   {hasMathFormula(formData.activities) && (
+                     <div className="mt-2 p-2.5 bg-gradient-to-r from-blue-50/80 to-indigo-50/80 border border-blue-200 rounded-lg">
+                       <div className="flex items-center justify-between mb-1 text-[11px] font-bold text-blue-900">
+                         <span className="flex items-center gap-1">
+                           <Calculator size={12} className="text-blue-600" />
+                           Pratinjau Rumus Visual (KaTeX):
+                         </span>
+                         <span className="text-[10px] text-blue-700 font-normal">
+                           Otomatis aktif dari sintaks $...$
+                         </span>
+                       </div>
+                       <div className="bg-white p-2.5 rounded border border-blue-100 shadow-2xs text-xs text-gray-800">
+                         <MathView text={formData.activities} displayAsBlock />
+                       </div>
+                     </div>
+                   )}
+                 </>
+               ) : (
+                 <div className="w-full min-h-[96px] border border-blue-300 rounded-lg p-3.5 bg-white shadow-inner">
+                   <div className="text-[11px] font-bold text-blue-600 uppercase tracking-wide mb-1">
+                     Pratinjau Tampilan Rumus & Kegiatan:
+                   </div>
+                   <div className="text-sm text-gray-800">
+                     <MathView text={formData.activities} displayAsBlock />
+                   </div>
+                 </div>
+               )}
+
+               <div className="flex flex-wrap items-center justify-between gap-2 mt-1.5 text-xs text-gray-500">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span>
+                      Apit rumus dengan <code className="bg-gray-100 px-1 py-0.5 rounded text-blue-700 font-mono text-[11px]">$...$</code> atau gunakan tombol <strong>Rumus Eksakta</strong>.
+                    </span>
+                    {formData.activities && /(\\\[|\\\(|```)/.test(formData.activities) && (
+                      <button
+                        type="button"
+                        onClick={() => setFormData(prev => ({ ...prev, activities: normalizeGeminiMathText(prev.activities) }))}
+                        className="text-indigo-600 hover:text-indigo-800 font-bold hover:underline inline-flex items-center gap-1 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200"
+                        title="Ubah format \[...\] dan \(...\) dari Gemini menjadi $...$ standar"
+                      >
+                        <Sparkles size={11} className="text-yellow-500" />
+                        <span>Rapikan Rumus Gemini</span>
+                      </button>
+                    )}
+                  </div>
+                  
+                  {!formData.activities && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFormData({
+                            ...formData,
+                            activities: `1. Pendahuluan: Berdoa, presensi, apersepsi & pertanyaan pemantik.\n2. Kegiatan Inti: Eksplorasi materi (${formData.learningObjective || 'konsep utama'}), diskusi interaktif, dan penugasan kolaboratif.\n3. Penutup: Refleksi bersama siswa dan asesmen formatif singkat.`
+                          });
+                        }}
+                        className="text-blue-600 hover:text-blue-800 font-semibold hover:underline"
+                      >
+                        + Template Standar
+                      </button>
+
+                      {isExactSubject && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFormData({
+                              ...formData,
+                              activities: `1. Pendahuluan: Berdoa, presensi, apersepsi mengaitkan materi ($f(x)$) dengan persoalan nyata.\n2. Kegiatan Inti: Menjelajahi formulasi konsep $x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$, menganalisis contoh perhitungan, dan diskusi kelompok.\n3. Penutup: Simpulan bersama perumusan rumus, kuis pemahaman singkat, dan refleksi pembelajaran.`
+                            });
+                          }}
+                          className="text-indigo-600 hover:text-indigo-800 font-semibold hover:underline"
+                        >
+                          + Template Eksakta
+                        </button>
+                      )}
+                    </div>
                   )}
                </div>
             </div>
@@ -2017,7 +2184,9 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
                                     )}
                                     <div className="mb-2">
                                        <span className="text-xs font-semibold text-green-600 uppercase tracking-wide">Kegiatan:</span>
-                                       <p className="text-gray-600 whitespace-pre-line text-xs">{journal.activities}</p>
+                                       <div className="text-gray-600 text-xs">
+                                          <MathView text={journal.activities} displayAsBlock />
+                                       </div>
                                     </div>
                                     {journal.absentStudents && (
                                        <div className="mt-2 bg-red-50 p-2 rounded border border-red-100">
@@ -2130,7 +2299,9 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
 
                                 <div>
                                     <p className="font-semibold text-xs text-gray-500 uppercase mb-1">Kegiatan</p>
-                                    <p className="text-sm text-gray-600 line-clamp-3">{journal.activities}</p>
+                                    <div className="text-sm text-gray-600 line-clamp-4">
+                                        <MathView text={journal.activities} />
+                                    </div>
                                 </div>
                                 {journal.absentStudents && (
                                     <div className="mt-2 bg-red-50 p-2 rounded border border-red-100">
@@ -2284,9 +2455,9 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
                               <strong>Tujuan:</strong> {j.learningObjective}
                             </p>
                           )}
-                          <p className="text-xs text-gray-500 line-clamp-2 italic">
-                            "{j.activities}"
-                          </p>
+                          <div className="text-xs text-gray-500 line-clamp-2 italic">
+                            <MathView text={j.activities} />
+                          </div>
                         </div>
                         <button
                           type="button"
@@ -2332,8 +2503,9 @@ const TeacherJournal: React.FC<TeacherJournalProps> = ({ user }) => {
                 : (formData.learningObjective || formData.materialId || ''))
         }
         onApplyText={(text) => {
-          setFormData(prev => ({ ...prev, activities: text }));
+          setFormData(prev => ({ ...prev, activities: normalizeGeminiMathText(text) }));
           setIsGeminiModalOpen(false);
+          setActivitiesViewMode('EDIT');
         }}
       />
     </div>
