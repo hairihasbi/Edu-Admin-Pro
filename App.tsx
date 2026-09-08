@@ -57,6 +57,7 @@ import RfidSecurityManager from "./components/RfidSecurityManager";
 import AttendanceMonitoring from "./components/AttendanceMonitoring";
 import ProposalPage from "./components/ProposalPage";
 import ExtracurricularManager from "./components/ExtracurricularManager";
+import CocurricularJournalManager from "./components/CocurricularJournalManager";
 import Breadcrumbs from "./components/Breadcrumbs";
 import OnboardingTour from "./components/OnboardingTour";
 import ForgotPassword from "./components/ForgotPassword";
@@ -128,6 +129,7 @@ import {
   Clock,
   FileText,
   Trophy,
+  Layers,
 } from "./components/Icons";
 
 // Konstanta Timeout: 15 Menit
@@ -1534,6 +1536,11 @@ const AppContent: React.FC = () => {
                       icon={NotebookPen}
                       label="Jurnal Mengajar"
                     />
+                    <NavLink
+                      to="/cocurricular-journal"
+                      icon={Layers}
+                      label="Jurnal Kokurikuler"
+                    />
                     {(currentUser.isExtracurricularAdvisor ||
                       (currentUser.extracurriculars &&
                         currentUser.extracurriculars.length > 0) ||
@@ -1972,6 +1979,10 @@ const AppContent: React.FC = () => {
                 <Route
                   path="/journal"
                   element={<TeacherJournal user={currentUser} />}
+                />
+                <Route
+                  path="/cocurricular-journal"
+                  element={<CocurricularJournalManager user={currentUser} />}
                 />
                 <Route
                   path="/extracurricular"

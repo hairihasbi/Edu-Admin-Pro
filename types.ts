@@ -250,6 +250,25 @@ export interface TeachingSchedule extends Syncable {
   subject: string;
 }
 
+// Jurnal Kokurikuler Bersama (P5 / Proyek Sekolah)
+export interface CocurricularJournal extends Syncable {
+  id: string;
+  schoolNpsn?: string;
+  userId: string; // ID user/guru pembuat
+  createdByName?: string; // Nama user pembuat
+  facilitatorName: string; // Nama fasilitator yang bertugas di jam tersebut
+  classId: string; // ID rombel/kelas (atau nama rombel)
+  className: string; // Nama kelas tampilan (e.g. 'XII', 'XII-1', 'X-A')
+  date: string; // YYYY-MM-DD (e.g. '2026-09-09')
+  dayName?: string; // e.g. 'Rabu'
+  meetingNo: number; // Jam Ke (e.g. 2, 3, 4, 5...)
+  meetingNoEnd?: number; // Jam Ke Selesai jika rentang
+  activities: string; // URAIAN KEGIATAN
+  projectTheme?: string; // Tema Proyek (e.g. 'Kearifan Lokal', 'Gaya Hidup Berkelanjutan', 'Suara Demokrasi', dll)
+  targetDimension?: string; // Dimensi Profil Pelajar Pancasila (opsional)
+  notes?: string; // Catatan tambahan / refleksi
+}
+
 // Updated RPP Request Interface
 export interface LessonPlanRequest {
   // Tahap 1: Identitas
