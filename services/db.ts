@@ -11,7 +11,7 @@ import {
   CbtExam, CbtQuestion, CbtAttempt,
   RfidLog, MentoringJournal, GraduateProfileAssessment,
   ExtracurricularMember, ExtracurricularJournal, ExtracurricularAchievement,
-  HomeroomGuidanceSession, GuruWaliInitialAssessment
+  HomeroomGuidanceSession, GuruWaliInitialAssessment, CocurricularJournal
 } from '../types';
 
 export class EduAdminDatabase extends Dexie {
@@ -59,6 +59,7 @@ export class EduAdminDatabase extends Dexie {
   extracurricularJournals!: Table<ExtracurricularJournal>;
   extracurricularAchievements!: Table<ExtracurricularAchievement>;
   guruWaliInitialAssessments!: Table<GuruWaliInitialAssessment>;
+  cocurricularJournals!: Table<CocurricularJournal>;
 
   constructor() {
     super('EduAdminDB');
@@ -115,6 +116,10 @@ export class EduAdminDatabase extends Dexie {
 
     (this as any).version(44).stores({
       guruWaliInitialAssessments: '&id, studentId, guruWaliId, schoolNpsn, date, status, isSynced, [studentId+guruWaliId]'
+    });
+
+    (this as any).version(45).stores({
+      cocurricularJournals: '&id, schoolNpsn, classId, date, meetingNo, userId, isSynced, [classId+date]'
     });
   }
 }

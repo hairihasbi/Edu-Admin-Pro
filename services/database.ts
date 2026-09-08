@@ -11,7 +11,7 @@ import {
   SupervisionAssignment, SupervisionResult, CbtExam, CbtQuestion, CbtAttempt, RfidLog,
   MentoringJournal, GraduateProfileAssessment,
   ExtracurricularMember, ExtracurricularJournal, ExtracurricularAchievement,
-  HomeroomGuidanceSession, GuruWaliInitialAssessment
+  HomeroomGuidanceSession, GuruWaliInitialAssessment, CocurricularJournal
 } from '../types';
 import { initTurso, pushToTurso, pullFromTurso, deleteFromTurso, deleteBatchFromTurso, clearRemoteTable, requestPasswordResetApi, verifyResetTokenApi, completePasswordResetApi } from './tursoService';
 import bcrypt from 'bcryptjs';
@@ -648,7 +648,8 @@ export const getSyncStats = async (user: User) => {
         'teacherCalendar', 'dailyPickets', 'studentIncidents', 'donations', 'passwordResets',
         'classInventory', 'homeVisits', 'parentCalls', 'learningStyleAssessments', 'homeroomGuidanceSessions',
         'supervisionAssignments', 'supervisionResults', 'cbtExams', 'cbtQuestions', 'cbtAttempts', 'rfidLogs',
-        'mentoringJournals', 'graduateProfileAssessments', 'guruWaliInitialAssessments'
+        'mentoringJournals', 'graduateProfileAssessments', 'guruWaliInitialAssessments',
+        'cocurricularJournals'
     ];
     
     let totalUnsynced = 0;
@@ -718,7 +719,7 @@ export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', logCall
             'eduadmin_cbt_exams', 'eduadmin_cbt_questions', 'eduadmin_cbt_attempts', 'eduadmin_rfid_logs',
             'eduadmin_mentoring_journals', 'eduadmin_graduate_assessments',
             'eduadmin_extracurricular_members', 'eduadmin_extracurricular_journals', 'eduadmin_extracurricular_achievements',
-            'eduadmin_guru_wali_initial_assessments'
+            'eduadmin_guru_wali_initial_assessments', 'eduadmin_cocurricular_journals'
         ];
 
         const collections = targetCollections || allCollections;
@@ -765,7 +766,8 @@ export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', logCall
             'eduadmin_extracurricular_members': db.extracurricularMembers,
             'eduadmin_extracurricular_journals': db.extracurricularJournals,
             'eduadmin_extracurricular_achievements': db.extracurricularAchievements,
-            'eduadmin_guru_wali_initial_assessments': db.guruWaliInitialAssessments
+            'eduadmin_guru_wali_initial_assessments': db.guruWaliInitialAssessments,
+            'eduadmin_cocurricular_journals': db.cocurricularJournals
         };
 
         if (direction === 'PUSH' || direction === 'FULL') {
@@ -3911,5 +3913,83 @@ export const deleteExtracurricularAchievement = async (id: string): Promise<bool
     pushToTurso('eduadmin_extracurricular_achievements', [{ id, deleted: true }]);
     return true;
 };
+
+// --- JURNAL KOKURIKULER BERSAMA (P5 / PROYEK SEKOLAH) ---
+export const getCocurricularJournals = async (filters?: {
+    classId?: string;
+    className?: string;
+    date?: string;
+    startDate?: string;
+    endDate?: string;
+    schoolNpsn?: string;
+}): Promise<CocurricularJournal[]> => {
+    let collection = db.cocurricularJournals.filter(j => !j.deleted);
+
+    if (filters?.schoolNpsn) {
+        collection = collection.filter(j => !j.schoolNpsn || j.schoolNpsn === filters.schoolNpsn);
+    }
+    if (filters?.classId && filters.classId !== 'ALL') {
+        collection = collection.filter(j => j.classId === filters.classId || j.className === filters.classId);
+    }
+    if (filters?.className && filters.className !== 'ALL') {
+        collection = collection.filter(j => j.className?.toLowerCase() === filters.className?.toLowerCase());
+    }
+    if (filters?.date) {
+        collection = collection.filter(j => j.date === filters.date);
+    }
+    if (filters?.startDate && filters?.endDate) {
+        collection = collection.filter(j => j.date >= filters.startDate! && j.date <= filters.endDate!);
+    } else if (filters?.startDate) {
+        collection = collection.filter(j => j.date >= filters.startDate!);
+    } else if (filters?.endDate) {
+        collection = collection.filter(j => j.date <= filters.endDate!);
+    }
+
+    const results = await collection.toArray();
+    // Sort by date ascending (or descending when needed), then meetingNo ascending (Jam 1, 2, 3, 4...)
+    return results.sort((a, b) => {
+        if (a.date !== b.date) {
+            return a.date.localeCompare(b.date);
+        }
+        return (Number(a.meetingNo) || 0) - (Number(b.meetingNo) || 0);
+    });
+};
+
+export const saveCocurricularJournal = async (
+    journal: Omit<CocurricularJournal, 'id' | 'lastModified' | 'isSynced'> & { id?: string }
+): Promise<CocurricularJournal> => {
+    const id = journal.id || uuidv4();
+    const itemToSave: CocurricularJournal = {
+        ...journal,
+        id,
+        lastModified: Date.now(),
+        isSynced: false
+    };
+    await db.cocurricularJournals.put(itemToSave);
+    triggerDebouncedSync();
+    return itemToSave;
+};
+
+export const bulkSaveCocurricularJournals = async (
+    journals: (Omit<CocurricularJournal, 'id' | 'lastModified' | 'isSynced'> & { id?: string })[]
+): Promise<CocurricularJournal[]> => {
+    const itemsToSave: CocurricularJournal[] = journals.map(j => ({
+        ...j,
+        id: j.id || uuidv4(),
+        lastModified: Date.now(),
+        isSynced: false
+    }));
+    await db.cocurricularJournals.bulkPut(itemsToSave);
+    triggerDebouncedSync();
+    return itemsToSave;
+};
+
+export const deleteCocurricularJournal = async (id: string): Promise<boolean> => {
+    const existing = await db.cocurricularJournals.get(id);
+    await db.cocurricularJournals.delete(id);
+    pushToTurso('eduadmin_cocurricular_journals', [existing ? { ...existing, deleted: true } : { id, deleted: true }]);
+    return true;
+};
+
 
 
