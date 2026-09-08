@@ -1,0 +1,127 @@
+
+import Dexie, { Table } from 'dexie';
+import { 
+  User, ClassRoom, Student, AttendanceRecord, 
+  ScopeMaterial, AssessmentScore, TeachingJournal, 
+  TeachingSchedule, LogEntry, MasterSubject, Ticket, 
+  StudentViolation, StudentPointReduction, StudentAchievement, CounselingSession, EmailConfig,
+  WhatsAppConfig, Notification, ApiKey, SystemSettings, Donation, DailyPicket, StudentIncident,
+  TeacherCalendarEvent, PasswordReset, ClassInventory, HomeVisit, ParentCall, LearningStyleAssessment,
+  SupervisionAssignment, SupervisionResult,
+  CbtExam, CbtQuestion, CbtAttempt,
+  RfidLog, MentoringJournal, GraduateProfileAssessment,
+  ExtracurricularMember, ExtracurricularJournal, ExtracurricularAchievement,
+  HomeroomGuidanceSession, GuruWaliInitialAssessment, CocurricularJournal
+} from '../types';
+
+export class EduAdminDatabase extends Dexie {
+  // Declare implicit table properties.
+  // (Just to inform TypeScript. Instantiated by Dexie in stores() method)
+  users!: Table<User>;
+  classes!: Table<ClassRoom>;
+  students!: Table<Student>;
+  attendanceRecords!: Table<AttendanceRecord>;
+  scopeMaterials!: Table<ScopeMaterial>;
+  assessmentScores!: Table<AssessmentScore>;
+  teachingJournals!: Table<TeachingJournal>;
+  teachingSchedules!: Table<TeachingSchedule>;
+  logs!: Table<LogEntry>;
+  emailConfig!: Table<EmailConfig & { id: string }>; // Config usually singleton, but stored as table
+  masterSubjects!: Table<MasterSubject>;
+  tickets!: Table<Ticket>;
+  violations!: Table<StudentViolation>;
+  pointReductions!: Table<StudentPointReduction>; // Added
+  achievements!: Table<StudentAchievement>;
+  counselingSessions!: Table<CounselingSession>;
+  homeroomGuidanceSessions!: Table<HomeroomGuidanceSession>;
+  whatsappConfigs!: Table<WhatsAppConfig>;
+  notifications!: Table<Notification>;
+  apiKeys!: Table<ApiKey>;
+  systemSettings!: Table<SystemSettings>;
+  donations!: Table<Donation>;
+  dailyPickets!: Table<DailyPicket>;
+  studentIncidents!: Table<StudentIncident>;
+  teacherCalendar!: Table<TeacherCalendarEvent>;
+  passwordResets!: Table<PasswordReset>;
+  classInventory!: Table<ClassInventory>;
+  homeVisits!: Table<HomeVisit>;
+  parentCalls!: Table<ParentCall>;
+  learningStyleAssessments!: Table<LearningStyleAssessment>;
+  supervisionAssignments!: Table<SupervisionAssignment>;
+  supervisionResults!: Table<SupervisionResult>;
+  cbtExams!: Table<CbtExam>;
+  cbtQuestions!: Table<CbtQuestion>;
+  cbtAttempts!: Table<CbtAttempt>;
+  rfidLogs!: Table<RfidLog>;
+  mentoringJournals!: Table<MentoringJournal>;
+  graduateProfileAssessments!: Table<GraduateProfileAssessment>;
+  extracurricularMembers!: Table<ExtracurricularMember>;
+  extracurricularJournals!: Table<ExtracurricularJournal>;
+  extracurricularAchievements!: Table<ExtracurricularAchievement>;
+  guruWaliInitialAssessments!: Table<GuruWaliInitialAssessment>;
+  cocurricularJournals!: Table<CocurricularJournal>;
+
+  constructor() {
+    super('EduAdminDB');
+    
+    // Define tables and indexes
+    // & = Primary Key
+    // * = Multi-entry index (not used here)
+    // [field] = Indexed field for searching
+    // Added schoolNpsn indexes for multi-tenancy filtering
+    // Bumped to version 43
+    (this as any).version(43).stores({
+      users: '&id, username, role, status, schoolNpsn, isRfidOfficer, isSynced',
+      classes: '&id, userId, schoolNpsn, name, homeroomTeacherId, isSynced', 
+      students: '&id, classId, schoolNpsn, name, nis, gender, rfidTag, guruWaliId, isSynced', 
+      attendanceRecords: '&id, userId, studentId, classId, date, status, isSynced, [studentId+date]',
+      scopeMaterials: '&id, classId, semester, userId, isSynced', 
+      assessmentScores: '&id, userId, studentId, classId, semester, category, materialId, subject, isSynced',
+      teachingJournals: '&id, userId, classId, date, isSynced',
+      teachingSchedules: '&id, userId, schoolNpsn, day, meetingNo, isSynced',
+      logs: '&id, level, actor, action, timestamp, isSynced',
+      emailConfig: '&id, isSynced', 
+      masterSubjects: '&id, name, isSynced',
+      tickets: '&id, userId, status, lastUpdated, isSynced',
+      violations: '&id, studentId, date, isSynced',
+      pointReductions: '&id, studentId, date, isSynced',
+      achievements: '&id, studentId, date, isSynced',
+      counselingSessions: '&id, studentId, date, status, isSynced',
+      homeroomGuidanceSessions: '&id, studentId, classId, schoolNpsn, userId, date, status, isSynced',
+      whatsappConfigs: '&userId, isSynced',
+      notifications: '&id, targetRole, isRead, isPopup, createdAt, isSynced',
+      apiKeys: '&id, key, status, isSynced',
+      systemSettings: '&id, isSynced',
+      donations: '&id, userId, invoiceNumber, status, createdAt, isSynced',
+      dailyPickets: '&id, date, schoolNpsn, isSynced',
+      studentIncidents: '&id, picketId, type, isSynced',
+      teacherCalendar: '&id, userId, date, type, isSynced',
+      passwordResets: '&id, token, userId, isSynced',
+      classInventory: '&id, classId, userId, schoolNpsn, isSynced',
+      homeVisits: '&id, studentId, classId, schoolNpsn, userId, isSynced',
+      parentCalls: '&id, studentId, classId, schoolNpsn, userId, isSynced',
+      learningStyleAssessments: '&id, studentId, classId, schoolNpsn, userId, isSynced',
+      supervisionAssignments: '&id, supervisorId, teacherId, schoolNpsn, status, isSynced',
+      supervisionResults: '&id, assignmentId, supervisorId, teacherId, schoolNpsn, date, isSynced',
+      cbtExams: '&id, userId, schoolNpsn, status, isSynced',
+      cbtQuestions: '&id, examId, sortOrder, isSynced',
+      cbtAttempts: '&id, examId, studentId, schoolNpsn, status, isSynced',
+      rfidLogs: '&id, studentId, classId, schoolNpsn, timestamp, status, isSynced',
+      mentoringJournals: '&id, guruWaliId, studentId, date, topic, schoolNpsn, isSynced',
+      graduateProfileAssessments: '&id, studentId, guruWaliId, date, schoolNpsn, isSynced',
+      extracurricularMembers: '&id, extracurricularName, schoolNpsn, studentId, studentClassId, isSynced',
+      extracurricularJournals: '&id, extracurricularName, schoolNpsn, coachId, date, semester, isSynced',
+      extracurricularAchievements: '&id, extracurricularName, schoolNpsn, coachId, date, level, isSynced'
+    });
+
+    (this as any).version(44).stores({
+      guruWaliInitialAssessments: '&id, studentId, guruWaliId, schoolNpsn, date, status, isSynced, [studentId+guruWaliId]'
+    });
+
+    (this as any).version(45).stores({
+      cocurricularJournals: '&id, schoolNpsn, classId, date, meetingNo, userId, isSynced, [classId+date]'
+    });
+  }
+}
+
+export const db = new EduAdminDatabase();
