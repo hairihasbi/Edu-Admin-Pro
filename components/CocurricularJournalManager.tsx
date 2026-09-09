@@ -9,7 +9,9 @@ import {
   getTeachersOnly,
   getPrincipalTeacher,
   getSystemSettings, 
-  getLocalDate 
+  getLocalDate,
+  runManualSync,
+  db
 } from '../services/database';
 import { MathView, normalizeGeminiMathText } from './MathRenderer';
 import { 
@@ -87,24 +89,52 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
   const [printMaxHour, setPrintMaxHour] = useState(10);
   const [printThemeTitle, setPrintThemeTitle] = useState('');
 
+  // Sync state
+  const [isSyncing, setIsSyncing] = useState(false);
+
   // Notification / Feedback
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const printAreaRef = useRef<HTMLDivElement>(null);
 
+  const showToast = (type: 'success' | 'error', text: string) => {
+    setToastMessage({ type, text });
+    setTimeout(() => setToastMessage(null), 4000);
+  };
+
+  const handleSyncPull = async (showNotification = false) => {
+    setIsSyncing(true);
+    try {
+      await runManualSync('PULL', () => {}, [
+        'eduadmin_cocurricular_journals',
+        'eduadmin_classes',
+        'eduadmin_users'
+      ]);
+      await loadBaseData();
+      await loadJournals();
+      if (showNotification) {
+        showToast('success', 'Data jurnal dari guru lain berhasil disinkronkan');
+      }
+    } catch (err) {
+      console.warn('Sync pull error:', err);
+      if (showNotification) {
+        showToast('error', 'Gagal menyinkronkan data dengan server');
+      }
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   // --- INITIAL DATA LOADING ---
   useEffect(() => {
     loadBaseData();
+    // Sinkronkan data otomatis dari cloud saat membuka halaman agar entri dari rekan guru langsung muncul
+    handleSyncPull(false);
   }, [user.id, user.schoolNpsn]);
 
   useEffect(() => {
     loadJournals();
   }, [user.schoolNpsn, selectedDate, selectedClass, filterMode]);
-
-  const showToast = (type: 'success' | 'error', text: string) => {
-    setToastMessage({ type, text });
-    setTimeout(() => setToastMessage(null), 4000);
-  };
 
   const loadBaseData = async () => {
     try {
@@ -115,7 +145,27 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
         getSystemSettings()
       ]);
 
-      setClasses(classList || []);
+      // Kumpulkan juga nama kelas dari jurnal kokurikuler yang sudah pernah diinput oleh guru lain
+      const existingJournals = await db.cocurricularJournals.filter(j => !j.deleted && !!j.className).toArray();
+      const existingClassNames = Array.from(new Set(existingJournals.map(j => (j.className || '').trim()).filter(Boolean)));
+      
+      // Gabungkan kelas master dan kelas yang ada di jurnal sehingga guru lain selalu bisa memilih kelas tersebut
+      const combinedClasses: ClassRoom[] = [...(classList || [])];
+      for (const clsName of existingClassNames) {
+        if (!combinedClasses.some(c => c.name.trim().toLowerCase() === clsName.toLowerCase())) {
+          combinedClasses.push({
+            id: clsName,
+            name: clsName,
+            userId: user.id,
+            schoolNpsn: user.schoolNpsn || 'DEFAULT',
+            studentCount: 0,
+            academicYear: '',
+            major: '',
+            level: ''
+          } as ClassRoom);
+        }
+      }
+      setClasses(combinedClasses);
 
       // HANYA akun user level GURU (tidak menampilkan user level TENDIK)
       const guruOnly = (teacherList || []).filter(t => 
@@ -148,12 +198,11 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
 
       setSettings(sysSettings || null);
 
-      if (classList && classList.length > 0 && selectedClass === 'XII') {
-        // If there are classes, we can keep XII or default to first class
-        const hasXII = classList.some(c => c.name.toUpperCase().includes('XII'));
-        if (!hasXII && classList[0]) {
-          setSelectedClass(classList[0].name);
-          setFormData(prev => ({ ...prev, className: classList[0].name, classId: classList[0].id }));
+      if (combinedClasses && combinedClasses.length > 0 && selectedClass === 'XII') {
+        const hasXII = combinedClasses.some(c => c.name.toUpperCase().includes('XII'));
+        if (!hasXII && combinedClasses[0]) {
+          setSelectedClass(combinedClasses[0].name);
+          setFormData(prev => ({ ...prev, className: combinedClasses[0].name, classId: combinedClasses[0].id }));
         }
       }
     } catch (err) {
@@ -164,9 +213,10 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
   const loadJournals = async () => {
     setIsLoading(true);
     try {
-      let filterParams: any = {
-        schoolNpsn: user.schoolNpsn
-      };
+      let filterParams: any = {};
+      if (user.schoolNpsn && user.schoolNpsn !== 'DEFAULT') {
+        filterParams.schoolNpsn = user.schoolNpsn;
+      }
 
       if (filterMode === 'DATE_AND_CLASS') {
         filterParams.date = selectedDate;
@@ -226,7 +276,16 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
 
   // Compute filled hours for the selected date & class
   const dailyJournalsForActiveContext = useMemo(() => {
-    return journals.filter(j => j.date === selectedDate && (j.className === selectedClass || selectedClass === 'ALL'));
+    const target = (selectedClass || '').trim().toLowerCase();
+    const targetClean = target.replace(/[^a-zA-Z0-9]/g, '');
+    return journals.filter(j => {
+      if (j.date !== selectedDate) return false;
+      if (selectedClass === 'ALL') return true;
+      const jName = (j.className || '').trim().toLowerCase();
+      const jId = (j.classId || '').trim().toLowerCase();
+      const jClean = jName.replace(/[^a-zA-Z0-9]/g, '');
+      return jName === target || jId === target || (targetClean && jClean && targetClean === jClean);
+    });
   }, [journals, selectedDate, selectedClass]);
 
   const filledHourMap = useMemo(() => {
@@ -298,9 +357,9 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
         // Edit single entry
         await saveCocurricularJournal({
           id: editingId,
-          schoolNpsn: user.schoolNpsn,
+          schoolNpsn: user.schoolNpsn || 'DEFAULT',
           userId: user.id,
-          createdByName: user.fullName,
+          createdByName: user.fullName || user.username || 'Guru',
           facilitatorName: formData.facilitatorName.trim() || user.fullName,
           classId: formData.classId,
           className: formData.className,
@@ -320,9 +379,9 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
           const batchItems: any[] = [];
           for (let h = start; h <= end; h++) {
             batchItems.push({
-              schoolNpsn: user.schoolNpsn,
+              schoolNpsn: user.schoolNpsn || 'DEFAULT',
               userId: user.id,
-              createdByName: user.fullName,
+              createdByName: user.fullName || user.username || 'Guru',
               facilitatorName: formData.facilitatorName.trim() || user.fullName,
               classId: formData.classId,
               className: formData.className,
@@ -340,9 +399,9 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
         } else {
           // Single row or range row
           await saveCocurricularJournal({
-            schoolNpsn: user.schoolNpsn,
+            schoolNpsn: user.schoolNpsn || 'DEFAULT',
             userId: user.id,
-            createdByName: user.fullName,
+            createdByName: user.fullName || user.username || 'Guru',
             facilitatorName: formData.facilitatorName.trim() || user.fullName,
             classId: formData.classId,
             className: formData.className,
@@ -563,6 +622,17 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
 
             {/* Quick Action Buttons */}
             <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => handleSyncPull(true)}
+                disabled={isSyncing}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-colors shadow-xs disabled:opacity-50"
+                title="Tarik data jurnal terbaru yang telah diisi oleh guru lain dari Cloud Server"
+              >
+                <RefreshCw size={14} className={isSyncing ? "animate-spin text-indigo-600" : "text-indigo-600"} />
+                <span>{isSyncing ? 'Menyinkronkan...' : 'Sinkronkan Data'}</span>
+              </button>
+
               <button
                 type="button"
                 onClick={openPrintModal}
