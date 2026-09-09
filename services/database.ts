@@ -1,5 +1,6 @@
 
 import { db } from './db';
+export { db };
 import { Table } from 'dexie';
 import { 
   User, UserRole, ClassRoom, Student, AttendanceRecord, 
@@ -855,12 +856,20 @@ export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', logCall
                         const SAFE_MERGE_COLLECTIONS = [
                             'eduadmin_guru_wali_initial_assessments',
                             'eduadmin_mentoring_journals',
-                            'eduadmin_graduate_assessments'
+                            'eduadmin_graduate_assessments',
+                            'eduadmin_cocurricular_journals'
                         ];
 
                         if (SAFE_MERGE_COLLECTIONS.includes(col)) {
                             if (uniqueItems.length > 0) {
-                                await table.bulkPut(uniqueItems);
+                                const toPut = uniqueItems.filter(i => !i.deleted);
+                                const toDeleteIds = uniqueItems.filter(i => i.deleted).map(i => i.id || i.userId).filter(Boolean);
+                                if (toPut.length > 0) {
+                                    await table.bulkPut(toPut);
+                                }
+                                if (toDeleteIds.length > 0) {
+                                    await table.bulkDelete(toDeleteIds);
+                                }
                             }
                         } else {
                             await table.clear();
@@ -3963,15 +3972,33 @@ export const getCocurricularJournals = async (filters?: {
 }): Promise<CocurricularJournal[]> => {
     let collection = db.cocurricularJournals.filter(j => !j.deleted);
 
-    if (filters?.schoolNpsn) {
-        collection = collection.filter(j => !j.schoolNpsn || j.schoolNpsn === filters.schoolNpsn);
+    // Filter NPSN dengan aman: terima item jika NPSN sama, atau DEFAULT, atau kosong agar tidak saling memblokir antar guru
+    if (filters?.schoolNpsn && filters.schoolNpsn !== 'DEFAULT') {
+        collection = collection.filter(j => 
+            !j.schoolNpsn || 
+            j.schoolNpsn === 'DEFAULT' || 
+            j.schoolNpsn === filters.schoolNpsn
+        );
     }
-    if (filters?.classId && filters.classId !== 'ALL') {
-        collection = collection.filter(j => j.classId === filters.classId || j.className === filters.classId);
-    }
+    
+    // Pencocokan fleksibel kelas (menghilangkan perbedaan spasi / tanda minus / huruf besar kecil)
     if (filters?.className && filters.className !== 'ALL') {
-        collection = collection.filter(j => j.className?.toLowerCase() === filters.className?.toLowerCase());
+        const target = filters.className.trim().toLowerCase();
+        const targetClean = target.replace(/[^a-zA-Z0-9]/g, '');
+        collection = collection.filter(j => {
+            const jName = (j.className || '').trim().toLowerCase();
+            const jId = (j.classId || '').trim().toLowerCase();
+            const jClean = jName.replace(/[^a-zA-Z0-9]/g, '');
+            return Boolean(jName === target || jId === target || (targetClean && jClean && targetClean === jClean));
+        });
+    } else if (filters?.classId && filters.classId !== 'ALL') {
+        const target = filters.classId.trim().toLowerCase();
+        collection = collection.filter(j => 
+            (j.classId || '').trim().toLowerCase() === target || 
+            (j.className || '').trim().toLowerCase() === target
+        );
     }
+
     if (filters?.date) {
         collection = collection.filter(j => j.date === filters.date);
     }
@@ -4004,6 +4031,9 @@ export const saveCocurricularJournal = async (
         isSynced: false
     };
     await db.cocurricularJournals.put(itemToSave);
+    pushToTurso('eduadmin_cocurricular_journals', [itemToSave]).then(async () => {
+        await db.cocurricularJournals.update(id, { isSynced: true });
+    }).catch(e => console.warn('[Cocurricular] Push to Turso queued:', e));
     triggerDebouncedSync();
     return itemToSave;
 };
@@ -4018,6 +4048,11 @@ export const bulkSaveCocurricularJournals = async (
         isSynced: false
     }));
     await db.cocurricularJournals.bulkPut(itemsToSave);
+    pushToTurso('eduadmin_cocurricular_journals', itemsToSave).then(async () => {
+        for (const item of itemsToSave) {
+            await db.cocurricularJournals.update(item.id, { isSynced: true });
+        }
+    }).catch(e => console.warn('[Cocurricular] Bulk push to Turso queued:', e));
     triggerDebouncedSync();
     return itemsToSave;
 };
