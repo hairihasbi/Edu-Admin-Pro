@@ -18,7 +18,8 @@ import {
   Calendar, Clock, BookOpen, User as UserIcon, Plus, Printer, 
   Trash2, Edit3, CheckCircle2, AlertCircle, Search, 
   Filter, Sparkles, FileText, ChevronRight, Share2, 
-  RefreshCw, Check, ArrowRight, Layers, Award, Info, X
+  RefreshCw, Check, ArrowRight, Layers, Award, Info, X,
+  MapPin, RotateCcw
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -55,6 +56,11 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
   const [principalUser, setPrincipalUser] = useState<User | null>(null);
   const [printPrincipalName, setPrintPrincipalName] = useState<string>('');
   const [printPrincipalNip, setPrintPrincipalNip] = useState<string>('');
+  const [printCity, setPrintCity] = useState<string>('');
+  const [printDateRaw, setPrintDateRaw] = useState<string>('');
+  const [printDateText, setPrintDateText] = useState<string>('');
+  const [printCoordinatorName, setPrintCoordinatorName] = useState<string>('');
+  const [printCoordinatorNip, setPrintCoordinatorNip] = useState<string>('');
   const [settings, setSettings] = useState<SystemSettings | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -308,7 +314,7 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
     return 1;
   }, [filledHourMap]);
 
-  // Helper to open print modal ensuring Kepala Sekolah data is synced
+  // Helper to open print modal ensuring Kepala Sekolah and Titimangsa data are initialized
   const openPrintModal = () => {
     if (!printPrincipalName && (principalUser?.fullName || settings?.headmasterName)) {
       setPrintPrincipalName(principalUser?.fullName || settings?.headmasterName || '');
@@ -316,7 +322,38 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
     if (!printPrincipalNip && (principalUser?.nip || settings?.headmasterNip)) {
       setPrintPrincipalNip(principalUser?.nip || settings?.headmasterNip || '');
     }
+    if (!printCity) {
+      setPrintCity(settings?.schoolCity || 'Sekolah');
+    }
+    if (!printDateRaw) {
+      setPrintDateRaw(selectedDate);
+    }
+    if (!printDateText) {
+      const formatted = formatIndonesianDate(selectedDate).split(', ')[1] || selectedDate;
+      setPrintDateText(formatted);
+    }
+    if (!printCoordinatorName) {
+      setPrintCoordinatorName(user.fullName || '');
+    }
+    if (!printCoordinatorNip) {
+      setPrintCoordinatorNip(user.nip || '');
+    }
     setShowPrintModal(true);
+  };
+
+  const handlePrintDateRawChange = (d: string) => {
+    setPrintDateRaw(d);
+    if (d) {
+      const formatted = formatIndonesianDate(d).split(', ')[1] || d;
+      setPrintDateText(formatted);
+    }
+  };
+
+  const handleResetTitimangsa = () => {
+    setPrintCity(settings?.schoolCity || 'Sekolah');
+    setPrintDateRaw(selectedDate);
+    const formatted = formatIndonesianDate(selectedDate).split(', ')[1] || selectedDate;
+    setPrintDateText(formatted);
   };
 
   // Quick set hour when teacher clicks an hour pill
@@ -1297,44 +1334,93 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
               </div>
             </div>
 
-            {/* Sub-bar Informasi Penandatangan Kepala Sekolah (Hanya Tampil di Layar, Tidak Dicetak) */}
-            <div className="px-4 py-2 bg-indigo-50/70 border-b border-indigo-100 flex flex-wrap items-center justify-between gap-3 text-xs print:hidden">
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-slate-700">Penandatangan Kepala Sekolah:</span>
-                <span className="font-bold text-indigo-900 bg-white px-2 py-0.5 rounded border border-indigo-200">
-                  {printPrincipalName || 'Belum diisi'}
-                </span>
-                {printPrincipalNip && (
-                  <span className="text-slate-600 font-mono text-[11px]">
-                    NIP. {printPrincipalNip}
-                  </span>
-                )}
-                {principalUser && (
-                  <span className="text-[10px] bg-emerald-100 text-emerald-800 font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
-                    <CheckCircle2 size={11} className="text-emerald-600" />
-                    Otomatis dari Akun Guru (Tugas Tambahan Kepala Sekolah)
-                  </span>
-                )}
+            {/* Sub-bar Konfigurasi Cetak: Titimangsa (Tempat/Tanggal) & Penandatangan (Hanya Tampil di Layar, Tidak Dicetak) */}
+            <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 flex flex-col gap-2 text-xs print:hidden">
+              
+              {/* Baris 1: Titimangsa (Tempat Cetak & Tanggal Cetak) */}
+              <div className="flex flex-wrap items-center justify-between gap-2.5">
+                <div className="flex items-center gap-1.5 font-semibold text-slate-700">
+                  <MapPin size={13} className="text-amber-600" />
+                  <span>Titimangsa Dokumen:</span>
+                  <span className="text-[11px] font-normal text-slate-500 hidden sm:inline">(Tempat & Tanggal Cetak)</span>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center gap-1 bg-white border border-slate-300 rounded-md px-2 py-1 focus-within:ring-1 focus-within:ring-indigo-500 focus-within:border-indigo-500">
+                    <span className="text-[11px] text-slate-400 font-medium">Tempat:</span>
+                    <input
+                      type="text"
+                      value={printCity}
+                      onChange={(e) => setPrintCity(e.target.value)}
+                      placeholder="Contoh: Sekolah / Padang"
+                      className="text-xs text-slate-800 placeholder-slate-400 focus:outline-none w-32 font-medium"
+                      title="Tempat atau Kota Cetak Dokumen"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-1 bg-white border border-slate-300 rounded-md px-2 py-1 focus-within:ring-1 focus-within:ring-indigo-500 focus-within:border-indigo-500">
+                    <span className="text-[11px] text-slate-400 font-medium">Tanggal:</span>
+                    <input
+                      type="text"
+                      value={printDateText}
+                      onChange={(e) => setPrintDateText(e.target.value)}
+                      placeholder="Contoh: 09 September 2026"
+                      className="text-xs text-slate-800 placeholder-slate-400 focus:outline-none w-36 font-medium"
+                      title="Format teks tanggal cetak (dapat diedit manual)"
+                    />
+                    <input
+                      type="date"
+                      value={printDateRaw}
+                      onChange={(e) => handlePrintDateRawChange(e.target.value)}
+                      className="w-4 h-4 cursor-pointer text-slate-500 hover:text-indigo-600 border-0 bg-transparent p-0"
+                      title="Pilih tanggal dari kalender"
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleResetTitimangsa}
+                    className="inline-flex items-center gap-1 text-[11px] text-slate-600 hover:text-indigo-600 bg-white border border-slate-200 hover:border-indigo-200 rounded px-2 py-1 transition-colors"
+                    title="Kembalikan tempat & tanggal cetak ke nilai default"
+                  >
+                    <RotateCcw size={11} />
+                    <span>Reset</span>
+                  </button>
+                </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={printPrincipalName}
-                  onChange={(e) => setPrintPrincipalName(e.target.value)}
-                  placeholder="Nama Kepala Sekolah"
-                  className="bg-white border border-slate-300 rounded px-2 py-1 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 w-44"
-                  title="Nama Kepala Sekolah"
-                />
-                <input
-                  type="text"
-                  value={printPrincipalNip}
-                  onChange={(e) => setPrintPrincipalNip(e.target.value)}
-                  placeholder="NIP Kepala Sekolah"
-                  className="bg-white border border-slate-300 rounded px-2 py-1 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 w-36"
-                  title="NIP Kepala Sekolah"
-                />
+              {/* Baris 2: Pejabat Penandatangan */}
+              <div className="flex flex-wrap items-center justify-between gap-2.5 pt-1.5 border-t border-slate-200/70">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-slate-700">Kepala Sekolah:</span>
+                  {principalUser && (
+                    <span className="text-[10px] bg-emerald-100 text-emerald-800 font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
+                      <CheckCircle2 size={11} className="text-emerald-600" />
+                      Otomatis dari Akun Guru
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="text"
+                    value={printPrincipalName}
+                    onChange={(e) => setPrintPrincipalName(e.target.value)}
+                    placeholder="Nama Kepala Sekolah"
+                    className="bg-white border border-slate-300 rounded px-2 py-1 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 w-44"
+                    title="Nama Kepala Sekolah"
+                  />
+                  <input
+                    type="text"
+                    value={printPrincipalNip}
+                    onChange={(e) => setPrintPrincipalNip(e.target.value)}
+                    placeholder="NIP Kepala Sekolah"
+                    className="bg-white border border-slate-300 rounded px-2 py-1 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 w-36"
+                    title="NIP Kepala Sekolah"
+                  />
+                </div>
               </div>
+
             </div>
 
             {/* Printable Paper Canvas */}
@@ -1440,15 +1526,49 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
                   </div>
 
                   <div>
-                    <p>
-                      {settings?.schoolCity || 'Sekolah'}, {formatIndonesianDate(selectedDate).split(', ')[1] || selectedDate}
+                    <p className="mb-0.5">
+                      {/* Teks Bersih untuk Cetak Fisik / PDF */}
+                      <span className="hidden print:inline">
+                        {printCity || 'Sekolah'}, {printDateText || (formatIndonesianDate(selectedDate).split(', ')[1] || selectedDate)}
+                      </span>
+                      {/* Kontrol Interaktif pada Tampilan Layar */}
+                      <span 
+                        className="print:hidden inline-flex items-center justify-center gap-1 bg-amber-50/90 hover:bg-amber-100 border border-dashed border-amber-300 hover:border-amber-400 rounded px-2 py-0.5 transition-all shadow-2xs group cursor-pointer"
+                        title="Edit manual tempat dan tanggal cetak di sini"
+                      >
+                        <MapPin size={11} className="text-amber-600 shrink-0" />
+                        <input
+                          type="text"
+                          value={printCity}
+                          onChange={(e) => setPrintCity(e.target.value)}
+                          placeholder="Tempat"
+                          className="bg-transparent border-b border-amber-400 focus:border-indigo-600 font-serif text-center px-1 text-[11px] text-slate-800 w-24 focus:outline-none"
+                          title="Edit manual Tempat Cetak (misal: Sekolah / Padang)"
+                        />
+                        <span className="font-serif text-slate-700">,</span>
+                        <input
+                          type="text"
+                          value={printDateText}
+                          onChange={(e) => setPrintDateText(e.target.value)}
+                          placeholder="Tanggal Cetak"
+                          className="bg-transparent border-b border-amber-400 focus:border-indigo-600 font-serif text-center px-1 text-[11px] text-slate-800 w-32 focus:outline-none"
+                          title="Edit manual Tanggal Cetak (misal: 09 September 2026)"
+                        />
+                        <input
+                          type="date"
+                          value={printDateRaw}
+                          onChange={(e) => handlePrintDateRawChange(e.target.value)}
+                          className="w-3.5 h-3.5 cursor-pointer opacity-70 hover:opacity-100 border-0 bg-transparent p-0 text-slate-600"
+                          title="Pilih tanggal dari kalender"
+                        />
+                      </span>
                     </p>
                     <p className="font-semibold">Koordinator Kokurikuler / P5</p>
                     <div className="h-16"></div>
                     <p className="font-bold underline">
-                      {user.fullName || '...................................................'}
+                      {printCoordinatorName || user.fullName || '...................................................'}
                     </p>
-                    <p>NIP. {user.nip || '...................................................'}</p>
+                    <p>NIP. {printCoordinatorNip || user.nip || '...................................................'}</p>
                   </div>
                 </div>
 
