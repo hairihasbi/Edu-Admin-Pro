@@ -11,7 +11,7 @@ const AdminSiteSettings: React.FC = () => {
     featureRppEnabled: true,
     maintenanceMessage: '',
     appName: 'EduAdmin Pro',
-    schoolName: 'Sekolah Indonesia',
+    schoolName: '',
     appDescription: 'Sistem Administrasi Sekolah Terpadu',
     appKeywords: 'sekolah, administrasi, guru, siswa, rpp, kurikulum merdeka',
     logoUrl: '',

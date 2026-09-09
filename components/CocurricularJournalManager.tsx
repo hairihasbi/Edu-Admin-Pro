@@ -19,7 +19,7 @@ import {
   Trash2, Edit3, CheckCircle2, AlertCircle, Search, 
   Filter, Sparkles, FileText, ChevronRight, Share2, 
   RefreshCw, Check, ArrowRight, Layers, Award, Info, X,
-  MapPin, RotateCcw
+  MapPin, RotateCcw, Building2
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -54,6 +54,7 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
   const [classes, setClasses] = useState<ClassRoom[]>([]);
   const [teachers, setTeachers] = useState<User[]>([]);
   const [principalUser, setPrincipalUser] = useState<User | null>(null);
+  const [printSchoolName, setPrintSchoolName] = useState<string>('');
   const [printPrincipalName, setPrintPrincipalName] = useState<string>('');
   const [printPrincipalNip, setPrintPrincipalNip] = useState<string>('');
   const [printCity, setPrintCity] = useState<string>('');
@@ -202,6 +203,49 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
         setPrintPrincipalNip(sysSettings.headmasterNip || '');
       }
 
+      // Deteksi otomatis Nama Sekolah yang aktif sesuai data riil pengguna & sekolah
+      const isGenericSchool = (s?: string | null) => {
+        if (!s) return true;
+        const norm = s.trim().toLowerCase();
+        return !norm || norm === 'sekolah indonesia' || norm === 'sistem sekolah' || norm === 'eduadmin' || norm === 'sekolah';
+      };
+
+      let activeSchool = '';
+      if (user.schoolName && !isGenericSchool(user.schoolName)) {
+        activeSchool = user.schoolName.trim();
+      } else if (principal?.schoolName && !isGenericSchool(principal.schoolName)) {
+        activeSchool = principal.schoolName.trim();
+      } else if (guruOnly && guruOnly.length > 0) {
+        const found = guruOnly.find(g => g.schoolName && !isGenericSchool(g.schoolName));
+        if (found?.schoolName) {
+          activeSchool = found.schoolName.trim();
+        }
+      }
+
+      if (!activeSchool && user.schoolNpsn && user.schoolNpsn !== 'DEFAULT') {
+        try {
+          const sameSchoolUsers = await db.users.where('schoolNpsn').equals(user.schoolNpsn).toArray();
+          const uSchool = sameSchoolUsers.find(u => u.schoolName && !isGenericSchool(u.schoolName));
+          if (uSchool?.schoolName) {
+            activeSchool = uSchool.schoolName.trim();
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+
+      if (!activeSchool && sysSettings?.schoolName && !isGenericSchool(sysSettings.schoolName)) {
+        activeSchool = sysSettings.schoolName.trim();
+      }
+
+      if (!activeSchool && user.schoolName && user.schoolName.trim()) {
+        activeSchool = user.schoolName.trim();
+      }
+
+      if (activeSchool) {
+        setPrintSchoolName(activeSchool);
+      }
+
       setSettings(sysSettings || null);
 
       if (combinedClasses && combinedClasses.length > 0 && selectedClass === 'XII') {
@@ -314,8 +358,25 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
     return 1;
   }, [filledHourMap]);
 
-  // Helper to open print modal ensuring Kepala Sekolah and Titimangsa data are initialized
+  // Helper to open print modal ensuring Kepala Sekolah, Nama Sekolah, and Titimangsa data are initialized
   const openPrintModal = () => {
+    const isGenericSchool = (s?: string | null) => {
+      if (!s) return true;
+      const norm = s.trim().toLowerCase();
+      return !norm || norm === 'sekolah indonesia' || norm === 'sistem sekolah' || norm === 'eduadmin' || norm === 'sekolah';
+    };
+
+    if (!printSchoolName || isGenericSchool(printSchoolName)) {
+      const activeSchool = 
+        (user.schoolName && !isGenericSchool(user.schoolName) ? user.schoolName.trim() : '') ||
+        (principalUser?.schoolName && !isGenericSchool(principalUser.schoolName) ? principalUser.schoolName.trim() : '') ||
+        (settings?.schoolName && !isGenericSchool(settings.schoolName) ? settings.schoolName.trim() : '') ||
+        (user.schoolName ? user.schoolName.trim() : '');
+      if (activeSchool) {
+        setPrintSchoolName(activeSchool);
+      }
+    }
+
     if (!printPrincipalName && (principalUser?.fullName || settings?.headmasterName)) {
       setPrintPrincipalName(principalUser?.fullName || settings?.headmasterName || '');
     }
@@ -350,6 +411,19 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
   };
 
   const handleResetTitimangsa = () => {
+    const isGenericSchool = (s?: string | null) => {
+      if (!s) return true;
+      const norm = s.trim().toLowerCase();
+      return !norm || norm === 'sekolah indonesia' || norm === 'sistem sekolah' || norm === 'eduadmin' || norm === 'sekolah';
+    };
+    const activeSchool = 
+      (user.schoolName && !isGenericSchool(user.schoolName) ? user.schoolName.trim() : '') ||
+      (principalUser?.schoolName && !isGenericSchool(principalUser.schoolName) ? principalUser.schoolName.trim() : '') ||
+      (settings?.schoolName && !isGenericSchool(settings.schoolName) ? settings.schoolName.trim() : '') ||
+      (user.schoolName ? user.schoolName.trim() : '');
+    if (activeSchool) {
+      setPrintSchoolName(activeSchool);
+    }
     setPrintCity(settings?.schoolCity || 'Sekolah');
     setPrintDateRaw(selectedDate);
     const formatted = formatIndonesianDate(selectedDate).split(', ')[1] || selectedDate;
@@ -1334,26 +1408,34 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
               </div>
             </div>
 
-            {/* Sub-bar Konfigurasi Cetak: Titimangsa (Tempat/Tanggal) & Penandatangan (Hanya Tampil di Layar, Tidak Dicetak) */}
+            {/* Sub-bar Konfigurasi Cetak: Nama Sekolah, Titimangsa (Tempat/Tanggal) & Penandatangan (Hanya Tampil di Layar, Tidak Dicetak) */}
             <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 flex flex-col gap-2 text-xs print:hidden">
               
-              {/* Baris 1: Titimangsa (Tempat Cetak & Tanggal Cetak) */}
+              {/* Baris 1: Nama Sekolah (KOP) & Titimangsa (Tempat/Tanggal) */}
               <div className="flex flex-wrap items-center justify-between gap-2.5">
                 <div className="flex items-center gap-1.5 font-semibold text-slate-700">
-                  <MapPin size={13} className="text-amber-600" />
-                  <span>Titimangsa Dokumen:</span>
-                  <span className="text-[11px] font-normal text-slate-500 hidden sm:inline">(Tempat & Tanggal Cetak)</span>
+                  <Building2 size={13} className="text-indigo-600 shrink-0" />
+                  <span>Kop Sekolah:</span>
+                  <input
+                    type="text"
+                    value={printSchoolName}
+                    onChange={(e) => setPrintSchoolName(e.target.value)}
+                    placeholder="Nama Sekolah Aktif"
+                    className="bg-white border border-slate-300 rounded px-2 py-1 text-xs text-slate-800 font-bold uppercase placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 w-52 sm:w-64"
+                    title="Nama Sekolah untuk KOP Jurnal (Otomatis diambil dari data sekolah aktif, dapat diedit)"
+                  />
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
                   <div className="flex items-center gap-1 bg-white border border-slate-300 rounded-md px-2 py-1 focus-within:ring-1 focus-within:ring-indigo-500 focus-within:border-indigo-500">
+                    <MapPin size={12} className="text-amber-600 shrink-0" />
                     <span className="text-[11px] text-slate-400 font-medium">Tempat:</span>
                     <input
                       type="text"
                       value={printCity}
                       onChange={(e) => setPrintCity(e.target.value)}
-                      placeholder="Contoh: Sekolah / Padang"
-                      className="text-xs text-slate-800 placeholder-slate-400 focus:outline-none w-32 font-medium"
+                      placeholder="Sekolah"
+                      className="text-xs text-slate-800 placeholder-slate-400 focus:outline-none w-28 font-medium"
                       title="Tempat atau Kota Cetak Dokumen"
                     />
                   </div>
@@ -1364,7 +1446,7 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
                       type="text"
                       value={printDateText}
                       onChange={(e) => setPrintDateText(e.target.value)}
-                      placeholder="Contoh: 09 September 2026"
+                      placeholder="09 September 2026"
                       className="text-xs text-slate-800 placeholder-slate-400 focus:outline-none w-36 font-medium"
                       title="Format teks tanggal cetak (dapat diedit manual)"
                     />
@@ -1381,7 +1463,7 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
                     type="button"
                     onClick={handleResetTitimangsa}
                     className="inline-flex items-center gap-1 text-[11px] text-slate-600 hover:text-indigo-600 bg-white border border-slate-200 hover:border-indigo-200 rounded px-2 py-1 transition-colors"
-                    title="Kembalikan tempat & tanggal cetak ke nilai default"
+                    title="Kembalikan nama sekolah, tempat & tanggal cetak ke nilai default"
                   >
                     <RotateCcw size={11} />
                     <span>Reset</span>
@@ -1430,7 +1512,25 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
                 {/* KOP / HEADER RESMI SEKOLAH */}
                 <div className="text-center mb-5 pb-3 border-b-2 border-black">
                   <h2 className="text-sm font-bold uppercase tracking-wider">
-                    {settings?.schoolName || user.schoolName || 'PEMERINTAH PROVINSI / KABUPATEN'}
+                    {/* Teks Bersih untuk Cetak Fisik / PDF */}
+                    <span className="hidden print:inline">
+                      {printSchoolName || user.schoolName || 'PEMERINTAH PROVINSI / KABUPATEN'}
+                    </span>
+                    {/* Kontrol Interaktif pada Tampilan Layar */}
+                    <span 
+                      className="print:hidden inline-flex items-center justify-center gap-1 bg-amber-50/80 hover:bg-amber-100 border border-dashed border-amber-300 hover:border-amber-400 rounded px-2 py-0.5 transition-all shadow-2xs group cursor-pointer"
+                      title="Edit manual Nama Sekolah pada KOP di sini"
+                    >
+                      <Building2 size={12} className="text-amber-600 shrink-0" />
+                      <input
+                        type="text"
+                        value={printSchoolName}
+                        onChange={(e) => setPrintSchoolName(e.target.value)}
+                        placeholder="NAMA SEKOLAH"
+                        className="bg-transparent border-b border-amber-400 focus:border-indigo-600 font-serif font-bold uppercase text-center px-1 text-sm text-slate-800 w-72 sm:w-96 focus:outline-none"
+                        title="Edit manual Nama Sekolah pada KOP (otomatis terisi dari data sekolah aktif)"
+                      />
+                    </span>
                   </h2>
                   <h1 className="text-base font-extrabold uppercase mt-0.5 tracking-tight">
                     JURNAL KEGIATAN KOKURIKULER / PROYEK P5
