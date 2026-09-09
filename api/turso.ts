@@ -858,6 +858,32 @@ const DB_SCHEMAS = [
     `CREATE INDEX IF NOT EXISTS idx_gwia_student ON guru_wali_initial_assessments(student_id)`,
     `CREATE INDEX IF NOT EXISTS idx_gwia_wali ON guru_wali_initial_assessments(guru_wali_id)`,
 
+    // 42. COCURRICULAR JOURNALS (JURNAL KOKURIKULER P5 / PROYEK SEKOLAH BERSAMA)
+    `CREATE TABLE IF NOT EXISTS cocurricular_journals (
+        id TEXT PRIMARY KEY,
+        school_npsn TEXT,
+        user_id TEXT,
+        created_by_name TEXT,
+        facilitator_name TEXT,
+        class_id TEXT,
+        class_name TEXT,
+        date TEXT,
+        day_name TEXT,
+        meeting_no INTEGER,
+        meeting_no_end INTEGER,
+        activities TEXT,
+        project_theme TEXT,
+        target_dimension TEXT,
+        notes TEXT,
+        last_modified INTEGER,
+        version INTEGER DEFAULT 1,
+        deleted INTEGER DEFAULT 0
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_coc_npsn ON cocurricular_journals(school_npsn)`,
+    `CREATE INDEX IF NOT EXISTS idx_coc_class ON cocurricular_journals(class_name)`,
+    `CREATE INDEX IF NOT EXISTS idx_coc_date ON cocurricular_journals(date)`,
+    `CREATE INDEX IF NOT EXISTS idx_coc_user ON cocurricular_journals(user_id)`,
+
     // User table migrations for extracurricular and subjects
     `ALTER TABLE users ADD COLUMN is_extracurricular_advisor INTEGER DEFAULT 0`,
     `ALTER TABLE users ADD COLUMN extracurriculars TEXT`,
@@ -1028,6 +1054,35 @@ const getTableConfig = (collection: string) => {
             JSON.stringify(item.achievements || {}),
             JSON.stringify(item.character || {}),
             JSON.stringify(item.conclusion || {}),
+            s(item.lastModified),
+            item.version || 1,
+            item.deleted ? 1 : 0
+        ]
+    };
+    case 'eduadmin_cocurricular_journals': return {
+        table: 'cocurricular_journals',
+        columns: [
+            'id', 'school_npsn', 'user_id', 'created_by_name', 'facilitator_name',
+            'class_id', 'class_name', 'date', 'day_name', 'meeting_no', 'meeting_no_end',
+            'activities', 'project_theme', 'target_dimension', 'notes',
+            'last_modified', 'version', 'deleted'
+        ],
+        mapFn: (item: any) => [
+            s(item.id),
+            s(item.schoolNpsn),
+            s(item.userId),
+            s(item.createdByName),
+            s(item.facilitatorName),
+            s(item.classId),
+            s(item.className),
+            s(item.date),
+            s(item.dayName),
+            Number(item.meetingNo) || 1,
+            item.meetingNoEnd ? Number(item.meetingNoEnd) : null,
+            s(item.activities),
+            s(item.projectTheme),
+            s(item.targetDimension),
+            s(item.notes),
             s(item.lastModified),
             item.version || 1,
             item.deleted ? 1 : 0
@@ -1333,6 +1388,26 @@ const mapRowToJSON = (collection: string, row: any) => {
         achievements: parseJSONObjectSafe(row.achievements),
         character: parseJSONObjectSafe(row.character),
         conclusion: parseJSONObjectSafe(row.conclusion),
+        lastModified: row.last_modified,
+        version: row.version,
+        deleted: Boolean(row.deleted)
+    };
+    case 'eduadmin_cocurricular_journals': return {
+        id: row.id,
+        schoolNpsn: row.school_npsn,
+        userId: row.user_id,
+        createdByName: row.created_by_name,
+        facilitatorName: row.facilitator_name,
+        classId: row.class_id,
+        className: row.class_name,
+        date: row.date,
+        dayName: row.day_name,
+        meetingNo: Number(row.meeting_no) || 1,
+        meetingNoEnd: row.meeting_no_end ? Number(row.meeting_no_end) : undefined,
+        activities: row.activities,
+        projectTheme: row.project_theme,
+        targetDimension: row.target_dimension,
+        notes: row.notes,
         lastModified: row.last_modified,
         version: row.version,
         deleted: Boolean(row.deleted)
@@ -2193,6 +2268,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     await client.execute(`ALTER TABLE journals ADD COLUMN absent_students TEXT`).catch(() => {});
                     await client.execute(`ALTER TABLE journals ADD COLUMN subject TEXT`).catch(() => {});
                     await client.batch(statements);
+                } else if (batchError.message && (batchError.message.includes('cocurricular_journals') || batchError.message.includes('no such table'))) {
+                    console.log("Lazy migration: Creating cocurricular_journals table...");
+                    try {
+                        await client.execute(`CREATE TABLE IF NOT EXISTS cocurricular_journals (
+                            id TEXT PRIMARY KEY,
+                            school_npsn TEXT,
+                            user_id TEXT,
+                            created_by_name TEXT,
+                            facilitator_name TEXT,
+                            class_id TEXT,
+                            class_name TEXT,
+                            date TEXT,
+                            day_name TEXT,
+                            meeting_no INTEGER,
+                            meeting_no_end INTEGER,
+                            activities TEXT,
+                            project_theme TEXT,
+                            target_dimension TEXT,
+                            notes TEXT,
+                            last_modified INTEGER,
+                            version INTEGER DEFAULT 1,
+                            deleted INTEGER DEFAULT 0
+                        )`);
+                        await client.execute(`CREATE INDEX IF NOT EXISTS idx_coc_npsn ON cocurricular_journals(school_npsn)`).catch(() => {});
+                        await client.execute(`CREATE INDEX IF NOT EXISTS idx_coc_class ON cocurricular_journals(class_name)`).catch(() => {});
+                        await client.execute(`CREATE INDEX IF NOT EXISTS idx_coc_date ON cocurricular_journals(date)`).catch(() => {});
+                        await client.batch(statements);
+                    } catch (e) {
+                        throw batchError;
+                    }
                 } else {
                     throw batchError;
                 }
@@ -2398,6 +2503,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                         args = [userId];
                     }
                 }
+                else if (tableConfig.table === 'cocurricular_journals') {
+                    // Jurnal Kokurikuler bersama: semua guru di sekolah yang sama berbagi akses
+                    if (userNpsn && userNpsn !== 'DEFAULT') {
+                        whereClauses.push("(school_npsn = ? OR school_npsn IS NULL OR school_npsn = 'DEFAULT' OR user_id = ? OR user_id IN (SELECT id FROM users WHERE school_npsn = ?))");
+                        args = [userNpsn, userId, userNpsn];
+                    } else {
+                        whereClauses.push("1 = 1");
+                    }
+                }
             } else {
                 // Students / Others
                 if (tableConfig.table === 'cbt_exams') {
@@ -2420,6 +2534,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     whereClauses.push("id = ?");
                     args = [userId];
                 }
+                else if (tableConfig.table === 'cocurricular_journals') {
+                    if (userNpsn && userNpsn !== 'DEFAULT') {
+                        whereClauses.push("school_npsn = ?");
+                        args = [userNpsn];
+                    } else {
+                        whereClauses.push("1 = 1");
+                    }
+                }
                 else {
                     if (userId) {
                         whereClauses.push("(user_id = ? OR id = ? OR student_id = ?)");
@@ -2436,7 +2558,40 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 console.log(`[API Debug] Materials Query: ${query}`, args);
             }
             
-            const result = await client.execute({ sql: query, args });
+            let result;
+            try {
+                result = await client.execute({ sql: query, args });
+            } catch (queryErr: any) {
+                if (queryErr.message && (queryErr.message.includes('no such table: cocurricular_journals') || (tableConfig.table === 'cocurricular_journals' && queryErr.message.includes('no such table')))) {
+                    console.log("Lazy migration in pull: Creating cocurricular_journals table...");
+                    await client.execute(`CREATE TABLE IF NOT EXISTS cocurricular_journals (
+                        id TEXT PRIMARY KEY,
+                        school_npsn TEXT,
+                        user_id TEXT,
+                        created_by_name TEXT,
+                        facilitator_name TEXT,
+                        class_id TEXT,
+                        class_name TEXT,
+                        date TEXT,
+                        day_name TEXT,
+                        meeting_no INTEGER,
+                        meeting_no_end INTEGER,
+                        activities TEXT,
+                        project_theme TEXT,
+                        target_dimension TEXT,
+                        notes TEXT,
+                        last_modified INTEGER,
+                        version INTEGER DEFAULT 1,
+                        deleted INTEGER DEFAULT 0
+                    )`).catch(() => {});
+                    await client.execute(`CREATE INDEX IF NOT EXISTS idx_coc_npsn ON cocurricular_journals(school_npsn)`).catch(() => {});
+                    await client.execute(`CREATE INDEX IF NOT EXISTS idx_coc_class ON cocurricular_journals(class_name)`).catch(() => {});
+                    await client.execute(`CREATE INDEX IF NOT EXISTS idx_coc_date ON cocurricular_journals(date)`).catch(() => {});
+                    result = { rows: [] };
+                } else {
+                    throw queryErr;
+                }
+            }
             rows = result.rows.map(row => ({
                 id: tableConfig.table === 'wa_configs' ? row.user_id : row.id,
                 data: mapRowToJSON(collection, row),
