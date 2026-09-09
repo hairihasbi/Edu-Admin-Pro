@@ -355,6 +355,44 @@ export const getSchoolTeachers = async (schoolNpsn: string): Promise<User[]> => 
         .toArray();
 };
 
+export const getPrincipalTeacher = async (schoolNpsn?: string): Promise<User | null> => {
+    if (schoolNpsn) {
+        const principal = await db.users
+            .where('schoolNpsn').equals(schoolNpsn)
+            .filter(u => (u.role === 'GURU' || (u.role as string) === 'GURU') && 
+                         (u.additionalRole === 'KEPALA_SEKOLAH' || u.additionalRole?.toLowerCase() === 'kepala_sekolah' || u.additionalRole?.toLowerCase() === 'kepala sekolah'))
+            .first();
+        if (principal) return principal;
+    }
+    const anyPrincipal = await db.users
+        .filter(u => (u.role === 'GURU' || (u.role as string) === 'GURU') && 
+                     (u.additionalRole === 'KEPALA_SEKOLAH' || u.additionalRole?.toLowerCase() === 'kepala_sekolah' || u.additionalRole?.toLowerCase() === 'kepala sekolah'))
+        .first();
+    if (anyPrincipal) return anyPrincipal;
+
+    const fallback = await db.users
+        .filter(u => u.additionalRole === 'KEPALA_SEKOLAH')
+        .first();
+    return fallback || null;
+};
+
+export const getTeachersOnly = async (schoolNpsn?: string): Promise<User[]> => {
+    let teachers: User[] = [];
+    if (schoolNpsn) {
+        teachers = await db.users
+            .where('schoolNpsn').equals(schoolNpsn)
+            .filter(u => (u.role === 'GURU' || (u.role as string) === 'GURU') && u.role !== 'TENDIK' && (u.role as string) !== 'TENDIK' && !u.deleted)
+            .toArray();
+    }
+    if (teachers.length === 0) {
+        teachers = await db.users
+            .filter(u => (u.role === 'GURU' || (u.role as string) === 'GURU') && u.role !== 'TENDIK' && (u.role as string) !== 'TENDIK' && !u.deleted)
+            .toArray();
+    }
+    return teachers.sort((a, b) => (a.fullName || '').localeCompare(b.fullName || ''));
+};
+
+
 export const getSchoolJournals = async (teacherIds: string[], date: string): Promise<TeachingJournal[]> => {
     return await db.teachingJournals
         .where('userId').anyOf(teacherIds)
