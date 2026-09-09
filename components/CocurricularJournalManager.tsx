@@ -6,7 +6,8 @@ import {
   bulkSaveCocurricularJournals, 
   deleteCocurricularJournal, 
   getClasses, 
-  getPicketOfficers,
+  getTeachersOnly,
+  getPrincipalTeacher,
   getSystemSettings, 
   getLocalDate 
 } from '../services/database';
@@ -49,6 +50,9 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
   const [journals, setJournals] = useState<CocurricularJournal[]>([]);
   const [classes, setClasses] = useState<ClassRoom[]>([]);
   const [teachers, setTeachers] = useState<User[]>([]);
+  const [principalUser, setPrincipalUser] = useState<User | null>(null);
+  const [printPrincipalName, setPrintPrincipalName] = useState<string>('');
+  const [printPrincipalNip, setPrintPrincipalNip] = useState<string>('');
   const [settings, setSettings] = useState<SystemSettings | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -71,7 +75,7 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
     startHour: 2,
     endHour: 2,
     isSeparateHours: true, // Split 2 to 4 into 3 individual rows for NO 1, 2, 3...
-    facilitatorName: user.fullName || '',
+    facilitatorName: (user.role === 'GURU' || (user.role as string) === UserRole.GURU) ? (user.fullName || '') : '',
     projectTheme: 'Gaya Hidup Berkelanjutan',
     activities: '',
     notes: ''
@@ -104,14 +108,44 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
 
   const loadBaseData = async () => {
     try {
-      const [classList, teacherList, sysSettings] = await Promise.all([
+      const [classList, teacherList, principalTeacher, sysSettings] = await Promise.all([
         getClasses(user.id, user.schoolNpsn),
-        user.schoolNpsn ? getPicketOfficers(user.schoolNpsn) : [],
+        getTeachersOnly(user.schoolNpsn),
+        getPrincipalTeacher(user.schoolNpsn),
         getSystemSettings()
       ]);
 
       setClasses(classList || []);
-      setTeachers(teacherList || []);
+
+      // HANYA akun user level GURU (tidak menampilkan user level TENDIK)
+      const guruOnly = (teacherList || []).filter(t => 
+        (t.role === 'GURU' || (t.role as string) === UserRole.GURU) && 
+        t.role !== 'TENDIK' && 
+        (t.role as string) !== 'TENDIK'
+      );
+
+      // Jika user yang aktif saat ini adalah Guru, pastikan masuk ke daftar jika belum ada
+      const isCurrentGuru = user.role === 'GURU' || (user.role as string) === UserRole.GURU;
+      if (isCurrentGuru && !guruOnly.some(t => t.id === user.id)) {
+        guruOnly.unshift(user);
+      }
+      setTeachers(guruOnly);
+
+      // Ambil data Kepala Sekolah otomatis dari akun user guru yang memiliki tugas tambahan kepala sekolah
+      const isCurrentKepsek = user.additionalRole === 'KEPALA_SEKOLAH' || 
+                              user.additionalRole?.toLowerCase() === 'kepala_sekolah' || 
+                              user.additionalRole?.toLowerCase() === 'kepala sekolah';
+      const principal = isCurrentKepsek ? user : principalTeacher;
+
+      if (principal) {
+        setPrincipalUser(principal);
+        setPrintPrincipalName(principal.fullName || '');
+        setPrintPrincipalNip(principal.nip || '');
+      } else if (sysSettings) {
+        setPrintPrincipalName(sysSettings.headmasterName || '');
+        setPrintPrincipalNip(sysSettings.headmasterNip || '');
+      }
+
       setSettings(sysSettings || null);
 
       if (classList && classList.length > 0 && selectedClass === 'XII') {
@@ -215,6 +249,17 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
     return 1;
   }, [filledHourMap]);
 
+  // Helper to open print modal ensuring Kepala Sekolah data is synced
+  const openPrintModal = () => {
+    if (!printPrincipalName && (principalUser?.fullName || settings?.headmasterName)) {
+      setPrintPrincipalName(principalUser?.fullName || settings?.headmasterName || '');
+    }
+    if (!printPrincipalNip && (principalUser?.nip || settings?.headmasterNip)) {
+      setPrintPrincipalNip(principalUser?.nip || settings?.headmasterNip || '');
+    }
+    setShowPrintModal(true);
+  };
+
   // Quick set hour when teacher clicks an hour pill
   const handleQuickSelectHour = (hour: number) => {
     const existing = filledHourMap.get(hour);
@@ -222,6 +267,7 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
       handleEdit(existing);
     } else {
       setEditingId(null);
+      const isGuru = user.role === 'GURU' || (user.role as string) === UserRole.GURU;
       setFormData(prev => ({
         ...prev,
         startHour: hour,
@@ -229,7 +275,7 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
         date: selectedDate,
         className: selectedClass,
         classId: selectedClass,
-        facilitatorName: user.fullName || ''
+        facilitatorName: isGuru ? (user.fullName || '') : (teachers[0]?.fullName || '')
       }));
       setIsFormOpen(true);
     }
@@ -519,7 +565,7 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={() => setShowPrintModal(true)}
+                onClick={openPrintModal}
                 className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 hover:border-slate-400 transition-colors shadow-xs"
                 title="Cetak format lembar jurnal resmi"
               >
@@ -530,7 +576,7 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
               <button
                 type="button"
                 onClick={handleExportExcel}
-                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-colors"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-colors"
                 title="Ekspor data ke Excel"
               >
                 <FileText size={15} />
@@ -541,6 +587,7 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
                 type="button"
                 onClick={() => {
                   setEditingId(null);
+                  const isGuru = user.role === 'GURU' || (user.role as string) === UserRole.GURU;
                   setFormData({
                     date: selectedDate,
                     className: selectedClass,
@@ -548,7 +595,7 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
                     startHour: nextUnfilledHour,
                     endHour: nextUnfilledHour,
                     isSeparateHours: true,
-                    facilitatorName: user.fullName || '',
+                    facilitatorName: isGuru ? (user.fullName || '') : (teachers[0]?.fullName || ''),
                     projectTheme: P5_THEMES[0],
                     activities: '',
                     notes: ''
@@ -850,8 +897,11 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
 
                 {/* Fasilitator */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Nama Fasilitator
+                  <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center justify-between">
+                    <span>Nama Fasilitator (Guru)</span>
+                    <span className="text-[10px] font-normal text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                      Khusus Level Guru ({teachers.length})
+                    </span>
                   </label>
                   <div className="space-y-1">
                     <input
@@ -869,13 +919,13 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
                             setFormData(prev => ({ ...prev, facilitatorName: e.target.value }));
                           }
                         }}
-                        className="w-full text-[11px] text-slate-500 bg-transparent border-0 p-0 cursor-pointer hover:text-indigo-600"
-                        defaultValue=""
+                        className="w-full text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded px-2 py-1 cursor-pointer hover:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        value={teachers.some(t => t.fullName === formData.facilitatorName) ? formData.facilitatorName : ""}
                       >
-                        <option value="" disabled>Pilih dari daftar rekan guru...</option>
+                        <option value="" disabled>Pilih dari daftar akun guru...</option>
                         {teachers.map(t => (
                           <option key={t.id} value={t.fullName}>
-                            {t.fullName}
+                            {t.fullName} {t.nip ? `(NIP: ${t.nip})` : ''}
                           </option>
                         ))}
                       </select>
@@ -999,7 +1049,7 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
 
             <button
               type="button"
-              onClick={() => setShowPrintModal(true)}
+              onClick={openPrintModal}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-colors self-start sm:self-auto"
             >
               <Printer size={14} />
@@ -1177,6 +1227,46 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
               </div>
             </div>
 
+            {/* Sub-bar Informasi Penandatangan Kepala Sekolah (Hanya Tampil di Layar, Tidak Dicetak) */}
+            <div className="px-4 py-2 bg-indigo-50/70 border-b border-indigo-100 flex flex-wrap items-center justify-between gap-3 text-xs print:hidden">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-slate-700">Penandatangan Kepala Sekolah:</span>
+                <span className="font-bold text-indigo-900 bg-white px-2 py-0.5 rounded border border-indigo-200">
+                  {printPrincipalName || 'Belum diisi'}
+                </span>
+                {printPrincipalNip && (
+                  <span className="text-slate-600 font-mono text-[11px]">
+                    NIP. {printPrincipalNip}
+                  </span>
+                )}
+                {principalUser && (
+                  <span className="text-[10px] bg-emerald-100 text-emerald-800 font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <CheckCircle2 size={11} className="text-emerald-600" />
+                    Otomatis dari Akun Guru (Tugas Tambahan Kepala Sekolah)
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={printPrincipalName}
+                  onChange={(e) => setPrintPrincipalName(e.target.value)}
+                  placeholder="Nama Kepala Sekolah"
+                  className="bg-white border border-slate-300 rounded px-2 py-1 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 w-44"
+                  title="Nama Kepala Sekolah"
+                />
+                <input
+                  type="text"
+                  value={printPrincipalNip}
+                  onChange={(e) => setPrintPrincipalNip(e.target.value)}
+                  placeholder="NIP Kepala Sekolah"
+                  className="bg-white border border-slate-300 rounded px-2 py-1 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 w-36"
+                  title="NIP Kepala Sekolah"
+                />
+              </div>
+            </div>
+
             {/* Printable Paper Canvas */}
             <div className="p-6 sm:p-8 overflow-y-auto flex-1 print:p-0 print:overflow-visible">
               <div ref={printAreaRef} className="print-sheet max-w-[210mm] mx-auto bg-white text-black font-serif text-[12px] leading-snug">
@@ -1274,9 +1364,9 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
                     <p className="font-semibold">Kepala Sekolah</p>
                     <div className="h-16"></div>
                     <p className="font-bold underline">
-                      {settings?.headmasterName || '...................................................'}
+                      {printPrincipalName || principalUser?.fullName || settings?.headmasterName || '...................................................'}
                     </p>
-                    <p>NIP. {settings?.headmasterNip || '...................................................'}</p>
+                    <p>NIP. {printPrincipalNip || principalUser?.nip || settings?.headmasterNip || '...................................................'}</p>
                   </div>
 
                   <div>
