@@ -460,7 +460,28 @@ const AppContent: React.FC = () => {
   useEffect(() => {
     if (!currentUser) return;
 
+    let resumeTimeout: NodeJS.Timeout | null = null;
+
+    const handleResume = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible" && navigator.onLine) {
+        // Beri waktu 2 detik agar koneksi I/O jaringan siap setelah tab aktif kembali
+        if (resumeTimeout) clearTimeout(resumeTimeout);
+        resumeTimeout = setTimeout(() => {
+          syncAllData(false).catch(() => {});
+          refreshNotifications(currentUser.role);
+        }, 2000);
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleResume);
+    window.addEventListener("online", handleResume);
+
     const syncInterval = setInterval(() => {
+      // Cegah sync saat tab diminimalkan atau sistem tidur (menghindari net::ERR_NETWORK_IO_SUSPENDED)
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+        return;
+      }
+
       if (navigator.onLine) {
         // 1. Cek apakah pengguna sedang aktif menginput/fokus pada form
         const activeEl = document.activeElement;
@@ -492,7 +513,12 @@ const AppContent: React.FC = () => {
       }
     }, 40000); // 40 Seconds Interval
 
-    return () => clearInterval(syncInterval);
+    return () => {
+      clearInterval(syncInterval);
+      if (resumeTimeout) clearTimeout(resumeTimeout);
+      document.removeEventListener("visibilitychange", handleResume);
+      window.removeEventListener("online", handleResume);
+    };
   }, [currentUser]);
 
   useEffect(() => {
