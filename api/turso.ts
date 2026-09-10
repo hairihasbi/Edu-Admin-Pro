@@ -884,6 +884,30 @@ const DB_SCHEMAS = [
     `CREATE INDEX IF NOT EXISTS idx_coc_date ON cocurricular_journals(date)`,
     `CREATE INDEX IF NOT EXISTS idx_coc_user ON cocurricular_journals(user_id)`,
 
+    // 43. HOMEROOM GUIDANCE SESSIONS (PEMBINAAN WALI KELAS)
+    `CREATE TABLE IF NOT EXISTS homeroom_guidance (
+        id TEXT PRIMARY KEY,
+        student_id TEXT,
+        class_id TEXT,
+        school_npsn TEXT,
+        user_id TEXT,
+        date TEXT,
+        violation_summary TEXT,
+        guidance_type TEXT,
+        notes TEXT,
+        student_commitment TEXT,
+        status TEXT,
+        follow_up_date TEXT,
+        parent_informed INTEGER DEFAULT 0,
+        last_modified INTEGER,
+        version INTEGER DEFAULT 1,
+        deleted INTEGER DEFAULT 0
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_hg_npsn ON homeroom_guidance(school_npsn)`,
+    `CREATE INDEX IF NOT EXISTS idx_hg_student ON homeroom_guidance(student_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_hg_class ON homeroom_guidance(class_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_hg_user ON homeroom_guidance(user_id)`,
+
     // User table migrations for extracurricular and subjects
     `ALTER TABLE users ADD COLUMN is_extracurricular_advisor INTEGER DEFAULT 0`,
     `ALTER TABLE users ADD COLUMN extracurriculars TEXT`,
@@ -1083,6 +1107,33 @@ const getTableConfig = (collection: string) => {
             s(item.projectTheme),
             s(item.targetDimension),
             s(item.notes),
+            s(item.lastModified),
+            item.version || 1,
+            item.deleted ? 1 : 0
+        ]
+    };
+    case 'eduadmin_homeroom_guidance': return {
+        table: 'homeroom_guidance',
+        columns: [
+            'id', 'student_id', 'class_id', 'school_npsn', 'user_id', 'date',
+            'violation_summary', 'guidance_type', 'notes', 'student_commitment',
+            'status', 'follow_up_date', 'parent_informed',
+            'last_modified', 'version', 'deleted'
+        ],
+        mapFn: (item: any) => [
+            s(item.id),
+            s(item.studentId),
+            s(item.classId),
+            s(item.schoolNpsn),
+            s(item.userId),
+            s(item.date),
+            s(item.violationSummary),
+            s(item.guidanceType),
+            s(item.notes),
+            s(item.studentCommitment),
+            s(item.status),
+            s(item.followUpDate),
+            item.parentInformed ? 1 : 0,
             s(item.lastModified),
             item.version || 1,
             item.deleted ? 1 : 0
@@ -1408,6 +1459,24 @@ const mapRowToJSON = (collection: string, row: any) => {
         projectTheme: row.project_theme,
         targetDimension: row.target_dimension,
         notes: row.notes,
+        lastModified: row.last_modified,
+        version: row.version,
+        deleted: Boolean(row.deleted)
+    };
+    case 'eduadmin_homeroom_guidance': return {
+        id: row.id,
+        studentId: row.student_id,
+        classId: row.class_id,
+        schoolNpsn: row.school_npsn,
+        userId: row.user_id,
+        date: row.date,
+        violationSummary: row.violation_summary,
+        guidanceType: row.guidance_type,
+        notes: row.notes,
+        studentCommitment: row.student_commitment,
+        status: row.status,
+        followUpDate: row.follow_up_date || undefined,
+        parentInformed: Boolean(row.parent_informed),
         lastModified: row.last_modified,
         version: row.version,
         deleted: Boolean(row.deleted)
@@ -2268,9 +2337,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     await client.execute(`ALTER TABLE journals ADD COLUMN absent_students TEXT`).catch(() => {});
                     await client.execute(`ALTER TABLE journals ADD COLUMN subject TEXT`).catch(() => {});
                     await client.batch(statements);
-                } else if (batchError.message && (batchError.message.includes('cocurricular_journals') || batchError.message.includes('no such table'))) {
-                    console.log("Lazy migration: Creating cocurricular_journals table...");
+                } else if (batchError.message && (batchError.message.includes('homeroom_guidance') || batchError.message.includes('cocurricular_journals') || batchError.message.includes('no such table'))) {
+                    console.log("Lazy migration: Creating missing tables...");
                     try {
+                        await client.execute(`CREATE TABLE IF NOT EXISTS homeroom_guidance (
+                            id TEXT PRIMARY KEY,
+                            student_id TEXT,
+                            class_id TEXT,
+                            school_npsn TEXT,
+                            user_id TEXT,
+                            date TEXT,
+                            violation_summary TEXT,
+                            guidance_type TEXT,
+                            notes TEXT,
+                            student_commitment TEXT,
+                            status TEXT,
+                            follow_up_date TEXT,
+                            parent_informed INTEGER DEFAULT 0,
+                            last_modified INTEGER,
+                            version INTEGER DEFAULT 1,
+                            deleted INTEGER DEFAULT 0
+                        )`);
+                        await client.execute(`CREATE INDEX IF NOT EXISTS idx_hg_npsn ON homeroom_guidance(school_npsn)`).catch(() => {});
+                        await client.execute(`CREATE INDEX IF NOT EXISTS idx_hg_student ON homeroom_guidance(student_id)`).catch(() => {});
+                        await client.execute(`CREATE INDEX IF NOT EXISTS idx_hg_class ON homeroom_guidance(class_id)`).catch(() => {});
+                        await client.execute(`CREATE INDEX IF NOT EXISTS idx_hg_user ON homeroom_guidance(user_id)`).catch(() => {});
+
                         await client.execute(`CREATE TABLE IF NOT EXISTS cocurricular_journals (
                             id TEXT PRIMARY KEY,
                             school_npsn TEXT,
@@ -2512,6 +2604,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                         whereClauses.push("1 = 1");
                     }
                 }
+                else if (tableConfig.table === 'homeroom_guidance') {
+                    if (userNpsn && userNpsn !== 'DEFAULT') {
+                        whereClauses.push("school_npsn = ?");
+                        args = [userNpsn];
+                    } else if (userId) {
+                        whereClauses.push("user_id = ?");
+                        args = [userId];
+                    }
+                }
             } else {
                 // Students / Others
                 if (tableConfig.table === 'cbt_exams') {
@@ -2542,6 +2643,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                         whereClauses.push("1 = 1");
                     }
                 }
+                else if (tableConfig.table === 'homeroom_guidance') {
+                    whereClauses.push("student_id = ?");
+                    args = [userId];
+                }
                 else {
                     if (userId) {
                         whereClauses.push("(user_id = ? OR id = ? OR student_id = ?)");
@@ -2562,7 +2667,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             try {
                 result = await client.execute({ sql: query, args });
             } catch (queryErr: any) {
-                if (queryErr.message && (queryErr.message.includes('no such table: cocurricular_journals') || (tableConfig.table === 'cocurricular_journals' && queryErr.message.includes('no such table')))) {
+                if (queryErr.message && (queryErr.message.includes('no such table: homeroom_guidance') || (tableConfig.table === 'homeroom_guidance' && queryErr.message.includes('no such table')))) {
+                    console.log("Lazy migration in pull: Creating homeroom_guidance table...");
+                    await client.execute(`CREATE TABLE IF NOT EXISTS homeroom_guidance (
+                        id TEXT PRIMARY KEY,
+                        student_id TEXT,
+                        class_id TEXT,
+                        school_npsn TEXT,
+                        user_id TEXT,
+                        date TEXT,
+                        violation_summary TEXT,
+                        guidance_type TEXT,
+                        notes TEXT,
+                        student_commitment TEXT,
+                        status TEXT,
+                        follow_up_date TEXT,
+                        parent_informed INTEGER DEFAULT 0,
+                        last_modified INTEGER,
+                        version INTEGER DEFAULT 1,
+                        deleted INTEGER DEFAULT 0
+                    )`).catch(() => {});
+                    await client.execute(`CREATE INDEX IF NOT EXISTS idx_hg_npsn ON homeroom_guidance(school_npsn)`).catch(() => {});
+                    await client.execute(`CREATE INDEX IF NOT EXISTS idx_hg_student ON homeroom_guidance(student_id)`).catch(() => {});
+                    await client.execute(`CREATE INDEX IF NOT EXISTS idx_hg_class ON homeroom_guidance(class_id)`).catch(() => {});
+                    await client.execute(`CREATE INDEX IF NOT EXISTS idx_hg_user ON homeroom_guidance(user_id)`).catch(() => {});
+                    result = { rows: [] };
+                } else if (queryErr.message && (queryErr.message.includes('no such table: cocurricular_journals') || (tableConfig.table === 'cocurricular_journals' && queryErr.message.includes('no such table')))) {
                     console.log("Lazy migration in pull: Creating cocurricular_journals table...");
                     await client.execute(`CREATE TABLE IF NOT EXISTS cocurricular_journals (
                         id TEXT PRIMARY KEY,
