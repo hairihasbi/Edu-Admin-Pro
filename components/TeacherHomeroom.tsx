@@ -171,7 +171,7 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
   const [selectedStudentForForm, setSelectedStudentForForm] = useState<Student | null>(null);
   const [violationFormType, setViolationFormType] = useState<'VIOLATION' | 'REDUCTION'>('VIOLATION');
   const [editingRecord, setEditingRecord] = useState<{ type: 'VIOLATION' | 'REDUCTION', id: string, reportedBy?: string } | null>(null);
-  const [disciplineFilter, setDisciplineFilter] = useState<'ALL' | 'ACTIVE' | 'RESOLVED'>('ALL');
+  const [disciplineFilter, setDisciplineFilter] = useState<'ALL' | 'ACTIVE' | 'RESOLVED' | 'NO_GUIDANCE' | 'GUIDANCE_1' | 'GUIDANCE_2' | 'GUIDANCE_3PLUS'>('ALL');
   const [formInput, setFormInput] = useState({
     category: 'Terlambat',
     customCategory: '',
@@ -185,6 +185,9 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
   const [showGuidanceModal, setShowGuidanceModal] = useState(false);
   const [selectedStudentForGuidance, setSelectedStudentForGuidance] = useState<Student | null>(null);
   const [editingGuidanceId, setEditingGuidanceId] = useState<string | null>(null);
+  const [modalGuidanceFilter, setModalGuidanceFilter] = useState<'ALL' | 'UNSUPERVISED' | 'ONCE' | 'TWICE' | 'THREE_PLUS'>('ALL');
+  const [modalStudentSearch, setModalStudentSearch] = useState('');
+  const [showModalHistoryDetails, setShowModalHistoryDetails] = useState(true);
   const [guidanceSearchQuery, setGuidanceSearchQuery] = useState('');
   const [guidanceStatusFilter, setGuidanceStatusFilter] = useState<string>('ALL');
   const [guidanceForm, setGuidanceForm] = useState<{
@@ -831,20 +834,31 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
     s.nis.includes(searchQuery)
   );
 
-  const recordedStudents = filteredStudents
-    .map(s => ({ 
-        ...s, 
-        stats: getStudentBehaviorStats(s.id),
-        details: {
-            violations: violations.filter(v => v.studentId === s.id),
-            reductions: pointReductions.filter(r => r.studentId === s.id),
-            achievements: achievements.filter(a => a.studentId === s.id),
-            sessions: sessions.filter(sess => sess.studentId === s.id),
-            homeVisits: homeVisits.filter(hv => hv.studentId === s.id),
-            parentCalls: parentCalls.filter(pc => pc.studentId === s.id),
-            guidances: homeroomGuidances.filter(g => g.studentId === s.id)
-        }
-    }))
+  const allDisciplineStudentsWithDetails = filteredStudents.map(s => {
+    const sGuidances = homeroomGuidances
+      .filter(g => g.studentId === s.id)
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    return {
+      ...s,
+      stats: getStudentBehaviorStats(s.id),
+      details: {
+        violations: violations.filter(v => v.studentId === s.id),
+        reductions: pointReductions.filter(r => r.studentId === s.id),
+        achievements: achievements.filter(a => a.studentId === s.id),
+        sessions: sessions.filter(sess => sess.studentId === s.id),
+        homeVisits: homeVisits.filter(hv => hv.studentId === s.id),
+        parentCalls: parentCalls.filter(pc => pc.studentId === s.id),
+        guidances: sGuidances
+      }
+    };
+  });
+
+  const unsupervisedStudentsList = allDisciplineStudentsWithDetails.filter(s => s.details.guidances.length === 0);
+  const guidance1xStudentsList = allDisciplineStudentsWithDetails.filter(s => s.details.guidances.length === 1);
+  const guidance2xStudentsList = allDisciplineStudentsWithDetails.filter(s => s.details.guidances.length === 2);
+  const guidance3xPlusStudentsList = allDisciplineStudentsWithDetails.filter(s => s.details.guidances.length >= 3);
+
+  const recordedStudents = allDisciplineStudentsWithDetails
     .filter(s => 
       s.stats.totalPoints > 0 || 
       s.details.violations.length > 0 || 
@@ -863,6 +877,14 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
     ? problemStudents
     : disciplineFilter === 'RESOLVED'
     ? resolvedStudents
+    : disciplineFilter === 'NO_GUIDANCE'
+    ? unsupervisedStudentsList
+    : disciplineFilter === 'GUIDANCE_1'
+    ? guidance1xStudentsList
+    : disciplineFilter === 'GUIDANCE_2'
+    ? guidance2xStudentsList
+    : disciplineFilter === 'GUIDANCE_3PLUS'
+    ? guidance3xPlusStudentsList
     : recordedStudents;
 
   const exportLeger = () => {
@@ -1014,6 +1036,9 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
 
   // --- HOMEROOM GUIDANCE HANDLERS ---
   const handleOpenGuidanceModal = (student?: Student, guidanceToEdit?: HomeroomGuidanceSession) => {
+    setModalGuidanceFilter('ALL');
+    setModalStudentSearch('');
+    setShowModalHistoryDetails(true);
     if (guidanceToEdit) {
       const studentObj = students.find(s => s.id === guidanceToEdit.studentId) || null;
       setSelectedStudentForGuidance(studentObj);
@@ -3683,8 +3708,119 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                </div>
             </div>
 
+            {/* Bilah Status & Rekapitulasi Pembinaan Siswa Walian */}
+            <div className="bg-white rounded-xl border border-indigo-100 p-4 shadow-sm text-left">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-3 border-b border-gray-100 pb-3">
+                    <div>
+                        <h4 className="font-extrabold text-gray-800 text-sm flex items-center gap-2">
+                            <BookOpen size={16} className="text-indigo-600" />
+                            Status & Frekuensi Pembinaan Siswa Walian (Kelas {className})
+                        </h4>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                            Monitoring intensitas pembinaan: belum dibina, bimbingan awal (1 kali), evaluasi lanjutan (2 kali), atau atensi khusus (≥3 kali). Klik kartu untuk memfilter daftar.
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={() => setDisciplineFilter('ALL')}
+                            className={`text-xs px-3 py-1.5 rounded-lg font-bold transition border ${
+                                disciplineFilter === 'ALL' 
+                                ? 'bg-indigo-50 border-indigo-300 text-indigo-700' 
+                                : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                            }`}
+                        >
+                            Reset Filter Tampilan
+                        </button>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                    {/* Total Siswa */}
+                    <div 
+                        onClick={() => setDisciplineFilter('ALL')}
+                        className={`p-3 rounded-xl border transition-all cursor-pointer ${
+                            disciplineFilter === 'ALL' 
+                            ? 'bg-indigo-50/80 border-indigo-300 ring-2 ring-indigo-200 shadow-xs' 
+                            : 'bg-gray-50/70 border-gray-200 hover:bg-gray-100/70'
+                        }`}
+                    >
+                        <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Total Siswa</div>
+                        <div className="text-xl font-extrabold text-gray-800 mt-1">{filteredStudents.length} <span className="text-xs font-normal text-gray-500">Siswa</span></div>
+                        <div className="text-[10px] text-gray-500 mt-0.5">100% siswa kelas {className}</div>
+                    </div>
+
+                    {/* Belum Dibina */}
+                    <div 
+                        onClick={() => setDisciplineFilter(disciplineFilter === 'NO_GUIDANCE' ? 'ALL' : 'NO_GUIDANCE')}
+                        className={`p-3 rounded-xl border transition-all cursor-pointer ${
+                            disciplineFilter === 'NO_GUIDANCE' 
+                            ? 'bg-amber-50 border-amber-300 ring-2 ring-amber-200 shadow-xs' 
+                            : 'bg-amber-50/40 border-amber-200/60 hover:bg-amber-50/80'
+                        }`}
+                    >
+                        <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-amber-800 uppercase tracking-wider">Belum Dibina</span>
+                            <span className="w-2 h-2 rounded-full bg-amber-400"></span>
+                        </div>
+                        <div className="text-xl font-extrabold text-amber-900 mt-1">{unsupervisedStudentsList.length} <span className="text-xs font-normal text-amber-700">Siswa</span></div>
+                        <div className="text-[10px] text-amber-700 mt-0.5">0 kali pembinaan</div>
+                    </div>
+
+                    {/* 1x Pembinaan */}
+                    <div 
+                        onClick={() => setDisciplineFilter(disciplineFilter === 'GUIDANCE_1' ? 'ALL' : 'GUIDANCE_1')}
+                        className={`p-3 rounded-xl border transition-all cursor-pointer ${
+                            disciplineFilter === 'GUIDANCE_1' 
+                            ? 'bg-blue-50 border-blue-300 ring-2 ring-blue-200 shadow-xs' 
+                            : 'bg-blue-50/40 border-blue-200/60 hover:bg-blue-50/80'
+                        }`}
+                    >
+                        <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-blue-800 uppercase tracking-wider">1x Pembinaan</span>
+                            <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                        </div>
+                        <div className="text-xl font-extrabold text-blue-900 mt-1">{guidance1xStudentsList.length} <span className="text-xs font-normal text-blue-700">Siswa</span></div>
+                        <div className="text-[10px] text-blue-700 mt-0.5">Sudah 1 kali dibina</div>
+                    </div>
+
+                    {/* 2x Pembinaan */}
+                    <div 
+                        onClick={() => setDisciplineFilter(disciplineFilter === 'GUIDANCE_2' ? 'ALL' : 'GUIDANCE_2')}
+                        className={`p-3 rounded-xl border transition-all cursor-pointer ${
+                            disciplineFilter === 'GUIDANCE_2' 
+                            ? 'bg-purple-50 border-purple-300 ring-2 ring-purple-200 shadow-xs' 
+                            : 'bg-purple-50/40 border-purple-200/60 hover:bg-purple-50/80'
+                        }`}
+                    >
+                        <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-purple-800 uppercase tracking-wider">2x Pembinaan</span>
+                            <span className="w-2 h-2 rounded-full bg-purple-500"></span>
+                        </div>
+                        <div className="text-xl font-extrabold text-purple-900 mt-1">{guidance2xStudentsList.length} <span className="text-xs font-normal text-purple-700">Siswa</span></div>
+                        <div className="text-[10px] text-purple-700 mt-0.5">Sudah 2 kali dibina</div>
+                    </div>
+
+                    {/* ≥3x Pembinaan */}
+                    <div 
+                        onClick={() => setDisciplineFilter(disciplineFilter === 'GUIDANCE_3PLUS' ? 'ALL' : 'GUIDANCE_3PLUS')}
+                        className={`p-3 rounded-xl border transition-all cursor-pointer ${
+                            disciplineFilter === 'GUIDANCE_3PLUS' 
+                            ? 'bg-rose-50 border-rose-300 ring-2 ring-rose-200 shadow-xs' 
+                            : 'bg-rose-50/40 border-rose-200/60 hover:bg-rose-50/80'
+                        }`}
+                    >
+                        <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-rose-800 uppercase tracking-wider">≥ 3x Pembinaan</span>
+                            <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                        </div>
+                        <div className="text-xl font-extrabold text-rose-900 mt-1">{guidance3xPlusStudentsList.length} <span className="text-xs font-normal text-rose-700">Siswa</span></div>
+                        <div className="text-[10px] text-rose-700 mt-0.5">Atensi intensif / BK</div>
+                    </div>
+                </div>
+            </div>
+
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                
                 {/* COLUMN 1: ALL HOMEROOM STUDENTS (Fast recording list) */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex flex-col h-full text-left">
                     <div className="flex justify-between items-center mb-4 pb-2 border-b">
@@ -3696,11 +3832,33 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                     <div className="space-y-2 overflow-y-auto max-h-[600px] pr-2">
                         {filteredStudents.map((student) => {
                             const bStats = getStudentBehaviorStats(student.id);
+                            const sGuidances = homeroomGuidances.filter(g => g.studentId === student.id);
+                            const gCount = sGuidances.length;
                             return (
                                 <div key={student.id} className="flex items-center justify-between p-3 border border-gray-100 hover:border-red-100 rounded-xl hover:bg-gray-50/50 transition duration-150 group">
                                     <div className="min-w-0 flex-1 pr-4">
                                         <div className="font-extrabold text-gray-800 truncate text-sm group-hover:text-red-600 transition-colors">{student.name}</div>
-                                        <div className="text-[11px] text-gray-500">NIS: {student.nis} • {student.gender === 'L' ? 'Laki-laki' : 'Perempuan'}</div>
+                                        <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                                            <span className="text-[11px] text-gray-500">NIS: {student.nis} • {student.gender === 'L' ? 'Laki-laki' : 'Perempuan'}</span>
+                                            <span className="text-gray-300">•</span>
+                                            {gCount === 0 ? (
+                                                <span className="inline-flex items-center text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">
+                                                    Belum Pembinaan (0x)
+                                                </span>
+                                            ) : gCount === 1 ? (
+                                                <span className="inline-flex items-center text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                                                    1x Pembinaan
+                                                </span>
+                                            ) : gCount === 2 ? (
+                                                <span className="inline-flex items-center text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200">
+                                                    2x Pembinaan
+                                                </span>
+                                            ) : (
+                                                <span className="inline-flex items-center text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200">
+                                                    {gCount}x Pembinaan
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <div className="text-right">
@@ -3805,7 +3963,52 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                                     : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
                             }`}
                         >
-                            Poin Tuntas / Pemulihan ({resolvedStudents.length})
+                            Poin Tuntas ({resolvedStudents.length})
+                        </button>
+                        <span className="text-gray-300">|</span>
+                        <button
+                            type="button"
+                            onClick={() => setDisciplineFilter('NO_GUIDANCE')}
+                            className={`px-2.5 py-1 rounded-lg font-bold transition ${
+                                disciplineFilter === 'NO_GUIDANCE'
+                                    ? 'bg-amber-600 text-white shadow-sm'
+                                    : 'bg-white text-amber-800 hover:bg-amber-50 border border-amber-200'
+                            }`}
+                        >
+                            Belum Dibina ({unsupervisedStudentsList.length})
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setDisciplineFilter('GUIDANCE_1')}
+                            className={`px-2.5 py-1 rounded-lg font-bold transition ${
+                                disciplineFilter === 'GUIDANCE_1'
+                                    ? 'bg-blue-600 text-white shadow-sm'
+                                    : 'bg-white text-blue-800 hover:bg-blue-50 border border-blue-200'
+                            }`}
+                        >
+                            1x Pembinaan ({guidance1xStudentsList.length})
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setDisciplineFilter('GUIDANCE_2')}
+                            className={`px-2.5 py-1 rounded-lg font-bold transition ${
+                                disciplineFilter === 'GUIDANCE_2'
+                                    ? 'bg-purple-600 text-white shadow-sm'
+                                    : 'bg-white text-purple-800 hover:bg-purple-50 border border-purple-200'
+                            }`}
+                        >
+                            2x Pembinaan ({guidance2xStudentsList.length})
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setDisciplineFilter('GUIDANCE_3PLUS')}
+                            className={`px-2.5 py-1 rounded-lg font-bold transition ${
+                                disciplineFilter === 'GUIDANCE_3PLUS'
+                                    ? 'bg-rose-600 text-white shadow-sm'
+                                    : 'bg-white text-rose-800 hover:bg-rose-50 border border-rose-200'
+                            }`}
+                        >
+                            ≥3x Pembinaan ({guidance3xPlusStudentsList.length})
                         </button>
                     </div>
 
@@ -3818,6 +4021,14 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                                         ? 'Kelas Aman & Kondusif!'
                                         : disciplineFilter === 'RESOLVED'
                                         ? 'Belum Ada Siswa Pemulihan Poin'
+                                        : disciplineFilter === 'NO_GUIDANCE'
+                                        ? 'Semua Siswa Sudah Pernah Dibina'
+                                        : disciplineFilter === 'GUIDANCE_1'
+                                        ? 'Tidak Ada Siswa Dengan 1x Pembinaan'
+                                        : disciplineFilter === 'GUIDANCE_2'
+                                        ? 'Tidak Ada Siswa Dengan 2x Pembinaan'
+                                        : disciplineFilter === 'GUIDANCE_3PLUS'
+                                        ? 'Tidak Ada Siswa Dengan ≥3x Pembinaan'
                                         : 'Belum Ada Catatan Kedisiplinan'}
                                 </h4>
                                 <p className="text-xs text-gray-500 mt-1">
@@ -3825,7 +4036,9 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                                         ? 'Tidak ada siswa yang tercatat memiliki poin aktif saat ini.'
                                         : disciplineFilter === 'RESOLVED'
                                         ? 'Tidak ada siswa dengan poin tuntas di kelas ini.'
-                                        : 'Tidak ada data kedisiplinan atau bimbingan yang tercatat.'}
+                                        : disciplineFilter === 'NO_GUIDANCE'
+                                        ? 'Seluruh siswa kelas ini telah tercatat memiliki riwayat pembinaan wali kelas.'
+                                        : 'Tidak ada data siswa yang cocok dengan filter pembinaan yang dipilih.'}
                                 </p>
                             </div>
                         ) : (
@@ -3835,6 +4048,7 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                                         <th className="p-3 w-8 text-center">No</th>
                                         <th className="p-3">Siswa</th>
                                         <th className="p-3 text-center">Poin</th>
+                                        <th className="p-3 text-center">Riwayat Pembinaan</th>
                                         <th className="p-3">Rekomendasi / Status</th>
                                         <th className="p-3 text-center">Tindakan</th>
                                         <th className="p-3 w-8"></th>
@@ -3860,6 +4074,29 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                                                     }`}>
                                                         {s.stats.totalPoints}
                                                     </span>
+                                                </td>
+                                                <td className="p-3 text-center">
+                                                    {s.details.guidances.length === 0 ? (
+                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                                                            Belum Dibina
+                                                        </span>
+                                                    ) : s.details.guidances.length === 1 ? (
+                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                                                            1x Pembinaan
+                                                        </span>
+                                                    ) : s.details.guidances.length === 2 ? (
+                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                                                            <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
+                                                            2x Pembinaan
+                                                        </span>
+                                                    ) : (
+                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                                            <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                                                            {s.details.guidances.length}x Pembinaan
+                                                        </span>
+                                                    )}
                                                 </td>
                                                 <td className="p-3">
                                                     <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${s.stats.statusColor}`}>
@@ -3890,7 +4127,7 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                                             </tr>
                                             {expandedStudentId === s.id && (
                                                 <tr className="bg-gray-50 border-b border-gray-200">
-                                                    <td colSpan={6} className="p-4 cursor-default">
+                                                    <td colSpan={7} className="p-4 cursor-default">
                                                         <div className="space-y-4">
                                                             {/* SECTION: VIOLATIONS */}
                                                             <div>
@@ -4342,18 +4579,77 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
             )}
 
             {/* POPUP MODAL FOR WALI KELAS GUIDANCE RECORDING */}
-            {showGuidanceModal && (
+            {showGuidanceModal && (() => {
+                const currentStudentGuidances = selectedStudentForGuidance
+                    ? homeroomGuidances
+                        .filter(g => g.studentId === selectedStudentForGuidance.id)
+                        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                    : [];
+                const currentCount = currentStudentGuidances.length;
+                const editingIdx = editingGuidanceId 
+                    ? currentStudentGuidances.findIndex(g => g.id === editingGuidanceId) 
+                    : -1;
+                const selectedStudentStats = selectedStudentForGuidance 
+                    ? getStudentBehaviorStats(selectedStudentForGuidance.id) 
+                    : null;
+
+                const modalUnsupervisedCount = students.filter(s => homeroomGuidances.filter(g => g.studentId === s.id).length === 0).length;
+                const modalOnceCount = students.filter(s => homeroomGuidances.filter(g => g.studentId === s.id).length === 1).length;
+                const modalTwiceCount = students.filter(s => homeroomGuidances.filter(g => g.studentId === s.id).length === 2).length;
+                const modalThreePlusCount = students.filter(s => homeroomGuidances.filter(g => g.studentId === s.id).length >= 3).length;
+
+                const filteredSelectStudents = students.filter(s => {
+                    const count = homeroomGuidances.filter(g => g.studentId === s.id).length;
+                    if (modalGuidanceFilter === 'UNSUPERVISED' && count !== 0) return false;
+                    if (modalGuidanceFilter === 'ONCE' && count !== 1) return false;
+                    if (modalGuidanceFilter === 'TWICE' && count !== 2) return false;
+                    if (modalGuidanceFilter === 'THREE_PLUS' && count < 3) return false;
+                    if (modalStudentSearch.trim()) {
+                        const q = modalStudentSearch.toLowerCase();
+                        return s.name.toLowerCase().includes(q) || s.nis.includes(q);
+                    }
+                    return true;
+                });
+
+                return (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 max-w-xl w-full overflow-hidden animate-in zoom-in-95 duration-200">
-                        <div className="p-6 bg-gradient-to-r from-indigo-700 to-indigo-900 text-white flex justify-between items-center">
+                    <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 max-w-2xl w-full overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+                        <div className="p-5 bg-gradient-to-r from-indigo-700 via-indigo-800 to-indigo-900 text-white flex justify-between items-center shrink-0">
                             <div>
-                                <h3 className="text-lg font-extrabold flex items-center gap-2">
+                                <h3 className="text-base sm:text-lg font-extrabold flex items-center gap-2">
                                     <BookOpen size={20} className="text-indigo-300" />
-                                    {editingGuidanceId ? 'Edit Tindak Lanjut Pembinaan' : 'Catat Tindak Lanjut Pembinaan Wali Kelas'}
+                                    {editingGuidanceId 
+                                        ? `Edit Catatan Pembinaan Ke-${editingIdx >= 0 ? editingIdx + 1 : '?'}` 
+                                        : selectedStudentForGuidance 
+                                        ? `Catat Pembinaan Ke-${currentCount + 1} Wali Kelas` 
+                                        : 'Catat Tindak Lanjut Pembinaan Wali Kelas'}
                                 </h3>
-                                <p className="text-xs text-indigo-200 mt-1 font-medium">
-                                    {selectedStudentForGuidance ? `Siswa: ${selectedStudentForGuidance.name} (NIS: ${selectedStudentForGuidance.nis})` : 'Pilih siswa yang akan dibina'}
-                                </p>
+                                <div className="flex flex-wrap items-center gap-2 mt-1">
+                                    <p className="text-xs text-indigo-200 font-medium">
+                                        {selectedStudentForGuidance ? (
+                                            <>Siswa: <span className="font-bold text-white">{selectedStudentForGuidance.name}</span> (NIS: {selectedStudentForGuidance.nis})</>
+                                        ) : 'Pilih siswa yang akan dibina'}
+                                    </p>
+                                    {selectedStudentForGuidance && (
+                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${
+                                            currentCount === 0 
+                                                ? 'bg-amber-500/20 text-amber-200 border-amber-400/40' 
+                                                : currentCount === 1 
+                                                ? 'bg-blue-500/20 text-blue-200 border-blue-400/40' 
+                                                : currentCount === 2 
+                                                ? 'bg-purple-500/20 text-purple-200 border-purple-400/40' 
+                                                : 'bg-rose-500/20 text-rose-200 border-rose-400/40'
+                                        }`}>
+                                            {currentCount === 0 
+                                                ? '⚠️ Belum Pernah Dibina' 
+                                                : currentCount === 1 
+                                                ? '🌱 Sudah 1x Pembinaan' 
+                                                : currentCount === 2 
+                                                ? '🔄 Sudah 2x Pembinaan' 
+                                                : `🚨 Sudah ${currentCount}x Pembinaan`}
+                                        </span>
+                                    )}
+                                </div>
                             </div>
                             <button 
                                 type="button"
@@ -4367,29 +4663,272 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                                 <X size={20} />
                             </button>
                         </div>
-                        <form onSubmit={handleSaveGuidance} className="p-6 space-y-4 text-left max-h-[80vh] overflow-y-auto">
-                            {/* Student selector if not set or allow change */}
-                            <div>
-                                <label className="block text-xs font-bold text-gray-700 mb-1">Pilih Siswa Walian</label>
-                                <select 
-                                    className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-indigo-500 text-gray-800 font-medium"
-                                    value={selectedStudentForGuidance?.id || ''}
-                                    onChange={e => {
-                                        const s = students.find(st => st.id === e.target.value);
-                                        setSelectedStudentForGuidance(s || null);
-                                    }}
-                                    required
-                                >
-                                    <option value="">-- Pilih Siswa --</option>
-                                    {students.map(s => {
-                                        const pts = getStudentBehaviorStats(s.id).totalPoints;
-                                        return (
-                                            <option key={s.id} value={s.id}>
-                                                {s.name} ({s.nis}) {pts > 0 ? `— [${pts} Poin Aktif]` : ''}
-                                            </option>
-                                        );
-                                    })}
-                                </select>
+
+                        <form onSubmit={handleSaveGuidance} className="p-5 space-y-4 text-left overflow-y-auto flex-1">
+                            {/* Student selector with quick filter tabs and search */}
+                            <div className="bg-gray-50/80 p-3.5 rounded-xl border border-gray-200">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+                                    <label className="block text-xs font-bold text-gray-700">
+                                        Pilih Siswa Walian <span className="text-red-500">*</span>
+                                    </label>
+                                    <div className="flex flex-wrap items-center gap-1 text-[10px]">
+                                        <span className="text-gray-400 font-medium">Filter Siswa:</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => setModalGuidanceFilter('ALL')}
+                                            className={`px-2 py-0.5 rounded font-bold transition ${
+                                                modalGuidanceFilter === 'ALL' 
+                                                ? 'bg-indigo-600 text-white' 
+                                                : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-100'
+                                            }`}
+                                        >
+                                            Semua ({students.length})
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setModalGuidanceFilter('UNSUPERVISED')}
+                                            className={`px-2 py-0.5 rounded font-bold transition ${
+                                                modalGuidanceFilter === 'UNSUPERVISED' 
+                                                ? 'bg-amber-600 text-white' 
+                                                : 'bg-white text-amber-800 border border-amber-200 hover:bg-amber-50'
+                                            }`}
+                                        >
+                                            Belum Dibina ({modalUnsupervisedCount})
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setModalGuidanceFilter('ONCE')}
+                                            className={`px-2 py-0.5 rounded font-bold transition ${
+                                                modalGuidanceFilter === 'ONCE' 
+                                                ? 'bg-blue-600 text-white' 
+                                                : 'bg-white text-blue-800 border border-blue-200 hover:bg-blue-50'
+                                            }`}
+                                        >
+                                            1x ({modalOnceCount})
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setModalGuidanceFilter('TWICE')}
+                                            className={`px-2 py-0.5 rounded font-bold transition ${
+                                                modalGuidanceFilter === 'TWICE' 
+                                                ? 'bg-purple-600 text-white' 
+                                                : 'bg-white text-purple-800 border border-purple-200 hover:bg-purple-50'
+                                            }`}
+                                        >
+                                            2x ({modalTwiceCount})
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setModalGuidanceFilter('THREE_PLUS')}
+                                            className={`px-2 py-0.5 rounded font-bold transition ${
+                                                modalGuidanceFilter === 'THREE_PLUS' 
+                                                ? 'bg-rose-600 text-white' 
+                                                : 'bg-white text-rose-800 border border-rose-200 hover:bg-rose-50'
+                                            }`}
+                                        >
+                                            ≥3x ({modalThreePlusCount})
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2">
+                                    <div className="sm:col-span-2">
+                                        <select 
+                                            className="w-full border border-gray-300 rounded-lg p-2 text-xs font-semibold focus:ring-2 focus:ring-indigo-500 text-gray-800 bg-white"
+                                            value={selectedStudentForGuidance?.id || ''}
+                                            onChange={e => {
+                                                const s = students.find(st => st.id === e.target.value);
+                                                setSelectedStudentForGuidance(s || null);
+                                                if (s && !editingGuidanceId) {
+                                                    const studentViols = violations.filter(v => v.studentId === s.id);
+                                                    const recentViolSummary = studentViols.length > 0 
+                                                        ? studentViols.slice(-3).map(v => v.violationName).join(', ')
+                                                        : '';
+                                                    setGuidanceForm(prev => ({
+                                                        ...prev,
+                                                        violationSummary: prev.violationSummary || recentViolSummary
+                                                    }));
+                                                }
+                                            }}
+                                            required
+                                        >
+                                            <option value="">-- Pilih Siswa Walian --</option>
+                                            {filteredSelectStudents.map(s => {
+                                                const pts = getStudentBehaviorStats(s.id).totalPoints;
+                                                const sCount = homeroomGuidances.filter(g => g.studentId === s.id).length;
+                                                const statusLabel = sCount === 0 
+                                                    ? 'Belum Pernah Dibina' 
+                                                    : sCount === 1 
+                                                    ? 'Sudah 1x Pembinaan' 
+                                                    : sCount === 2 
+                                                    ? 'Sudah 2x Pembinaan' 
+                                                    : `Sudah ${sCount}x Pembinaan`;
+                                                return (
+                                                    <option key={s.id} value={s.id}>
+                                                        {s.name} ({s.nis}) — [{statusLabel}]{pts > 0 ? ` • ${pts} Poin Aktif` : ''}
+                                                    </option>
+                                                );
+                                            })}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <input 
+                                            type="text"
+                                            placeholder="Cari nama / NIS..."
+                                            className="w-full border border-gray-300 rounded-lg p-2 text-xs focus:ring-2 focus:ring-indigo-500 text-gray-800 bg-white"
+                                            value={modalStudentSearch}
+                                            onChange={e => setModalStudentSearch(e.target.value)}
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Guidance Status Information Card for Selected Student */}
+                                {selectedStudentForGuidance && (
+                                    <div className={`mt-3 p-3 rounded-xl border transition-all ${
+                                        currentCount === 0 
+                                            ? 'bg-amber-50/70 border-amber-200' 
+                                            : currentCount === 1 
+                                            ? 'bg-blue-50/70 border-blue-200' 
+                                            : currentCount === 2 
+                                            ? 'bg-purple-50/70 border-purple-200' 
+                                            : 'bg-rose-50/70 border-rose-200'
+                                    }`}>
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                            <div className="flex items-center gap-2.5">
+                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-xs shrink-0 ${
+                                                    currentCount === 0 
+                                                        ? 'bg-amber-200 text-amber-900' 
+                                                        : currentCount === 1 
+                                                        ? 'bg-blue-200 text-blue-900' 
+                                                        : currentCount === 2 
+                                                        ? 'bg-purple-200 text-purple-900' 
+                                                        : 'bg-rose-200 text-rose-900'
+                                                }`}>
+                                                    {currentCount}x
+                                                </div>
+                                                <div>
+                                                    <div className="font-extrabold text-xs text-gray-800 flex items-center gap-1.5">
+                                                        <span>Status Siswa:</span>
+                                                        <span className={`px-2 py-0.5 rounded-md text-[11px] font-black ${
+                                                            currentCount === 0 
+                                                                ? 'bg-amber-200/80 text-amber-950' 
+                                                                : currentCount === 1 
+                                                                ? 'bg-blue-200/80 text-blue-950' 
+                                                                : currentCount === 2 
+                                                                ? 'bg-purple-200/80 text-purple-950' 
+                                                                : 'bg-rose-200/80 text-rose-950'
+                                                        }`}>
+                                                            {currentCount === 0 ? 'Belum Pernah Dilakukan Pembinaan (0 Kali)' :
+                                                             currentCount === 1 ? 'Sudah 1 Kali Melakukan Pembinaan' :
+                                                             currentCount === 2 ? 'Sudah 2 Kali Melakukan Pembinaan' :
+                                                             `Sudah ${currentCount} Kali Melakukan Pembinaan`}
+                                                        </span>
+                                                    </div>
+                                                    <div className="text-[11px] text-gray-600 mt-0.5">
+                                                        Akumulasi Poin Aktif: <strong className={selectedStudentStats && selectedStudentStats.totalPoints > 0 ? 'text-red-600' : 'text-emerald-700'}>{selectedStudentStats ? selectedStudentStats.totalPoints : 0} Poin</strong> • NIS: {selectedStudentForGuidance.nis}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {currentCount > 0 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowModalHistoryDetails(!showModalHistoryDetails)}
+                                                    className="text-[11px] font-bold text-indigo-700 hover:text-indigo-900 flex items-center gap-1 underline decoration-dotted self-start sm:self-auto"
+                                                >
+                                                    {showModalHistoryDetails ? 'Sembunyikan Riwayat' : `Lihat Riwayat (${currentCount} Sesi)`}
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        {/* Guidance Context Guidance Banner */}
+                                        <div className="mt-2.5 pt-2 border-t border-gray-200/60 text-[11px] text-gray-700">
+                                            {editingGuidanceId ? (
+                                                <div className="flex items-center gap-1.5 font-semibold text-indigo-800">
+                                                    <span>✏️ Mode Edit: Memperbarui Catatan Pembinaan Ke-{editingIdx >= 0 ? editingIdx + 1 : '?'}.</span>
+                                                </div>
+                                            ) : currentCount === 0 ? (
+                                                <div className="text-amber-900 leading-relaxed">
+                                                    <span className="font-bold">✨ Inputan ini akan tercatat sebagai: PEMBINAAN KE-1 (Bimbingan Awal)</span>
+                                                    <p className="text-[10px] text-amber-800 mt-0.5">
+                                                        Siswa belum memiliki riwayat bimbingan wali kelas. Fokuskan sesi ini untuk membangun kesadaran tata tertib dan merumuskan komitmen perbaikan pertama.
+                                                    </p>
+                                                </div>
+                                            ) : currentCount === 1 ? (
+                                                <div className="text-blue-900 leading-relaxed">
+                                                    <span className="font-bold">🔄 Inputan ini akan tercatat sebagai: PEMBINAAN KE-2 (Evaluasi Komitmen Lanjutan)</span>
+                                                    <p className="text-[10px] text-blue-800 mt-0.5">
+                                                        Siswa telah menjalani 1 kali pembinaan sebelumnya. Tinjau apakah komitmen pembinaan ke-1 telah ditaati atau terulang kembali, lalu perkuat komitmen kedua.
+                                                    </p>
+                                                </div>
+                                            ) : currentCount === 2 ? (
+                                                <div className="text-purple-900 leading-relaxed">
+                                                    <span className="font-bold">⚠️ Inputan ini akan tercatat sebagai: PEMBINAAN KE-3 (Perjanjian & Perhatian Khusus)</span>
+                                                    <p className="text-[10px] text-purple-800 mt-0.5">
+                                                        Siswa sudah 2 kali dibina oleh wali kelas. Disarankan membuat surat perjanjian tertulis, mengonfirmasi orang tua, atau menjadwalkan rujukan ke Guru BK.
+                                                    </p>
+                                                </div>
+                                            ) : (
+                                                <div className="text-rose-900 leading-relaxed">
+                                                    <span className="font-bold">🚨 Inputan ini akan tercatat sebagai: PEMBINAAN KE-{currentCount + 1} (Rekomendasi Eskalasi ke BK)</span>
+                                                    <p className="text-[10px] text-rose-800 mt-0.5">
+                                                        Siswa telah menjalani {currentCount} kali pembinaan wali kelas. Sangat dianjurkan memilih status "Perlu Eskalasi ke BK" dan mengoordinasikan pemanggilan orang tua bersama pihak kesiswaan.
+                                                    </p>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Expandable Riwayat Detail Sesi Pembinaan Sebelumnya */}
+                                        {currentCount > 0 && showModalHistoryDetails && (
+                                            <div className="mt-3 pt-3 border-t border-gray-200/70 space-y-2">
+                                                <div className="text-[11px] font-extrabold text-gray-700 flex items-center justify-between">
+                                                    <span>Daftar Riwayat Pembinaan Terdahulu:</span>
+                                                    <span className="text-[10px] text-gray-500 font-normal">Urutan kronologis</span>
+                                                </div>
+                                                <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                                                    {currentStudentGuidances.map((g, idx) => (
+                                                        <div 
+                                                            key={g.id} 
+                                                            className={`p-2 rounded-lg border text-[11px] transition-colors ${
+                                                                editingGuidanceId === g.id 
+                                                                    ? 'bg-indigo-100/70 border-indigo-300' 
+                                                                    : 'bg-white/90 border-gray-200 hover:border-indigo-200'
+                                                            }`}
+                                                        >
+                                                            <div className="flex items-center justify-between gap-1 mb-0.5">
+                                                                <div className="flex items-center gap-1.5 font-bold">
+                                                                    <span className="px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 text-[10px] font-black">
+                                                                        Sesi Ke-{idx + 1}
+                                                                    </span>
+                                                                    <span className="text-gray-800">{g.date}</span>
+                                                                    <span className="text-gray-400">•</span>
+                                                                    <span className="text-gray-600 font-medium">{g.guidanceType}</span>
+                                                                </div>
+                                                                <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                                                                    g.status === 'Selesai/Membaik' ? 'bg-green-100 text-green-700' :
+                                                                    g.status === 'Perlu Eskalasi ke BK' ? 'bg-red-100 text-red-700' :
+                                                                    'bg-amber-100 text-amber-700'
+                                                                }`}>
+                                                                    {g.status}
+                                                                </span>
+                                                            </div>
+                                                            {g.violationSummary && (
+                                                                <div className="text-[10px] text-gray-600">
+                                                                    <span className="font-semibold text-gray-700">Masalah:</span> {g.violationSummary}
+                                                                </div>
+                                                            )}
+                                                            {g.studentCommitment && (
+                                                                <div className="text-[10px] text-indigo-800 italic mt-0.5">
+                                                                    <span className="font-semibold not-italic text-gray-700">Komitmen:</span> "{g.studentCommitment}"
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -4522,7 +5061,8 @@ const TeacherHomeroom: React.FC<TeacherHomeroomProps> = ({ user }) => {
                         </form>
                     </div>
                 </div>
-            )}
+                );
+            })()}
         </div>
       )}
 

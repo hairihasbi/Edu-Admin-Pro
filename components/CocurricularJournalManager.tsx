@@ -19,7 +19,7 @@ import {
   Trash2, Edit3, CheckCircle2, AlertCircle, Search, 
   Filter, Sparkles, FileText, ChevronRight, Share2, 
   RefreshCw, Check, ArrowRight, Layers, Award, Info, X,
-  MapPin, RotateCcw, Building2, Copy, CopyCheck
+  MapPin, RotateCcw, Building2, Copy, CopyCheck, Zap
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -111,6 +111,11 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
   const [isLoadingSourceJournals, setIsLoadingSourceJournals] = useState(false);
   const [isCopying, setIsCopying] = useState(false);
   const [classesJournalCounts, setClassesJournalCounts] = useState<Record<string, { today: number; total: number }>>({});
+
+  // Jurnal kelas lain untuk fitur salin cepat & rekomendasi salin otomatis
+  const [otherClassesJournals, setOtherClassesJournals] = useState<CocurricularJournal[]>([]);
+  const [recentOtherJournals, setRecentOtherJournals] = useState<CocurricularJournal[]>([]);
+  const [isQuickCopying, setIsQuickCopying] = useState(false);
 
   // Sync state
   const [isSyncing, setIsSyncing] = useState(false);
@@ -300,6 +305,149 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
       showToast('error', 'Gagal memuat data jurnal');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Muat data jurnal dari kelas lain untuk fitur salin cepat
+  const loadOtherClassesJournals = async () => {
+    try {
+      const activeCls = (selectedClass || '').trim().toLowerCase();
+      // Jurnal dari kelas lain pada tanggal yang sama
+      const allOnDate = await db.cocurricularJournals
+        .filter(j => !j.deleted && 
+          j.date === selectedDate &&
+          (j.className || '').trim().toLowerCase() !== activeCls &&
+          (j.classId || '').trim().toLowerCase() !== activeCls
+        )
+        .toArray();
+      allOnDate.sort((a, b) => (Number(a.meetingNo) || 0) - (Number(b.meetingNo) || 0));
+      setOtherClassesJournals(allOnDate);
+
+      // Jurnal dari kelas lain terkini (arsip terbaru untuk bantuan input formulir jika tanggal ini masih kosong)
+      const allRecent = await db.cocurricularJournals
+        .filter(j => !j.deleted &&
+          (j.className || '').trim().toLowerCase() !== activeCls &&
+          (j.classId || '').trim().toLowerCase() !== activeCls
+        )
+        .reverse()
+        .sortBy('date');
+      setRecentOtherJournals(allRecent.slice(0, 10));
+    } catch (err) {
+      console.warn('Failed to load other classes journals:', err);
+    }
+  };
+
+  useEffect(() => {
+    loadOtherClassesJournals();
+  }, [selectedDate, selectedClass, journals]);
+
+  // Kelompokkan jurnal kelas lain per nama kelas
+  const otherClassesWithData = useMemo(() => {
+    const map = new Map<string, { className: string; count: number; items: CocurricularJournal[] }>();
+    otherClassesJournals.forEach(j => {
+      const c = (j.className || '').trim() || 'Kelas Lain';
+      if (!map.has(c)) {
+        map.set(c, { className: c, count: 0, items: [] });
+      }
+      const obj = map.get(c)!;
+      obj.count++;
+      obj.items.push(j);
+    });
+    return Array.from(map.values());
+  }, [otherClassesJournals]);
+
+  // Salin otomatis seluruh jam kegiatan dari kelas sumber tertentu ke kelas yang sedang aktif (1-Klik)
+  const handleQuickCopyAllFromClass = async (sourceClassName: string) => {
+    const itemsToCopy = otherClassesJournals.filter(
+      j => (j.className || '').trim().toLowerCase() === sourceClassName.trim().toLowerCase()
+    );
+    if (itemsToCopy.length === 0) {
+      showToast('error', `Tidak ada data kegiatan dari kelas ${sourceClassName} untuk disalin.`);
+      return;
+    }
+
+    setIsQuickCopying(true);
+    try {
+      const dayName = getDayName(selectedDate);
+      const targetClassObj = classes.find(c => c.name.toLowerCase() === selectedClass.toLowerCase());
+      const targetClassId = targetClassObj?.id || selectedClass;
+      const facilitator = user.fullName || user.username || 'Guru';
+
+      // Cek entri yang sudah ada di kelas aktif pada tanggal ini
+      const existingInTarget = await db.cocurricularJournals
+        .filter(j => !j.deleted && 
+          ((j.className || '').trim().toLowerCase() === selectedClass.trim().toLowerCase() || 
+           (j.classId || '').trim().toLowerCase() === selectedClass.trim().toLowerCase()) &&
+          j.date === selectedDate
+        )
+        .toArray();
+
+      const existingHourMap = new Map<number, CocurricularJournal>();
+      existingInTarget.forEach(ex => {
+        const s = Number(ex.meetingNo) || 1;
+        const e = Number(ex.meetingNoEnd) || s;
+        for (let h = s; h <= e; h++) {
+          existingHourMap.set(h, ex);
+        }
+      });
+
+      let totalCopied = 0;
+      let totalSkipped = 0;
+      const batchToSave: any[] = [];
+
+      for (const src of itemsToCopy) {
+        const startHour = Number(src.meetingNo) || 1;
+        const endHour = Number(src.meetingNoEnd) || startHour;
+
+        let hasConflict = false;
+        for (let h = startHour; h <= endHour; h++) {
+          if (existingHourMap.has(h)) {
+            hasConflict = true;
+            break;
+          }
+        }
+
+        if (hasConflict) {
+          totalSkipped++;
+          continue;
+        }
+
+        batchToSave.push({
+          schoolNpsn: user.schoolNpsn || 'DEFAULT',
+          userId: user.id,
+          createdByName: user.fullName || user.username || 'Guru',
+          facilitatorName: facilitator,
+          classId: targetClassId,
+          className: selectedClass,
+          date: selectedDate,
+          dayName,
+          meetingNo: startHour,
+          meetingNoEnd: endHour > startHour ? endHour : undefined,
+          activities: src.activities,
+          projectTheme: src.projectTheme,
+          targetDimension: src.targetDimension,
+          notes: src.notes
+        });
+        totalCopied++;
+      }
+
+      if (batchToSave.length > 0) {
+        await bulkSaveCocurricularJournals(batchToSave);
+      }
+
+      await loadJournals();
+      await loadOtherClassesJournals();
+
+      if (totalCopied > 0) {
+        showToast('success', `Berhasil menyalin ${totalCopied} entri kegiatan dari Kelas ${sourceClassName} ke Kelas ${selectedClass}!${totalSkipped > 0 ? ` (${totalSkipped} jam dilewati karena sudah terisi)` : ''}`);
+      } else if (totalSkipped > 0) {
+        showToast('error', `Semua jam kegiatan sudah terisi di Kelas ${selectedClass}. Buka dialog salin jika ingin menimpa.`);
+      }
+    } catch (err) {
+      console.error('Quick copy error:', err);
+      showToast('error', 'Gagal menyalin jurnal dari kelas lain');
+    } finally {
+      setIsQuickCopying(false);
     }
   };
 
@@ -516,7 +664,16 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
       const activeSrcCls = srcCls || selectedClass;
       setCopySourceClass(activeSrcCls);
       setCopySourceDate(selectedDate);
-      setCopyTargetClasses([selectedClass]);
+      
+      // Jika sumber adalah kelas yang sedang aktif, targetnya diarahkan ke kelas lain
+      // Jika sumber dari kelas lain, targetnya otomatis ke kelas aktif saat ini
+      if (activeSrcCls.trim().toLowerCase() === selectedClass.trim().toLowerCase()) {
+        const otherClasses = classes.filter(c => c.name.trim().toLowerCase() !== selectedClass.trim().toLowerCase()).map(c => c.name);
+        setCopyTargetClasses(otherClasses.length > 0 ? [otherClasses[0]] : [selectedClass]);
+      } else {
+        setCopyTargetClasses([selectedClass]);
+      }
+
       setCopyTargetDate(selectedDate);
       setCopyFacilitatorMode('ME');
       setCopyCustomFacilitator(teachers[0]?.fullName || '');
@@ -671,6 +828,7 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
 
       setShowCopyModal(false);
       await loadJournals();
+      await loadOtherClassesJournals();
 
       if (totalCopied > 0) {
         showToast('success', `Berhasil menyalin ${totalCopied} entri kegiatan ke kelas: ${copyTargetClasses.join(', ')}${totalSkipped > 0 ? ` (${totalSkipped} jam dilewati karena sudah ada isinya)` : ''}`);
@@ -1239,6 +1397,62 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
               <span>Salin dari Kelas Lain</span>
             </button>
           </div>
+
+          {/* Smart Recommendation Banner jika kelas lain memiliki jurnal pada tanggal yang sama */}
+          {otherClassesWithData.length > 0 && (
+            <div className="mt-3.5 bg-gradient-to-r from-emerald-50 via-teal-50/50 to-emerald-50 border border-emerald-300/80 rounded-xl p-3.5 sm:p-4 text-xs shadow-2xs">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div className="flex items-start gap-2.5">
+                  <div className="p-2 bg-emerald-600 text-white rounded-lg shrink-0 mt-0.5 shadow-2xs">
+                    <Zap size={15} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-bold text-slate-900 text-xs sm:text-sm">
+                        Tersedia Jurnal Kokurikuler dari Kelas Lain pada Tanggal Ini!
+                      </span>
+                      <span className="bg-emerald-100 text-emerald-800 text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                        Rekomendasi Salin
+                      </span>
+                    </div>
+                    <p className="text-slate-600 mt-1 leading-relaxed">
+                      Ditemukan data jurnal terisi dari kelas paralel untuk {formatIndonesianDate(selectedDate)}:{' '}
+                      {otherClassesWithData.map(c => (
+                        <span key={c.className} className="inline-flex items-center gap-1 font-semibold text-emerald-900 bg-white/90 border border-emerald-200 px-2 py-0.5 rounded mr-1.5 mt-1 text-[11px] shadow-3xs">
+                          <CheckCircle2 size={11} className="text-emerald-600" />
+                          Kelas {c.className} ({c.count} Jam)
+                        </span>
+                      ))}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 shrink-0 self-start md:self-center">
+                  {otherClassesWithData.slice(0, 2).map(c => (
+                    <button
+                      key={c.className}
+                      type="button"
+                      disabled={isQuickCopying}
+                      onClick={() => handleQuickCopyAllFromClass(c.className)}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg transition shadow-2xs disabled:opacity-50 text-xs"
+                      title={`Salin seluruh kegiatan dari Kelas ${c.className} ke Kelas ${selectedClass}`}
+                    >
+                      <Zap size={13} className={isQuickCopying ? "animate-spin" : ""} />
+                      <span>{isQuickCopying ? 'Menyalin...' : `Salin dari ${c.className} (1-Klik)`}</span>
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => openCopyModal(otherClassesWithData[0]?.className)}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-300 font-bold rounded-lg transition shadow-2xs text-xs"
+                  >
+                    <Copy size={13} className="text-emerald-700" />
+                    <span>Pilih Jam / Kustomisasi...</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* INPUT FORM (COLLAPSIBLE / MODULAR) */}
@@ -1442,6 +1656,125 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
                 </div>
               </div>
 
+              {/* FITUR SALIN CEPAT DARI KELAS LAIN UNTUK FORMULIR */}
+              <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-3.5 space-y-2.5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-emerald-600 text-white rounded-md shrink-0">
+                      <Copy size={13} />
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold text-emerald-950">
+                        Salin Uraian Kegiatan dari Kelas Lain
+                      </span>
+                      <p className="text-[11px] text-emerald-700">
+                        Pilih kegiatan yang sudah terisi di kelas lain agar uraian & tema langsung masuk ke form ini:
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => openCopyModal()}
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 hover:text-emerald-950 bg-white hover:bg-emerald-100/70 border border-emerald-300 px-2.5 py-1 rounded-lg transition shadow-3xs self-start sm:self-auto shrink-0"
+                  >
+                    <Layers size={12} />
+                    <span>Buka Dialog Salin Lengkap</span>
+                  </button>
+                </div>
+
+                {otherClassesJournals.length > 0 ? (
+                  <div className="space-y-2">
+                    <select
+                      onChange={(e) => {
+                        const jId = e.target.value;
+                        if (!jId) return;
+                        const chosen = otherClassesJournals.find(j => j.id === jId);
+                        if (chosen) {
+                          setFormData(prev => ({
+                            ...prev,
+                            projectTheme: chosen.projectTheme || prev.projectTheme,
+                            activities: chosen.activities,
+                            notes: chosen.notes || prev.notes
+                          }));
+                          showToast('success', `Uraian kegiatan dari Kelas ${chosen.className} Jam ${chosen.meetingNo} berhasil diterapkan ke formulir`);
+                        }
+                      }}
+                      className="w-full bg-white border border-emerald-300 text-slate-800 text-xs rounded-lg px-3 py-2 font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                      defaultValue=""
+                    >
+                      <option value="" disabled>
+                        -- Pilih entri jurnal kelas lain pada {formatIndonesianDate(selectedDate)} ({otherClassesJournals.length} tersedia) --
+                      </option>
+                      {otherClassesJournals.map(j => (
+                        <option key={j.id} value={j.id}>
+                          [Kelas {j.className}] Jam {j.meetingNoEnd ? `${j.meetingNo}-${j.meetingNoEnd}` : j.meetingNo} • Fasilitator: {j.facilitatorName} — {j.activities.slice(0, 70)}...
+                        </option>
+                      ))}
+                    </select>
+
+                    {/* Quick click preview chips */}
+                    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                      <span className="text-[10px] font-bold text-emerald-800 shrink-0">Klik cepat 1-ketuk:</span>
+                      {otherClassesJournals.slice(0, 4).map(j => (
+                        <button
+                          key={j.id}
+                          type="button"
+                          onClick={() => {
+                            setFormData(prev => ({
+                              ...prev,
+                              projectTheme: j.projectTheme || prev.projectTheme,
+                              activities: j.activities,
+                              notes: j.notes || prev.notes
+                            }));
+                            showToast('success', `Uraian kegiatan dari Kelas ${j.className} Jam ${j.meetingNo} berhasil diterapkan ke formulir`);
+                          }}
+                          className="text-[10px] font-semibold bg-white hover:bg-emerald-100/90 text-emerald-900 border border-emerald-200 px-2 py-1 rounded transition flex items-center gap-1 text-left max-w-xs truncate shadow-3xs"
+                          title={j.activities}
+                        >
+                          <span className="font-bold text-emerald-950">[{j.className} Jam {j.meetingNo}]</span>
+                          <span className="truncate">{j.activities.slice(0, 32)}...</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : recentOtherJournals.length > 0 ? (
+                  <div className="space-y-2">
+                    <p className="text-[11px] text-slate-500">
+                      Belum ada entri kelas lain pada tanggal ini. Anda dapat menyalin dari entri terbaru kelas lain sebelumnya:
+                    </p>
+                    <select
+                      onChange={(e) => {
+                        const jId = e.target.value;
+                        if (!jId) return;
+                        const chosen = recentOtherJournals.find(j => j.id === jId);
+                        if (chosen) {
+                          setFormData(prev => ({
+                            ...prev,
+                            projectTheme: chosen.projectTheme || prev.projectTheme,
+                            activities: chosen.activities,
+                            notes: chosen.notes || prev.notes
+                          }));
+                          showToast('success', `Uraian kegiatan dari Kelas ${chosen.className} (${formatIndonesianDate(chosen.date)}) berhasil diterapkan ke formulir`);
+                        }
+                      }}
+                      className="w-full bg-white border border-slate-300 text-slate-800 text-xs rounded-lg px-3 py-2 font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                      defaultValue=""
+                    >
+                      <option value="" disabled>-- Pilih dari arsip kegiatan kelas lain sebelumnya --</option>
+                      {recentOtherJournals.map(j => (
+                        <option key={j.id} value={j.id}>
+                          [Kelas {j.className}] {formatIndonesianDate(j.date)} • Jam {j.meetingNo} — {j.activities.slice(0, 65)}...
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-slate-400 italic">
+                    Belum ada jurnal dari kelas lain yang tersimpan di sistem.
+                  </p>
+                )}
+              </div>
+
               {/* Uraian Kegiatan */}
               <div>
                 <div className="flex items-center justify-between mb-1">
@@ -1542,13 +1875,114 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
               <tbody className="divide-y divide-slate-200">
                 {groupedJournals.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-12 text-center text-slate-400">
-                      <div className="flex flex-col items-center justify-center gap-2">
-                        <BookOpen size={32} className="text-slate-300" />
-                        <span className="text-sm font-medium">Belum ada entri jurnal kokurikuler</span>
-                        <span className="text-xs text-slate-400">
-                          Gunakan tombol "Input Jurnal Jam Ini" di atas untuk menambahkan aktivitas.
-                        </span>
+                    <td colSpan={7} className="py-10 px-4 text-center">
+                      <div className="max-w-xl mx-auto flex flex-col items-center justify-center gap-3">
+                        <div className="p-3 bg-indigo-50 text-indigo-600 rounded-full">
+                          <BookOpen size={28} />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-bold text-slate-800">
+                            Belum Ada Entri Jurnal Kokurikuler untuk {selectedClass === 'ALL' ? 'Semua Kelas' : `Kelas ${selectedClass}`}
+                          </h3>
+                          <p className="text-xs text-slate-500 mt-0.5">
+                            Tanggal: <span className="font-semibold text-slate-700">{formatIndonesianDate(selectedDate)}</span>
+                          </p>
+                        </div>
+
+                        {otherClassesWithData.length > 0 ? (
+                          <div className="w-full bg-emerald-50/90 border border-emerald-300 rounded-xl p-4 text-left mt-2 shadow-2xs">
+                            <div className="flex items-center gap-2 mb-1.5">
+                              <span className="p-1 bg-emerald-600 text-white rounded-md">
+                                <Zap size={13} />
+                              </span>
+                              <span className="text-xs font-bold text-emerald-950">
+                                Rekomendasi: Tersedia Jurnal Terisi dari Kelas Lain pada Tanggal Ini!
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-emerald-800 mb-3">
+                              Rekan guru telah mengisi kegiatan kokurikuler untuk kelas berikut. Anda dapat langsung menyalinnya ke Kelas {selectedClass}:
+                            </p>
+                            <div className="space-y-2">
+                              {otherClassesWithData.map(c => (
+                                <div 
+                                  key={c.className} 
+                                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 bg-white rounded-lg border border-emerald-200"
+                                >
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs font-bold text-slate-800">
+                                        Kelas {c.className}
+                                      </span>
+                                      <span className="text-[10px] text-emerald-700 font-extrabold bg-emerald-100/80 px-2 py-0.5 rounded">
+                                        {c.count} Jam Terisi
+                                      </span>
+                                    </div>
+                                    <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">
+                                      {c.items[0]?.activities || ''}
+                                    </p>
+                                  </div>
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <button
+                                      type="button"
+                                      disabled={isQuickCopying}
+                                      onClick={() => handleQuickCopyAllFromClass(c.className)}
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition shadow-3xs disabled:opacity-50"
+                                    >
+                                      <Zap size={12} className={isQuickCopying ? "animate-spin" : ""} />
+                                      <span>Salin Semua Jam ({c.count})</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => openCopyModal(c.className)}
+                                      className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-medium border border-slate-300 rounded-lg transition"
+                                    >
+                                      <span>Pilih Jam...</span>
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-slate-400">
+                            Gunakan tombol di bawah untuk mengisi jurnal jam ini atau salin dari kelas/tanggal lain.
+                          </span>
+                        )}
+
+                        <div className="flex items-center gap-2 pt-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingId(null);
+                              const isGuru = user.role === 'GURU' || (user.role as string) === UserRole.GURU;
+                              setFormData({
+                                date: selectedDate,
+                                className: selectedClass,
+                                classId: selectedClass,
+                                startHour: nextUnfilledHour,
+                                endHour: nextUnfilledHour,
+                                isSeparateHours: true,
+                                facilitatorName: isGuru ? (user.fullName || '') : (teachers[0]?.fullName || ''),
+                                projectTheme: P5_THEMES[0],
+                                activities: '',
+                                notes: ''
+                              });
+                              setIsFormOpen(true);
+                            }}
+                            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition shadow-3xs"
+                          >
+                            <Plus size={14} />
+                            <span>Input Jurnal Baru</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openCopyModal()}
+                            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-300 rounded-lg hover:bg-emerald-100 transition"
+                          >
+                            <Copy size={13} className="text-emerald-700" />
+                            <span>Buka Dialog Salin</span>
+                          </button>
+                        </div>
                       </div>
                     </td>
                   </tr>
