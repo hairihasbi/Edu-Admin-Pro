@@ -857,7 +857,8 @@ export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', logCall
                             'eduadmin_guru_wali_initial_assessments',
                             'eduadmin_mentoring_journals',
                             'eduadmin_graduate_assessments',
-                            'eduadmin_cocurricular_journals'
+                            'eduadmin_cocurricular_journals',
+                            'eduadmin_homeroom_guidance'
                         ];
 
                         if (SAFE_MERGE_COLLECTIONS.includes(col)) {

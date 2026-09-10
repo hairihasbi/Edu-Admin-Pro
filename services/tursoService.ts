@@ -69,13 +69,37 @@ const handleApiResponse = async (response: Response, isPublicOrInit = false) => 
     }
 };
 
+export const isNetworkSuspendedError = (err: any) => {
+    if (!err) return false;
+    const msg = String(err?.message || err);
+    return (
+        msg.includes('ERR_NETWORK_IO_SUSPENDED') ||
+        msg.includes('Failed to fetch') ||
+        msg.includes('NetworkError') ||
+        msg.includes('Load failed') ||
+        msg.includes('The user aborted a request') ||
+        msg.includes('AbortError')
+    );
+};
+
 const retryFetch = async (fn: () => Promise<any>, retries = 2, delayMs = 1000) => {
     try {
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
+            throw new Error("OFFLINE: Jaringan terputus.");
+        }
         return await fn();
-    } catch (error) {
+    } catch (error: any) {
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
+            throw error;
+        }
+        // If tab is currently suspended / hidden or network I/O is suspended by OS
+        if (isNetworkSuspendedError(error) && typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+            throw error;
+        }
         if (retries > 0) {
-            await new Promise(resolve => setTimeout(resolve, delayMs));
-            return retryFetch(fn, retries - 1, delayMs);
+            const actualDelay = isNetworkSuspendedError(error) ? Math.max(delayMs, 1500) : delayMs;
+            await new Promise(resolve => setTimeout(resolve, actualDelay));
+            return retryFetch(fn, retries - 1, actualDelay * 1.5);
         }
         throw error;
     }
@@ -188,6 +212,11 @@ export const pushToTurso = async (collection: string, items: any[], force: boole
       throw new Error("OFFLINE: Cannot push to Turso");
   }
 
+  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+      // Avoid network pushes while tab is hidden/suspended; will sync when tab becomes active
+      return;
+  }
+
   // 1. Filter items needing sync
   const itemsToPush = force ? items : items.filter(item => item.deleted || !item.isSynced || !item.lastModified);
   
@@ -227,6 +256,10 @@ export const pushToTurso = async (collection: string, items: any[], force: boole
           await handleApiResponse(response);
           
       } catch (error: any) {
+          if (isNetworkSuspendedError(error)) {
+              console.warn(`[Turso Push] Koneksi jaringan tertunda/suspended saat push ${collection}, akan dicoba ulang otomatis saat tab aktif.`);
+              return;
+          }
           console.error(`Batch push failed for ${collection} (items ${i} to ${i + BATCH_SIZE}):`, error);
           throw error; // Re-throw to stop sync process and alert user
       }
@@ -324,6 +357,11 @@ export const completePasswordResetApi = async (token: string, newPassword: strin
 // Pull Remote Data from Turso via API
 export const pullFromTurso = async (collection: string, localItems: any[]): Promise<{items: any[], hasChanges: boolean}> => {
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      return { items: localItems, hasChanges: false };
+  }
+
+  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+      // Don't pull when tab is suspended or in background
       return { items: localItems, hasChanges: false };
   }
 
@@ -465,7 +503,9 @@ export const pullFromTurso = async (collection: string, localItems: any[]): Prom
     const PROTECTED_COLLECTIONS = [
         'eduadmin_guru_wali_initial_assessments',
         'eduadmin_mentoring_journals',
-        'eduadmin_graduate_assessments'
+        'eduadmin_graduate_assessments',
+        'eduadmin_cocurricular_journals',
+        'eduadmin_homeroom_guidance'
     ];
 
     if (remoteMap.size === 0 && localItems.length > 0) {
@@ -539,8 +579,12 @@ export const pullFromTurso = async (collection: string, localItems: any[]): Prom
     }
 
     return { items: mergedItems, hasChanges };
-  } catch (e) {
-    console.error(`Pull Error (${collection}):`, e);
+  } catch (e: any) {
+    if (isNetworkSuspendedError(e)) {
+        console.warn(`[Turso Sync] Koneksi jaringan tertunda/suspended saat pull ${collection}. Data lokal tetap aman.`);
+    } else {
+        console.error(`Pull Error (${collection}):`, e);
+    }
     // Don't swallow auth errors if possible, but keep app stable
     return { items: localItems, hasChanges: false };
   }
