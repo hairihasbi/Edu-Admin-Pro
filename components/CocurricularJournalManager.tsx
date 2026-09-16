@@ -92,9 +92,14 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
 
   // Print Modal State
   const [showPrintModal, setShowPrintModal] = useState(false);
-  const [printIncludeEmptyRows, setPrintIncludeEmptyRows] = useState(true);
+  const [printIncludeEmptyRows, setPrintIncludeEmptyRows] = useState(false);
   const [printMaxHour, setPrintMaxHour] = useState(10);
   const [printThemeTitle, setPrintThemeTitle] = useState('');
+  const [printJournals, setPrintJournals] = useState<CocurricularJournal[]>([]);
+  const [printScope, setPrintScope] = useState<'ALL_DATES' | 'SELECTED_DATE'>('ALL_DATES');
+  const [printStartDate, setPrintStartDate] = useState<string>('');
+  const [printEndDate, setPrintEndDate] = useState<string>('');
+  const [isLoadingPrintData, setIsLoadingPrintData] = useState<boolean>(false);
 
   // Copy Modal State (Salin Jurnal Antar-Kelas)
   const [showCopyModal, setShowCopyModal] = useState(false);
@@ -522,8 +527,39 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
     return 1;
   }, [filledHourMap]);
 
-  // Helper to open print modal ensuring Kepala Sekolah, Nama Sekolah, and Titimangsa data are initialized
-  const openPrintModal = () => {
+  // Helper to load all journals for print (including all previous days)
+  const loadPrintJournals = async (targetClass: string) => {
+    setIsLoadingPrintData(true);
+    try {
+      let filterParams: any = {};
+      if (user.schoolNpsn && user.schoolNpsn !== 'DEFAULT') {
+        filterParams.schoolNpsn = user.schoolNpsn;
+      }
+      if (targetClass !== 'ALL') {
+        filterParams.className = targetClass;
+      }
+      const list = await getCocurricularJournals(filterParams);
+      list.sort((a, b) => {
+        if (a.date !== b.date) {
+          return a.date.localeCompare(b.date);
+        }
+        return (Number(a.meetingNo) || 0) - (Number(b.meetingNo) || 0);
+      });
+      setPrintJournals(list);
+    } catch (err) {
+      console.error('Failed to load journals for print:', err);
+    } finally {
+      setIsLoadingPrintData(false);
+    }
+  };
+
+  const handlePrintClassChange = async (newClass: string) => {
+    setSelectedClass(newClass);
+    await loadPrintJournals(newClass);
+  };
+
+  // Helper to open print modal ensuring Kepala Sekolah, Nama Sekolah, Titimangsa, dan Seluruh Jurnal Kelas dimuat
+  const openPrintModal = async () => {
     const isGenericSchool = (s?: string | null) => {
       if (!s) return true;
       const norm = s.trim().toLowerCase();
@@ -563,7 +599,11 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
     if (!printCoordinatorNip) {
       setPrintCoordinatorNip(user.nip || '');
     }
+
+    // Default ke ALL_DATES agar seluruh riwayat jurnal hari sebelumnya juga tercetak
+    setPrintScope('ALL_DATES');
     setShowPrintModal(true);
+    await loadPrintJournals(selectedClass);
   };
 
   const handlePrintDateRawChange = (d: string) => {
@@ -1068,46 +1108,147 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
     window.print();
   };
 
-  // Build rows for print sheet according to user's uploaded image!
-  const printableData = useMemo(() => {
-    // Current group for active date and class
-    const items = dailyJournalsForActiveContext.slice().sort((a, b) => (Number(a.meetingNo) || 0) - (Number(b.meetingNo) || 0));
-    
-    if (!printIncludeEmptyRows) {
-      return items.map((item, idx) => ({
-        no: idx + 1,
-        hour: item.meetingNoEnd ? `${item.meetingNo} - ${item.meetingNoEnd}` : item.meetingNo,
-        activity: item.activities,
-        facilitator: item.facilitatorName,
-        isFilled: true
-      }));
+  // Build structured groups by Date & Class for print sheet
+  // Ensures all previous days for the selected class are included
+  const printDateGroups = useMemo(() => {
+    // Determine the source journals to print
+    let itemsToProcess = printJournals;
+
+    if (printScope === 'SELECTED_DATE') {
+      itemsToProcess = itemsToProcess.filter(j => j.date === selectedDate);
+    } else {
+      if (printStartDate) {
+        itemsToProcess = itemsToProcess.filter(j => j.date >= printStartDate);
+      }
+      if (printEndDate) {
+        itemsToProcess = itemsToProcess.filter(j => j.date <= printEndDate);
+      }
     }
 
-    // Build comprehensive rows up to printMaxHour (e.g. Jam 2 to 10 or Jam 1 to 10)
-    // Looking at the user's uploaded image, rows start at Jam 2 up to Jam 10!
-    // We can list hours 1 to printMaxHour, filling matched hours and leaving unmatched ones empty
-    const rows = [];
-    let rowNumber = 1;
-
-    for (let h = 2; h <= printMaxHour; h++) {
-      // Find matching journal
-      const matched = items.find(j => {
-        const start = Number(j.meetingNo);
-        const end = Number(j.meetingNoEnd) || start;
-        return h >= start && h <= end;
-      });
-
-      rows.push({
-        no: rowNumber++,
-        hour: h,
-        activity: matched ? matched.activities : '',
-        facilitator: matched ? matched.facilitatorName : '',
-        isFilled: !!matched
+    // Filter class if selectedClass !== 'ALL'
+    if (selectedClass !== 'ALL') {
+      const target = (selectedClass || '').trim().toLowerCase();
+      const targetClean = target.replace(/[^a-zA-Z0-9]/g, '');
+      itemsToProcess = itemsToProcess.filter(j => {
+        const jName = (j.className || '').trim().toLowerCase();
+        const jId = (j.classId || '').trim().toLowerCase();
+        const jClean = jName.replace(/[^a-zA-Z0-9]/g, '');
+        return jName === target || jId === target || (targetClean && jClean && targetClean === jClean);
       });
     }
 
-    return rows;
-  }, [dailyJournalsForActiveContext, printIncludeEmptyRows, printMaxHour]);
+    // If no items were found:
+    if (itemsToProcess.length === 0) {
+      if (printIncludeEmptyRows) {
+        const fallbackRows = [];
+        for (let h = 2; h <= printMaxHour; h++) {
+          fallbackRows.push({
+            globalNo: h - 1,
+            hour: h,
+            activity: '',
+            facilitator: '',
+            isFilled: false
+          });
+        }
+        return [{
+          groupKey: `${selectedDate}__${selectedClass}`,
+          date: selectedDate,
+          dayName: getDayName(selectedDate),
+          className: selectedClass,
+          items: [],
+          rows: fallbackRows
+        }];
+      }
+      return [];
+    }
+
+    // Group items by date + className
+    const map = new Map<string, {
+      groupKey: string;
+      date: string;
+      dayName: string;
+      className: string;
+      items: CocurricularJournal[];
+    }>();
+
+    itemsToProcess.forEach(j => {
+      const key = `${j.date}__${j.className || selectedClass}`;
+      if (!map.has(key)) {
+        map.set(key, {
+          groupKey: key,
+          date: j.date,
+          dayName: j.dayName || getDayName(j.date),
+          className: j.className || selectedClass,
+          items: []
+        });
+      }
+      map.get(key)!.items.push(j);
+    });
+
+    // Sort groups chronologically: earlier dates first
+    const sortedGroups = Array.from(map.values()).sort((a, b) => {
+      if (a.date !== b.date) {
+        return a.date.localeCompare(b.date);
+      }
+      return a.className.localeCompare(b.className);
+    });
+
+    let currentGlobalNo = 1;
+
+    return sortedGroups.map(group => {
+      const items = group.items.sort((a, b) => (Number(a.meetingNo) || 0) - (Number(b.meetingNo) || 0));
+
+      let rows: {
+        globalNo: number;
+        hour: number | string;
+        activity: string;
+        facilitator: string;
+        isFilled: boolean;
+      }[] = [];
+
+      if (!printIncludeEmptyRows) {
+        rows = items.map(item => ({
+          globalNo: currentGlobalNo++,
+          hour: item.meetingNoEnd ? `${item.meetingNo} - ${item.meetingNoEnd}` : item.meetingNo,
+          activity: item.activities,
+          facilitator: item.facilitatorName,
+          isFilled: true
+        }));
+      } else {
+        const hasHour1 = items.some(it => (Number(it.meetingNo) || 0) <= 1);
+        const startHour = hasHour1 ? 1 : 2;
+
+        for (let h = startHour; h <= printMaxHour; h++) {
+          const matched = items.find(j => {
+            const start = Number(j.meetingNo);
+            const end = Number(j.meetingNoEnd) || start;
+            return h >= start && h <= end;
+          });
+
+          rows.push({
+            globalNo: currentGlobalNo++,
+            hour: h,
+            activity: matched ? matched.activities : '',
+            facilitator: matched ? matched.facilitatorName : '',
+            isFilled: !!matched
+          });
+        }
+      }
+
+      return {
+        ...group,
+        rows
+      };
+    });
+  }, [printJournals, printScope, printStartDate, printEndDate, selectedDate, selectedClass, printIncludeEmptyRows, printMaxHour]);
+
+  const printTotalEntriesCount = useMemo(() => {
+    return printDateGroups.reduce((acc, g) => acc + g.items.length, 0);
+  }, [printDateGroups]);
+
+  const printUniqueDates = useMemo(() => {
+    return Array.from(new Set(printDateGroups.map(g => g.date))).sort();
+  }, [printDateGroups]);
 
   return (
     <div className="min-h-screen bg-slate-50/60 pb-16">
@@ -2562,15 +2703,65 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
           <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col print:max-h-none print:shadow-none print:w-full print:rounded-none">
             
             {/* Modal Header */}
-            <div className="p-4 border-b border-slate-200 flex items-center justify-between print:hidden">
+            <div className="p-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 print:hidden">
               <div className="flex items-center gap-2">
                 <Printer size={18} className="text-indigo-600" />
-                <h3 className="text-sm font-bold text-slate-900">
-                  Pratinjau Cetak Jurnal Kokurikuler
-                </h3>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">
+                    Pratinjau Cetak Jurnal Kokurikuler
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    {printScope === 'ALL_DATES'
+                      ? `Mencakup seluruh riwayat jurnal kelas (${printTotalEntriesCount} entri dari ${printUniqueDates.length} hari pertemuan)`
+                      : `Mencakup lembar tanggal ${selectedDate} (${printTotalEntriesCount} entri)`}
+                  </p>
+                </div>
               </div>
               
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
+                {/* Cakupan Cetak Toggle */}
+                <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setPrintScope('ALL_DATES')}
+                    className={`px-3 py-1 font-semibold rounded-md transition-all ${
+                      printScope === 'ALL_DATES'
+                        ? 'bg-indigo-600 text-white shadow-2xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                    title="Cetak seluruh riwayat jurnal kegiatan kelas ini dari hari-hari sebelumnya hingga hari ini"
+                  >
+                    Semua Hari ({printJournals.length} Entri)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPrintScope('SELECTED_DATE')}
+                    className={`px-3 py-1 font-semibold rounded-md transition-all ${
+                      printScope === 'SELECTED_DATE'
+                        ? 'bg-indigo-600 text-white shadow-2xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                    title={`Hanya cetak lembar tanggal ${selectedDate}`}
+                  >
+                    Hanya Tanggal Ini
+                  </button>
+                </div>
+
+                {/* Pilih Kelas Cetak */}
+                <div className="flex items-center gap-1.5 text-xs text-slate-700">
+                  <span className="font-semibold text-slate-500">Kelas:</span>
+                  <select
+                    value={selectedClass}
+                    onChange={(e) => handlePrintClassChange(e.target.value)}
+                    className="bg-white border border-slate-300 rounded px-2 py-1 text-xs text-slate-800 font-bold focus:ring-1 focus:ring-indigo-500"
+                  >
+                    {classes.map(c => (
+                      <option key={c.id} value={c.name}>{c.name}</option>
+                    ))}
+                    <option value="ALL">Semua Kelas</option>
+                  </select>
+                </div>
+
                 <label className="flex items-center gap-1.5 text-xs text-slate-700 cursor-pointer">
                   <input
                     type="checkbox"
@@ -2578,13 +2769,14 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
                     onChange={(e) => setPrintIncludeEmptyRows(e.target.checked)}
                     className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 text-xs"
                   />
-                  <span>Lengkapi baris s.d. Jam {printMaxHour} (seperti gambar)</span>
+                  <span>Lengkapi baris s.d. Jam {printMaxHour}</span>
                 </label>
 
                 <button
                   type="button"
                   onClick={handlePrint}
-                  className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors shadow-xs"
+                  disabled={isLoadingPrintData}
+                  className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-lg transition-colors shadow-xs"
                 >
                   <Printer size={14} />
                   <span>Cetak Sekarang</span>
@@ -2662,19 +2854,40 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
                 </div>
               </div>
 
-              {/* Baris 2: Pejabat Penandatangan */}
+              {/* Baris 2: Filter Rentang Tanggal (Jika Mode Semua Hari) & Pejabat Penandatangan */}
               <div className="flex flex-wrap items-center justify-between gap-2.5 pt-1.5 border-t border-slate-200/70">
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold text-slate-700">Kepala Sekolah:</span>
-                  {principalUser && (
-                    <span className="text-[10px] bg-emerald-100 text-emerald-800 font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
-                      <CheckCircle2 size={11} className="text-emerald-600" />
-                      Otomatis dari Akun Guru
-                    </span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-semibold text-slate-700">Rentang Tanggal:</span>
+                  <input
+                    type="date"
+                    value={printStartDate}
+                    onChange={(e) => setPrintStartDate(e.target.value)}
+                    placeholder="Mulai"
+                    className="bg-white border border-slate-300 rounded px-2 py-0.5 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    title="Filter tanggal mulai (opsional)"
+                  />
+                  <span className="text-slate-400">s.d.</span>
+                  <input
+                    type="date"
+                    value={printEndDate}
+                    onChange={(e) => setPrintEndDate(e.target.value)}
+                    placeholder="Sampai"
+                    className="bg-white border border-slate-300 rounded px-2 py-0.5 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    title="Filter tanggal selesai (opsional)"
+                  />
+                  {(printStartDate || printEndDate) && (
+                    <button
+                      type="button"
+                      onClick={() => { setPrintStartDate(''); setPrintEndDate(''); }}
+                      className="text-[11px] text-indigo-600 hover:text-indigo-800 underline font-medium"
+                    >
+                      Reset Rentang
+                    </button>
                   )}
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-semibold text-slate-700">Kepala Sekolah:</span>
                   <input
                     type="text"
                     value={printPrincipalName}
@@ -2727,11 +2940,21 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
                     JURNAL KEGIATAN KOKURIKULER / PROYEK P5
                   </h1>
                   <p className="text-[11px] font-normal text-slate-700 mt-1">
-                    Kelas: <strong>{selectedClass}</strong> • Hari, Tanggal: <strong>{formatIndonesianDate(selectedDate)}</strong> • Semester: Ganjil / Genap
+                    Kelas: <strong>{selectedClass === 'ALL' ? 'Semua Kelas' : selectedClass}</strong> • {
+                      printScope === 'ALL_DATES' && printUniqueDates.length > 1 ? (
+                        <>
+                          Periode: <strong>{formatIndonesianDate(printUniqueDates[0])} s.d. {formatIndonesianDate(printUniqueDates[printUniqueDates.length - 1])}</strong> ({printUniqueDates.length} Hari Pertemuan)
+                        </>
+                      ) : (
+                        <>
+                          Hari, Tanggal: <strong>{formatIndonesianDate(selectedDate)}</strong>
+                        </>
+                      )
+                    } • Semester: Ganjil / Genap
                   </p>
                 </div>
 
-                {/* TABEL EXACT DENGAN IMAGE YANG DIUNGGAH USER */}
+                {/* TABEL EXACT DENGAN FORMAT RESMI SEKOLAH */}
                 <table className="w-full border-collapse border border-black text-[11px]">
                   <thead>
                     <tr className="border border-black font-bold text-center bg-slate-50 print:bg-transparent">
@@ -2745,62 +2968,78 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
                     </tr>
                   </thead>
                   <tbody>
-                    {printableData.map((row, index) => {
-                      const isFirstRow = index === 0;
+                    {isLoadingPrintData ? (
+                      <tr>
+                        <td colSpan={7} className="border border-black py-8 text-center text-slate-500 italic">
+                          Sedang memuat data jurnal kokurikuler kelas {selectedClass}...
+                        </td>
+                      </tr>
+                    ) : printDateGroups.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="border border-black py-8 text-center text-slate-500 italic">
+                          Belum ada entri jurnal kokurikuler untuk kelas {selectedClass}.
+                        </td>
+                      </tr>
+                    ) : (
+                      printDateGroups.map((group) => {
+                        return group.rows.map((row, index) => {
+                          const isFirstRow = index === 0;
 
-                      return (
-                        <tr key={index} className="border border-black min-h-[44px]">
-                          {/* NO */}
-                          <td className="border border-black py-2.5 px-2 text-center align-middle font-medium">
-                            {row.no}
-                          </td>
+                          return (
+                            <tr key={`${group.groupKey}_${index}`} className="border border-black min-h-[44px]">
+                              {/* NO */}
+                              <td className="border border-black py-2.5 px-2 text-center align-middle font-medium">
+                                {row.globalNo}
+                              </td>
 
-                          {/* HARI/TANGGAL (ROW-SPAN MENCAKUP SEMUA BARIS) */}
-                          {isFirstRow && (
-                            <td
-                              rowSpan={printableData.length}
-                              className="border border-black py-3 px-3 text-center align-middle font-semibold"
-                            >
-                              {formatIndonesianDate(selectedDate)}
-                            </td>
-                          )}
+                              {/* HARI/TANGGAL (ROW-SPAN MENCAKUP SEMUA BARIS DALAM SATU HARI) */}
+                              {isFirstRow && (
+                                <td
+                                  rowSpan={group.rows.length}
+                                  className="border border-black py-3 px-3 text-center align-middle font-semibold"
+                                >
+                                  {formatIndonesianDate(group.date)}
+                                </td>
+                              )}
 
-                          {/* KELAS (ROW-SPAN MENCAKUP SEMUA BARIS) */}
-                          {isFirstRow && (
-                            <td
-                              rowSpan={printableData.length}
-                              className="border border-black py-3 px-2 text-center align-middle font-bold"
-                            >
-                              {selectedClass}
-                            </td>
-                          )}
+                              {/* KELAS (ROW-SPAN MENCAKUP SEMUA BARIS DALAM SATU HARI) */}
+                              {isFirstRow && (
+                                <td
+                                  rowSpan={group.rows.length}
+                                  className="border border-black py-3 px-2 text-center align-middle font-bold"
+                                >
+                                  {group.className || selectedClass}
+                                </td>
+                              )}
 
-                          {/* JAM KE */}
-                          <td className="border border-black py-2.5 px-2 text-center align-middle font-semibold">
-                            {row.hour}
-                          </td>
+                              {/* JAM KE */}
+                              <td className="border border-black py-2.5 px-2 text-center align-middle font-semibold">
+                                {row.hour}
+                              </td>
 
-                          {/* URAIAN KEGIATAN */}
-                          <td className="border border-black py-2.5 px-3 align-middle leading-normal">
-                            {row.activity ? (
-                              <MathView text={row.activity} />
-                            ) : (
-                              <span className="text-transparent select-none">&nbsp;</span>
-                            )}
-                          </td>
+                              {/* URAIAN KEGIATAN */}
+                              <td className="border border-black py-2.5 px-3 align-middle leading-normal">
+                                {row.activity ? (
+                                  <MathView text={row.activity} />
+                                ) : (
+                                  <span className="text-transparent select-none">&nbsp;</span>
+                                )}
+                              </td>
 
-                          {/* FASILITATOR */}
-                          <td className="border border-black py-2.5 px-2 text-center align-middle font-medium">
-                            {row.facilitator || ''}
-                          </td>
+                              {/* FASILITATOR */}
+                              <td className="border border-black py-2.5 px-2 text-center align-middle font-medium">
+                                {row.facilitator || ''}
+                              </td>
 
-                          {/* TANDA TANGAN (KOTAK PARAF MANUAL) */}
-                          <td className="border border-black py-2.5 px-2 text-center align-middle h-11">
-                            {/* Kotak paraf fisik kosong untuk guru tanda tangan di kertas */}
-                          </td>
-                        </tr>
-                      );
-                    })}
+                              {/* TANDA TANGAN (KOTAK PARAF MANUAL) */}
+                              <td className="border border-black py-2.5 px-2 text-center align-middle h-11">
+                                {/* Kotak paraf fisik kosong untuk guru tanda tangan di kertas */}
+                              </td>
+                            </tr>
+                          );
+                        });
+                      })
+                    )}
                   </tbody>
                 </table>
 
@@ -2867,17 +3106,28 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
             </div>
 
             {/* Modal Footer */}
-            <div className="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between print:hidden rounded-b-2xl">
+            <div className="p-4 border-t border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-3 print:hidden rounded-b-2xl">
               <span className="text-xs text-slate-500">
-                Format tabel disesuaikan dengan standar format lembar kokurikuler/P5.
+                Format tabel resmi: Hari/Tanggal dan Kelas dirapatkan (rowspan) secara vertikal. Menampilkan {printTotalEntriesCount} entri kegiatan dari {printUniqueDates.length} hari pertemuan.
               </span>
-              <button
-                type="button"
-                onClick={() => setShowPrintModal(false)}
-                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 bg-slate-200 hover:bg-slate-300 rounded-lg transition-colors"
-              >
-                Tutup
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handlePrint}
+                  disabled={isLoadingPrintData}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-lg transition-colors shadow-xs"
+                >
+                  <Printer size={14} />
+                  <span>Cetak Lembar Jurnal</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowPrintModal(false)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 bg-slate-200 hover:bg-slate-300 rounded-lg transition-colors"
+                >
+                  Tutup
+                </button>
+              </div>
             </div>
 
           </div>
@@ -2900,6 +3150,20 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
             width: 100%;
             margin: 0;
             padding: 10mm;
+          }
+          table {
+            page-break-inside: auto;
+          }
+          tr {
+            page-break-inside: avoid;
+            page-break-after: auto;
+          }
+          thead {
+            display: table-header-group;
+          }
+          .break-inside-avoid {
+            page-break-inside: avoid;
+            break-inside: avoid;
           }
         }
       `}</style>
