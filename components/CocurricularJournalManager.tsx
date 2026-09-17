@@ -99,6 +99,7 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
   const [printScope, setPrintScope] = useState<'ALL_DATES' | 'SELECTED_DATE'>('ALL_DATES');
   const [printStartDate, setPrintStartDate] = useState<string>('');
   const [printEndDate, setPrintEndDate] = useState<string>('');
+  const [printTitimangsaMode, setPrintTitimangsaMode] = useState<'PER_DAY' | 'UNIFORM'>('PER_DAY');
   const [isLoadingPrintData, setIsLoadingPrintData] = useState<boolean>(false);
 
   // Copy Modal State (Salin Jurnal Antar-Kelas)
@@ -1143,6 +1144,7 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
         const fallbackRows = [];
         for (let h = 2; h <= printMaxHour; h++) {
           fallbackRows.push({
+            dailyNo: h - 1,
             globalNo: h - 1,
             hour: h,
             activity: '',
@@ -1199,6 +1201,7 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
       const items = group.items.sort((a, b) => (Number(a.meetingNo) || 0) - (Number(b.meetingNo) || 0));
 
       let rows: {
+        dailyNo: number;
         globalNo: number;
         hour: number | string;
         activity: string;
@@ -1206,8 +1209,11 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
         isFilled: boolean;
       }[] = [];
 
+      let currentDailyNo = 1;
+
       if (!printIncludeEmptyRows) {
         rows = items.map(item => ({
+          dailyNo: currentDailyNo++,
           globalNo: currentGlobalNo++,
           hour: item.meetingNoEnd ? `${item.meetingNo} - ${item.meetingNoEnd}` : item.meetingNo,
           activity: item.activities,
@@ -1226,6 +1232,7 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
           });
 
           rows.push({
+            dailyNo: currentDailyNo++,
             globalNo: currentGlobalNo++,
             hour: h,
             activity: matched ? matched.activities : '',
@@ -2824,23 +2831,36 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
                   </div>
 
                   <div className="flex items-center gap-1 bg-white border border-slate-300 rounded-md px-2 py-1 focus-within:ring-1 focus-within:ring-indigo-500 focus-within:border-indigo-500">
-                    <span className="text-[11px] text-slate-400 font-medium">Tanggal:</span>
-                    <input
-                      type="text"
-                      value={printDateText}
-                      onChange={(e) => setPrintDateText(e.target.value)}
-                      placeholder="09 September 2026"
-                      className="text-xs text-slate-800 placeholder-slate-400 focus:outline-none w-36 font-medium"
-                      title="Format teks tanggal cetak (dapat diedit manual)"
-                    />
-                    <input
-                      type="date"
-                      value={printDateRaw}
-                      onChange={(e) => handlePrintDateRawChange(e.target.value)}
-                      className="w-4 h-4 cursor-pointer text-slate-500 hover:text-indigo-600 border-0 bg-transparent p-0"
-                      title="Pilih tanggal dari kalender"
-                    />
+                    <span className="text-[11px] text-slate-400 font-medium">Titimangsa:</span>
+                    <select
+                      value={printTitimangsaMode}
+                      onChange={(e) => setPrintTitimangsaMode(e.target.value as 'PER_DAY' | 'UNIFORM')}
+                      className="text-xs font-semibold text-indigo-700 bg-transparent focus:outline-none cursor-pointer"
+                    >
+                      <option value="PER_DAY">Tanggal Sesuai Hari Pertemuan</option>
+                      <option value="UNIFORM">Satu Tanggal Serentak</option>
+                    </select>
                   </div>
+
+                  {printTitimangsaMode === 'UNIFORM' && (
+                    <div className="flex items-center gap-1 bg-white border border-slate-300 rounded-md px-2 py-1 focus-within:ring-1 focus-within:ring-indigo-500 focus-within:border-indigo-500">
+                      <input
+                        type="text"
+                        value={printDateText}
+                        onChange={(e) => setPrintDateText(e.target.value)}
+                        placeholder="09 September 2026"
+                        className="text-xs text-slate-800 placeholder-slate-400 focus:outline-none w-36 font-medium"
+                        title="Format teks tanggal cetak serentak"
+                      />
+                      <input
+                        type="date"
+                        value={printDateRaw}
+                        onChange={(e) => handlePrintDateRawChange(e.target.value)}
+                        className="w-4 h-4 cursor-pointer text-slate-500 hover:text-indigo-600 border-0 bg-transparent p-0"
+                        title="Pilih tanggal dari kalender"
+                      />
+                    </div>
+                  )}
 
                   <button
                     type="button"
@@ -2910,215 +2930,187 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
             </div>
 
             {/* Printable Paper Canvas */}
-            <div className="p-6 sm:p-8 overflow-y-auto flex-1 print:p-0 print:overflow-visible">
-              <div ref={printAreaRef} className="print-sheet max-w-[210mm] mx-auto bg-white text-black font-serif text-[12px] leading-snug">
-                
-                {/* KOP / HEADER RESMI SEKOLAH */}
-                <div className="text-center mb-5 pb-3 border-b-2 border-black">
-                  <h2 className="text-sm font-bold uppercase tracking-wider">
-                    {/* Teks Bersih untuk Cetak Fisik / PDF */}
-                    <span className="hidden print:inline">
-                      {printSchoolName || user.schoolName || 'PEMERINTAH PROVINSI / KABUPATEN'}
-                    </span>
-                    {/* Kontrol Interaktif pada Tampilan Layar */}
-                    <span 
-                      className="print:hidden inline-flex items-center justify-center gap-1 bg-amber-50/80 hover:bg-amber-100 border border-dashed border-amber-300 hover:border-amber-400 rounded px-2 py-0.5 transition-all shadow-2xs group cursor-pointer"
-                      title="Edit manual Nama Sekolah pada KOP di sini"
-                    >
-                      <Building2 size={12} className="text-amber-600 shrink-0" />
-                      <input
-                        type="text"
-                        value={printSchoolName}
-                        onChange={(e) => setPrintSchoolName(e.target.value)}
-                        placeholder="NAMA SEKOLAH"
-                        className="bg-transparent border-b border-amber-400 focus:border-indigo-600 font-serif font-bold uppercase text-center px-1 text-sm text-slate-800 w-72 sm:w-96 focus:outline-none"
-                        title="Edit manual Nama Sekolah pada KOP (otomatis terisi dari data sekolah aktif)"
-                      />
-                    </span>
-                  </h2>
-                  <h1 className="text-base font-extrabold uppercase mt-0.5 tracking-tight">
-                    JURNAL KEGIATAN KOKURIKULER / PROYEK P5
-                  </h1>
-                  <p className="text-[11px] font-normal text-slate-700 mt-1">
-                    Kelas: <strong>{selectedClass === 'ALL' ? 'Semua Kelas' : selectedClass}</strong> • {
-                      printScope === 'ALL_DATES' && printUniqueDates.length > 1 ? (
-                        <>
-                          Periode: <strong>{formatIndonesianDate(printUniqueDates[0])} s.d. {formatIndonesianDate(printUniqueDates[printUniqueDates.length - 1])}</strong> ({printUniqueDates.length} Hari Pertemuan)
-                        </>
-                      ) : (
-                        <>
-                          Hari, Tanggal: <strong>{formatIndonesianDate(selectedDate)}</strong>
-                        </>
-                      )
-                    } • Semester: Ganjil / Genap
-                  </p>
-                </div>
-
-                {/* TABEL EXACT DENGAN FORMAT RESMI SEKOLAH */}
-                <table className="w-full border-collapse border border-black text-[11px]">
-                  <thead>
-                    <tr className="border border-black font-bold text-center bg-slate-50 print:bg-transparent">
-                      <th className="border border-black py-2 px-2 w-[5%]">NO</th>
-                      <th className="border border-black py-2 px-3 w-[22%]">HARI/TANGGAL</th>
-                      <th className="border border-black py-2 px-2 w-[8%]">KELAS</th>
-                      <th className="border border-black py-2 px-2 w-[8%]">JAM KE</th>
-                      <th className="border border-black py-2 px-4 w-[35%]">URAIAN KEGIATAN</th>
-                      <th className="border border-black py-2 px-3 w-[14%]">FASILITATOR</th>
-                      <th className="border border-black py-2 px-2 w-[14%]">TANDA TANGAN</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {isLoadingPrintData ? (
-                      <tr>
-                        <td colSpan={7} className="border border-black py-8 text-center text-slate-500 italic">
-                          Sedang memuat data jurnal kokurikuler kelas {selectedClass}...
-                        </td>
-                      </tr>
-                    ) : printDateGroups.length === 0 ? (
-                      <tr>
-                        <td colSpan={7} className="border border-black py-8 text-center text-slate-500 italic">
-                          Belum ada entri jurnal kokurikuler untuk kelas {selectedClass}.
-                        </td>
-                      </tr>
-                    ) : (
-                      printDateGroups.map((group) => {
-                        return group.rows.map((row, index) => {
-                          const isFirstRow = index === 0;
-
-                          return (
-                            <tr key={`${group.groupKey}_${index}`} className="border border-black min-h-[44px]">
-                              {/* NO */}
-                              <td className="border border-black py-2.5 px-2 text-center align-middle font-medium">
-                                {row.globalNo}
-                              </td>
-
-                              {/* HARI/TANGGAL (ROW-SPAN MENCAKUP SEMUA BARIS DALAM SATU HARI) */}
-                              {isFirstRow && (
-                                <td
-                                  rowSpan={group.rows.length}
-                                  className="border border-black py-3 px-3 text-center align-middle font-semibold"
-                                >
-                                  {formatIndonesianDate(group.date)}
-                                </td>
-                              )}
-
-                              {/* KELAS (ROW-SPAN MENCAKUP SEMUA BARIS DALAM SATU HARI) */}
-                              {isFirstRow && (
-                                <td
-                                  rowSpan={group.rows.length}
-                                  className="border border-black py-3 px-2 text-center align-middle font-bold"
-                                >
-                                  {group.className || selectedClass}
-                                </td>
-                              )}
-
-                              {/* JAM KE */}
-                              <td className="border border-black py-2.5 px-2 text-center align-middle font-semibold">
-                                {row.hour}
-                              </td>
-
-                              {/* URAIAN KEGIATAN */}
-                              <td className="border border-black py-2.5 px-3 align-middle leading-normal">
-                                {row.activity ? (
-                                  <MathView text={row.activity} />
-                                ) : (
-                                  <span className="text-transparent select-none">&nbsp;</span>
-                                )}
-                              </td>
-
-                              {/* FASILITATOR */}
-                              <td className="border border-black py-2.5 px-2 text-center align-middle font-medium">
-                                {row.facilitator || ''}
-                              </td>
-
-                              {/* TANDA TANGAN (KOTAK PARAF MANUAL) */}
-                              <td className="border border-black py-2.5 px-2 text-center align-middle h-11">
-                                {/* Kotak paraf fisik kosong untuk guru tanda tangan di kertas */}
-                              </td>
-                            </tr>
-                          );
-                        });
-                      })
-                    )}
-                  </tbody>
-                </table>
-
-                {/* TITIMANGSA & TANDA TANGAN PEJABAT */}
-                <div className="mt-8 pt-4 grid grid-cols-2 text-center text-[11px] leading-relaxed break-inside-avoid">
-                  <div>
-                    <p>Mengetahui,</p>
-                    <p className="font-semibold">Kepala Sekolah</p>
-                    <div className="h-16"></div>
-                    <p className="font-bold underline">
-                      {printPrincipalName || principalUser?.fullName || settings?.headmasterName || '...................................................'}
-                    </p>
-                    <p>NIP. {printPrincipalNip || principalUser?.nip || settings?.headmasterNip || '...................................................'}</p>
+            <div className="p-4 sm:p-8 overflow-y-auto flex-1 print:p-0 print:overflow-visible bg-slate-100/70 print:bg-white">
+              <div ref={printAreaRef} className="print-area max-w-[210mm] mx-auto w-full">
+                {isLoadingPrintData ? (
+                  <div className="print-page bg-white p-12 text-center text-slate-500 rounded-xl shadow-md border border-slate-200">
+                    <p className="font-sans text-sm animate-pulse">Sedang memuat data riwayat jurnal kokurikuler kelas {selectedClass}...</p>
                   </div>
+                ) : printDateGroups.length === 0 ? (
+                  <div className="print-page bg-white p-12 text-center text-slate-500 italic rounded-xl shadow-md border border-slate-200">
+                    Belum ada entri jurnal kokurikuler untuk kelas {selectedClass}.
+                  </div>
+                ) : (
+                  printDateGroups.map((group, pageIndex) => {
+                    const sheetDateFormatted = formatIndonesianDate(group.date);
+                    const sheetDateOnly = sheetDateFormatted.split(', ')[1] || group.date;
+                    const titimangsaDate = printTitimangsaMode === 'PER_DAY' ? sheetDateOnly : (printDateText || sheetDateOnly);
 
-                  <div>
-                    <p className="mb-0.5">
-                      {/* Teks Bersih untuk Cetak Fisik / PDF */}
-                      <span className="hidden print:inline">
-                        {printCity || 'Sekolah'}, {printDateText || (formatIndonesianDate(selectedDate).split(', ')[1] || selectedDate)}
-                      </span>
-                      {/* Kontrol Interaktif pada Tampilan Layar */}
-                      <span 
-                        className="print:hidden inline-flex items-center justify-center gap-1 bg-amber-50/90 hover:bg-amber-100 border border-dashed border-amber-300 hover:border-amber-400 rounded px-2 py-0.5 transition-all shadow-2xs group cursor-pointer"
-                        title="Edit manual tempat dan tanggal cetak di sini"
+                    return (
+                      <div
+                        key={group.groupKey}
+                        className="print-page bg-white text-black font-serif text-[12px] leading-snug p-8 sm:p-10 mb-8 rounded-xl shadow-md border border-slate-200 print:border-none print:shadow-none print:p-0 print:m-0 print:mb-0 print:rounded-none"
                       >
-                        <MapPin size={11} className="text-amber-600 shrink-0" />
-                        <input
-                          type="text"
-                          value={printCity}
-                          onChange={(e) => setPrintCity(e.target.value)}
-                          placeholder="Tempat"
-                          className="bg-transparent border-b border-amber-400 focus:border-indigo-600 font-serif text-center px-1 text-[11px] text-slate-800 w-24 focus:outline-none"
-                          title="Edit manual Tempat Cetak (misal: Sekolah / Padang)"
-                        />
-                        <span className="font-serif text-slate-700">,</span>
-                        <input
-                          type="text"
-                          value={printDateText}
-                          onChange={(e) => setPrintDateText(e.target.value)}
-                          placeholder="Tanggal Cetak"
-                          className="bg-transparent border-b border-amber-400 focus:border-indigo-600 font-serif text-center px-1 text-[11px] text-slate-800 w-32 focus:outline-none"
-                          title="Edit manual Tanggal Cetak (misal: 09 September 2026)"
-                        />
-                        <input
-                          type="date"
-                          value={printDateRaw}
-                          onChange={(e) => handlePrintDateRawChange(e.target.value)}
-                          className="w-3.5 h-3.5 cursor-pointer opacity-70 hover:opacity-100 border-0 bg-transparent p-0 text-slate-600"
-                          title="Pilih tanggal dari kalender"
-                        />
-                      </span>
-                    </p>
-                    <p className="font-semibold">Koordinator Kokurikuler / P5</p>
-                    <div className="h-16"></div>
-                    <p className="font-bold underline">
-                      {printCoordinatorName || user.fullName || '...................................................'}
-                    </p>
-                    <p>NIP. {printCoordinatorNip || user.nip || '...................................................'}</p>
-                  </div>
-                </div>
+                        {/* Indikator Nomor Halaman pada Layar Pratinjau (Tidak Dicetak) */}
+                        <div className="print:hidden flex items-center justify-between pb-3 mb-5 border-b border-slate-200 text-xs font-sans">
+                          <span className="font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2.5 py-1 rounded-md">
+                            Halaman {pageIndex + 1} dari {printDateGroups.length} — {sheetDateFormatted}
+                          </span>
+                          <span className="text-slate-500 font-medium">
+                            Kelas: <strong>{group.className || selectedClass}</strong> • {group.rows.filter(r => r.isFilled).length} Jam Terisi
+                          </span>
+                        </div>
 
+                        {/* 1. KOP / HEADER RESMI SEKOLAH */}
+                        <div className="text-center mb-5 pb-3 border-b-2 border-black">
+                          <h2 className="text-sm font-bold uppercase tracking-wider">
+                            {/* Teks Bersih untuk Cetak Fisik / PDF */}
+                            <span className="hidden print:inline">
+                              {printSchoolName || user.schoolName || 'PEMERINTAH PROVINSI / KABUPATEN'}
+                            </span>
+                            {/* Kontrol Interaktif pada Tampilan Layar */}
+                            <span 
+                              className="print:hidden inline-flex items-center justify-center gap-1 bg-amber-50/80 hover:bg-amber-100 border border-dashed border-amber-300 hover:border-amber-400 rounded px-2 py-0.5 transition-all shadow-2xs group cursor-pointer"
+                              title="Edit manual Nama Sekolah pada KOP di sini"
+                            >
+                              <Building2 size={12} className="text-amber-600 shrink-0" />
+                              <input
+                                type="text"
+                                value={printSchoolName}
+                                onChange={(e) => setPrintSchoolName(e.target.value)}
+                                placeholder="NAMA SEKOLAH"
+                                className="bg-transparent border-b border-amber-400 focus:border-indigo-600 font-serif font-bold uppercase text-center px-1 text-sm text-slate-800 w-72 sm:w-96 focus:outline-none"
+                                title="Edit manual Nama Sekolah pada KOP"
+                              />
+                            </span>
+                          </h2>
+                          <h1 className="text-base font-extrabold uppercase mt-0.5 tracking-tight">
+                            JURNAL KEGIATAN KOKURIKULER / PROYEK P5
+                          </h1>
+                          <p className="text-[11px] font-normal text-slate-700 mt-1">
+                            Kelas: <strong>{group.className || (selectedClass === 'ALL' ? 'Semua Kelas' : selectedClass)}</strong> • Hari, Tanggal: <strong>{sheetDateFormatted}</strong> • Semester: Ganjil / Genap
+                          </p>
+                        </div>
+
+                        {/* 2. TABEL RESMI SEKOLAH HARI ITU */}
+                        <table className="w-full border-collapse border border-black text-[11px]">
+                          <thead>
+                            <tr className="border border-black font-bold text-center bg-slate-50 print:bg-transparent">
+                              <th className="border border-black py-2 px-2 w-[6%]">NO</th>
+                              <th className="border border-black py-2 px-3 w-[22%]">HARI/TANGGAL</th>
+                              <th className="border border-black py-2 px-2 w-[9%]">KELAS</th>
+                              <th className="border border-black py-2 px-2 w-[9%]">JAM KE</th>
+                              <th className="border border-black py-2 px-4 w-[34%]">URAIAN KEGIATAN</th>
+                              <th className="border border-black py-2 px-3 w-[12%]">FASILITATOR</th>
+                              <th className="border border-black py-2 px-2 w-[8%]">TANDA TANGAN</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {group.rows.map((row, index) => {
+                              const isFirstRow = index === 0;
+
+                              return (
+                                <tr key={`${group.groupKey}_${index}`} className="border border-black min-h-[38px]">
+                                  {/* NO */}
+                                  <td className="border border-black py-2 px-2 text-center align-middle font-medium">
+                                    {row.dailyNo}
+                                  </td>
+
+                                  {/* HARI/TANGGAL (ROW-SPAN MENCAKUP SEMUA BARIS DALAM HARI INI) */}
+                                  {isFirstRow && (
+                                    <td
+                                      rowSpan={group.rows.length}
+                                      className="border border-black py-3 px-3 text-center align-middle font-semibold"
+                                    >
+                                      {sheetDateFormatted}
+                                    </td>
+                                  )}
+
+                                  {/* KELAS (ROW-SPAN MENCAKUP SEMUA BARIS DALAM HARI INI) */}
+                                  {isFirstRow && (
+                                    <td
+                                      rowSpan={group.rows.length}
+                                      className="border border-black py-3 px-2 text-center align-middle font-bold"
+                                    >
+                                      {group.className || selectedClass}
+                                    </td>
+                                  )}
+
+                                  {/* JAM KE */}
+                                  <td className="border border-black py-2 px-2 text-center align-middle font-semibold">
+                                    {row.hour}
+                                  </td>
+
+                                  {/* URAIAN KEGIATAN */}
+                                  <td className="border border-black py-2 px-3 align-middle leading-normal">
+                                    {row.activity ? (
+                                      <MathView text={row.activity} />
+                                    ) : (
+                                      <span className="text-transparent select-none">&nbsp;</span>
+                                    )}
+                                  </td>
+
+                                  {/* FASILITATOR */}
+                                  <td className="border border-black py-2 px-2 text-center align-middle font-medium">
+                                    {row.facilitator || ''}
+                                  </td>
+
+                                  {/* TANDA TANGAN (KOTAK PARAF MANUAL) */}
+                                  <td className="border border-black py-2 px-2 text-center align-middle h-10">
+                                    {/* Kotak paraf fisik kosong untuk guru tanda tangan di kertas */}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+
+                        {/* 3. TITIMANGSA & TANDA TANGAN VALIDASI (ADA DI SETIAP HALAMAN) */}
+                        <div className="mt-8 pt-2 grid grid-cols-2 text-center text-[11px] leading-relaxed break-inside-avoid">
+                          <div>
+                            <p>Mengetahui,</p>
+                            <p className="font-semibold">Kepala Sekolah</p>
+                            <div className="h-16"></div>
+                            <p className="font-bold underline">
+                              {printPrincipalName || principalUser?.fullName || settings?.headmasterName || '...................................................'}
+                            </p>
+                            <p>NIP. {printPrincipalNip || principalUser?.nip || settings?.headmasterNip || '...................................................'}</p>
+                          </div>
+
+                          <div>
+                            <p className="mb-0.5">
+                              {printCity || 'Sekolah'}, {titimangsaDate}
+                            </p>
+                            <p className="font-semibold">Koordinator Kokurikuler / P5</p>
+                            <div className="h-16"></div>
+                            <p className="font-bold underline">
+                              {printCoordinatorName || user.fullName || '...................................................'}
+                            </p>
+                            <p>NIP. {printCoordinatorNip || user.nip || '...................................................'}</p>
+                          </div>
+                        </div>
+
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </div>
 
             {/* Modal Footer */}
             <div className="p-4 border-t border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-3 print:hidden rounded-b-2xl">
               <span className="text-xs text-slate-500">
-                Format tabel resmi: Hari/Tanggal dan Kelas dirapatkan (rowspan) secara vertikal. Menampilkan {printTotalEntriesCount} entri kegiatan dari {printUniqueDates.length} hari pertemuan.
+                Format rekap resmi: Tiap halaman mencetak jurnal per hari lengkap dengan kop, tabel, serta validasi tanda tangan Kepala Sekolah & Koordinator. Total: <strong>{printDateGroups.length} halaman</strong> ({printTotalEntriesCount} entri).
               </span>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={handlePrint}
-                  disabled={isLoadingPrintData}
+                  disabled={isLoadingPrintData || printDateGroups.length === 0}
                   className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-lg transition-colors shadow-xs"
                 >
                   <Printer size={14} />
-                  <span>Cetak Lembar Jurnal</span>
+                  <span>Cetak {printDateGroups.length > 1 ? `Semua (${printDateGroups.length} Halaman)` : 'Lembar Jurnal'}</span>
                 </button>
                 <button
                   type="button"
@@ -3137,26 +3129,47 @@ export const CocurricularJournalManager: React.FC<CocurricularJournalManagerProp
       {/* PRINT CSS STYLING */}
       <style>{`
         @media print {
+          @page {
+            size: A4 portrait;
+            margin: 10mm 12mm 10mm 12mm;
+          }
           body * {
             visibility: hidden;
           }
-          .print-sheet, .print-sheet * {
+          .print-area, .print-area * {
             visibility: visible;
           }
-          .print-sheet {
+          .print-area {
             position: absolute;
             left: 0;
             top: 0;
             width: 100%;
             margin: 0;
-            padding: 10mm;
+            padding: 0;
+          }
+          .print-page {
+            position: relative;
+            page-break-before: auto;
+            page-break-after: always;
+            break-after: page;
+            page-break-inside: avoid;
+            break-inside: avoid;
+            width: 100%;
+            box-sizing: border-box;
+            padding: 0;
+            margin: 0;
+          }
+          .print-page:last-child {
+            page-break-after: auto;
+            break-after: auto;
           }
           table {
-            page-break-inside: auto;
+            page-break-inside: avoid;
+            break-inside: avoid;
           }
           tr {
             page-break-inside: avoid;
-            page-break-after: auto;
+            break-inside: avoid;
           }
           thead {
             display: table-header-group;
