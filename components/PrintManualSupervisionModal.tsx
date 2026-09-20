@@ -276,23 +276,35 @@ export const PrintManualSupervisionModal: React.FC<PrintManualSupervisionModalPr
           ${location}, ${new Date(supervisionDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
         </div>
         <table style="width: 100%; border-collapse: collapse;">
-          <tr>
-            <td style="width: 33.3%; text-align: center; vertical-align: top; padding: 0 4px;">
+          <tr style="vertical-align: bottom;">
+            <td style="width: 33.3%; text-align: center; padding: 0 4px; vertical-align: bottom; font-size: 8.5pt;">
+              &nbsp;<br>
               Guru yang Disupervisi,
-              <div class="signature-space"></div>
+            </td>
+            <td style="width: 33.3%; text-align: center; padding: 0 4px; vertical-align: bottom; font-size: 8.5pt;">
+              &nbsp;<br>
+              Supervisor / Penilai,
+            </td>
+            <td style="width: 33.4%; text-align: center; padding: 0 4px; vertical-align: bottom; font-size: 8.5pt;">
+              Mengetahui,<br>
+              <strong>Kepala Sekolah</strong>
+            </td>
+          </tr>
+          <tr>
+            <td style="height: 48px;"></td>
+            <td style="height: 48px;"></td>
+            <td style="height: 48px;"></td>
+          </tr>
+          <tr style="vertical-align: top;">
+            <td style="width: 33.3%; text-align: center; padding: 0 4px; vertical-align: top;">
               <strong style="text-decoration: underline;">${teacherName || '...........................................'}</strong><br>
               <span style="font-size: 8pt;">NIP. ${teacherNip || '...........................................'}</span>
             </td>
-            <td style="width: 33.3%; text-align: center; vertical-align: top; padding: 0 4px;">
-              Supervisor / Penilai,
-              <div class="signature-space"></div>
+            <td style="width: 33.3%; text-align: center; padding: 0 4px; vertical-align: top;">
               <strong style="text-decoration: underline;">${supervisorName || '...........................................'}</strong><br>
               <span style="font-size: 8pt;">NIP. ${supervisorNip || '...........................................'}</span>
             </td>
-            <td style="width: 33.4%; text-align: center; vertical-align: top; padding: 0 4px;">
-              Mengetahui,<br>
-              <strong>Kepala Sekolah</strong>
-              <div class="signature-space"></div>
+            <td style="width: 33.4%; text-align: center; padding: 0 4px; vertical-align: top;">
               <strong style="text-decoration: underline;">${principalName || '...........................................'}</strong><br>
               <span style="font-size: 8pt;">NIP. ${principalNip || '...........................................'}</span>
             </td>
