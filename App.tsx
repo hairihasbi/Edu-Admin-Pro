@@ -807,6 +807,7 @@ const AppContent: React.FC = () => {
     if (path.includes("broadcast")) return "Broadcast WhatsApp";
     if (path.includes("sync")) return "Sinkronisasi Data"; // NEW
     if (path.includes("supervision-assessment")) return "Penilaian Supervisi";
+    if (path.includes("supervision-results")) return "Hasil Supervisi";
     if (path.includes("monitoring-kurikulum")) return "Monitoring Kurikulum"; // NEW
     if (path.includes("guru-wali-manager")) return "Manajemen Guru Wali";
     if (path.includes("guru-wali-mentoring")) return "Bimbingan Guru Wali";
@@ -1508,14 +1509,11 @@ const AppContent: React.FC = () => {
                         label="Monitoring Absensi RFID"
                       />
                     )}
-                    {(currentUser.additionalRole === "WAKASEK_KURIKULUM" ||
-                      currentUser.isSupervisor) && (
-                      <NavLink
-                        to="/supervision-results"
-                        icon={ClipboardCheck}
-                        label="Hasil Supervisi"
-                      />
-                    )}
+                    <NavLink
+                      to="/supervision-results"
+                      icon={ClipboardCheck}
+                      label="Hasil Supervisi"
+                    />
                     {currentUser.additionalRole === "WAKASEK_KURIKULUM" && (
                       <NavLink
                         to="/guru-wali-manager"
@@ -1990,14 +1988,10 @@ const AppContent: React.FC = () => {
                   path="/cbt/results/:examId"
                   element={<CbtResults user={currentUser} />}
                 />
-                {(currentUser.additionalRole === "KEPALA_SEKOLAH" ||
-                  currentUser.additionalRole === "WAKASEK_KURIKULUM" ||
-                  currentUser.isSupervisor) && (
-                  <Route
-                    path="/supervision-results"
-                    element={<SupervisionResults user={currentUser} />}
-                  />
-                )}
+                <Route
+                  path="/supervision-results"
+                  element={<SupervisionResults user={currentUser} />}
+                />
                 <Route
                   path="/scope-material"
                   element={<TeacherScopeMaterial user={currentUser} />}
