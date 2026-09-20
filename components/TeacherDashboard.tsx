@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { BookOpen, School, User, IdCard, CalendarDays, Layout, Users, ClipboardList, TrendingUp, Heart, Coffee, Megaphone, AlertCircle, Info, Zap, DatabaseBackup, AlertTriangle, Database, WifiOff, RefreshCcw, Cloud, ArrowRight, CheckCircle } from './Icons';
+import { BookOpen, School, User, IdCard, CalendarDays, Layout, Users, ClipboardList, ClipboardCheck, TrendingUp, Heart, Coffee, Megaphone, AlertCircle, Info, Zap, DatabaseBackup, AlertTriangle, Database, WifiOff, RefreshCcw, Cloud, ArrowRight, CheckCircle } from './Icons';
 import { User as UserType, TeachingSchedule, DashboardStatsData, Notification, UserRole, ClassRoom } from '../types';
 import { getDashboardStats, getTeachingSchedules, getActiveAnnouncements, getSyncStats, getSchoolJournals, getAvailableClassesForHomeroom, getLocalDate } from '../services/database';
 import { checkConnection } from '../services/tursoService';
@@ -605,6 +605,40 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
                   <Link to="/supervision-results" className="p-3 bg-white border border-blue-200 text-blue-600 rounded-xl text-center shadow-sm hover:bg-blue-50 transition transform hover:-translate-y-1">
                     <ClipboardList size={20} className="mx-auto mb-1" />
                     <span className="text-[10px] font-bold block uppercase">Monitoring Hasil</span>
+                  </Link>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Section for Teacher: Hasil Supervisi Saya */}
+          {user.additionalRole !== 'KEPALA_SEKOLAH' && user.additionalRole !== 'WAKASEK_KURIKULUM' && !isTendik && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="bg-indigo-50 px-6 py-4 border-b border-indigo-100 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <ClipboardCheck size={18} className="text-indigo-600" />
+                  <h3 className="font-semibold text-indigo-800">Supervisi Akademik Guru</h3>
+                </div>
+                <span className="bg-indigo-600 text-white text-[10px] px-2 py-0.5 rounded font-black uppercase tracking-wider">
+                  {user.isSupervisor ? 'Supervisor' : 'Guru'}
+                </span>
+              </div>
+              <div className="p-6 space-y-4">
+                <p className="text-xs text-gray-500 leading-relaxed italic border-l-2 border-indigo-200 pl-3">
+                  {user.isSupervisor 
+                    ? "Lakukan penilaian supervisi rekan sejawat atau pantau hasil supervisi akademik Anda sendiri."
+                    : "Lihat hasil penilaian dan catatan pembinaan supervisi akademik yang telah diisikan oleh supervisor Anda."}
+                </p>
+                <div className={user.isSupervisor ? "grid grid-cols-2 gap-3" : "flex"}>
+                  {user.isSupervisor && (
+                    <Link to="/supervision-assessment" className="p-3 bg-indigo-600 text-white rounded-xl text-center shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition transform hover:-translate-y-1">
+                      <Zap size={20} className="mx-auto mb-1" />
+                      <span className="text-[10px] font-bold block uppercase">Lakukan Supervisi</span>
+                    </Link>
+                  )}
+                  <Link to="/supervision-results" className={`p-3 bg-white border border-indigo-200 text-indigo-700 rounded-xl text-center shadow-sm hover:bg-indigo-50 transition transform hover:-translate-y-1 ${user.isSupervisor ? '' : 'w-full flex items-center justify-center gap-2 font-bold text-xs'}`}>
+                    <ClipboardCheck size={20} className={user.isSupervisor ? "mx-auto mb-1" : ""} />
+                    <span className={user.isSupervisor ? "text-[10px] font-bold block uppercase" : "uppercase"}>Lihat Hasil Supervisi Saya</span>
                   </Link>
                 </div>
               </div>

@@ -19,6 +19,7 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
 
   const isWakasek = user.additionalRole === 'WAKASEK_KURIKULUM';
   const isKepsek = user.additionalRole === 'KEPALA_SEKOLAH' || user.role === 'ADMIN';
+  const isTeacherOnly = !isWakasek && !isKepsek;
   const navigate = useNavigate();
 
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
@@ -63,22 +64,23 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
     else setIsSyncing(true);
     
     try {
-      // If management, offer to sync first to get latest distributed results
-      if (forceSync && navigator.onLine) {
-        await runManualSync('PULL', () => {}, ['eduadmin_supervision_results', 'eduadmin_users', 'eduadmin_supervision_assignments']);
+      // Pull latest supervision data from cloud if online
+      if ((forceSync || !results.length) && navigator.onLine) {
+        try {
+          await runManualSync('PULL', () => {}, ['eduadmin_supervision_results', 'eduadmin_users', 'eduadmin_supervision_assignments']);
+        } catch (e) {
+          console.warn("Sync pull warning:", e);
+        }
       }
 
       let data: SupervisionResult[] = [];
       if (isWakasek || isKepsek) {
+        // Kepala Sekolah and Wakasek Kurikulum can view all results for the school
         data = await getSupervisionResultsForSchool(user.schoolNpsn!);
       } else {
-        // Supervisor sees results they have assessed, Teacher sees results for them
-        const supervisorResults = await getSupervisionResults(undefined, user.id);
+        // STRICT PRIVACY: Teachers can ONLY see their own supervision results. No other teacher's data can be accessed.
         const teacherResults = await getSupervisionResults(user.id, undefined);
-        
-        // Merge and deduplicate by ID
-        const combined = [...supervisorResults, ...teacherResults];
-        data = Array.from(new Map(combined.map(item => [item.id, item])).values());
+        data = teacherResults.filter(item => item.teacherId === user.id);
       }
       
       const schoolTeachers = await getSchoolTeachers(user.schoolNpsn!);
@@ -94,6 +96,10 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
   };
 
   const filteredResults = results.filter(r => {
+    // Secondary privacy guard: teachers must never see records of other teachers
+    if (isTeacherOnly && r.teacherId !== user.id) {
+      return false;
+    }
     const teacher = teachers.find(t => t.id === r.teacherId);
     const supervisor = teachers.find(t => t.id === r.supervisorId);
     const searchStr = `${teacher?.fullName || ''} ${supervisor?.fullName || ''} ${r.date}`.toLowerCase();
@@ -399,12 +405,12 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
           </div>
           <div>
             <h2 className="text-xl font-bold text-gray-800">
-              {isKepsek ? 'Monitoring Supervisi (Kepsek)' : isWakasek ? 'Monitoring Supervisi (Wakasek)' : 'Laporan Hasil Supervisi'}
+              Hasil Supervisi Akademik
             </h2>
             <p className="text-gray-500 text-sm">
               {isKepsek || isWakasek 
-                ? "Pantau hasil penilaian supervisi seluruh guru di sekolah." 
-                : "Lihat hasil penilaian supervisi Anda atau guru yang Anda nilai."}
+                ? "Pantau hasil penilaian dan rekapitulasi supervisi guru di sekolah." 
+                : "Lihat hasil penilaian dan catatan supervisi akademik Anda yang telah diisikan oleh supervisor."}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -416,10 +422,6 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
               <RefreshCcw size={14} className={isSyncing ? 'animate-spin' : ''} />
               {isSyncing ? 'Sinkronisasi...' : 'Tarik Data Terbaru'}
             </button>
-            <div className="flex items-center gap-1.5 px-3 py-1 bg-purple-50 text-purple-600 rounded-full text-[10px] font-bold border border-purple-100">
-              <Shield size={12} />
-              {isKepsek ? 'AKSES KEPALA SEKOLAH' : isWakasek ? 'AKSES WAKASEK' : 'AKSES GURU'}
-            </div>
           </div>
         </div>
 
@@ -427,7 +429,7 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
           <input
             type="text"
-            placeholder="Cari guru atau tanggal..."
+            placeholder={isTeacherOnly ? "Cari tanggal atau supervisor..." : "Cari nama guru atau tanggal..."}
             className="pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 w-full md:w-64"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -438,10 +440,28 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
       {filteredResults.length === 0 ? (
         <div className="bg-white p-12 rounded-xl border border-gray-100 shadow-sm text-center">
           <AlertCircle className="mx-auto text-gray-300 mb-4" size={48} />
-          <h3 className="text-lg font-bold text-gray-700 mb-2">Belum Ada Hasil</h3>
-          <p className="text-gray-500 text-sm">
-            {searchTerm ? "Tidak ditemukan hasil yang sesuai dengan pencarian Anda." : "Belum ada data penilaian supervisi yang tersedia."}
+          <h3 className="text-lg font-bold text-gray-700 mb-2">
+            {isTeacherOnly ? "Belum Ada Hasil Supervisi" : "Belum Ada Hasil"}
+          </h3>
+          <p className="text-gray-500 text-sm max-w-md mx-auto">
+            {searchTerm 
+              ? "Tidak ditemukan hasil yang sesuai dengan pencarian Anda." 
+              : isTeacherOnly 
+                ? "Hasil supervisi akademik Anda akan muncul di sini setelah supervisor selesai mengisi dan memvalidasi instrumen supervisi." 
+                : "Belum ada data penilaian supervisi yang tersedia."}
           </p>
+          {isTeacherOnly && !searchTerm && (
+            <div className="mt-4">
+              <button
+                onClick={() => fetchData(true)}
+                disabled={isSyncing}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg text-xs font-bold transition disabled:opacity-50"
+              >
+                <RefreshCcw size={14} className={isSyncing ? 'animate-spin' : ''} />
+                {isSyncing ? 'Menyinkronkan...' : 'Sinkronkan Data Terbaru'}
+              </button>
+            </div>
+          )}
         </div>
       ) : (
         <div className="space-y-4">
