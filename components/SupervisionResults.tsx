@@ -3,8 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, SupervisionResult } from '../types';
 import { getSupervisionResults, getSupervisionResultsForSchool, getSchoolTeachers, runManualSync } from '../services/database';
-import { ClipboardCheck, User as UserIcon, Calendar, Star, ChevronDown, ChevronUp, Search, Filter, Loader2, AlertCircle, Shield, Pencil as Edit, Printer, X, RefreshCcw } from './Icons';
-import { PrintManualSupervisionModal } from './PrintManualSupervisionModal';
+import { ClipboardCheck, User as UserIcon, Calendar, Star, ChevronDown, ChevronUp, Search, Filter, Loader2, AlertCircle, Shield, Pencil as Edit, Printer, X, RefreshCcw, FileText } from './Icons';
 
 interface SupervisionResultsProps {
   user: User;
@@ -24,9 +23,9 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
   const navigate = useNavigate();
 
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
-  const [isManualModalOpen, setIsManualModalOpen] = useState(false);
   const [printResult, setPrintResult] = useState<SupervisionResult | null>(null);
   const [printConfig, setPrintConfig] = useState({
+    printFormat: 'SUMMARY' as 'SUMMARY' | 'FULL',
     className: '',
     semester: '',
     competence: '',
@@ -36,8 +35,8 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
     location: localStorage.getItem('sup_location') || '',
     date: new Date().toISOString().split('T')[0],
     letterheadUrl: localStorage.getItem('sup_letterhead') || '',
-    marginTop: localStorage.getItem('sup_margin_top') || '1.5',
-    marginBottom: localStorage.getItem('sup_margin_bottom') || '1.5'
+    marginTop: localStorage.getItem('sup_margin_top') || '0.8',
+    marginBottom: localStorage.getItem('sup_margin_bottom') || '0.8'
   });
 
   const handleLetterheadUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -113,12 +112,12 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
     setIsPrintModalOpen(true);
   };
 
-    const generatePrint = () => {
+  const generatePrint = () => {
     if (!printResult) return;
     const teacher = teachers.find(t => t.id === printResult.teacherId);
     const supervisor = teachers.find(t => t.id === printResult.supervisorId);
 
-    const printWindow = window.open('', '', 'height=800,width=1000');
+    const printWindow = window.open('', '', 'height=850,width=1050');
     if (!printWindow) return;
 
     // Save preferences
@@ -129,257 +128,469 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
     localStorage.setItem('sup_margin_bottom', printConfig.marginBottom);
 
     const formatDate = (dateStr: string) => {
-        return new Date(dateStr).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+      if (!dateStr) return '-';
+      return new Date(dateStr).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
     };
 
-    const identityHeaderHtml = `
-      <table class="header-info no-print-padding">
-        <tr>
-          <td width="150">Satuan Pendidikan</td><td width="10">:</td><td>${user.schoolName || '-'}</td>
-          <td width="150">Kelas / Semester</td><td width="10">:</td><td>${printConfig.className} / ${printConfig.semester}</td>
-        </tr>
-        <tr>
-          <td>Nama Guru</td><td>:</td><td>${teacher?.fullName || '-'}</td>
-          <td>Kompetensi Dasar</td><td>:</td><td>${printConfig.competence}</td>
-        </tr>
-        <tr>
-          <td>Mata Pelajaran</td><td>:</td><td>${teacher?.subject || '-'}</td>
-          <td>Alokasi Waktu</td><td>:</td><td>${printConfig.timeAllocation}</td>
-        </tr>
-      </table>
-    `;
+    const getPredicateLabel = (score: number) => {
+      if (score >= 91) return 'AMAT BAIK (A)';
+      if (score >= 81) return 'BAIK (B)';
+      if (score >= 71) return 'CUKUP (C)';
+      return 'KURANG (D)';
+    };
+
+    const getKetercapaian = (score: number) => {
+      if (score >= 91) return 'Sangat Memuaskan';
+      if (score >= 81) return 'Memenuhi Standar';
+      if (score >= 71) return 'Cukup Memenuhi Standar';
+      return 'Perlu Pembinaan Khusus';
+    };
+
+    // Calculate real component scores from actual supervisor inputs
+    const adminScores = printResult.planningAdmin?.scores || {};
+    const adminPerolehan = Object.values(adminScores).reduce((acc: number, curr: any) => acc + (typeof curr === 'number' ? curr : 0), 0);
+    const adminFinalScore = printResult.planningAdmin?.finalScore ?? (Object.keys(adminScores).length ? (adminPerolehan / 24) * 100 : 0);
+    const adminPredicate = printResult.planningAdmin?.predicate || getPredicateLabel(adminFinalScore);
+
+    const rppScores = printResult.lessonPlan?.scores || {};
+    const rppPerolehan = Object.values(rppScores).reduce((acc: number, curr: any) => acc + (typeof curr === 'number' ? curr : 0), 0);
+    const rppFinalScore = printResult.lessonPlan?.finalScore ?? (Object.keys(rppScores).length ? (rppPerolehan / 34) * 100 : 0);
+    const rppPredicate = printResult.lessonPlan?.predicate || getPredicateLabel(rppFinalScore);
+
+    const implScores = printResult.implementation?.scores || {};
+    const implPerolehan = Object.values(implScores).reduce((acc: number, curr: any) => acc + (typeof curr === 'number' ? curr : 0), 0);
+    const implFinalScore = printResult.implementation?.finalScore ?? (Object.keys(implScores).length ? (implPerolehan / 76) * 100 : 0);
+    const implPredicate = printResult.implementation?.predicate || getPredicateLabel(implFinalScore);
+
+    const totalSkorRiil = adminPerolehan + rppPerolehan + implPerolehan;
+    const totalSkorMaks = 134; // 24 + 34 + 76
+    
+    // Weighted / Average Final Score
+    const validScores = [adminFinalScore, rppFinalScore, implFinalScore].filter(s => s > 0);
+    const averageFinalScore = printResult.score || (validScores.length > 0 ? validScores.reduce((a, b) => a + b, 0) / validScores.length : 0);
+    const overallPredicate = getPredicateLabel(averageFinalScore);
 
     const letterheadHtml = printConfig.letterheadUrl 
-      ? `<div class="letterhead-container"><img src="${printConfig.letterheadUrl}" style="width: 100%; max-height: 150px; object-fit: contain; margin-bottom: 20px;" /></div>` 
-      : '';
+      ? `<div class="letterhead-container"><img src="${printConfig.letterheadUrl}" style="width: 100%; max-height: 120px; object-fit: contain;" /></div>` 
+      : `
+        <div class="school-header-text">
+          <div style="font-size: 13pt; font-weight: bold; letter-spacing: 0.5px;">${(user.schoolName || 'SATUAN PENDIDIKAN').toUpperCase()}</div>
+          <div style="font-size: 9pt; color: #444; margin-top: 2px;">NPSN: ${user.schoolNpsn || '-'} &nbsp;|&nbsp; Sistem Manajemen Penilaian Supervisi Akademik Guru</div>
+        </div>
+      `;
 
-    // Aggregate coaching suggestions into notes if notes is empty or as additional info
-    const aggregateCoachingSuggestions = () => {
-      const suggestions: string[] = [];
-      if (printResult.planningAdmin?.coachingSuggestion) suggestions.push(`[Administrasi] ${printResult.planningAdmin.coachingSuggestion}`);
-      if (printResult.lessonPlan?.coachingSuggestion) suggestions.push(`[RPP] ${printResult.lessonPlan.coachingSuggestion}`);
-      if (printResult.implementation?.coachingSuggestion) suggestions.push(`[Pelaksanaan] ${printResult.implementation.coachingSuggestion}`);
-      
-      if (suggestions.length > 0) {
-        return suggestions.join('<br>');
-      }
-      return printResult.notes || '-';
-    };
-
-    const summaryAndSignaturesHtml = `
-      <div class="summary-box">
-        <strong>Catatan Umum Supervisor (Saran Pembinaan):</strong><br>
-        <div style="margin-top: 5px; font-style: italic; font-size: 10pt;">${aggregateCoachingSuggestions()}</div>
-      </div>
-
-      <div style="margin-top: 30px; page-break-inside: avoid;">
-        <table class="signature-section" style="width: 100%; border-collapse: collapse;">
+    // Identity Table
+    const identityHtml = `
+      <div class="identity-box">
+        <table class="identity-table">
           <tr>
-            <td style="width: 50%;">&nbsp;</td>
-            <td style="width: 50%; text-align: center;">
-              Mengetahui,<br>
-              ${printConfig.location}, ${formatDate(printConfig.date)}<br>
-              <span style="font-weight: bold;">Kepala Sekolah</span>
-            </td>
+            <td style="width: 18%;">Satuan Pendidikan</td>
+            <td style="width: 2%;">:</td>
+            <td style="width: 32%;"><strong>${user.schoolName || '-'}</strong></td>
+            <td style="width: 18%;">Mata Pelajaran</td>
+            <td style="width: 2%;">:</td>
+            <td style="width: 28%;"><strong>${teacher?.subject || '-'}</strong></td>
           </tr>
           <tr>
-            <td>&nbsp;</td>
-            <td class="signature-space"></td>
+            <td>Nama Guru</td>
+            <td>:</td>
+            <td><strong>${teacher?.fullName || '-'}</strong></td>
+            <td>Kelas / Semester</td>
+            <td>:</td>
+            <td>${printConfig.className || '-'} / ${printConfig.semester || '-'}</td>
           </tr>
           <tr>
-            <td>&nbsp;</td>
-            <td style="text-align: center; font-weight: bold; white-space: nowrap;">${printConfig.principalName || '................................'}</td>
+            <td>NIP Guru</td>
+            <td>:</td>
+            <td>${teacher?.nip || '-'}</td>
+            <td>Hari / Tanggal Supervisi</td>
+            <td>:</td>
+            <td>${formatDate(printResult.date || printConfig.date)}</td>
           </tr>
           <tr>
-            <td>&nbsp;</td>
-            <td style="text-align: center;">NIP. ${printConfig.principalNip || '................................'}</td>
-          </tr>
-          
-          <tr><td colspan="2" style="height: 40px;">&nbsp;</td></tr>
-          
-          <tr style="font-weight: bold; text-align: center;">
-            <td>Supervisor / Penilai</td>
-            <td>Guru Mata Pelajaran</td>
+            <td>Nama Supervisor</td>
+            <td>:</td>
+            <td><strong>${supervisor?.fullName || '-'}</strong></td>
+            <td>Alokasi Waktu / Jam ke</td>
+            <td>:</td>
+            <td>${printConfig.timeAllocation || '-'}</td>
           </tr>
           <tr>
-            <td class="signature-space"></td>
-            <td class="signature-space"></td>
-          </tr>
-          <tr style="font-weight: bold; text-align: center;">
-            <td style="white-space: nowrap;">${supervisor?.fullName || '................................'}</td>
-            <td style="white-space: nowrap;">${teacher?.fullName || '................................'}</td>
-          </tr>
-          <tr style="text-align: center;">
-            <td>NIP. ${supervisor?.nip || '................................'}</td>
-            <td>NIP. ${teacher?.nip || '................................'}</td>
+            <td>NIP Supervisor</td>
+            <td>:</td>
+            <td>${supervisor?.nip || '-'}</td>
+            <td>Kompetensi / Topik</td>
+            <td>:</td>
+            <td>${printConfig.competence || '-'}</td>
           </tr>
         </table>
       </div>
     `;
 
-    const generateTableRows = (scores: Record<string, number>, comments: Record<string, string>, components: string[]) => {
-        return components.map((comp, idx) => `
-            <tr>
-                <td style="text-align: center;">${idx + 1}</td>
-                <td>${comp}</td>
-                <td style="text-align: center;">${scores[comp] || 0}</td>
-                <td>${comments[comp] || ''}</td>
-            </tr>
-        `).join('');
-    };
+    // Tabel Rekapitulasi Nilai Akhir
+    const rekapitulasiTableHtml = `
+      <div class="section-title">I. REKAPITULASI HASIL AKHIR PENILAIAN SUPERVISI AKADEMIK</div>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th style="width: 35px;">No</th>
+            <th>Aspek / Komponen Supervisi Akademik</th>
+            <th style="width: 80px;">Skor Maks</th>
+            <th style="width: 85px;">Skor Riil</th>
+            <th style="width: 95px;">Nilai Akhir (0-100)</th>
+            <th style="width: 110px;">Predikat</th>
+            <th style="width: 130px;">Tingkat Ketercapaian</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="text-align: center; font-weight: bold;">1</td>
+            <td style="font-weight: 500;">Administrasi Perencanaan Pembelajaran</td>
+            <td style="text-align: center;">24</td>
+            <td style="text-align: center; font-weight: bold;">${adminPerolehan}</td>
+            <td style="text-align: center; font-weight: bold;">${adminFinalScore.toFixed(2)}</td>
+            <td style="text-align: center; font-weight: bold;">${adminPredicate}</td>
+            <td style="text-align: center;">${getKetercapaian(adminFinalScore)}</td>
+          </tr>
+          <tr>
+            <td style="text-align: center; font-weight: bold;">2</td>
+            <td style="font-weight: 500;">Telaah RPP / Modul Ajar Guru</td>
+            <td style="text-align: center;">34</td>
+            <td style="text-align: center; font-weight: bold;">${rppPerolehan}</td>
+            <td style="text-align: center; font-weight: bold;">${rppFinalScore.toFixed(2)}</td>
+            <td style="text-align: center; font-weight: bold;">${rppPredicate}</td>
+            <td style="text-align: center;">${getKetercapaian(rppFinalScore)}</td>
+          </tr>
+          <tr>
+            <td style="text-align: center; font-weight: bold;">3</td>
+            <td style="font-weight: 500;">Observasi Pelaksanaan Proses Pembelajaran di Kelas</td>
+            <td style="text-align: center;">76</td>
+            <td style="text-align: center; font-weight: bold;">${implPerolehan}</td>
+            <td style="text-align: center; font-weight: bold;">${implFinalScore.toFixed(2)}</td>
+            <td style="text-align: center; font-weight: bold;">${implPredicate}</td>
+            <td style="text-align: center;">${getKetercapaian(implFinalScore)}</td>
+          </tr>
+        </tbody>
+        <tfoot>
+          <tr style="font-weight: bold; background-color: #f8fafc;">
+            <td colspan="2" style="text-align: right; padding-right: 10px;">JUMLAH PEROLEHAN SKOR RIIL</td>
+            <td style="text-align: center;">${totalSkorMaks}</td>
+            <td style="text-align: center; font-size: 10pt; color: #111;">${totalSkorRiil}</td>
+            <td colspan="3" style="text-align: center; font-size: 8.5pt; color: #4b5563;">
+              Ketercapaian Kumulatif: ${((totalSkorRiil / totalSkorMaks) * 100).toFixed(1)}%
+            </td>
+          </tr>
+          <tr style="font-weight: bold; background-color: #f1f5f9;">
+            <td colspan="4" style="text-align: right; padding-right: 10px; font-size: 9.5pt;">NILAI AKHIR RATA-RATA SUPERVISI</td>
+            <td style="text-align: center; font-size: 11pt; color: #1e3a8a;">${averageFinalScore.toFixed(2)}</td>
+            <td style="text-align: center; font-size: 9.5pt; color: #1e3a8a;">${overallPredicate}</td>
+            <td style="text-align: center; font-size: 9pt; font-weight: bold; color: #047857;">${getKetercapaian(averageFinalScore)}</td>
+          </tr>
+        </tfoot>
+      </table>
+    `;
 
-    const implComponents = [
-        { label: 'KEGIATAN PENDAHULUAN', startIdx: 0, endIdx: 5 },
-        { label: 'KEGIATAN INTI', startIdx: 5, endIdx: 11 },
-        { label: 'KEGIATAN PENUTUP', startIdx: 11, endIdx: 15 },
-        { label: 'KEGIATAN PENILAIAN HASIL BELAJAR', startIdx: 15, endIdx: 19 }
-    ];
+    // Catatan dan Rekomendasi Pembinaan Supervisor
+    const coachingBoxHtml = `
+      <div class="coaching-box">
+        <div style="font-weight: bold; margin-bottom: 4px; font-size: 9pt;">II. CATATAN & REKOMENDASI PEMBINAAN SUPERVISOR:</div>
+        ${printResult.notes ? `<div style="margin-bottom: 3px;"><strong>Catatan Umum:</strong> ${printResult.notes}</div>` : ''}
+        ${printResult.planningAdmin?.coachingSuggestion ? `<div style="margin-bottom: 3px;"><strong>1. Administrasi Perencanaan:</strong> ${printResult.planningAdmin.coachingSuggestion}</div>` : ''}
+        ${printResult.lessonPlan?.coachingSuggestion ? `<div style="margin-bottom: 3px;"><strong>2. Telaah RPP:</strong> ${printResult.lessonPlan.coachingSuggestion}</div>` : ''}
+        ${printResult.implementation?.coachingSuggestion ? `<div style="margin-bottom: 3px;"><strong>3. Pelaksanaan Pembelajaran:</strong> ${printResult.implementation.coachingSuggestion}</div>` : ''}
+        ${!printResult.notes && !printResult.planningAdmin?.coachingSuggestion && !printResult.lessonPlan?.coachingSuggestion && !printResult.implementation?.coachingSuggestion ? '<div style="font-style: italic; color: #666;">Guru telah melaksanakan perencanaan dan pembelajaran di kelas dengan sangat baik sesuai standar kurikulum. Pertahankan dan terus tingkatkan inovasi pembelajaran.</div>' : ''}
+      </div>
+    `;
 
-    const generateImplTableRows = (scores: Record<string, number>, comments: Record<string, string>, components: string[]) => {
-        let rows = '';
-        implComponents.forEach((section, sIdx) => {
-            rows += `
-                <tr style="background-color: #f9fafb; font-weight: bold;">
-                    <td style="text-align: center;">${String.fromCharCode(65 + sIdx)}</td>
-                    <td colspan="3">${section.label}</td>
-                </tr>
-            `;
-            const sectionComps = components.slice(section.startIdx, section.endIdx);
-            sectionComps.forEach((comp, idx) => {
-                rows += `
-                    <tr>
-                        <td style="text-align: center;">${section.startIdx + idx + 1}</td>
-                        <td>${comp}</td>
-                        <td style="text-align: center;">${scores[comp] || 0}</td>
-                        <td>${comments[comp] || ''}</td>
-                    </tr>
-                `;
-            });
-        });
-        return rows;
-    };
+    // Lembar Pengesahan Tanda Tangan 3 Pihak Berdampingan
+    const signaturesHtml = `
+      <div class="signature-container">
+        <div style="text-align: right; margin-bottom: 6px; font-size: 8.5pt;">
+          ${printConfig.location || 'Ditetapkan'}, ${formatDate(printConfig.date)}
+        </div>
+        <table style="width: 100%; border-collapse: collapse;">
+          <tr>
+            <td style="width: 33.3%; text-align: center; vertical-align: top; padding: 0 4px;">
+              Guru yang Disupervisi,
+              <div class="signature-space"></div>
+              <strong style="text-decoration: underline;">${teacher?.fullName || '...........................................'}</strong><br>
+              <span style="font-size: 8pt;">NIP. ${teacher?.nip || '...........................................'}</span>
+            </td>
+            <td style="width: 33.3%; text-align: center; vertical-align: top; padding: 0 4px;">
+              Supervisor / Penilai,
+              <div class="signature-space"></div>
+              <strong style="text-decoration: underline;">${supervisor?.fullName || '...........................................'}</strong><br>
+              <span style="font-size: 8pt;">NIP. ${supervisor?.nip || '...........................................'}</span>
+            </td>
+            <td style="width: 33.4%; text-align: center; vertical-align: top; padding: 0 4px;">
+              Mengetahui,<br>
+              <strong>Kepala Sekolah</strong>
+              <div class="signature-space"></div>
+              <strong style="text-decoration: underline;">${printConfig.principalName || '...........................................'}</strong><br>
+              <span style="font-size: 8pt;">NIP. ${printConfig.principalNip || '...........................................'}</span>
+            </td>
+          </tr>
+        </table>
+      </div>
+    `;
 
-    // Components from SupervisionAssessment.tsx constants
+    // Detailed Components (if FULL format selected)
     const PLANNING_ADMIN_COMPONENTS = ["Kalender Pendidikan", "Program Tahunan", "Program Semester", "Silabus", "RPP", "Jadwal Pelajaran", "Agenda Harian", "Daftar Nilai", "KKM", "Daftar Hadir Peserta Didik", "Ketersediaan Bahan Ajar", "Buku Pedoman Guru"];
     const LESSON_PLAN_COMPONENTS = ["Identitas Sekolah", "Identitas Mata Pelajaran", "Kelas/Semester", "Materi Pokok/Kompetensi Dasar", "Alokasi Waktu", "Tujuan Pembelajaran", "Metode & Model Pembelajaran", "Media Pembelajaran (LMS)", "Media Pembelajaran (Visual)", "Sumber Belajar", "Kegiatan Pembelajaran (Sistematis)", "Kegiatan Inti (HOTS)", "Langkah Integrasi (4C, PPK, Literasi)", "Penilaian Proses (Otentik)", "Penilaian Hasil (Mencerminkan Proses)", "Teknik Penilaian (Alat Tes/Instrumen)", "Kunci Jawaban/Rubrik"];
     const IMPLEMENTATION_COMPONENTS = ["Memberikan motivasi & menyiapkan peserta didik", "Mengajukan pertanyaan & mengaitkan pengetahuan sebelumnya", "Menjelaskan tujuan pembelajaran/KD", "Penanaman/Pembudayaan karakter dan literasi", "Menyampaikan tugas & arahan mekanisme penyelesaian", "Menggunakan Learning Manajemen Sistem (LMS)", "Memanfaatkan fasilitas akun belajar.id", "Memanfaatkan penggunaan video, power point, dll", "Metode/Pendekatan mewujudkan suasana menyenangkan (integrasi 21st Century)", "Menggunakan media pembelajaran sebagai alat bantu", "Memanfaatkan berbagai fasilitas Sumber belajar", "Kesimpulan bersama & manfaat pembelajaran", "Memberikan umpan balik proses & hasil", "Kegiatan tindak lanjut (tugas individu/kelompok)", "Rencana kegiatan pertemuan berikutnya", "Penilaian proses sesuai perencanaan", "Penilaian hasil (tes, portofolio, penugasan)", "Teknik Penilaian (instrumen sesuai KD)", "Penerapan TIK terintegrasi & efektif"];
 
+    const implGroups = [
+      { code: 'A', title: 'KEGIATAN PENDAHULUAN', startIdx: 0, endIdx: 5 },
+      { code: 'B', title: 'KEGIATAN INTI', startIdx: 5, endIdx: 11 },
+      { code: 'C', title: 'KEGIATAN PENUTUP', startIdx: 11, endIdx: 15 },
+      { code: 'D', title: 'KEGIATAN PENILAIAN HASIL BELAJAR', startIdx: 15, endIdx: 19 }
+    ];
+
+    let fullDetailsHtml = '';
+    if (printConfig.printFormat === 'FULL') {
+      fullDetailsHtml = `
+        <div class="page-break"></div>
+        <div class="section-title">III. RINCIAN PEROLEHAN SKOR PER BUTIR YANG DINILAI</div>
+        
+        <!-- Rincian 1: Administrasi -->
+        <div style="font-weight: bold; margin: 8px 0 4px 0; font-size: 9pt;">1. Administrasi Perencanaan Pembelajaran (Skor Maksimal: 24)</div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th width="35">No</th>
+              <th>Komponen Administrasi</th>
+              <th width="70">Skor Diperoleh</th>
+              <th>Catatan / Keterangan Supervisor</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${PLANNING_ADMIN_COMPONENTS.map((comp, idx) => `
+              <tr>
+                <td style="text-align: center; font-weight: bold;">${idx + 1}</td>
+                <td style="font-weight: 500;">${comp}</td>
+                <td style="text-align: center; font-weight: bold; color: #1e3a8a;">${adminScores[comp] ?? 0}</td>
+                <td style="font-style: italic; color: #4b5563;">${printResult.planningAdmin?.comments?.[comp] || '-'}</td>
+              </tr>
+            `).join('')}
+            <tr style="font-weight: bold; background: #f8fafc;">
+              <td colspan="2" style="text-align: right;">Total Skor Riil / Nilai Akhir</td>
+              <td style="text-align: center;">${adminPerolehan} / 24</td>
+              <td style="text-align: center;">Nilai: ${adminFinalScore.toFixed(2)} (${adminPredicate})</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- Rincian 2: RPP -->
+        <div style="font-weight: bold; margin: 12px 0 4px 0; font-size: 9pt;">2. Telaah RPP / Modul Ajar (Skor Maksimal: 34)</div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th width="35">No</th>
+              <th>Komponen Telaah RPP</th>
+              <th width="70">Skor Diperoleh</th>
+              <th>Catatan / Keterangan Supervisor</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${LESSON_PLAN_COMPONENTS.map((comp, idx) => `
+              <tr>
+                <td style="text-align: center; font-weight: bold;">${idx + 1}</td>
+                <td style="font-weight: 500;">${comp}</td>
+                <td style="text-align: center; font-weight: bold; color: #1e3a8a;">${rppScores[comp] ?? 0}</td>
+                <td style="font-style: italic; color: #4b5563;">${printResult.lessonPlan?.comments?.[comp] || '-'}</td>
+              </tr>
+            `).join('')}
+            <tr style="font-weight: bold; background: #f8fafc;">
+              <td colspan="2" style="text-align: right;">Total Skor Riil / Nilai Akhir</td>
+              <td style="text-align: center;">${rppPerolehan} / 34</td>
+              <td style="text-align: center;">Nilai: ${rppFinalScore.toFixed(2)} (${rppPredicate})</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- Rincian 3: Pelaksanaan -->
+        <div style="font-weight: bold; margin: 12px 0 4px 0; font-size: 9pt;">3. Observasi Pelaksanaan Proses Pembelajaran di Kelas (Skor Maksimal: 76)</div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th width="35">No</th>
+              <th>Kegiatan / Aspek Pembelajaran di Kelas</th>
+              <th width="70">Skor Diperoleh</th>
+              <th>Catatan / Keterangan Supervisor</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${implGroups.map(grp => `
+              <tr style="background: #f1f5f9; font-weight: bold;">
+                <td style="text-align: center;">${grp.code}</td>
+                <td colspan="3">${grp.title}</td>
+              </tr>
+              ${IMPLEMENTATION_COMPONENTS.slice(grp.startIdx, grp.endIdx).map((comp, sIdx) => {
+                const itemNum = grp.startIdx + sIdx + 1;
+                return `
+                  <tr>
+                    <td style="text-align: center; font-weight: bold;">${itemNum}</td>
+                    <td style="font-weight: 500;">${comp}</td>
+                    <td style="text-align: center; font-weight: bold; color: #1e3a8a;">${implScores[comp] ?? 0}</td>
+                    <td style="font-style: italic; color: #4b5563;">${printResult.implementation?.comments?.[comp] || '-'}</td>
+                  </tr>
+                `;
+              }).join('')}
+            `).join('')}
+            <tr style="font-weight: bold; background: #f8fafc;">
+              <td colspan="2" style="text-align: right;">Total Skor Riil / Nilai Akhir</td>
+              <td style="text-align: center;">${implPerolehan} / 76</td>
+              <td style="text-align: center;">Nilai: ${implFinalScore.toFixed(2)} (${implPredicate})</td>
+            </tr>
+          </tbody>
+        </table>
+      `;
+    }
+
     printWindow.document.write(`
-      <html>
+      <!DOCTYPE html>
+      <html lang="id">
         <head>
-          <title></title>
+          <meta charset="utf-8">
+          <title>Hasil Penilaian Supervisi Akademik - ${teacher?.fullName || 'Guru'}</title>
           <style>
-            body { font-family: 'Times New Roman', serif; font-size: 11pt; line-height: 1.4; color: #333; margin: 0; padding: 0.5cm; }
-            .header-info { margin-bottom: 20px; width: 100%; border-collapse: collapse; }
-            .header-info td { padding: 2px 5px; }
-            h2 { text-align: center; font-size: 14pt; margin-top: 10px; margin-bottom: 20px; text-decoration: underline; }
-            table.data-table { width: 100%; border-collapse: collapse; margin-bottom: 30px; page-break-inside: auto; }
-            table.data-table tr { page-break-inside: avoid; }
-            table.data-table th, table.data-table td { border: 1px solid #000; padding: 8px 6px; }
-            table.data-table th { background-color: #f2f2f2; text-align: center; font-weight: bold; }
-            .section-title { font-weight: bold; margin-top: 20px; margin-bottom: 10px; background: #eee; padding: 8px; border: 1px solid #000; border-bottom: none; }
-            .summary-box { margin-top: 25px; margin-bottom: 25px; border: 1px solid #000; padding: 15px; page-break-inside: avoid; }
-            .letterhead-container { width: 100%; text-align: center; margin-bottom: 40px; border-bottom: 4px double #000; padding-bottom: 15px; }
-            .signature-section { margin-top: 50px; width: 100%; border-collapse: collapse; page-break-inside: avoid; }
-            .signature-section td { text-align: center; vertical-align: top; padding-top: 5px; padding-bottom: 5px; }
-            .signature-space { height: 80px; }
+            body { 
+              font-family: 'Times New Roman', serif; 
+              font-size: 9.5pt; 
+              line-height: 1.25; 
+              color: #111; 
+              margin: 0; 
+              padding: 0.3cm; 
+            }
+            .school-header-text {
+              text-align: center;
+              margin-bottom: 8px;
+              border-bottom: 3px double #000;
+              padding-bottom: 6px;
+            }
+            .letterhead-container { 
+              width: 100%; 
+              text-align: center; 
+              margin-bottom: 8px; 
+              border-bottom: 3px double #000; 
+              padding-bottom: 6px; 
+            }
+            .doc-title { 
+              text-align: center; 
+              font-size: 12pt; 
+              margin: 0 0 2px 0; 
+              text-decoration: underline; 
+              font-weight: bold; 
+              letter-spacing: 0.5px; 
+            }
+            .doc-subtitle { 
+              text-align: center; 
+              font-size: 10pt; 
+              margin: 0 0 8px 0; 
+              font-weight: bold; 
+              color: #222; 
+            }
+            .identity-box { 
+              border: 1px solid #222; 
+              background-color: #fdfdfd; 
+              padding: 4px 8px; 
+              margin-bottom: 6px; 
+              border-radius: 2px; 
+            }
+            .identity-table { 
+              width: 100%; 
+              border-collapse: collapse; 
+              font-size: 8.5pt; 
+            }
+            .identity-table td { 
+              padding: 1.5px 3px; 
+              vertical-align: top; 
+            }
+            .section-title { 
+              font-weight: bold; 
+              margin-top: 6px; 
+              margin-bottom: 4px; 
+              font-size: 9pt; 
+              color: #000; 
+            }
+            table.data-table { 
+              width: 100%; 
+              border-collapse: collapse; 
+              margin-bottom: 8px; 
+              page-break-inside: auto; 
+            }
+            table.data-table th, table.data-table td { 
+              border: 1px solid #111; 
+              padding: 3px 5px; 
+              vertical-align: middle; 
+            }
+            table.data-table th { 
+              background-color: #f2f2f2; 
+              text-align: center; 
+              font-weight: bold; 
+              font-size: 8.5pt; 
+            }
+            table.data-table tr { 
+              page-break-inside: avoid; 
+              break-inside: avoid; 
+            }
+            .coaching-box { 
+              border: 1px solid #222; 
+              background-color: #fafafa; 
+              padding: 5px 8px; 
+              margin-top: 4px; 
+              margin-bottom: 6px; 
+              font-size: 8.5pt; 
+              line-height: 1.25; 
+              page-break-inside: avoid; 
+              break-inside: avoid; 
+            }
+            .signature-container { 
+              margin-top: 8px; 
+              page-break-inside: avoid; 
+              break-inside: avoid; 
+              font-size: 8.5pt; 
+            }
+            .signature-space { 
+              height: 44px; 
+            }
             @media print {
-              @page { size: portrait; margin: 0; }
-              body { 
-                margin-top: ${printConfig.marginTop}cm; 
-                margin-bottom: ${printConfig.marginBottom}cm; 
-                margin-left: 2cm; 
-                margin-right: 2cm; 
+              @page { 
+                size: 215mm 330mm; /* Standar Ukuran Kertas F4 / Folio Indonesia */
+                margin-top: ${printConfig.marginTop || '0.8'}cm; 
+                margin-bottom: ${printConfig.marginBottom || '0.8'}cm; 
+                margin-left: 1.5cm; 
+                margin-right: 1.5cm; 
               }
-              button { display: none; }
-              .no-print { display: none; }
-              .page-break { page-break-before: always; margin-top: 2cm; }
+              body { 
+                padding: 0; 
+              }
+              .page-break { 
+                page-break-before: always; 
+                break-before: page; 
+                height: 0; 
+                margin: 0; 
+              }
             }
           </style>
         </head>
         <body>
-          <!-- SECTION I: ADMINISTRASI -->
           ${letterheadHtml}
-          <h2>INSTRUMEN SUPERVISI AKADEMIK</h2>
-          ${identityHeaderHtml}
-          <div class="section-title">I. ADMINISTRASI PERENCANAAN PEMBELAJARAN</div>
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th width="40">No</th>
-                <th>Komponen Administrasi</th>
-                <th width="60">Skor</th>
-                <th>Catatan Perbaikan</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${generateTableRows(printResult.planningAdmin?.scores || {}, printResult.planningAdmin?.comments || {}, PLANNING_ADMIN_COMPONENTS)}
-              <tr style="font-weight: bold;">
-                <td colspan="2" style="text-align: right;">Skor Akhir / Predikat</td>
-                <td style="text-align: center;">${printResult.planningAdmin?.finalScore.toFixed(2)}</td>
-                <td style="text-align: center;">${printResult.planningAdmin?.predicate}</td>
-              </tr>
-            </tbody>
-          </table>
-          ${printResult.planningAdmin?.coachingSuggestion ? `<div style="margin-top: 5px; font-size: 10pt;"><strong>Saran Pembinaan:</strong> ${printResult.planningAdmin.coachingSuggestion}</div>` : ''}
-          ${summaryAndSignaturesHtml}
+          <h2 class="doc-title">LAPORAN HASIL PENILAIAN SUPERVISI AKADEMIK GURU</h2>
+          <div class="doc-subtitle">TAHUN PELAJARAN ${printConfig.semester ? `SEMESTER ${printConfig.semester}` : ''}</div>
+          
+          ${identityHtml}
+          ${rekapitulasiTableHtml}
+          ${coachingBoxHtml}
+          ${signaturesHtml}
 
-          <!-- SECTION II: RPP -->
-          <div class="page-break"></div>
-          ${letterheadHtml}
-          <h2>INSTRUMEN RENCANA PELAKSANAAN PEMBELAJARAN (RPP)</h2>
-          ${identityHeaderHtml}
-          <div class="section-title">II. RENCANA PELAKSANAAN PEMBELAJARAN (RPP) GURU</div>
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th width="40">No</th>
-                <th>Komponen RPP</th>
-                <th width="60">Skor</th>
-                <th>Catatan Perbaikan</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${generateTableRows(printResult.lessonPlan?.scores || {}, printResult.lessonPlan?.comments || {}, LESSON_PLAN_COMPONENTS)}
-              <tr style="font-weight: bold;">
-                <td colspan="2" style="text-align: right;">Skor Akhir / Predikat</td>
-                <td style="text-align: center;">${printResult.lessonPlan?.finalScore.toFixed(2)}</td>
-                <td style="text-align: center;">${printResult.lessonPlan?.predicate}</td>
-              </tr>
-            </tbody>
-          </table>
-          ${printResult.lessonPlan?.coachingSuggestion ? `<div style="margin-top: 5px; font-size: 10pt;"><strong>Saran Pembinaan:</strong> ${printResult.lessonPlan.coachingSuggestion}</div>` : ''}
-          ${summaryAndSignaturesHtml}
-
-          <!-- SECTION III: PELAKSANAAN -->
-          <div class="page-break"></div>
-          ${letterheadHtml}
-          <h2>INSTRUMEN SUPERVISI PELAKSANAAN PEMBELAJARAN</h2>
-          ${identityHeaderHtml}
-          <div class="section-title">III. PELAKSANAAN PEMBELAJARAN</div>
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th width="40">No</th>
-                <th>Kegiatan Pembelajaran</th>
-                <th width="60">Skor</th>
-                <th>Catatan / Penguatan</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${generateImplTableRows(printResult.implementation?.scores || {}, printResult.implementation?.comments || {}, IMPLEMENTATION_COMPONENTS)}
-              <tr style="font-weight: bold;">
-                <td colspan="2" style="text-align: right;">Skor Akhir / Predikat</td>
-                <td style="text-align: center;">${printResult.implementation?.finalScore.toFixed(2)}</td>
-                <td style="text-align: center;">${printResult.implementation?.predicate}</td>
-              </tr>
-            </tbody>
-          </table>
-          ${printResult.implementation?.coachingSuggestion ? `<div style="margin-top: 5px; font-size: 10pt;"><strong>Saran Pembinaan:</strong> ${printResult.implementation.coachingSuggestion}</div>` : ''}
-          ${summaryAndSignaturesHtml}
+          ${fullDetailsHtml}
 
           <script>
-            window.onload = function() { window.print(); window.close(); }
+            window.onload = function() { 
+              window.print(); 
+              window.close(); 
+            }
           </script>
         </body>
       </html>
@@ -416,14 +627,6 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setIsManualModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-lg text-xs font-bold transition shadow-sm"
-              title="Cetak format lembar instrumen kosong untuk observasi manual offline"
-            >
-              <Printer size={14} />
-              <span>Cetak Instrumen Manual</span>
-            </button>
             <button 
               onClick={() => fetchData(true)}
               disabled={isSyncing}
@@ -759,7 +962,7 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
             <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-blue-600 text-white">
               <div className="flex items-center gap-2">
                 <Printer size={20} />
-                <h3 className="font-bold">Pengaturan Cetak Dokumen Supervisi</h3>
+                <h3 className="font-bold">Cetak Laporan Hasil Penilaian Supervisi</h3>
               </div>
               <button 
                 onClick={() => setIsPrintModalOpen(false)}
@@ -770,6 +973,61 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
             </div>
             
             <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
+              {/* Info Ukuran Kertas F4 / Folio */}
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-800 flex items-start gap-2">
+                <span className="font-bold text-base leading-none">📄</span>
+                <div>
+                  <strong className="block font-semibold">Standar Kertas: Folio / F4 (215 x 330 mm)</strong>
+                  Tata letak dokumen dirancang otomatis agar tabel nilai, rekomendasi supervisor, dan tanda tangan 3 pihak terpadu dalam satu halaman tanpa terpisah.
+                </div>
+              </div>
+
+              {/* Pilihan Format Cetak */}
+              <div>
+                <label className="block text-[10px] font-bold text-gray-500 uppercase mb-2">Pilihan Format Dokumen</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setPrintConfig({ ...printConfig, printFormat: 'SUMMARY' })}
+                    className={`p-3.5 rounded-xl border text-left transition flex items-start gap-3 ${
+                      printConfig.printFormat === 'SUMMARY'
+                        ? 'border-blue-600 bg-blue-50/50 text-blue-900 ring-2 ring-blue-500/20'
+                        : 'border-gray-200 hover:border-gray-300 text-gray-700 bg-white'
+                    }`}
+                  >
+                    <div className={`p-2 rounded-lg ${printConfig.printFormat === 'SUMMARY' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500'}`}>
+                      <FileText size={18} />
+                    </div>
+                    <div>
+                      <div className="font-bold text-xs">Laporan Ringkasan Hasil (1 Halaman F4)</div>
+                      <p className="text-[10px] text-gray-500 mt-1">
+                        Rekapitulasi nilai akhir, skor riil, predikat, saran pembinaan, dan tanda tangan 3 pihak lengkap dalam 1 lembar F4.
+                      </p>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPrintConfig({ ...printConfig, printFormat: 'FULL' })}
+                    className={`p-3.5 rounded-xl border text-left transition flex items-start gap-3 ${
+                      printConfig.printFormat === 'FULL'
+                        ? 'border-blue-600 bg-blue-50/50 text-blue-900 ring-2 ring-blue-500/20'
+                        : 'border-gray-200 hover:border-gray-300 text-gray-700 bg-white'
+                    }`}
+                  >
+                    <div className={`p-2 rounded-lg ${printConfig.printFormat === 'FULL' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500'}`}>
+                      <Printer size={18} />
+                    </div>
+                    <div>
+                      <div className="font-bold text-xs">Laporan Hasil Lengkap (+ Rincian Butir)</div>
+                      <p className="text-[10px] text-gray-500 mt-1">
+                        Menampilkan lembar ringkasan hasil diikuti seluruh lembar rincian butir instrumen yang telah dinilai supervisor.
+                      </p>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="md:col-span-2">
                   <label className="block text-[10px] font-bold text-gray-400 uppercase mb-2">Upload Kop Surat (Opsional)</label>
@@ -781,7 +1039,7 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
                         onChange={handleLetterheadUpload}
                         className="w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                       />
-                      <p className="text-[9px] text-gray-400 mt-1">Format: JPG, PNG, WEBP. Maks: 2MB. Akan tampil di setiap header instrumen.</p>
+                      <p className="text-[9px] text-gray-400 mt-1">Format: JPG, PNG, WEBP. Maks: 2MB. Tampil di header lembar supervisi.</p>
                     </div>
                     {printConfig.letterheadUrl && (
                       <div className="relative group">
@@ -918,19 +1176,12 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
                 className="px-6 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition flex items-center gap-2 shadow-lg shadow-blue-200"
               >
                 <Printer size={18} />
-                Cetak Sekarang
+                Cetak Hasil Supervisi
               </button>
             </div>
           </div>
         </div>
       )}
-      {/* Modal Cetak Instrumen Manual (Offline) */}
-      <PrintManualSupervisionModal
-        isOpen={isManualModalOpen}
-        onClose={() => setIsManualModalOpen(false)}
-        currentUser={user}
-        teachers={teachers}
-      />
     </div>
   );
 };

@@ -269,38 +269,32 @@ export const PrintManualSupervisionModal: React.FC<PrintManualSupervisionModalPr
       </div>
     `;
 
-    // Signatures Section
+    // Signatures Section - 3 columns aligned horizontally to save space and guarantee 1-page fit
     const signaturesHtml = `
       <div class="signature-container">
-        <table style="width: 100%; border-collapse: collapse; margin-top: 25px;">
+        <div style="text-align: right; margin-bottom: 6px; font-size: 8.5pt;">
+          ${location}, ${new Date(supervisionDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+        </div>
+        <table style="width: 100%; border-collapse: collapse;">
           <tr>
-            <td style="width: 50%; text-align: left; vertical-align: top; padding-left: 20px;">
-              &nbsp;
+            <td style="width: 33.3%; text-align: center; vertical-align: top; padding: 0 4px;">
+              Guru yang Disupervisi,
+              <div class="signature-space"></div>
+              <strong style="text-decoration: underline;">${teacherName || '...........................................'}</strong><br>
+              <span style="font-size: 8pt;">NIP. ${teacherNip || '...........................................'}</span>
             </td>
-            <td style="width: 50%; text-align: center; vertical-align: top;">
-              ${location}, ${new Date(supervisionDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}<br>
+            <td style="width: 33.3%; text-align: center; vertical-align: top; padding: 0 4px;">
+              Supervisor / Penilai,
+              <div class="signature-space"></div>
+              <strong style="text-decoration: underline;">${supervisorName || '...........................................'}</strong><br>
+              <span style="font-size: 8pt;">NIP. ${supervisorNip || '...........................................'}</span>
+            </td>
+            <td style="width: 33.4%; text-align: center; vertical-align: top; padding: 0 4px;">
               Mengetahui,<br>
               <strong>Kepala Sekolah</strong>
               <div class="signature-space"></div>
-              <strong>${principalName || '................................................'}</strong><br>
-              NIP. ${principalNip || '................................................'}
-            </td>
-          </tr>
-          <tr>
-            <td colspan="2" style="height: 25px;"></td>
-          </tr>
-          <tr>
-            <td style="width: 50%; text-align: center; vertical-align: top;">
-              Guru yang Disupervisi,
-              <div class="signature-space"></div>
-              <strong>${teacherName || '................................................'}</strong><br>
-              NIP. ${teacherNip || '................................................'}
-            </td>
-            <td style="width: 50%; text-align: center; vertical-align: top;">
-              Supervisor / Penilai,
-              <div class="signature-space"></div>
-              <strong>${supervisorName || '................................................'}</strong><br>
-              NIP. ${supervisorNip || '................................................'}
+              <strong style="text-decoration: underline;">${principalName || '...........................................'}</strong><br>
+              <span style="font-size: 8pt;">NIP. ${principalNip || '...........................................'}</span>
             </td>
           </tr>
         </table>
@@ -368,7 +362,6 @@ export const PrintManualSupervisionModal: React.FC<PrintManualSupervisionModalPr
         <div class="coaching-manual-box">
           <strong>Catatan Pembinaan / Rekomendasi Tindak Lanjut Administrasi Perencanaan:</strong>
           <div class="manual-lined-area">
-            <div class="write-line"></div>
             <div class="write-line"></div>
             <div class="write-line"></div>
           </div>
@@ -439,7 +432,6 @@ export const PrintManualSupervisionModal: React.FC<PrintManualSupervisionModalPr
         <div class="coaching-manual-box">
           <strong>Catatan Pembinaan / Rekomendasi Penyempurnaan RPP:</strong>
           <div class="manual-lined-area">
-            <div class="write-line"></div>
             <div class="write-line"></div>
             <div class="write-line"></div>
           </div>
@@ -538,7 +530,6 @@ export const PrintManualSupervisionModal: React.FC<PrintManualSupervisionModalPr
           <div class="manual-lined-area">
             <div class="write-line"></div>
             <div class="write-line"></div>
-            <div class="write-line"></div>
           </div>
         </div>
 
@@ -573,132 +564,140 @@ export const PrintManualSupervisionModal: React.FC<PrintManualSupervisionModalPr
           <style>
             body {
               font-family: 'Times New Roman', serif;
-              font-size: 10.5pt;
-              line-height: 1.35;
+              font-size: 9.5pt;
+              line-height: 1.25;
               color: #111;
               margin: 0;
-              padding: 0.5cm;
+              padding: 0.3cm;
             }
             .school-header {
               text-align: center;
-              margin-bottom: 15px;
+              margin-bottom: 10px;
             }
             .doc-title {
               text-align: center;
-              font-size: 13pt;
-              margin: 0 0 4px 0;
+              font-size: 12pt;
+              margin: 0 0 2px 0;
               text-decoration: underline;
               font-weight: bold;
               letter-spacing: 0.5px;
             }
             .doc-subtitle {
               text-align: center;
-              font-size: 11pt;
-              margin: 0 0 14px 0;
+              font-size: 10pt;
+              margin: 0 0 8px 0;
               font-weight: bold;
               color: #222;
             }
             .identity-box {
               border: 1px solid #222;
               background-color: #fdfdfd;
-              padding: 8px 12px;
-              margin-bottom: 12px;
-              border-radius: 4px;
+              padding: 4px 8px;
+              margin-bottom: 6px;
+              border-radius: 2px;
             }
             .identity-table {
               width: 100%;
               border-collapse: collapse;
-              font-size: 9.5pt;
+              font-size: 8.5pt;
             }
             .identity-table td {
-              padding: 2.5px 4px;
+              padding: 1.5px 3px;
               vertical-align: top;
             }
             .instructions-box {
               border: 1px dashed #666;
               background: #f9f9f9;
-              padding: 6px 10px;
-              font-size: 8.5pt;
-              margin-bottom: 12px;
-              line-height: 1.3;
+              padding: 4px 8px;
+              font-size: 8pt;
+              margin-bottom: 6px;
+              line-height: 1.2;
             }
             table.data-table {
               width: 100%;
               border-collapse: collapse;
-              margin-bottom: 15px;
+              margin-bottom: 8px;
+              page-break-inside: auto;
             }
             table.data-table th, table.data-table td {
               border: 1px solid #111;
-              padding: 5px 6px;
+              padding: 3px 5px;
               vertical-align: middle;
             }
             table.data-table th {
               background-color: #f2f2f2;
               text-align: center;
               font-weight: bold;
-              font-size: 9pt;
+              font-size: 8.5pt;
+            }
+            table.data-table tr {
+              page-break-inside: avoid;
+              break-inside: avoid;
             }
             .score-manual-boxes {
               display: flex;
               justify-content: center;
-              gap: 12px;
+              gap: 10px;
               font-size: 8.5pt;
               font-weight: bold;
             }
             .score-manual-boxes-4 {
               display: flex;
               justify-content: center;
-              gap: 8px;
+              gap: 7px;
               font-size: 8.5pt;
               font-weight: bold;
             }
             .notes-line {
-              min-height: 24px;
+              min-height: 18px;
             }
             .coaching-manual-box {
               border: 1px solid #222;
-              padding: 8px 12px;
-              margin-top: 10px;
-              margin-bottom: 15px;
-              font-size: 9pt;
+              padding: 5px 8px;
+              margin-top: 5px;
+              margin-bottom: 6px;
+              font-size: 8.5pt;
               page-break-inside: avoid;
+              break-inside: avoid;
             }
             .manual-lined-area {
-              margin-top: 6px;
+              margin-top: 4px;
             }
             .write-line {
               border-bottom: 1px dotted #888;
-              height: 22px;
+              height: 15px;
               width: 100%;
             }
             .signature-container {
-              margin-top: 15px;
+              margin-top: 8px;
               page-break-inside: avoid;
-              font-size: 10pt;
+              break-inside: avoid;
+              font-size: 8.5pt;
             }
             .signature-space {
-              height: 65px;
+              height: 44px;
             }
             .letterhead-container {
               width: 100%;
               text-align: center;
-              margin-bottom: 15px;
+              margin-bottom: 10px;
               border-bottom: 4px double #000;
-              padding-bottom: 8px;
+              padding-bottom: 6px;
             }
             @media print {
               @page {
-                size: portrait;
-                margin-top: ${marginTop}cm;
-                margin-bottom: ${marginBottom}cm;
-                margin-left: 1.8cm;
-                margin-right: 1.8cm;
+                size: 215mm 330mm; /* Standar Ukuran Kertas F4 / Folio Indonesia */
+                margin-top: ${marginTop || '0.8'}cm;
+                margin-bottom: ${marginBottom || '0.8'}cm;
+                margin-left: 1.5cm;
+                margin-right: 1.5cm;
               }
               body {
                 padding: 0;
               }
               .page-break {
                 page-break-before: always;
+                break-before: page;
                 height: 0;
                 margin: 0;
               }
@@ -1059,7 +1058,7 @@ export const PrintManualSupervisionModal: React.FC<PrintManualSupervisionModalPr
         {/* Modal Footer */}
         <div className="p-5 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
           <p className="text-[11px] text-gray-500 italic">
-            Format cetak didesain standar kertas A4, siap digunakan untuk catatan fisik saat observasi.
+            Format cetak didesain standar kertas F4 / Folio (215 x 330 mm), bagian tanda tangan terpadu dalam satu halaman tanpa terpisah.
           </p>
           <div className="flex gap-3">
             <button
