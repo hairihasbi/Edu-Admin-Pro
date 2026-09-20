@@ -3,7 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { User, SupervisionAssignment, SupervisionResult } from '../types';
 import { getAssignmentsForSupervisor, getSchoolTeachers, saveSupervisionResult, getSupervisionResultByAssignment, updateSupervisionAssignmentStatus } from '../services/database';
-import { ClipboardCheck, User as UserIcon, Calendar, CheckCircle, AlertCircle, Loader2, ChevronRight, Save, Star } from './Icons';
+import { ClipboardCheck, User as UserIcon, Calendar, CheckCircle, AlertCircle, Loader2, ChevronRight, Save, Star, Printer } from './Icons';
+import { PrintManualSupervisionModal } from './PrintManualSupervisionModal';
 
 interface SupervisionAssessmentProps {
   user: User;
@@ -84,6 +85,8 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
   const [isSaving, setIsSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [activeTab, setActiveTab] = useState<'PLANNING' | 'RPP' | 'IMPLEMENTATION'>('PLANNING');
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [manualPrintAssignment, setManualPrintAssignment] = useState<SupervisionAssignment | null>(null);
 
   // Tab 1: Administrasi Perencanaan Pembelajaran
   const [planningScores, setPlanningScores] = useState<Record<string, number>>({});
@@ -329,16 +332,29 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       {/* Header */}
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
-        <div className="p-3 bg-purple-50 text-purple-600 rounded-full">
-          <ClipboardCheck size={24} />
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="p-3 bg-purple-50 text-purple-600 rounded-full">
+            <ClipboardCheck size={24} />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-gray-800">Instrumen Supervisi Akademik</h2>
+            <p className="text-gray-500 text-sm">
+              Lakukan penilaian terhadap rekan sejawat atau cetak format instrumen manual untuk observasi fisik lapangan.
+            </p>
+          </div>
         </div>
-        <div>
-          <h2 className="text-xl font-bold text-gray-800">Instrumen Supervisi Akademik</h2>
-          <p className="text-gray-500 text-sm">
-            Lakukan penilaian terhadap rekan sejawat sesuai dengan penugasan dari Wakasek Kurikulum.
-          </p>
-        </div>
+        <button
+          type="button"
+          onClick={() => {
+            setManualPrintAssignment(selectedAssignment);
+            setIsPrintModalOpen(true);
+          }}
+          className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl text-xs font-bold hover:opacity-95 transition shadow-md shadow-purple-100 self-start md:self-auto"
+        >
+          <Printer size={16} />
+          <span>Cetak Instrumen Manual</span>
+        </button>
       </div>
 
       {successMessage && (
@@ -465,12 +481,26 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
                     Guru: <span className="font-bold text-purple-600">{teachers.find(t => t.id === selectedAssignment.teacherId)?.fullName}</span>
                   </p>
                 </div>
-                <button
-                  onClick={() => setSelectedAssignment(null)}
-                  className="text-gray-400 hover:text-gray-600 text-xs font-medium"
-                >
-                  Batal
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setManualPrintAssignment(selectedAssignment);
+                      setIsPrintModalOpen(true);
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-lg text-xs font-bold transition shadow-sm"
+                    title="Cetak format lembar instrumen lengkap untuk guru ini"
+                  >
+                    <Printer size={14} />
+                    <span>Cetak Instrumen Guru Ini</span>
+                  </button>
+                  <button
+                    onClick={() => setSelectedAssignment(null)}
+                    className="text-gray-400 hover:text-gray-600 text-xs font-medium px-2 py-1"
+                  >
+                    Batal
+                  </button>
+                </div>
               </div>
 
               <div className="p-6">
@@ -813,6 +843,15 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
           )}
         </div>
       </div>
+
+      {/* Modal Cetak Instrumen Manual */}
+      <PrintManualSupervisionModal
+        isOpen={isPrintModalOpen}
+        onClose={() => setIsPrintModalOpen(false)}
+        currentUser={user}
+        teachers={teachers}
+        selectedAssignment={manualPrintAssignment}
+      />
     </div>
   );
 };

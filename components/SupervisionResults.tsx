@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { User, SupervisionResult } from '../types';
 import { getSupervisionResults, getSupervisionResultsForSchool, getSchoolTeachers, runManualSync } from '../services/database';
 import { ClipboardCheck, User as UserIcon, Calendar, Star, ChevronDown, ChevronUp, Search, Filter, Loader2, AlertCircle, Shield, Pencil as Edit, Printer, X, RefreshCcw } from './Icons';
+import { PrintManualSupervisionModal } from './PrintManualSupervisionModal';
 
 interface SupervisionResultsProps {
   user: User;
@@ -23,6 +24,7 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
   const navigate = useNavigate();
 
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [isManualModalOpen, setIsManualModalOpen] = useState(false);
   const [printResult, setPrintResult] = useState<SupervisionResult | null>(null);
   const [printConfig, setPrintConfig] = useState({
     className: '',
@@ -414,6 +416,14 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsManualModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-lg text-xs font-bold transition shadow-sm"
+              title="Cetak format lembar instrumen kosong untuk observasi manual offline"
+            >
+              <Printer size={14} />
+              <span>Cetak Instrumen Manual</span>
+            </button>
             <button 
               onClick={() => fetchData(true)}
               disabled={isSyncing}
@@ -914,6 +924,13 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
           </div>
         </div>
       )}
+      {/* Modal Cetak Instrumen Manual (Offline) */}
+      <PrintManualSupervisionModal
+        isOpen={isManualModalOpen}
+        onClose={() => setIsManualModalOpen(false)}
+        currentUser={user}
+        teachers={teachers}
+      />
     </div>
   );
 };
