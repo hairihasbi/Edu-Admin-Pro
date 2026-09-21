@@ -1408,11 +1408,17 @@ const AppContent: React.FC = () => {
                       icon={ClipboardCheck}
                       label="Hasil Supervisi"
                     />
-                    <NavLink
-                      to="/extracurricular"
-                      icon={Trophy}
-                      label="Pembina Ekskul"
-                    />
+                    {Boolean(
+                      currentUser.isExtracurricularAdvisor &&
+                        currentUser.extracurriculars &&
+                        currentUser.extracurriculars.length > 0
+                    ) && (
+                      <NavLink
+                        to="/extracurricular"
+                        icon={Trophy}
+                        label="Pembina Ekskul"
+                      />
+                    )}
                     <NavLink
                       to="/sync"
                       icon={ArrowLeftRight}
@@ -1565,10 +1571,11 @@ const AppContent: React.FC = () => {
                       icon={Layers}
                       label="Jurnal Kokurikuler"
                     />
-                    {(currentUser.isExtracurricularAdvisor ||
-                      (currentUser.extracurriculars &&
-                        currentUser.extracurriculars.length > 0) ||
-                      currentUser.additionalRole === "WAKASEK_KURIKULUM") && (
+                    {Boolean(
+                      currentUser.isExtracurricularAdvisor &&
+                        currentUser.extracurriculars &&
+                        currentUser.extracurriculars.length > 0
+                    ) && (
                       <NavLink
                         to="/extracurricular"
                         icon={Trophy}
