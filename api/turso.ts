@@ -541,10 +541,14 @@ const DB_SCHEMAS = [
         school_npsn TEXT,
         status TEXT,
         scheduled_date TEXT,
+        start_date TEXT,
+        end_date TEXT,
         last_modified INTEGER,
         version INTEGER DEFAULT 1,
         deleted INTEGER DEFAULT 0
     )`,
+    `ALTER TABLE supervision_assignments ADD COLUMN start_date TEXT`,
+    `ALTER TABLE supervision_assignments ADD COLUMN end_date TEXT`,
     `CREATE TABLE IF NOT EXISTS supervision_results (
         id TEXT PRIMARY KEY,
         assignment_id TEXT,
@@ -1003,8 +1007,8 @@ const getTableConfig = (collection: string) => {
     };
     case 'eduadmin_supervision_assignments': return { 
         table: 'supervision_assignments', 
-        columns: ['id', 'supervisor_id', 'teacher_id', 'school_npsn', 'status', 'scheduled_date', 'last_modified', 'version', 'deleted'], 
-        mapFn: (item: any) => [s(item.id), s(item.supervisorId), s(item.teacherId), s(item.schoolNpsn), s(item.status), s(item.scheduledDate), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] 
+        columns: ['id', 'supervisor_id', 'teacher_id', 'school_npsn', 'status', 'scheduled_date', 'start_date', 'end_date', 'last_modified', 'version', 'deleted'], 
+        mapFn: (item: any) => [s(item.id), s(item.supervisorId), s(item.teacherId), s(item.schoolNpsn), s(item.status), s(item.scheduledDate || item.startDate), s(item.startDate || item.scheduledDate), s(item.endDate || item.scheduledDate), s(item.lastModified), item.version || 1, item.deleted ? 1 : 0] 
     };
     case 'eduadmin_supervision_results': return { 
         table: 'supervision_results', 
@@ -1345,7 +1349,10 @@ const mapRowToJSON = (collection: string, row: any) => {
     };
     case 'eduadmin_supervision_assignments': return {
         id: row.id, supervisorId: row.supervisor_id, teacherId: row.teacher_id,
-        schoolNpsn: row.school_npsn, status: row.status, scheduledDate: row.scheduled_date,
+        schoolNpsn: row.school_npsn, status: row.status,
+        scheduledDate: row.scheduled_date || row.start_date,
+        startDate: row.start_date || row.scheduled_date,
+        endDate: row.end_date || row.scheduled_date,
         lastModified: row.last_modified, version: row.version, deleted: Boolean(row.deleted)
     };
     case 'eduadmin_supervision_results': return {
@@ -2336,6 +2343,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     await client.execute(`ALTER TABLE users ADD COLUMN rpp_last_reset TEXT`).catch(() => {});
                     await client.execute(`ALTER TABLE journals ADD COLUMN absent_students TEXT`).catch(() => {});
                     await client.execute(`ALTER TABLE journals ADD COLUMN subject TEXT`).catch(() => {});
+                    await client.execute(`ALTER TABLE supervision_assignments ADD COLUMN start_date TEXT`).catch(() => {});
+                    await client.execute(`ALTER TABLE supervision_assignments ADD COLUMN end_date TEXT`).catch(() => {});
                     await client.batch(statements);
                 } else if (batchError.message && (batchError.message.includes('homeroom_guidance') || batchError.message.includes('cocurricular_journals') || batchError.message.includes('no such table'))) {
                     console.log("Lazy migration: Creating missing tables...");
@@ -2532,8 +2541,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 }
                 else if (tableConfig.table === 'supervision_assignments') {
                     if (userNpsn && userNpsn !== 'DEFAULT') {
-                        whereClauses.push("school_npsn = ?");
-                        args = [userNpsn];
+                        whereClauses.push("(school_npsn = ? OR supervisor_id = ? OR teacher_id = ?)");
+                        args = [userNpsn, userId, userId];
                     } else {
                         whereClauses.push("(supervisor_id = ? OR teacher_id = ?)");
                         args = [userId, userId];
