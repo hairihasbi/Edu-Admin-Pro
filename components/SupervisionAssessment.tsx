@@ -2,8 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { User, SupervisionAssignment, SupervisionResult } from '../types';
-import { getAssignmentsForSupervisor, getSchoolTeachers, saveSupervisionResult, getSupervisionResultByAssignment, updateSupervisionAssignmentStatus } from '../services/database';
-import { ClipboardCheck, User as UserIcon, Calendar, CheckCircle, AlertCircle, Loader2, ChevronRight, Save, Star, Printer } from './Icons';
+import { getSchoolTeachers, saveSupervisionResult, getSupervisionResultByAssignment, updateSupervisionAssignmentStatus, getSupervisionAssignments, runManualSync } from '../services/database';
+import { ClipboardCheck, User as UserIcon, Calendar, CheckCircle, AlertCircle, Loader2, ChevronRight, Save, Star, Printer, Filter, Search, RefreshCcw, Shield } from './Icons';
 import { PrintManualSupervisionModal } from './PrintManualSupervisionModal';
 
 interface SupervisionAssessmentProps {
@@ -81,6 +81,9 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
   const [assignments, setAssignments] = useState<SupervisionAssignment[]>([]);
   const [teachers, setTeachers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [selectedSupervisorFilter, setSelectedSupervisorFilter] = useState<string>('ALL');
+  const [searchGuru, setSearchGuru] = useState<string>('');
   const [selectedAssignment, setSelectedAssignment] = useState<SupervisionAssignment | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
@@ -112,14 +115,19 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
   const location = useLocation();
 
   const isKepsek = user.additionalRole === 'KEPALA_SEKOLAH';
+  const isWakasek = user.additionalRole === 'WAKASEK_KURIKULUM';
+  const isAdmin = user.role === 'ADMIN';
+  const isSchoolLeader = isKepsek || isWakasek || isAdmin;
+  const isSupervisor = Boolean(user.isSupervisor);
+  const canAccess = isSupervisor || isSchoolLeader;
 
   useEffect(() => {
-    if (!user.isSupervisor && !isKepsek) {
+    if (!canAccess) {
       navigate('/');
       return;
     }
     fetchData();
-  }, [user.id, user.isSupervisor, isKepsek]);
+  }, [user.id, user.isSupervisor, canAccess]);
 
   useEffect(() => {
     // Handle deep link to an assignment
@@ -133,22 +141,70 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
     }
   }, [location.search, assignments]);
 
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = async (forceSync = false) => {
+    if (forceSync) setIsSyncing(true);
+    else setLoading(true);
+
     try {
-      const [myAssignments, schoolTeachers] = await Promise.all([
-        getAssignmentsForSupervisor(user.id),
+      if (forceSync || navigator.onLine) {
+        try {
+          await runManualSync('PULL', () => {}, [
+            'eduadmin_supervision_assignments',
+            'eduadmin_users',
+            'eduadmin_supervision_results'
+          ]);
+        } catch (e) {
+          console.warn("Sync pull warning in assessment:", e);
+        }
+      }
+
+      const [schoolAssignments, schoolTeachers] = await Promise.all([
+        getSupervisionAssignments(user.schoolNpsn!),
         getSchoolTeachers(user.schoolNpsn!)
       ]);
-      // Show both pending and completed assignments so they can be edited
-      setAssignments(myAssignments.sort((a,b) => (a.status === 'PENDING' ? -1 : 1)));
-      setTeachers(schoolTeachers);
+      
+      setAssignments(schoolAssignments);
+      setTeachers(schoolTeachers.sort((a, b) => a.fullName.localeCompare(b.fullName)));
     } catch (error) {
       console.error("Failed to fetch assignments:", error);
     } finally {
       setLoading(false);
+      setIsSyncing(false);
     }
   };
+
+  // List of all supervisors available in the system
+  const availableSupervisors = teachers.filter(t => 
+    t.isSupervisor || 
+    t.additionalRole === 'KEPALA_SEKOLAH' || 
+    t.id === user.id ||
+    assignments.some(a => a.supervisorId === t.id)
+  );
+
+  const displayedAssignments = assignments.filter(a => {
+    // 1. Role / supervisor filtering
+    if (!isSchoolLeader) {
+      // Non-leader supervisor only sees their own assigned teachers
+      if (a.supervisorId !== user.id) return false;
+    } else {
+      // School leader can see ALL or filter by a specific supervisor
+      if (selectedSupervisorFilter !== 'ALL' && a.supervisorId !== selectedSupervisorFilter) {
+        return false;
+      }
+    }
+
+    // 2. Search filtering
+    if (searchGuru.trim()) {
+      const q = searchGuru.toLowerCase();
+      const teacher = teachers.find(t => t.id === a.teacherId);
+      const supervisor = teachers.find(t => t.id === a.supervisorId);
+      const matchTeacher = teacher?.fullName.toLowerCase().includes(q) || (teacher?.nip && teacher.nip.includes(q)) || (teacher?.subject && teacher.subject.toLowerCase().includes(q));
+      const matchSupervisor = supervisor?.fullName.toLowerCase().includes(q);
+      return matchTeacher || matchSupervisor;
+    }
+
+    return true;
+  }).sort((a, b) => (a.status === 'PENDING' ? -1 : 1));
 
   const handleSelectAssignment = async (assignment: SupervisionAssignment) => {
     setSelectedAssignment(assignment);
@@ -260,7 +316,7 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
 
       const result: Partial<SupervisionResult> & { assignmentId: string } = {
         assignmentId: selectedAssignment.id,
-        supervisorId: user.id,
+        supervisorId: selectedAssignment.supervisorId || user.id,
         teacherId: selectedAssignment.teacherId,
         schoolNpsn: user.schoolNpsn!,
         date: new Date().toISOString().split('T')[0],
@@ -367,28 +423,84 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Left: Assignment List */}
         <div className="lg:col-span-1 space-y-4">
-          <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm">
-            <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-              <Calendar className="text-blue-600" size={18} />
-              Daftar Penugasan
-            </h3>
+          <div className="bg-white p-4 sm:p-5 rounded-xl border border-gray-100 shadow-sm space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-gray-800 flex items-center gap-2 text-sm sm:text-base">
+                <Calendar className="text-blue-600" size={18} />
+                Daftar Penugasan
+              </h3>
+              <button
+                type="button"
+                onClick={() => fetchData(true)}
+                disabled={isSyncing}
+                className="p-1.5 bg-gray-50 hover:bg-purple-50 text-gray-500 hover:text-purple-600 rounded-lg border border-gray-200 transition disabled:opacity-50"
+                title="Sinkronkan & Tarik Data Terbaru"
+              >
+                <RefreshCcw size={14} className={isSyncing ? "animate-spin text-purple-600" : ""} />
+              </button>
+            </div>
+
+            {/* Supervisor Filter Dropdown (School Leader only) */}
+            {isSchoolLeader && (
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-gray-500 flex items-center gap-1">
+                  <Filter size={12} className="text-gray-400" />
+                  Filter Supervisor:
+                </label>
+                <select
+                  value={selectedSupervisorFilter}
+                  onChange={(e) => setSelectedSupervisorFilter(e.target.value)}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2 text-xs font-semibold text-gray-700 outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer"
+                >
+                  <option value="ALL">Semua Supervisor ({assignments.length})</option>
+                  <option value={user.id}>Saya ({user.fullName}) ({assignments.filter(a => a.supervisorId === user.id).length})</option>
+                  {availableSupervisors.filter(s => s.id !== user.id).map(s => {
+                    const count = assignments.filter(a => a.supervisorId === s.id).length;
+                    return (
+                      <option key={s.id} value={s.id}>
+                        {s.fullName} ({count})
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+            )}
+
+            {/* Quick Search */}
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+              <input
+                type="text"
+                placeholder="Cari guru / mapel / supervisor..."
+                value={searchGuru}
+                onChange={(e) => setSearchGuru(e.target.value)}
+                className="w-full pl-8 pr-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-purple-500"
+              />
+            </div>
+
+            <div className="text-[11px] text-gray-400 font-medium">
+              Menampilkan {displayedAssignments.length} dari {assignments.length} penugasan
+            </div>
             
-            {assignments.length === 0 ? (
+            {displayedAssignments.length === 0 ? (
               <div className="text-center py-10 bg-gray-50 rounded-lg border border-dashed border-gray-200">
                 <AlertCircle className="mx-auto text-gray-300 mb-2" size={32} />
-                <p className="text-xs text-gray-400 italic">Tidak ada penugasan supervisi.</p>
+                <p className="text-xs text-gray-400 italic">
+                  {searchGuru ? "Tidak ada penugasan sesuai pencarian." : "Belum ada penugasan supervisi yang sesuai filter."}
+                </p>
               </div>
             ) : (
-              <div className="space-y-3">
-                {assignments.map(a => {
+              <div className="space-y-2.5 max-h-[600px] overflow-y-auto pr-1">
+                {displayedAssignments.map(a => {
                   const teacher = teachers.find(t => t.id === a.teacherId);
+                  const supervisor = teachers.find(t => t.id === a.supervisorId);
                   const isSelected = selectedAssignment?.id === a.id;
                   const isCompleted = a.status === 'COMPLETED';
                   return (
                     <button
                       key={a.id}
                       onClick={() => handleSelectAssignment(a)}
-                      className={`w-full text-left p-4 rounded-xl border transition flex items-center justify-between group relative overflow-hidden ${
+                      className={`w-full text-left p-3 rounded-xl border transition flex items-center justify-between group relative overflow-hidden ${
                         isSelected 
                           ? 'bg-purple-50 border-purple-200 ring-2 ring-purple-100' 
                           : 'bg-white border-gray-100 hover:border-purple-200 hover:bg-gray-50'
@@ -399,13 +511,23 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
                           <CheckCircle size={10} />
                         </div>
                       )}
-                      <div className="min-w-0">
-                        <div className={`text-sm font-bold truncate ${isSelected ? 'text-purple-700' : 'text-gray-800'}`}>
+                      <div className="min-w-0 flex-1 pr-2">
+                        <div className={`text-xs font-bold truncate ${isSelected ? 'text-purple-700' : 'text-gray-800'}`}>
                           {teacher?.fullName || 'Guru'}
                         </div>
-                        <div className="text-[10px] text-gray-500 mt-1 flex flex-col gap-1">
-                          <div className="flex items-center gap-1">
-                            <Calendar size={12} />
+                        {teacher?.subject && (
+                          <div className="text-[10px] text-gray-500 truncate">
+                            Mapel: {teacher.subject}
+                          </div>
+                        )}
+                        <div className="mt-1">
+                          <span className="inline-block text-[9px] font-semibold bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded truncate max-w-full">
+                            Spv: {supervisor?.fullName || 'Belum Ditentukan'}
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-gray-400 mt-1 flex flex-col gap-0.5">
+                          <div className="flex items-center gap-1 text-[9px]">
+                            <Calendar size={10} />
                             {a.startDate && a.endDate ? (
                               `${new Date(a.startDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })} - ${new Date(a.endDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}`
                             ) : (
@@ -419,7 +541,7 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
                           </div>
                         </div>
                       </div>
-                      <ChevronRight size={18} className={`transition ${isSelected ? 'text-purple-500 translate-x-1' : 'text-gray-300 group-hover:text-purple-400'}`} />
+                      <ChevronRight size={16} className={`transition flex-shrink-0 ${isSelected ? 'text-purple-500 translate-x-1' : 'text-gray-300 group-hover:text-purple-400'}`} />
                     </button>
                   );
                 })}
@@ -470,16 +592,29 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
                 </button>
               </div>
 
-              <div className="p-6 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
+              <div className="p-4 sm:p-6 border-b border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <h3 className="font-bold text-gray-800">
                     {activeTab === 'PLANNING' && "Administrasi Perencanaan Pembelajaran"}
                     {activeTab === 'RPP' && "Rencana Pelaksanaan Pembelajaran (RPP) Guru"}
                     {activeTab === 'IMPLEMENTATION' && "Supervisi Pelaksanaan Pembelajaran"}
                   </h3>
-                  <p className="text-xs text-gray-500">
-                    Guru: <span className="font-bold text-purple-600">{teachers.find(t => t.id === selectedAssignment.teacherId)?.fullName}</span>
-                  </p>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500 mt-1">
+                    <div>
+                      Guru: <span className="font-bold text-purple-600">{teachers.find(t => t.id === selectedAssignment.teacherId)?.fullName || 'N/A'}</span>
+                      {teachers.find(t => t.id === selectedAssignment.teacherId)?.subject && (
+                        <span className="text-gray-400 ml-1">({teachers.find(t => t.id === selectedAssignment.teacherId)?.subject})</span>
+                      )}
+                    </div>
+                    <div>
+                      Supervisor: <span className="font-bold text-gray-700">{teachers.find(t => t.id === selectedAssignment.supervisorId)?.fullName || 'N/A'}</span>
+                    </div>
+                    {selectedAssignment.startDate && selectedAssignment.endDate && (
+                      <div className="text-gray-400">
+                        Jadwal: {new Date(selectedAssignment.startDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })} - {new Date(selectedAssignment.endDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <button

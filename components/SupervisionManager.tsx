@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { User, SupervisionAssignment } from '../types';
-import { getSchoolTeachers, toggleSupervisorStatus, saveSupervisionAssignment, getSupervisionAssignments, deleteSupervisionAssignment } from '../services/database';
-import { Users, Shield, CheckCircle, XCircle, Trash2, Plus, Search, Calendar, UserCheck, Loader2, AlertCircle, Clock } from './Icons';
+import { getSchoolTeachers, toggleSupervisorStatus, saveSupervisionAssignment, getSupervisionAssignments, deleteSupervisionAssignment, runManualSync } from '../services/database';
+import { Users, Shield, CheckCircle, XCircle, Trash2, Plus, Search, Calendar, UserCheck, Loader2, AlertCircle, Clock, Filter, RefreshCcw } from './Icons';
 
 interface SupervisionManagerProps {
   user: User;
@@ -12,8 +12,10 @@ const SupervisionManager: React.FC<SupervisionManagerProps> = ({ user }) => {
   const [teachers, setTeachers] = useState<User[]>([]);
   const [assignments, setAssignments] = useState<SupervisionAssignment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [tableSupervisorFilter, setTableSupervisorFilter] = useState('ALL');
 
   // Form state for new assignment
   const [selectedSupervisor, setSelectedSupervisor] = useState('');
@@ -25,10 +27,24 @@ const SupervisionManager: React.FC<SupervisionManagerProps> = ({ user }) => {
     fetchData();
   }, [user.schoolNpsn]);
 
-  const fetchData = async () => {
+  const fetchData = async (forceSync = false) => {
     if (!user.schoolNpsn) return;
-    setLoading(true);
+    if (forceSync) setIsSyncing(true);
+    else setLoading(true);
+
     try {
+      if ((forceSync || navigator.onLine)) {
+        try {
+          await runManualSync('PULL', () => {}, [
+            'eduadmin_supervision_assignments',
+            'eduadmin_users',
+            'eduadmin_supervision_results'
+          ]);
+        } catch (e) {
+          console.warn("Background sync warning:", e);
+        }
+      }
+
       const [schoolTeachers, schoolAssignments] = await Promise.all([
         getSchoolTeachers(user.schoolNpsn),
         getSupervisionAssignments(user.schoolNpsn)
@@ -39,6 +55,7 @@ const SupervisionManager: React.FC<SupervisionManagerProps> = ({ user }) => {
       console.error("Failed to fetch supervision data:", error);
     } finally {
       setLoading(false);
+      setIsSyncing(false);
     }
   };
 
@@ -73,6 +90,14 @@ const SupervisionManager: React.FC<SupervisionManagerProps> = ({ user }) => {
         endDate
       };
       await saveSupervisionAssignment(newAssignment);
+      
+      // Ensure the selected supervisor has isSupervisor = true
+      const sup = teachers.find(t => t.id === selectedSupervisor);
+      if (sup && !sup.isSupervisor) {
+        await toggleSupervisorStatus(selectedSupervisor, true);
+        setTeachers(prev => prev.map(t => t.id === selectedSupervisor ? { ...t, isSupervisor: true } : t));
+      }
+
       await fetchData();
       setSelectedTeacher('');
     } catch (error) {
@@ -97,7 +122,14 @@ const SupervisionManager: React.FC<SupervisionManagerProps> = ({ user }) => {
     (t.nip && t.nip.includes(searchQuery))
   );
 
-  const supervisors = teachers.filter(t => t.isSupervisor);
+  // Supervisors list: includes anyone flagged as supervisor, or Kepala Sekolah, or the active user
+  const supervisors = teachers.filter(t => t.isSupervisor || t.additionalRole === 'KEPALA_SEKOLAH' || t.id === user.id);
+
+  // Assignments filtered for the table
+  const displayedAssignments = assignments.filter(a => {
+    if (tableSupervisorFilter === 'ALL') return true;
+    return a.supervisorId === tableSupervisorFilter;
+  });
 
   return (
     <div className="space-y-6">
@@ -223,11 +255,46 @@ const SupervisionManager: React.FC<SupervisionManagerProps> = ({ user }) => {
 
           {/* Assignment List */}
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="p-4 border-b border-gray-100 bg-gray-50/50">
-              <h3 className="font-bold text-gray-800 flex items-center gap-2">
+            <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
                 <Calendar className="text-purple-600" size={18} />
-                Jadwal & Status Supervisi
-              </h3>
+                <h3 className="font-bold text-gray-800">
+                  Jadwal & Status Supervisi
+                </h3>
+                <span className="text-xs bg-purple-100 text-purple-700 font-bold px-2 py-0.5 rounded-full">
+                  {displayedAssignments.length} dari {assignments.length} penugasan
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-lg px-2.5 py-1">
+                  <Filter size={13} className="text-gray-400" />
+                  <span className="text-[11px] font-bold text-gray-500">Filter Supervisor:</span>
+                  <select
+                    value={tableSupervisorFilter}
+                    onChange={(e) => setTableSupervisorFilter(e.target.value)}
+                    className="text-xs font-semibold text-gray-700 bg-transparent outline-none cursor-pointer"
+                  >
+                    <option value="ALL">Semua Supervisor ({assignments.length})</option>
+                    {supervisors.map(s => {
+                      const count = assignments.filter(a => a.supervisorId === s.id).length;
+                      return (
+                        <option key={s.id} value={s.id}>
+                          {s.fullName} ({count})
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => fetchData(true)}
+                  disabled={isSyncing}
+                  className="p-1.5 bg-white border border-gray-200 text-gray-600 hover:text-purple-600 rounded-lg transition disabled:opacity-50"
+                  title="Refresh & Sinkronkan"
+                >
+                  <RefreshCcw size={15} className={isSyncing ? "animate-spin text-purple-600" : ""} />
+                </button>
+              </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
@@ -243,10 +310,10 @@ const SupervisionManager: React.FC<SupervisionManagerProps> = ({ user }) => {
                 <tbody className="divide-y divide-gray-100">
                   {loading ? (
                     <tr><td colSpan={5} className="text-center py-8"><Loader2 className="animate-spin mx-auto text-purple-600" /></td></tr>
-                  ) : assignments.length === 0 ? (
-                    <tr><td colSpan={5} className="text-center py-12 text-gray-400 italic">Belum ada penugasan supervisi</td></tr>
+                  ) : displayedAssignments.length === 0 ? (
+                    <tr><td colSpan={5} className="text-center py-12 text-gray-400 italic">Tidak ada penugasan supervisi yang sesuai filter</td></tr>
                   ) : (
-                    assignments.map(a => {
+                    displayedAssignments.map(a => {
                       const supervisor = teachers.find(t => t.id === a.supervisorId);
                       const teacher = teachers.find(t => t.id === a.teacherId);
                       return (
