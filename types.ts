@@ -588,6 +588,13 @@ export interface SupervisionAssignment extends Syncable {
   scheduledDate?: string; // Legacy field for compatibility
 }
 
+export interface DeepLearningFollowUpRecommendations {
+  weakAspects: string; // 1. Penguatan pada Aspek yang Lemah
+  shortTermStrategy: string; // 2. Strategi Perbaikan Jangka Pendek (1–4 Minggu)
+  longTermStrategy: string; // 3. Strategi Pengembangan Jangka Panjang (Satu Semester/Tahun)
+  resourcesNeeded: string; // 4. Sumber Daya/ Dukungan yang Dibutuhkan
+}
+
 export interface SupervisionResult extends Syncable {
   id: string;
   assignmentId: string;
@@ -598,14 +605,17 @@ export interface SupervisionResult extends Syncable {
   score: number; // Overall score
   notes?: string; // Overall notes
   
-  // Section 1: Administrasi Perencanaan Pembelajaran
+  // Section 1: Instrumen Supervisi Persiapan Pembelajaran Mendalam (sebelumnya Administrasi Perencanaan Pembelajaran)
   planningAdmin?: {
     scores: Record<string, number>;
     comments: Record<string, string>;
     totalRealScore: number;
+    maxScore?: number;
     finalScore: number;
     predicate: string;
     coachingSuggestion?: string;
+    readinessCategory?: 'Sangat Kurang' | 'Kurang' | 'Baik' | 'Sangat Baik' | string;
+    recommendations?: DeepLearningFollowUpRecommendations;
   };
 
   // Section 2: RPP Guru
