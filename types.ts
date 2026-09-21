@@ -632,14 +632,25 @@ export interface SupervisionResult extends Syncable {
     recommendations?: DeepLearningFollowUpRecommendations;
   };
 
-  // Section 3: Pelaksanaan Pembelajaran
+  // Section 3: Instrumen Umpan Balik Perencanaan Pembelajaran Mendalam (sebelumnya Pelaksanaan Pembelajaran)
   implementation?: {
     scores: Record<string, number>;
-    comments: Record<string, string>;
+    comments: Record<string, string>; // Komentar Kritis per butir 1-15
     totalRealScore: number;
+    maxScore?: number;
     finalScore: number;
     predicate: string;
     coachingSuggestion?: string;
+    // Metadata Header Umpan Balik Perencanaan Pembelajaran
+    planningUrl?: string; // Tautan Perencanaan Pembelajaran yang ditelaah
+    level?: string; // Jenjang pada Perencanaan Pembelajaran
+    subject?: string; // Mata Pelajaran pada Perencanaan Pembelajaran
+    gradeClass?: string; // Kelas pada Perencanaan Pembelajaran
+    title?: string; // Judul Perencanaan Pembelajaran
+    // Butir reflektif No 16, 17, 18
+    advantages?: string; // No 16 . Tuliskan kelebihan Perencanaan Pembelajaran
+    areasToImprove?: string; // No 17 . Tuliskan hal yang perlu ditingkatkan dari Perencanaan Pembelajaran
+    recommendations?: string; // No 18 . Tuliskan rekomendasi dan lanjutkan dengan revisi Perencanaan Pembelajaran sesuai prinsip PM
   };
 
   // Legacy support
