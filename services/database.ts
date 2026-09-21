@@ -887,7 +887,9 @@ export const runManualSync = async (direction: 'PUSH' | 'PULL' | 'FULL', logCall
                             'eduadmin_mentoring_journals',
                             'eduadmin_graduate_assessments',
                             'eduadmin_cocurricular_journals',
-                            'eduadmin_homeroom_guidance'
+                            'eduadmin_homeroom_guidance',
+                            'eduadmin_supervision_assignments',
+                            'eduadmin_supervision_results'
                         ];
 
                         if (SAFE_MERGE_COLLECTIONS.includes(col)) {
@@ -2583,11 +2585,26 @@ export const submitPublicAssessment = async (assessment: any) => {
 // --- SUPERVISION ---
 export const toggleSupervisorStatus = async (userId: string, isSupervisor: boolean) => {
     await db.users.update(userId, { isSupervisor, lastModified: Date.now(), isSynced: false });
+    const updatedUser = await db.users.get(userId);
+    if (updatedUser) {
+        pushToTurso('eduadmin_users', [updatedUser]).then(async () => {
+            await db.users.update(userId, { isSynced: true });
+        }).catch(e => console.warn('[Supervision] Push user status queued:', e));
+    }
     triggerDebouncedSync();
 };
 
 export const getSupervisionAssignments = async (schoolNpsn: string) => {
-    return await db.supervisionAssignments.where('schoolNpsn').equals(schoolNpsn).toArray();
+    if (!schoolNpsn || schoolNpsn === 'DEFAULT') {
+        return await db.supervisionAssignments.toArray();
+    }
+    const assignments = await db.supervisionAssignments.where('schoolNpsn').equals(schoolNpsn).toArray();
+    if (assignments.length === 0) {
+        // Fallback: check if there are any assignments in local db
+        const all = await db.supervisionAssignments.toArray();
+        if (all.length > 0) return all;
+    }
+    return assignments;
 };
 
 export const getAssignmentsForSupervisor = async (supervisorId: string) => {
@@ -2602,6 +2619,24 @@ export const saveSupervisionAssignment = async (assignment: Omit<SupervisionAssi
         isSynced: false
     };
     await db.supervisionAssignments.put(item);
+    
+    // Automatically guarantee that the assigned supervisor has isSupervisor = true
+    if (assignment.supervisorId) {
+        try {
+            await db.users.update(assignment.supervisorId, { isSupervisor: true, lastModified: Date.now(), isSynced: false });
+            const supUser = await db.users.get(assignment.supervisorId);
+            if (supUser) {
+                pushToTurso('eduadmin_users', [supUser]).catch(() => {});
+            }
+        } catch (err) {
+            console.warn('[Supervision] Auto-enable supervisor role warning:', err);
+        }
+    }
+
+    pushToTurso('eduadmin_supervision_assignments', [item]).then(async () => {
+        await db.supervisionAssignments.update(item.id, { isSynced: true });
+    }).catch(e => console.warn('[Supervision] Push assignment to Turso queued:', e));
+
     triggerDebouncedSync();
     return item;
 };
@@ -2611,14 +2646,18 @@ export const deleteSupervisionAssignment = async (id: string) => {
     const results = await db.supervisionResults.where('assignmentId').equals(id).toArray();
     for (const res of results) {
         await db.supervisionResults.delete(res.id);
-        pushToTurso('eduadmin_supervision_results', [{id: res.id, deleted: true}]);
+        pushToTurso('eduadmin_supervision_results', [{id: res.id, deleted: true}]).catch(() => {});
     }
 
     await db.supervisionAssignments.delete(id);
-    pushToTurso('eduadmin_supervision_assignments', [{id, deleted: true}]);
+    pushToTurso('eduadmin_supervision_assignments', [{id, deleted: true}]).catch(() => {});
+    triggerDebouncedSync();
 };
 
 export const getSupervisionResults = async (teacherId?: string, supervisorId?: string) => {
+    if (teacherId && supervisorId) {
+        return await db.supervisionResults.where('teacherId').equals(teacherId).and(r => r.supervisorId === supervisorId).toArray();
+    }
     if (teacherId) {
         return await db.supervisionResults.where('teacherId').equals(teacherId).toArray();
     }
@@ -2629,7 +2668,15 @@ export const getSupervisionResults = async (teacherId?: string, supervisorId?: s
 };
 
 export const getSupervisionResultsForSchool = async (schoolNpsn: string) => {
-    return await db.supervisionResults.where('schoolNpsn').equals(schoolNpsn).toArray();
+    if (!schoolNpsn || schoolNpsn === 'DEFAULT') {
+        return await db.supervisionResults.toArray();
+    }
+    const results = await db.supervisionResults.where('schoolNpsn').equals(schoolNpsn).toArray();
+    if (results.length === 0) {
+        const all = await db.supervisionResults.toArray();
+        if (all.length > 0) return all;
+    }
+    return results;
 };
 
 export const getSupervisionResultByAssignment = async (assignmentId: string) => {
@@ -2658,13 +2705,11 @@ export const saveSupervisionResult = async (result: Partial<SupervisionResult> &
     }
     
     await db.supervisionResults.put(item);
-    triggerDebouncedSync();
     
-    // We don't automatically mark as COMPLETED here anymore if we want to allow ongoing edits
-    // Or we keep it as PENDING while editing?
-    // User says: "when finished saving all, supervisor still can edit"
-    // So status can be COMPLETED but supervisor still sees it.
-    
+    pushToTurso('eduadmin_supervision_results', [item]).then(async () => {
+        await db.supervisionResults.update(item.id, { isSynced: true });
+    }).catch(e => console.warn('[Supervision] Push result to Turso queued:', e));
+
     triggerDebouncedSync();
     return item;
 };
