@@ -393,6 +393,35 @@ export const getTeachersOnly = async (schoolNpsn?: string): Promise<User[]> => {
     return teachers.sort((a, b) => (a.fullName || '').localeCompare(b.fullName || ''));
 };
 
+export interface AssignedEkskulMap {
+    [ekskulLower: string]: {
+        ekskulName: string;
+        teacherId: string;
+        teacherName: string;
+    };
+}
+
+export const getAssignedExtracurriculars = async (schoolNpsn?: string, excludeUserId?: string): Promise<AssignedEkskulMap> => {
+    const teachers = await getTeachersOnly(schoolNpsn);
+    const assigned: AssignedEkskulMap = {};
+    for (const t of teachers) {
+        if (excludeUserId && t.id === excludeUserId) continue;
+        if (t.isExtracurricularAdvisor && Array.isArray(t.extracurriculars) && t.extracurriculars.length > 0) {
+            for (const item of t.extracurriculars) {
+                const clean = (item || '').trim();
+                if (clean) {
+                    assigned[clean.toLowerCase()] = {
+                        ekskulName: clean,
+                        teacherId: t.id,
+                        teacherName: t.fullName || 'Guru Lain'
+                    };
+                }
+            }
+        }
+    }
+    return assigned;
+};
+
 
 export const getSchoolJournals = async (teacherIds: string[], date: string): Promise<TeachingJournal[]> => {
     return await db.teachingJournals
