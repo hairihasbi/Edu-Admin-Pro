@@ -170,7 +170,8 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
     // Calculate real component scores from actual supervisor inputs
     const adminScores = printResult.planningAdmin?.scores || {};
     const adminPerolehan = Object.values(adminScores).reduce((acc: number, curr: any) => acc + (typeof curr === 'number' ? curr : 0), 0);
-    const adminFinalScore = printResult.planningAdmin?.finalScore ?? (Object.keys(adminScores).length ? (adminPerolehan / 24) * 100 : 0);
+    const adminMaxScore = printResult.planningAdmin?.maxScore || (Object.keys(adminScores).length > 12 ? 72 : 24);
+    const adminFinalScore = printResult.planningAdmin?.finalScore ?? (Object.keys(adminScores).length ? (adminPerolehan / adminMaxScore) * 100 : 0);
     const adminPredicate = printResult.planningAdmin?.predicate || getPredicateLabel(adminFinalScore);
 
     const rppScores = printResult.lessonPlan?.scores || {};
@@ -184,7 +185,7 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
     const implPredicate = printResult.implementation?.predicate || getPredicateLabel(implFinalScore);
 
     const totalSkorRiil = adminPerolehan + rppPerolehan + implPerolehan;
-    const totalSkorMaks = 134; // 24 + 34 + 76
+    const totalSkorMaks = adminMaxScore + 34 + 76;
     
     // Weighted / Average Final Score
     const validScores = [adminFinalScore, rppFinalScore, implFinalScore].filter(s => s > 0);
@@ -266,8 +267,8 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
         <tbody>
           <tr>
             <td style="text-align: center; font-weight: bold;">1</td>
-            <td style="font-weight: 500;">Administrasi Perencanaan Pembelajaran</td>
-            <td style="text-align: center;">24</td>
+            <td style="font-weight: 500;">Persiapan Pembelajaran Mendalam</td>
+            <td style="text-align: center;">${adminMaxScore}</td>
             <td style="text-align: center; font-weight: bold;">${adminPerolehan}</td>
             <td style="text-align: center; font-weight: bold;">${adminFinalScore.toFixed(2)}</td>
             <td style="text-align: center; font-weight: bold;">${adminPredicate}</td>
@@ -791,8 +792,8 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
                     {result.planningAdmin ? (
                       <div className="mt-4 space-y-6">
                         <div className="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm">
-                          <div className="bg-gray-50 p-3 border-b border-gray-100 flex justify-between items-center">
-                            <h5 className="text-xs font-black text-gray-500 uppercase tracking-widest">Administrasi Perencanaan Pembelajaran</h5>
+                          <div className="bg-purple-50/70 p-3 border-b border-gray-100 flex justify-between items-center">
+                            <h5 className="text-xs font-black text-purple-700 uppercase tracking-widest">Persiapan Pembelajaran Mendalam</h5>
                             <div className="flex items-center gap-2">
                               {supervisor?.id === user.id && (
                                 <button
@@ -800,16 +801,21 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
                                     e.stopPropagation();
                                     navigate(`/supervision-assessment?assignmentId=${result.assignmentId}`);
                                   }}
-                                  className="flex items-center gap-1 px-2 py-1 bg-white border border-gray-200 rounded-lg text-[10px] font-bold text-blue-600 hover:bg-blue-50 transition shadow-sm"
+                                  className="flex items-center gap-1 px-2 py-1 bg-white border border-gray-200 rounded-lg text-[10px] font-bold text-purple-700 hover:bg-purple-50 transition shadow-sm"
                                 >
                                   <Edit size={12} />
                                   Edit Penilaian
                                 </button>
                               )}
+                              {result.planningAdmin.readinessCategory && (
+                                <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
+                                  {result.planningAdmin.readinessCategory}
+                                </span>
+                              )}
                               <span className={`px-3 py-1 rounded-full text-[10px] font-black text-white ${
-                                result.planningAdmin.predicate === 'BAIK SEKALI' ? 'bg-green-500' :
-                                result.planningAdmin.predicate === 'BAIK' ? 'bg-blue-500' :
-                                result.planningAdmin.predicate === 'CUKUP' ? 'bg-yellow-500' : 'bg-red-500'
+                                result.planningAdmin.predicate === 'BAIK SEKALI' || result.planningAdmin.predicate === 'Sangat Baik' ? 'bg-green-500' :
+                                result.planningAdmin.predicate === 'BAIK' || result.planningAdmin.predicate === 'Baik' ? 'bg-blue-500' :
+                                result.planningAdmin.predicate === 'CUKUP' || result.planningAdmin.predicate === 'Kurang' ? 'bg-yellow-500' : 'bg-red-500'
                               }`}>
                                 {result.planningAdmin.predicate} ({result.planningAdmin.finalScore.toFixed(2)})
                               </span>
@@ -820,9 +826,9 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
                               <thead>
                                 <tr className="bg-gray-50/50">
                                   <th className="border-b border-r p-2 text-left w-8">No</th>
-                                  <th className="border-b border-r p-2 text-left">Komponen</th>
-                                  <th className="border-b border-r p-2 text-center w-16">Nilai</th>
-                                  <th className="border-b p-2 text-left">Catatan</th>
+                                  <th className="border-b border-r p-2 text-left">Komponen / Aspek yang Dinilai</th>
+                                  <th className="border-b border-r p-2 text-center w-16">Skor</th>
+                                  <th className="border-b p-2 text-left">Catatan/Temuan</th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -831,12 +837,46 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
                                     <td className="border-b border-r p-2 text-center">{idx + 1}</td>
                                     <td className="border-b border-r p-2 font-medium">{comp}</td>
                                     <td className="border-b border-r p-2 text-center font-bold text-purple-600">{score as React.ReactNode}</td>
-                                    <td className="border-b p-2 text-gray-500 italic">{result.planningAdmin?.comments[comp] || '-'}</td>
+                                    <td className="border-b p-2 text-gray-500 italic">{result.planningAdmin?.comments?.[comp] || '-'}</td>
                                   </tr>
                                 ))}
                               </tbody>
                             </table>
                           </div>
+
+                          {result.planningAdmin.recommendations && (
+                            <div className="p-3 bg-purple-50/40 border-t border-purple-100 space-y-2">
+                              <div className="text-[11px] font-black text-purple-900 uppercase tracking-wide">
+                                2. Rekomendasi Tindak Lanjut:
+                              </div>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[10px]">
+                                {result.planningAdmin.recommendations.weakAspects && (
+                                  <div className="p-2.5 bg-white rounded-lg border border-purple-100 shadow-2xs">
+                                    <span className="font-bold text-gray-700 block mb-0.5">1. Aspek Lemah:</span>
+                                    <span className="text-gray-600 whitespace-pre-line">{result.planningAdmin.recommendations.weakAspects}</span>
+                                  </div>
+                                )}
+                                {result.planningAdmin.recommendations.shortTermStrategy && (
+                                  <div className="p-2.5 bg-white rounded-lg border border-purple-100 shadow-2xs">
+                                    <span className="font-bold text-gray-700 block mb-0.5">2. Strategi Jangka Pendek:</span>
+                                    <span className="text-gray-600 whitespace-pre-line">{result.planningAdmin.recommendations.shortTermStrategy}</span>
+                                  </div>
+                                )}
+                                {result.planningAdmin.recommendations.longTermStrategy && (
+                                  <div className="p-2.5 bg-white rounded-lg border border-purple-100 shadow-2xs">
+                                    <span className="font-bold text-gray-700 block mb-0.5">3. Strategi Jangka Panjang:</span>
+                                    <span className="text-gray-600 whitespace-pre-line">{result.planningAdmin.recommendations.longTermStrategy}</span>
+                                  </div>
+                                )}
+                                {result.planningAdmin.recommendations.resourcesNeeded && (
+                                  <div className="p-2.5 bg-white rounded-lg border border-purple-100 shadow-2xs">
+                                    <span className="font-bold text-gray-700 block mb-0.5">4. Dukungan/Sumber Daya:</span>
+                                    <span className="text-gray-600 whitespace-pre-line">{result.planningAdmin.recommendations.resourcesNeeded}</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
                         </div>
 
                         {result.lessonPlan && (

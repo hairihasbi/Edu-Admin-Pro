@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, SupervisionAssignment } from '../types';
 import { Printer, X, FileText, School, User as UserIcon, Calendar, CheckCircle } from './Icons';
+import { DEEP_LEARNING_SUPERVISION_ITEMS } from './deepLearningSupervisionConstants';
 
 export const PLANNING_ADMIN_COMPONENTS = [
   "Kalender Pendidikan",
@@ -313,67 +314,101 @@ export const PrintManualSupervisionModal: React.FC<PrintManualSupervisionModalPr
       </div>
     `;
 
-    // Section 1: Administrasi Perencanaan Pembelajaran
+    // Section 1: Instrumen Supervisi Persiapan Pembelajaran Mendalam
     const section1Html = `
       <div class="instrument-section">
         ${letterheadHtml}
-        <h2 class="doc-title">INSTRUMEN SUPERVISI AKADEMIK</h2>
-        <div class="doc-subtitle">BAGIAN I: ADMINISTRASI PERENCANAAN PEMBELAJARAN</div>
+        <h2 class="doc-title">INSTRUMEN SUPERVISI</h2>
+        <div class="doc-subtitle">PERSIAPAN PEMBELAJARAN MENDALAM</div>
         
         ${identityHtml}
 
-        <div class="instructions-box">
-          <strong>Petunjuk Pengisian:</strong><br>
-          Berilah tanda centang (✓) atau lingkari skor pada kolom yang sesuai dengan kriteria berikut:<br>
-          <strong>0</strong> = Tidak Ada / Tidak Sedia &nbsp;&nbsp;|&nbsp;&nbsp; 
-          <strong>1</strong> = Kurang Lengkap / Kurang Sesuai &nbsp;&nbsp;|&nbsp;&nbsp; 
-          <strong>2</strong> = Lengkap / Sesuai Standar
+        <div style="font-weight: bold; font-size: 10pt; margin: 10px 0 6px 0; color: #111;">
+          1. Instrumen Penilaian
         </div>
 
         <table class="data-table">
           <thead>
             <tr>
-              <th width="35">No</th>
-              <th>Komponen Administrasi Perencanaan</th>
-              <th width="120">Kriteria Skor<br><span style="font-size: 8pt; font-weight: normal;">(0 = Tidak, 1 = Kurang, 2 = Lengkap)</span></th>
-              <th width="230">Catatan / Saran Masukan Perbaikan</th>
+              <th width="30">No</th>
+              <th width="125">Komponen yang Dimonitor</th>
+              <th width="125">Indikator</th>
+              <th>Pertanyaan/Aspek yang Dinilai</th>
+              <th width="75">Skor (1–4)*</th>
+              <th width="160">Catatan/Temuan</th>
             </tr>
           </thead>
           <tbody>
-            ${PLANNING_ADMIN_COMPONENTS.map((comp, idx) => `
+            ${DEEP_LEARNING_SUPERVISION_ITEMS.map((item) => `
               <tr>
-                <td style="text-align: center; font-weight: bold;">${idx + 1}</td>
-                <td style="font-weight: 500;">${comp}</td>
-                <td style="text-align: center;">
-                  <div class="score-manual-boxes">
-                    <span>[ &nbsp; ] 0</span>
+                ${item.isFirstInGroup ? `
+                  <td rowspan="${item.groupRowSpan}" style="text-align: center; font-weight: bold; vertical-align: top; background: #fafafa;">${item.groupLetter}</td>
+                  <td rowspan="${item.groupRowSpan}" style="font-weight: 600; vertical-align: top; background: #fafafa;">${item.component}</td>
+                ` : ''}
+                <td style="font-weight: 500; vertical-align: top;">${item.indicator}</td>
+                <td style="vertical-align: top;">${item.question}</td>
+                <td style="text-align: center; vertical-align: top;">
+                  <div class="score-manual-boxes" style="display: flex; flex-direction: column; gap: 2px; align-items: flex-start; padding-left: 6px;">
                     <span>[ &nbsp; ] 1</span>
                     <span>[ &nbsp; ] 2</span>
+                    <span>[ &nbsp; ] 3</span>
+                    <span>[ &nbsp; ] 4</span>
                   </div>
                 </td>
-                <td class="notes-line"></td>
+                <td class="notes-line" style="vertical-align: top;"></td>
               </tr>
             `).join('')}
           </tbody>
           <tfoot>
-            <tr style="font-weight: bold; background: #fafafa;">
-              <td colspan="2" style="text-align: right;">JUMLAH SKOR RIIL PEROLEHAN</td>
-              <td style="text-align: center; font-size: 11pt;">...............</td>
-              <td style="font-size: 8pt; color: #555;">(Maksimum Skor Ideal = 24)</td>
+            <tr style="background: #fafafa; font-size: 8.5pt;">
+              <td colspan="6" style="padding: 6px 8px; border: 1px solid #333;">
+                <strong>Keterangan Skor:</strong> 
+                1 = Tidak ada &nbsp;|&nbsp; 
+                2 = Ada tetapi belum lengkap &nbsp;|&nbsp; 
+                3 = Lengkap namun belum optimal &nbsp;|&nbsp; 
+                4 = Lengkap dan sangat baik
+              </td>
             </tr>
             <tr style="font-weight: bold; background: #fafafa;">
-              <td colspan="2" style="text-align: right;">NILAI AKHIR = (Skor Riil / 24) x 100</td>
-              <td style="text-align: center; font-size: 11pt;">...............</td>
-              <td style="text-align: center; font-size: 9pt;">
-                Predikat: [ &nbsp; ] A (Amat Baik) &nbsp; [ &nbsp; ] B (Baik) &nbsp; [ &nbsp; ] C (Cukup) &nbsp; [ &nbsp; ] D (Kurang)
+              <td colspan="4" style="text-align: right;">Total Skor: ................ / 80 &nbsp;&nbsp;(Skor Riil: ................ / 72)</td>
+              <td colspan="2" style="font-size: 8.5pt;">
+                Kategori Kesiapan: [ &nbsp; ] Sangat Kurang &nbsp;&nbsp; [ &nbsp; ] Kurang &nbsp;&nbsp; [ &nbsp; ] Baik &nbsp;&nbsp; [ &nbsp; ] Sangat Baik
               </td>
             </tr>
           </tfoot>
         </table>
 
-        <div class="coaching-manual-box">
-          <strong>Catatan Pembinaan / Rekomendasi Tindak Lanjut Administrasi Perencanaan:</strong>
-          <div class="manual-lined-area">
+        <div style="font-weight: bold; font-size: 10pt; margin: 16px 0 8px 0; color: #111;">
+          2. Rekomendasi Tindak Lanjut
+        </div>
+
+        <div class="coaching-manual-box" style="margin-bottom: 8px;">
+          <strong>1. Penguatan pada Aspek yang Lemah:</strong>
+          <div class="manual-lined-area" style="min-height: 44px;">
+            <div class="write-line"></div>
+            <div class="write-line"></div>
+          </div>
+        </div>
+
+        <div class="coaching-manual-box" style="margin-bottom: 8px;">
+          <strong>2. Strategi Perbaikan Jangka Pendek (1–4 Minggu):</strong>
+          <div class="manual-lined-area" style="min-height: 44px;">
+            <div class="write-line"></div>
+            <div class="write-line"></div>
+          </div>
+        </div>
+
+        <div class="coaching-manual-box" style="margin-bottom: 8px;">
+          <strong>3. Strategi Pengembangan Jangka Panjang (Satu Semester/Tahun):</strong>
+          <div class="manual-lined-area" style="min-height: 44px;">
+            <div class="write-line"></div>
+            <div class="write-line"></div>
+          </div>
+        </div>
+
+        <div class="coaching-manual-box" style="margin-bottom: 12px;">
+          <strong>4. Sumber Daya/ Dukungan yang Dibutuhkan:</strong>
+          <div class="manual-lined-area" style="min-height: 44px;">
             <div class="write-line"></div>
             <div class="write-line"></div>
           </div>
@@ -790,8 +825,8 @@ export const PrintManualSupervisionModal: React.FC<PrintManualSupervisionModalPr
               >
                 <CheckCircle size={18} className={instrumentType === 'PLANNING' ? 'text-purple-600' : 'text-gray-400'} />
                 <div>
-                  <div className="text-xs font-bold text-gray-800">Bagian I: Administrasi Perencanaan</div>
-                  <div className="text-[10px] text-gray-500">12 Komponen Perangkat Pembelajaran</div>
+                  <div className="text-xs font-bold text-gray-800">Bagian I: Persiapan Pembelajaran Mendalam</div>
+                  <div className="text-[10px] text-gray-500">18 Indikator Evaluasi & 4 Rekomendasi Tindak Lanjut</div>
                 </div>
               </button>
 
