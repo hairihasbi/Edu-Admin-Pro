@@ -3,15 +3,17 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { User, SupervisionAssignment, SupervisionResult, DeepLearningFollowUpRecommendations } from '../types';
 import { getSchoolTeachers, saveSupervisionResult, getSupervisionResultByAssignment, updateSupervisionAssignmentStatus, getSupervisionAssignments, runManualSync } from '../services/database';
-import { ClipboardCheck, User as UserIcon, Calendar, CheckCircle, AlertCircle, Loader2, ChevronRight, Save, Star, Printer, Filter, Search, RefreshCcw, Shield } from './Icons';
+import { ClipboardCheck, User as UserIcon, Calendar, CheckCircle, AlertCircle, Loader2, ChevronRight, Save, Star, Printer, Filter, Search, RefreshCcw, Shield, ExternalLink, Globe } from './Icons';
 import { PrintManualSupervisionModal } from './PrintManualSupervisionModal';
 import { 
   DEEP_LEARNING_SUPERVISION_ITEMS, 
   DEEP_LEARNING_IMPLEMENTATION_SUPERVISION_ITEMS,
+  DEEP_LEARNING_FEEDBACK_PLANNING_ITEMS,
   SCORE_DESCRIPTIONS, 
   FOLLOW_UP_QUESTIONS, 
   calculateDeepLearningScore,
-  calculateDeepLearningImplementationScore 
+  calculateDeepLearningImplementationScore,
+  calculateDeepLearningFeedbackScore 
 } from './deepLearningSupervisionConstants';
 
 interface SupervisionAssessmentProps {
@@ -123,9 +125,17 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
   const [lessonPlanReadinessCategory, setLessonPlanReadinessCategory] = useState<'Sangat Kurang' | 'Kurang' | 'Baik' | 'Sangat Baik'>('Sangat Kurang');
   const [lessonPlanCoaching, setLessonPlanCoaching] = useState('');
 
-  // Tab 3: Pelaksanaan Pembelajaran
+  // Tab 3: Instrumen Umpan Balik Perencanaan Pembelajaran Mendalam
+  const [implPlanningUrl, setImplPlanningUrl] = useState('');
+  const [implLevel, setImplLevel] = useState('');
+  const [implSubject, setImplSubject] = useState('');
+  const [implGradeClass, setImplGradeClass] = useState('');
+  const [implTitle, setImplTitle] = useState('');
   const [implScores, setImplScores] = useState<Record<string, number>>({});
   const [implComments, setImplComments] = useState<Record<string, string>>({});
+  const [implAdvantages, setImplAdvantages] = useState('');
+  const [implAreasToImprove, setImplAreasToImprove] = useState('');
+  const [implRecommendations, setImplRecommendations] = useState('');
   const [implCoaching, setImplCoaching] = useState('');
 
   // Tab 3: Legacy/Placeholder state
@@ -292,16 +302,27 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
         }
         setLessonPlanCoaching(existingLesson?.coachingSuggestion || '');
 
-        // Load Tab 3
-        setImplScores(existing.implementation?.scores || {});
-        setImplComments(existing.implementation?.comments || {});
-        setImplCoaching(existing.implementation?.coachingSuggestion || '');
+        // Load Tab 3: Instrumen Umpan Balik Perencanaan Pembelajaran Mendalam
+        const existingImpl = existing.implementation;
+        const currentTeacher = teachers.find(t => t.id === assignment.teacherId);
+        setImplPlanningUrl(existingImpl?.planningUrl || '');
+        setImplLevel(existingImpl?.level || '');
+        setImplSubject(existingImpl?.subject || currentTeacher?.subject || '');
+        setImplGradeClass(existingImpl?.gradeClass || '');
+        setImplTitle(existingImpl?.title || '');
+        setImplScores(existingImpl?.scores || {});
+        setImplComments(existingImpl?.comments || {});
+        setImplAdvantages(existingImpl?.advantages || '');
+        setImplAreasToImprove(existingImpl?.areasToImprove || '');
+        setImplRecommendations(existingImpl?.recommendations || '');
+        setImplCoaching(existingImpl?.coachingSuggestion || '');
 
         // Load Legacy/Notes
         setScores({}); // Aspect scores are legacy
         setComments({});
         setGeneralNotes(existing.notes || '');
       } else {
+        const currentTeacher = teachers.find(t => t.id === assignment.teacherId);
         // Reset Tab 1: Persiapan Pembelajaran Mendalam
         const initialPlanningScores: Record<string, number> = {};
         DEEP_LEARNING_SUPERVISION_ITEMS.forEach(c => { initialPlanningScores[c.id] = 0; });
@@ -330,11 +351,19 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
         setLessonPlanReadinessCategory('Sangat Kurang');
         setLessonPlanCoaching('');
 
-        // Reset Tab 3
+        // Reset Tab 3: Instrumen Umpan Balik Perencanaan Pembelajaran Mendalam
         const initialImplScores: Record<string, number> = {};
-        IMPLEMENTATION_COMPONENTS.forEach(c => { initialImplScores[c] = 1; });
+        DEEP_LEARNING_FEEDBACK_PLANNING_ITEMS.forEach(c => { initialImplScores[c.id] = 0; });
+        setImplPlanningUrl('');
+        setImplLevel('');
+        setImplSubject(currentTeacher?.subject || '');
+        setImplGradeClass('');
+        setImplTitle('');
         setImplScores(initialImplScores);
         setImplComments({});
+        setImplAdvantages('');
+        setImplAreasToImprove('');
+        setImplRecommendations('');
         setImplCoaching('');
 
         // Reset Legacy
@@ -375,15 +404,7 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
   };
 
   const calculateImplementationResults = () => {
-    const totalRealScore = Object.values(implScores).reduce((a, b) => a + b, 0);
-    const finalScore = (totalRealScore / 76) * 100; // 19 components * 4
-    
-    let predicate = 'KURANG';
-    if (finalScore > 90) predicate = 'BAIK SEKALI';
-    else if (finalScore > 75) predicate = 'BAIK';
-    else if (finalScore > 60) predicate = 'CUKUP';
-
-    return { totalRealScore, finalScore, predicate };
+    return calculateDeepLearningFeedbackScore(implScores);
   };
 
   const handleSaveTab = async () => {
@@ -429,14 +450,23 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
           scores: implScores,
           comments: implComments,
           totalRealScore: implData.totalRealScore,
+          maxScore: implData.maxScore,
           finalScore: implData.finalScore,
           predicate: implData.predicate,
-          coachingSuggestion: implCoaching
+          coachingSuggestion: implRecommendations || implAreasToImprove || implCoaching,
+          planningUrl: implPlanningUrl,
+          level: implLevel,
+          subject: implSubject,
+          gradeClass: implGradeClass,
+          title: implTitle,
+          advantages: implAdvantages,
+          areasToImprove: implAreasToImprove,
+          recommendations: implRecommendations
         }
       };
 
       await saveSupervisionResult(result);
-      setSuccessMessage(`Progres ${activeTab === 'PLANNING' ? 'Persiapan Pembelajaran Mendalam' : activeTab === 'RPP' ? 'Pelaksanaan Pembelajaran Mendalam' : 'Pelaksanaan'} berhasil disimpan!`);
+      setSuccessMessage(`Progres ${activeTab === 'PLANNING' ? 'Persiapan Pembelajaran Mendalam' : activeTab === 'RPP' ? 'Pelaksanaan Pembelajaran Mendalam' : 'Umpan Balik Perencanaan Pembelajaran Mendalam'} berhasil disimpan!`);
       setTimeout(() => setSuccessMessage(''), 3000);
     } catch (error) {
       console.error("Failed to save progress:", error);
@@ -675,7 +705,7 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
                     activeTab === 'IMPLEMENTATION' ? 'text-purple-600 border-b-2 border-purple-600 bg-purple-50/30' : 'text-gray-400 hover:text-gray-600'
                   }`}
                 >
-                  Pelaksanaan Pembelajaran
+                  Umpan Balik Perencanaan Pembelajaran Mendalam
                 </button>
               </div>
 
@@ -684,7 +714,7 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
                   <h3 className="font-bold text-gray-800">
                     {activeTab === 'PLANNING' && "INSTRUMEN SUPERVISI PERSIAPAN PEMBELAJARAN MENDALAM"}
                     {activeTab === 'RPP' && "INSTRUMEN SUPERVISI PELAKSANAAN PEMBELAJARAN MENDALAM"}
-                    {activeTab === 'IMPLEMENTATION' && "Supervisi Pelaksanaan Pembelajaran"}
+                    {activeTab === 'IMPLEMENTATION' && "INSTRUMEN UMPAN BALIK PERENCANAAN PEMBELAJARAN MENDALAM"}
                   </h3>
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500 mt-1">
                     <div>
@@ -1371,56 +1401,167 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
 
                 {activeTab === 'IMPLEMENTATION' && (
                   <div className="space-y-6">
-                    <div className="overflow-x-auto">
+                    {/* Header Card: Metadata Perencanaan Pembelajaran */}
+                    <div className="bg-gradient-to-r from-purple-50/70 via-indigo-50/40 to-blue-50/50 p-5 rounded-2xl border border-purple-100 shadow-sm space-y-4">
+                      <div className="border-b border-purple-100/80 pb-3">
+                        <h4 className="text-sm font-black text-purple-900 uppercase tracking-wider flex items-center gap-2">
+                          <ClipboardCheck size={18} className="text-purple-600" />
+                          Informasi Perencanaan Pembelajaran yang Ditelaah
+                        </h4>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          Supervisor dapat mengisi atau menyesuaikan identitas dan tautan perencanaan pembelajaran yang ditelaah.
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
+                        <div className="md:col-span-2 lg:col-span-3">
+                          <label className="block font-bold text-gray-700 mb-1">
+                            Tautan Perencanaan Pembelajaran yang Ditelaah:
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <div className="relative flex-1">
+                              <Globe size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                              <input
+                                type="url"
+                                placeholder="https://drive.google.com/... atau tautan modul/RPP online"
+                                className="w-full pl-9 pr-3 py-2 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-purple-500 text-xs font-medium text-gray-800 placeholder:text-gray-400"
+                                value={implPlanningUrl}
+                                onChange={(e) => setImplPlanningUrl(e.target.value)}
+                              />
+                            </div>
+                            {implPlanningUrl && (
+                              <a
+                                href={implPlanningUrl.startsWith('http') ? implPlanningUrl : `https://${implPlanningUrl}`}
+                                target="_blank"
+                                rel="noreferrer noopener"
+                                className="flex items-center gap-1.5 px-3 py-2 bg-purple-600 text-white font-bold rounded-xl hover:bg-purple-700 transition shadow-sm text-xs whitespace-nowrap"
+                              >
+                                <ExternalLink size={13} />
+                                Buka Tautan
+                              </a>
+                            )}
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block font-bold text-gray-700 mb-1">
+                            Jenjang pada Perencanaan Pembelajaran:
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="Contoh: SMA / SMK / SMP / SD / Fase E"
+                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-purple-500 text-xs text-gray-800"
+                            value={implLevel}
+                            onChange={(e) => setImplLevel(e.target.value)}
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block font-bold text-gray-700 mb-1">
+                            Mata Pelajaran pada Perencanaan Pembelajaran:
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="Contoh: Informatika / Matematika / Bahasa Indonesia"
+                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-purple-500 text-xs text-gray-800 font-semibold"
+                            value={implSubject}
+                            onChange={(e) => setImplSubject(e.target.value)}
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block font-bold text-gray-700 mb-1">
+                            Kelas pada Perencanaan Pembelajaran:
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="Contoh: X-A / XI MIPA 1 / VII"
+                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-purple-500 text-xs text-gray-800"
+                            value={implGradeClass}
+                            onChange={(e) => setImplGradeClass(e.target.value)}
+                          />
+                        </div>
+
+                        <div className="md:col-span-2 lg:col-span-3">
+                          <label className="block font-bold text-gray-700 mb-1">
+                            Judul Perencanaan Pembelajaran:
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="Contoh: Modul Ajar Penerapan Algoritma dan Struktur Data dalam Pemecahan Masalah Nyata"
+                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-purple-500 text-xs font-semibold text-gray-800"
+                            value={implTitle}
+                            onChange={(e) => setImplTitle(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Scale Guide */}
+                    <div className="bg-amber-50/60 border border-amber-200/80 p-3.5 rounded-xl text-xs flex flex-col md:flex-row md:items-center justify-between gap-2 text-amber-900">
+                      <div className="font-bold flex items-center gap-1.5">
+                        <Star size={14} className="text-amber-600 fill-amber-600" />
+                        Panduan Skala Penilaian:
+                      </div>
+                      <div className="flex flex-wrap items-center gap-3 text-[11px]">
+                        <span className="bg-white/80 px-2 py-0.5 rounded border border-amber-200"><strong>1</strong> = Hampir tidak ada</span>
+                        <span className="bg-white/80 px-2 py-0.5 rounded border border-amber-200"><strong>2</strong> = Sedikit dan lemah</span>
+                        <span className="bg-white/80 px-2 py-0.5 rounded border border-amber-200"><strong>3</strong> = Cukup</span>
+                        <span className="bg-white/80 px-2 py-0.5 rounded border border-amber-200"><strong>4</strong> = Memadai</span>
+                      </div>
+                    </div>
+
+                    {/* Table of 15 Feedback Items */}
+                    <div className="overflow-x-auto rounded-xl border border-gray-200 shadow-sm">
                       <table className="w-full border-collapse text-xs">
                         <thead>
-                          <tr className="bg-gray-100 text-gray-700">
-                            <th className="border p-3 text-center w-12">No</th>
-                            <th className="border p-3 text-left">Komponen</th>
-                            <th className="border p-3 text-center w-56">Skor (1-4)</th>
-                            <th className="border p-3 text-left">Catatan / Penguatan</th>
+                          <tr className="bg-gradient-to-r from-purple-800 to-indigo-800 text-white">
+                            <th className="border-b border-purple-700 p-3 text-center w-12 font-bold">No</th>
+                            <th className="border-b border-purple-700 p-3 text-left font-bold min-w-[280px]">
+                              Aspek yang Diamati
+                            </th>
+                            <th className="border-b border-purple-700 p-3 text-left font-bold min-w-[260px]">
+                              Komentar Kritis
+                            </th>
+                            <th className="border-b border-purple-700 p-3 text-center font-bold w-48 whitespace-nowrap">
+                              Skor (1 - 4)
+                            </th>
                           </tr>
                         </thead>
-                        <tbody>
-                          {IMPLEMENTATION_COMPONENTS.map((comp, idx) => (
-                            <React.Fragment key={idx}>
-                              {idx === 0 && (
-                                <tr className="bg-gray-50 font-bold text-blue-700">
-                                  <td className="border p-2 text-center">A</td>
-                                  <td colSpan={3} className="border p-2">KEGIATAN PENDAHULUAN</td>
-                                </tr>
-                              )}
-                              {idx === 5 && (
-                                <tr className="bg-gray-50 font-bold text-blue-700">
-                                  <td className="border p-2 text-center">B</td>
-                                  <td colSpan={3} className="border p-2">KEGIATAN INTI</td>
-                                </tr>
-                              )}
-                              {idx === 11 && (
-                                <tr className="bg-gray-50 font-bold text-blue-700">
-                                  <td className="border p-2 text-center">C</td>
-                                  <td colSpan={3} className="border p-2">KEGIATAN PENUTUP</td>
-                                </tr>
-                              )}
-                              {idx === 15 && (
-                                <tr className="bg-gray-50 font-bold text-blue-700">
-                                  <td className="border p-2 text-center">D</td>
-                                  <td colSpan={3} className="border p-2">KEGIATAN PENILAIAN HASIL BELAJAR</td>
-                                </tr>
-                              )}
-                              <tr className="hover:bg-gray-50">
-                                <td className="border p-3 text-center font-medium">{idx + 1}</td>
-                                <td className="border p-3 font-bold text-gray-800">{comp}</td>
-                                <td className="border p-3">
-                                  <div className="flex justify-center gap-2">
+                        <tbody className="divide-y divide-gray-100 bg-white">
+                          {DEEP_LEARNING_FEEDBACK_PLANNING_ITEMS.map((item) => {
+                            const score = implScores[item.id] ?? 0;
+                            return (
+                              <tr key={item.id} className="hover:bg-purple-50/30 transition-colors">
+                                <td className="p-3 text-center font-bold text-gray-600 bg-gray-50/50 align-top">
+                                  {item.number}
+                                </td>
+                                <td className="p-3 text-gray-800 leading-relaxed align-top">
+                                  <span className="font-semibold text-gray-900">{item.aspect}</span>
+                                </td>
+                                <td className="p-3 align-top">
+                                  <textarea
+                                    placeholder="Tuliskan komentar kritis supervisor terhadap aspek ini..."
+                                    rows={2}
+                                    className="w-full p-2 bg-gray-50/70 border border-gray-200 rounded-lg text-xs outline-none focus:bg-white focus:ring-2 focus:ring-purple-400 focus:border-transparent transition resize-y"
+                                    value={implComments[item.id] || ''}
+                                    onChange={(e) => setImplComments(prev => ({ ...prev, [item.id]: e.target.value }))}
+                                  />
+                                </td>
+                                <td className="p-3 align-middle text-center">
+                                  <div className="flex items-center justify-center gap-1.5">
                                     {[1, 2, 3, 4].map(val => (
                                       <button
                                         key={val}
-                                        onClick={() => setImplScores(prev => ({ ...prev, [comp]: val }))}
-                                        className={`w-8 h-8 rounded-full font-bold transition ${
-                                          implScores[comp] === val 
-                                            ? 'bg-green-600 text-white shadow-md' 
-                                            : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+                                        type="button"
+                                        onClick={() => setImplScores(prev => ({ ...prev, [item.id]: val }))}
+                                        className={`w-8 h-8 rounded-lg font-bold text-xs transition shadow-sm ${
+                                          score === val 
+                                            ? 'bg-purple-600 text-white ring-2 ring-purple-300 scale-105' 
+                                            : 'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-800'
+                                        }`}
+                                        title={`Skor ${val}: ${
+                                          val === 1 ? 'Hampir tidak ada' : val === 2 ? 'Sedikit dan lemah' : val === 3 ? 'Cukup' : 'Memadai'
                                         }`}
                                       >
                                         {val}
@@ -1428,63 +1569,118 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
                                     ))}
                                   </div>
                                 </td>
-                                <td className="border p-3">
-                                  <input
-                                    type="text"
-                                    placeholder="..."
-                                    className="w-full bg-transparent outline-none border-b border-transparent focus:border-green-300"
-                                    value={implComments[comp] || ''}
-                                    onChange={(e) => setImplComments(prev => ({ ...prev, [comp]: e.target.value }))}
-                                  />
-                                </td>
                               </tr>
-                            </React.Fragment>
-                          ))}
+                            );
+                          })}
                         </tbody>
-                        <tfoot className="bg-gray-50 font-bold">
+                        <tfoot className="bg-gray-50 font-bold border-t-2 border-gray-200">
                           <tr>
-                            <td colSpan={2} className="border p-3 text-right text-gray-500">JUMLAH SKOR RIIL</td>
-                            <td className="border p-3 text-center text-green-600 text-lg">
-                              {Object.values(implScores).reduce((a, b) => a + b, 0)}
+                            <td colSpan={2} className="p-3 text-right text-gray-600">
+                              JUMLAH SKOR RIIL (Maksimal: 60)
                             </td>
-                            <td className="border p-3"></td>
+                            <td className="p-3 text-gray-500 font-normal italic text-right">
+                              Total Terisi: {Object.keys(implScores).filter(k => (implScores[k] || 0) > 0).length} / 15 Aspek
+                            </td>
+                            <td className="p-3 text-center text-purple-700 text-base font-black">
+                              {calculateImplementationResults().totalRealScore} / 60
+                            </td>
                           </tr>
-                          <tr>
-                            <td colSpan={2} className="border p-3 text-right text-gray-500">JUMLAH SKOR IDEAL</td>
-                            <td className="border p-3 text-center">76</td>
-                            <td className="border p-3"></td>
-                          </tr>
-                          <tr>
-                            <td colSpan={2} className="border p-3 text-right">NILAI AKHIR</td>
-                            <td className="border p-3 text-center text-blue-600 text-lg">
+                          <tr className="bg-purple-50/50">
+                            <td colSpan={2} className="p-3 text-right text-purple-900">
+                              NILAI AKHIR = (Skor Riil / 60) × 100
+                            </td>
+                            <td className="p-3 text-right text-purple-900 text-base font-black">
                               {calculateImplementationResults().finalScore.toFixed(2)}
                             </td>
-                            <td className="border p-3 bg-black text-white text-center uppercase tracking-widest">
-                              {calculateImplementationResults().predicate}
+                            <td className="p-3 text-center">
+                              <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold tracking-wider ${
+                                calculateImplementationResults().finalScore >= 86
+                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                  : calculateImplementationResults().finalScore >= 70
+                                  ? 'bg-blue-100 text-blue-800 border border-blue-300'
+                                  : calculateImplementationResults().finalScore >= 55
+                                  ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                                  : 'bg-rose-100 text-rose-800 border border-rose-300'
+                              }`}>
+                                {calculateImplementationResults().predicate}
+                              </span>
                             </td>
                           </tr>
                         </tfoot>
                       </table>
                     </div>
 
-                    <div className="pt-6 border-t border-gray-100">
-                      <label className="block text-sm font-bold text-gray-800 mb-2">Saran Pembinaan</label>
-                      <textarea
-                        placeholder="Berikan saran pembinaan pelaksanaan pembelajaran untuk guru..."
-                        className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-green-500"
-                        rows={4}
-                        value={implCoaching}
-                        onChange={(e) => setImplCoaching(e.target.value)}
-                      />
+                    {/* Section Butir 16, 17, 18 Refleksi Kualitatif Manual */}
+                    <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-5">
+                      <div className="border-b border-gray-100 pb-3">
+                        <h4 className="text-sm font-black text-gray-900 uppercase tracking-wider flex items-center gap-2">
+                          <CheckCircle size={18} className="text-indigo-600" />
+                          Umpan Balik Kualitatif & Rekomendasi Tindak Lanjut
+                        </h4>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          Isian butir reflektif nomor 16, 17, dan 18 dapat ditulis secara mandiri oleh supervisor.
+                        </p>
+                      </div>
+
+                      {/* No 16 */}
+                      <div className="space-y-1.5">
+                        <label className="block text-xs font-black text-gray-800">
+                          No 16 . Tuliskan kelebihan Perencanaan Pembelajaran:
+                        </label>
+                        <textarea
+                          placeholder="Tuliskan kelebihan, kekuatan, dan praktik baik dari perencanaan pembelajaran yang ditelaah..."
+                          rows={3}
+                          className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+                          value={implAdvantages}
+                          onChange={(e) => setImplAdvantages(e.target.value)}
+                        />
+                      </div>
+
+                      {/* No 17 */}
+                      <div className="space-y-1.5">
+                        <label className="block text-xs font-black text-gray-800">
+                          No 17 . Tuliskan hal yang perlu ditingkatkan dari Perencanaan Pembelajaran:
+                        </label>
+                        <textarea
+                          placeholder="Tuliskan aspek atau indikator yang masih perlu ditingkatkan, dilengkapi, atau dioptimalkan..."
+                          rows={3}
+                          className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+                          value={implAreasToImprove}
+                          onChange={(e) => setImplAreasToImprove(e.target.value)}
+                        />
+                      </div>
+
+                      {/* No 18 */}
+                      <div className="space-y-1.5">
+                        <label className="block text-xs font-black text-gray-800">
+                          No 18 . Tuliskan rekomendasi dan lanjutkan dengan revisi Perencanaan Pembelajaran sesuai prinsip PM:
+                        </label>
+                        <textarea
+                          placeholder="Tuliskan rekomendasi perbaikan dan langkah konkret revisi perencanaan pembelajaran sesuai prinsip Pembelajaran Mendalam (PM)..."
+                          rows={4}
+                          className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+                          value={implRecommendations}
+                          onChange={(e) => setImplRecommendations(e.target.value)}
+                        />
+                      </div>
                     </div>
 
-                    <div className="bg-green-50 p-4 rounded-xl border border-green-100">
-                      <h5 className="text-xs font-black text-green-600 uppercase mb-2 tracking-widest text-center">Instrumen Supervisi Pelaksanaan Pembelajaran</h5>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-2">
-                        <div className="text-[10px]"><span className="font-bold">A (Baik Sekali):</span> 90.01 - 100.00</div>
-                        <div className="text-[10px]"><span className="font-bold">B (Baik):</span> 75.01 - 90.00</div>
-                        <div className="text-[10px]"><span className="font-bold">C (Cukup):</span> 60.01 - 75.00</div>
-                        <div className="text-[10px]"><span className="font-bold">D (Kurang):</span> 0.00 - 60.00</div>
+                    {/* Tanda Tangan: Hanya Pemberi Umpan Balik (Supervisor) */}
+                    <div className="bg-gray-50/70 p-6 rounded-2xl border border-gray-200">
+                      <div className="flex flex-col sm:flex-row justify-end items-center">
+                        <div className="text-center min-w-[260px] space-y-12">
+                          <p className="font-semibold text-gray-700 text-xs">
+                            Pemberi Umpan Balik,
+                          </p>
+                          <div className="pt-2">
+                            <p className="font-bold underline text-gray-900 text-xs">
+                              {teachers.find(t => t.id === selectedAssignment.supervisorId)?.fullName || user.fullName}
+                            </p>
+                            <p className="text-gray-500 text-[11px] mt-0.5">
+                              NIP. {teachers.find(t => t.id === selectedAssignment.supervisorId)?.nip || user.nip || '-'}
+                            </p>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>

@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { User, SupervisionResult } from '../types';
 import { getSupervisionResults, getSupervisionResultsForSchool, getSchoolTeachers, runManualSync } from '../services/database';
 import { ClipboardCheck, User as UserIcon, Calendar, Star, ChevronDown, ChevronUp, Search, Filter, Loader2, AlertCircle, Shield, Pencil as Edit, Printer, X, RefreshCcw, FileText } from './Icons';
+import { DEEP_LEARNING_SUPERVISION_ITEMS, DEEP_LEARNING_IMPLEMENTATION_SUPERVISION_ITEMS, DEEP_LEARNING_FEEDBACK_PLANNING_ITEMS } from './deepLearningSupervisionConstants';
 
 interface SupervisionResultsProps {
   user: User;
@@ -176,16 +177,18 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
 
     const rppScores = printResult.lessonPlan?.scores || {};
     const rppPerolehan = Object.values(rppScores).reduce((acc: number, curr: any) => acc + (typeof curr === 'number' ? curr : 0), 0);
-    const rppFinalScore = printResult.lessonPlan?.finalScore ?? (Object.keys(rppScores).length ? (rppPerolehan / 34) * 100 : 0);
+    const rppMaxScore = printResult.lessonPlan?.maxScore || (Object.keys(rppScores).length > 15 ? 68 : 34);
+    const rppFinalScore = printResult.lessonPlan?.finalScore ?? (Object.keys(rppScores).length ? (rppPerolehan / rppMaxScore) * 100 : 0);
     const rppPredicate = printResult.lessonPlan?.predicate || getPredicateLabel(rppFinalScore);
 
     const implScores = printResult.implementation?.scores || {};
     const implPerolehan = Object.values(implScores).reduce((acc: number, curr: any) => acc + (typeof curr === 'number' ? curr : 0), 0);
-    const implFinalScore = printResult.implementation?.finalScore ?? (Object.keys(implScores).length ? (implPerolehan / 76) * 100 : 0);
+    const implMaxScore = printResult.implementation?.maxScore || 60;
+    const implFinalScore = printResult.implementation?.finalScore ?? (Object.keys(implScores).length ? (implPerolehan / implMaxScore) * 100 : 0);
     const implPredicate = printResult.implementation?.predicate || getPredicateLabel(implFinalScore);
 
     const totalSkorRiil = adminPerolehan + rppPerolehan + implPerolehan;
-    const totalSkorMaks = adminMaxScore + 34 + 76;
+    const totalSkorMaks = adminMaxScore + rppMaxScore + implMaxScore;
     
     // Weighted / Average Final Score
     const validScores = [adminFinalScore, rppFinalScore, implFinalScore].filter(s => s > 0);
@@ -276,8 +279,8 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
           </tr>
           <tr>
             <td style="text-align: center; font-weight: bold;">2</td>
-            <td style="font-weight: 500;">Telaah RPP / Modul Ajar Guru</td>
-            <td style="text-align: center;">34</td>
+            <td style="font-weight: 500;">Pelaksanaan Pembelajaran Mendalam</td>
+            <td style="text-align: center;">${rppMaxScore}</td>
             <td style="text-align: center; font-weight: bold;">${rppPerolehan}</td>
             <td style="text-align: center; font-weight: bold;">${rppFinalScore.toFixed(2)}</td>
             <td style="text-align: center; font-weight: bold;">${rppPredicate}</td>
@@ -285,8 +288,8 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
           </tr>
           <tr>
             <td style="text-align: center; font-weight: bold;">3</td>
-            <td style="font-weight: 500;">Observasi Pelaksanaan Proses Pembelajaran di Kelas</td>
-            <td style="text-align: center;">76</td>
+            <td style="font-weight: 500;">Umpan Balik Perencanaan Pembelajaran Mendalam</td>
+            <td style="text-align: center;">${implMaxScore}</td>
             <td style="text-align: center; font-weight: bold;">${implPerolehan}</td>
             <td style="text-align: center; font-weight: bold;">${implFinalScore.toFixed(2)}</td>
             <td style="text-align: center; font-weight: bold;">${implPredicate}</td>
@@ -317,9 +320,9 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
       <div class="coaching-box">
         <div style="font-weight: bold; margin-bottom: 4px; font-size: 9pt;">II. CATATAN & REKOMENDASI PEMBINAAN SUPERVISOR:</div>
         ${printResult.notes ? `<div style="margin-bottom: 3px;"><strong>Catatan Umum:</strong> ${printResult.notes}</div>` : ''}
-        ${printResult.planningAdmin?.coachingSuggestion ? `<div style="margin-bottom: 3px;"><strong>1. Administrasi Perencanaan:</strong> ${printResult.planningAdmin.coachingSuggestion}</div>` : ''}
-        ${printResult.lessonPlan?.coachingSuggestion ? `<div style="margin-bottom: 3px;"><strong>2. Telaah RPP:</strong> ${printResult.lessonPlan.coachingSuggestion}</div>` : ''}
-        ${printResult.implementation?.coachingSuggestion ? `<div style="margin-bottom: 3px;"><strong>3. Pelaksanaan Pembelajaran:</strong> ${printResult.implementation.coachingSuggestion}</div>` : ''}
+        ${printResult.planningAdmin?.coachingSuggestion ? `<div style="margin-bottom: 3px;"><strong>1. Persiapan Pembelajaran Mendalam:</strong> ${printResult.planningAdmin.coachingSuggestion}</div>` : ''}
+        ${printResult.lessonPlan?.coachingSuggestion ? `<div style="margin-bottom: 3px;"><strong>2. Pelaksanaan Pembelajaran Mendalam:</strong> ${printResult.lessonPlan.coachingSuggestion}</div>` : ''}
+        ${printResult.implementation?.coachingSuggestion ? `<div style="margin-bottom: 3px;"><strong>3. Umpan Balik Perencanaan Pembelajaran Mendalam:</strong> ${printResult.implementation.coachingSuggestion}</div>` : ''}
         ${!printResult.notes && !printResult.planningAdmin?.coachingSuggestion && !printResult.lessonPlan?.coachingSuggestion && !printResult.implementation?.coachingSuggestion ? '<div style="font-style: italic; color: #666;">Guru telah melaksanakan perencanaan dan pembelajaran di kelas dengan sangat baik sesuai standar kurikulum. Pertahankan dan terus tingkatkan inovasi pembelajaran.</div>' : ''}
       </div>
     `;
@@ -382,23 +385,26 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
 
     let fullDetailsHtml = '';
     if (printConfig.printFormat === 'FULL') {
+      const isDlAdmin = adminMaxScore === 72 || Object.keys(adminScores).length > 12;
+      const isDlRpp = rppMaxScore === 68 || Object.keys(rppScores).length > 15;
+
       fullDetailsHtml = `
         <div class="page-break"></div>
         <div class="section-title">III. RINCIAN PEROLEHAN SKOR PER BUTIR YANG DINILAI</div>
         
-        <!-- Rincian 1: Administrasi -->
-        <div style="font-weight: bold; margin: 8px 0 4px 0; font-size: 9pt;">1. Administrasi Perencanaan Pembelajaran (Skor Maksimal: 24)</div>
+        <!-- Rincian 1: Persiapan Pembelajaran Mendalam -->
+        <div style="font-weight: bold; margin: 8px 0 4px 0; font-size: 9pt;">1. Persiapan Pembelajaran Mendalam (Skor Maksimal: ${adminMaxScore})</div>
         <table class="data-table">
           <thead>
             <tr>
               <th width="35">No</th>
-              <th>Komponen Administrasi</th>
+              <th>Komponen / Aspek yang Diamati</th>
               <th width="70">Skor Diperoleh</th>
               <th>Catatan / Keterangan Supervisor</th>
             </tr>
           </thead>
           <tbody>
-            ${PLANNING_ADMIN_COMPONENTS.map((comp, idx) => `
+            ${(isDlAdmin ? DEEP_LEARNING_SUPERVISION_ITEMS.map(item => item.indicator) : PLANNING_ADMIN_COMPONENTS).map((comp, idx) => `
               <tr>
                 <td style="text-align: center; font-weight: bold;">${idx + 1}</td>
                 <td style="font-weight: 500;">${comp}</td>
@@ -408,25 +414,25 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
             `).join('')}
             <tr style="font-weight: bold; background: #f8fafc;">
               <td colspan="2" style="text-align: right;">Total Skor Riil / Nilai Akhir</td>
-              <td style="text-align: center;">${adminPerolehan} / 24</td>
+              <td style="text-align: center;">${adminPerolehan} / ${adminMaxScore}</td>
               <td style="text-align: center;">Nilai: ${adminFinalScore.toFixed(2)} (${adminPredicate})</td>
             </tr>
           </tbody>
         </table>
 
-        <!-- Rincian 2: RPP -->
-        <div style="font-weight: bold; margin: 12px 0 4px 0; font-size: 9pt;">2. Telaah RPP / Modul Ajar (Skor Maksimal: 34)</div>
+        <!-- Rincian 2: Pelaksanaan Pembelajaran Mendalam -->
+        <div style="font-weight: bold; margin: 12px 0 4px 0; font-size: 9pt;">2. Pelaksanaan Pembelajaran Mendalam (Skor Maksimal: ${rppMaxScore})</div>
         <table class="data-table">
           <thead>
             <tr>
               <th width="35">No</th>
-              <th>Komponen Telaah RPP</th>
+              <th>Aspek Pengamatan Pembelajaran Mendalam</th>
               <th width="70">Skor Diperoleh</th>
               <th>Catatan / Keterangan Supervisor</th>
             </tr>
           </thead>
           <tbody>
-            ${LESSON_PLAN_COMPONENTS.map((comp, idx) => `
+            ${(isDlRpp ? DEEP_LEARNING_IMPLEMENTATION_SUPERVISION_ITEMS.map(i => i.indicator) : LESSON_PLAN_COMPONENTS).map((comp, idx) => `
               <tr>
                 <td style="text-align: center; font-weight: bold;">${idx + 1}</td>
                 <td style="font-weight: 500;">${comp}</td>
@@ -436,48 +442,102 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
             `).join('')}
             <tr style="font-weight: bold; background: #f8fafc;">
               <td colspan="2" style="text-align: right;">Total Skor Riil / Nilai Akhir</td>
-              <td style="text-align: center;">${rppPerolehan} / 34</td>
+              <td style="text-align: center;">${rppPerolehan} / ${rppMaxScore}</td>
               <td style="text-align: center;">Nilai: ${rppFinalScore.toFixed(2)} (${rppPredicate})</td>
             </tr>
           </tbody>
         </table>
 
-        <!-- Rincian 3: Pelaksanaan -->
-        <div style="font-weight: bold; margin: 12px 0 4px 0; font-size: 9pt;">3. Observasi Pelaksanaan Proses Pembelajaran di Kelas (Skor Maksimal: 76)</div>
+        <!-- Rincian 3: Umpan Balik Perencanaan Pembelajaran Mendalam -->
+        <div style="font-weight: bold; margin: 12px 0 4px 0; font-size: 9pt;">3. Umpan Balik Perencanaan Pembelajaran Mendalam (Skor Maksimal: ${implMaxScore})</div>
+        
+        ${printResult.implementation?.planningUrl || printResult.implementation?.level || printResult.implementation?.title ? `
+          <table class="identity-table" style="margin-bottom: 8px;">
+            <tr>
+              <td style="width: 260px; font-weight: bold;">Tautan Perencanaan Pembelajaran</td>
+              <td style="width: 10px;">:</td>
+              <td>${printResult.implementation.planningUrl ? `<a href="${printResult.implementation.planningUrl}" target="_blank" style="color: #1e40af; text-decoration: underline;">${printResult.implementation.planningUrl}</a>` : '-'}</td>
+            </tr>
+            <tr>
+              <td style="font-weight: bold;">Jenjang / Mata Pelajaran</td>
+              <td>:</td>
+              <td>${printResult.implementation.level || '-'} / ${printResult.implementation.subject || teacher?.subject || '-'}</td>
+            </tr>
+            <tr>
+              <td style="font-weight: bold;">Kelas / Judul Perencanaan</td>
+              <td>:</td>
+              <td>${printResult.implementation.gradeClass || printConfig.className || '-'} / ${printResult.implementation.title || '-'}</td>
+            </tr>
+          </table>
+        ` : ''}
+
         <table class="data-table">
           <thead>
             <tr>
               <th width="35">No</th>
-              <th>Kegiatan / Aspek Pembelajaran di Kelas</th>
-              <th width="70">Skor Diperoleh</th>
-              <th>Catatan / Keterangan Supervisor</th>
+              <th>Aspek yang Diamati</th>
+              <th>Komentar Kritis</th>
+              <th width="70">Skor (1-4)</th>
             </tr>
           </thead>
           <tbody>
-            ${implGroups.map(grp => `
-              <tr style="background: #f1f5f9; font-weight: bold;">
-                <td style="text-align: center;">${grp.code}</td>
-                <td colspan="3">${grp.title}</td>
-              </tr>
-              ${IMPLEMENTATION_COMPONENTS.slice(grp.startIdx, grp.endIdx).map((comp, sIdx) => {
-                const itemNum = grp.startIdx + sIdx + 1;
-                return `
-                  <tr>
-                    <td style="text-align: center; font-weight: bold;">${itemNum}</td>
-                    <td style="font-weight: 500;">${comp}</td>
-                    <td style="text-align: center; font-weight: bold; color: #1e3a8a;">${implScores[comp] ?? 0}</td>
-                    <td style="font-style: italic; color: #4b5563;">${printResult.implementation?.comments?.[comp] || '-'}</td>
-                  </tr>
-                `;
-              }).join('')}
-            `).join('')}
+            ${DEEP_LEARNING_FEEDBACK_PLANNING_ITEMS.map((item) => {
+              const scoreVal = implScores[item.aspect] ?? implScores[item.id] ?? 0;
+              const commentVal = printResult.implementation?.comments?.[item.aspect] || printResult.implementation?.comments?.[item.id] || '-';
+              return `
+                <tr>
+                  <td style="text-align: center; font-weight: bold;">${item.number}</td>
+                  <td style="font-weight: 500;">${item.aspect}</td>
+                  <td style="font-style: italic; color: #4b5563;">${commentVal}</td>
+                  <td style="text-align: center; font-weight: bold; color: #1e3a8a;">${scoreVal}</td>
+                </tr>
+              `;
+            }).join('')}
             <tr style="font-weight: bold; background: #f8fafc;">
-              <td colspan="2" style="text-align: right;">Total Skor Riil / Nilai Akhir</td>
-              <td style="text-align: center;">${implPerolehan} / 76</td>
-              <td style="text-align: center;">Nilai: ${implFinalScore.toFixed(2)} (${implPredicate})</td>
+              <td colspan="3" style="text-align: right;">Total Skor Riil / Nilai Akhir</td>
+              <td style="text-align: center;">${implPerolehan} / ${implMaxScore}</td>
+            </tr>
+            <tr style="font-weight: bold; background: #f1f5f9;">
+              <td colspan="3" style="text-align: right;">Predikat Capaian Nilai Akhir:</td>
+              <td style="text-align: center; color: #047857;">${implFinalScore.toFixed(2)} (${implPredicate})</td>
             </tr>
           </tbody>
         </table>
+
+        <!-- Reflektif Butir 16, 17, 18 -->
+        <div style="margin-top: 10px; font-size: 8.5pt;">
+          <div style="padding: 6px 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; margin-bottom: 6px;">
+            <strong>No 16 . Tuliskan kelebihan Perencanaan Pembelajaran:</strong>
+            <div style="margin-top: 2px; color: #334155; font-style: italic;">
+              ${printResult.implementation?.advantages || '- Belum diisi -'}
+            </div>
+          </div>
+
+          <div style="padding: 6px 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; margin-bottom: 6px;">
+            <strong>No 17 . Tuliskan hal yang perlu ditingkatkan dari Perencanaan Pembelajaran:</strong>
+            <div style="margin-top: 2px; color: #334155; font-style: italic;">
+              ${printResult.implementation?.areasToImprove || '- Belum diisi -'}
+            </div>
+          </div>
+
+          <div style="padding: 6px 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; margin-bottom: 6px;">
+            <strong>No 18 . Tuliskan rekomendasi dan lanjutkan dengan revisi Perencanaan Pembelajaran sesuai prinsip PM:</strong>
+            <div style="margin-top: 2px; color: #334155; font-style: italic;">
+              ${printResult.implementation?.recommendations || '- Belum diisi -'}
+            </div>
+          </div>
+        </div>
+
+        <!-- Tanda Tangan Pemberi Umpan Balik -->
+        <div style="margin-top: 20px; display: flex; justify-content: flex-end; page-break-inside: avoid;">
+          <div style="width: 280px; text-align: center; font-size: 8.5pt;">
+            <div>${printConfig.location || 'Ditetapkan'}, ${formatDate(printResult.date || printConfig.date)}</div>
+            <div style="font-weight: bold; margin-top: 4px;">Pemberi Umpan Balik,</div>
+            <div style="height: 50px;"></div>
+            <strong style="text-decoration: underline;">${supervisor?.fullName || '-'}</strong><br>
+            <span style="font-size: 8pt;">NIP. ${supervisor?.nip || '-'}</span>
+          </div>
+        </div>
       `;
     }
 
@@ -882,7 +942,7 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
                         {result.lessonPlan && (
                           <div className="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm">
                             <div className="bg-blue-50 p-3 border-b border-gray-100 flex justify-between items-center">
-                              <h5 className="text-xs font-black text-blue-600 uppercase tracking-widest">Rencana Pelaksanaan Pembelajaran (RPP) Guru</h5>
+                              <h5 className="text-xs font-black text-blue-600 uppercase tracking-widest">INSTRUMEN SUPERVISI PELAKSANAAN PEMBELAJARAN MENDALAM</h5>
                               <span className={`px-3 py-1 rounded-full text-[10px] font-black text-white ${
                                 result.lessonPlan.predicate === 'BAIK SEKALI' ? 'bg-green-500' :
                                 result.lessonPlan.predicate === 'BAIK' ? 'bg-blue-500' :
@@ -896,7 +956,7 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
                                 <thead>
                                   <tr className="bg-gray-50/50">
                                     <th className="border-b border-r p-2 text-left w-8">No</th>
-                                    <th className="border-b border-r p-2 text-left">Komponen</th>
+                                    <th className="border-b border-r p-2 text-left">Aspek Pengamatan Pembelajaran Mendalam</th>
                                     <th className="border-b border-r p-2 text-center w-16">Nilai</th>
                                     <th className="border-b p-2 text-left">Catatan</th>
                                   </tr>
@@ -918,8 +978,11 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
 
                         {result.implementation && (
                           <div className="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm">
-                            <div className="bg-green-50 p-3 border-b border-gray-100 flex justify-between items-center">
-                              <h5 className="text-xs font-black text-green-600 uppercase tracking-widest">Pelaksanaan Pembelajaran</h5>
+                            <div className="bg-purple-50 p-3 border-b border-purple-100 flex justify-between items-center">
+                              <div>
+                                <h5 className="text-xs font-black text-purple-700 uppercase tracking-widest">INSTRUMEN UMPAN BALIK PERENCANAAN PEMBELAJARAN MENDALAM</h5>
+                                <div className="text-[10px] text-purple-500">Telaah Perencanaan Pembelajaran Mendalam & Catatan Kritis</div>
+                              </div>
                               <span className={`px-3 py-1 rounded-full text-[10px] font-black text-white ${
                                 result.implementation.predicate === 'BAIK SEKALI' ? 'bg-green-500' :
                                 result.implementation.predicate === 'BAIK' ? 'bg-blue-500' :
@@ -928,54 +991,85 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
                                 {result.implementation.predicate} ({result.implementation.finalScore.toFixed(2)})
                               </span>
                             </div>
+
+                            {/* Header Metadata Khusus Perencanaan */}
+                            {(result.implementation.planningUrl || result.implementation.title || result.implementation.level) && (
+                              <div className="p-3 bg-purple-50/30 border-b border-purple-100 text-[10px] space-y-1">
+                                {result.implementation.planningUrl && (
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-bold text-gray-600 min-w-32">Tautan Perencanaan:</span>
+                                    <a 
+                                      href={result.implementation.planningUrl} 
+                                      target="_blank" 
+                                      rel="noreferrer" 
+                                      className="text-purple-600 hover:text-purple-800 underline truncate max-w-lg font-medium"
+                                    >
+                                      {result.implementation.planningUrl}
+                                    </a>
+                                  </div>
+                                )}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-gray-700 pt-1">
+                                  <div>
+                                    <span className="font-bold">Jenjang / Mapel:</span> {result.implementation.level || '-'} / {result.implementation.subject || '-'}
+                                  </div>
+                                  <div>
+                                    <span className="font-bold">Kelas / Judul:</span> {result.implementation.gradeClass || '-'} / {result.implementation.title || '-'}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
                             <div className="overflow-x-auto">
                               <table className="w-full text-[10px] border-collapse">
                                 <thead>
                                   <tr className="bg-gray-50/50">
                                     <th className="border-b border-r p-2 text-left w-8">No</th>
-                                    <th className="border-b border-r p-2 text-left">Komponen</th>
-                                    <th className="border-b border-r p-2 text-center w-16">Nilai</th>
-                                    <th className="border-b p-2 text-left">Catatan</th>
+                                    <th className="border-b border-r p-2 text-left">Aspek yang Diamati</th>
+                                    <th className="border-b border-r p-2 text-left">Komentar Kritis</th>
+                                    <th className="border-b p-2 text-center w-20">Skor (1-4)</th>
                                   </tr>
                                 </thead>
                                 <tbody>
                                   {Object.entries(result.implementation.scores).map(([comp, score], idx) => (
-                                    <React.Fragment key={idx}>
-                                      {idx === 0 && (
-                                        <tr className="bg-gray-50/50 font-bold text-blue-700">
-                                          <td className="border-b border-r p-2 text-center">A</td>
-                                          <td colSpan={3} className="border-b p-2">KEGIATAN PENDAHULUAN</td>
-                                        </tr>
-                                      )}
-                                      {idx === 5 && (
-                                        <tr className="bg-gray-50/50 font-bold text-blue-700">
-                                          <td className="border-b border-r p-2 text-center">B</td>
-                                          <td colSpan={3} className="border-b p-2">KEGIATAN INTI</td>
-                                        </tr>
-                                      )}
-                                      {idx === 11 && (
-                                        <tr className="bg-gray-50/50 font-bold text-blue-700">
-                                          <td className="border-b border-r p-2 text-center">C</td>
-                                          <td colSpan={3} className="border-b p-2">KEGIATAN PENUTUP</td>
-                                        </tr>
-                                      )}
-                                      {idx === 15 && (
-                                        <tr className="bg-gray-50/50 font-bold text-blue-700">
-                                          <td className="border-b border-r p-2 text-center">D</td>
-                                          <td colSpan={3} className="border-b p-2">KEGIATAN PENILAIAN HASIL BELAJAR</td>
-                                        </tr>
-                                      )}
-                                      <tr className="hover:bg-gray-50/50">
-                                        <td className="border-b border-r p-2 text-center">{idx + 1}</td>
-                                        <td className="border-b border-r p-2 font-medium">{comp}</td>
-                                        <td className="border-b border-r p-2 text-center font-bold text-green-600">{score as React.ReactNode}</td>
-                                        <td className="border-b p-2 text-gray-500 italic">{result.implementation?.comments[comp] || '-'}</td>
-                                      </tr>
-                                    </React.Fragment>
+                                    <tr key={idx} className="hover:bg-gray-50/50">
+                                      <td className="border-b border-r p-2 text-center font-medium">{idx + 1}</td>
+                                      <td className="border-b border-r p-2 font-medium text-gray-800">{comp}</td>
+                                      <td className="border-b border-r p-2 text-gray-600 italic">{result.implementation?.comments[comp] || '-'}</td>
+                                      <td className="border-b p-2 text-center font-bold text-purple-600">{score as React.ReactNode}</td>
+                                    </tr>
                                   ))}
                                 </tbody>
                               </table>
                             </div>
+
+                            {/* Refleksi Butir 16, 17, 18 */}
+                            {(result.implementation.advantages || result.implementation.areasToImprove || result.implementation.recommendations) && (
+                              <div className="p-3 bg-gray-50/70 border-t border-gray-100 space-y-2">
+                                <div className="text-[11px] font-black text-gray-700 uppercase tracking-wide">
+                                  Catatan Refleksi & Rekomendasi Revisi Perencanaan PM:
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-[10px]">
+                                  {result.implementation.advantages && (
+                                    <div className="p-2.5 bg-white rounded-lg border border-green-200 shadow-2xs">
+                                      <span className="font-bold text-green-800 block mb-0.5">No 16. Kelebihan Perencanaan:</span>
+                                      <span className="text-gray-600 whitespace-pre-line">{result.implementation.advantages}</span>
+                                    </div>
+                                  )}
+                                  {result.implementation.areasToImprove && (
+                                    <div className="p-2.5 bg-white rounded-lg border border-amber-200 shadow-2xs">
+                                      <span className="font-bold text-amber-800 block mb-0.5">No 17. Hal Perlu Ditingkatkan:</span>
+                                      <span className="text-gray-600 whitespace-pre-line">{result.implementation.areasToImprove}</span>
+                                    </div>
+                                  )}
+                                  {result.implementation.recommendations && (
+                                    <div className="p-2.5 bg-white rounded-lg border border-purple-200 shadow-2xs">
+                                      <span className="font-bold text-purple-800 block mb-0.5">No 18. Rekomendasi Revisi PM:</span>
+                                      <span className="text-gray-600 whitespace-pre-line">{result.implementation.recommendations}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
 

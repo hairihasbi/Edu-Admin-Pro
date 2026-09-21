@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, SupervisionAssignment } from '../types';
 import { Printer, X, FileText, School, User as UserIcon, Calendar, CheckCircle } from './Icons';
-import { DEEP_LEARNING_SUPERVISION_ITEMS, DEEP_LEARNING_IMPLEMENTATION_SUPERVISION_ITEMS } from './deepLearningSupervisionConstants';
+import { DEEP_LEARNING_SUPERVISION_ITEMS, DEEP_LEARNING_IMPLEMENTATION_SUPERVISION_ITEMS, DEEP_LEARNING_FEEDBACK_PLANNING_ITEMS } from './deepLearningSupervisionConstants';
 
 export const PLANNING_ADMIN_COMPONENTS = [
   "Kalender Pendidikan",
@@ -106,6 +106,16 @@ export const PrintManualSupervisionModal: React.FC<PrintManualSupervisionModalPr
   const [letterheadUrl, setLetterheadUrl] = useState(localStorage.getItem('sup_letterhead_url') || '');
   const [marginTop, setMarginTop] = useState(localStorage.getItem('sup_margin_top') || '1.5');
   const [marginBottom, setMarginBottom] = useState(localStorage.getItem('sup_margin_bottom') || '1.5');
+
+  // Planning feedback specific state (INSTRUMEN UMPAN BALIK PERENCANAAN PEMBELAJARAN MENDALAM)
+  const [planningUrl, setPlanningUrl] = useState('');
+  const [planningLevel, setPlanningLevel] = useState('SMA');
+  const [planningSubject, setPlanningSubject] = useState('');
+  const [planningGradeClass, setPlanningGradeClass] = useState('X');
+  const [planningTitle, setPlanningTitle] = useState('');
+  const [advantages, setAdvantages] = useState('');
+  const [areasToImprove, setAreasToImprove] = useState('');
+  const [recommendations, setRecommendations] = useState('');
 
   // Initialize or update fields when modal opens or selections change
   useEffect(() => {
@@ -522,99 +532,136 @@ export const PrintManualSupervisionModal: React.FC<PrintManualSupervisionModalPr
       </div>
     `;
 
-    // Section 3: Pelaksanaan Pembelajaran
-    const implGroups = [
-      { code: 'A', title: 'KEGIATAN PENDAHULUAN', startIdx: 0, endIdx: 5 },
-      { code: 'B', title: 'KEGIATAN INTI', startIdx: 5, endIdx: 11 },
-      { code: 'C', title: 'KEGIATAN PENUTUP', startIdx: 11, endIdx: 15 },
-      { code: 'D', title: 'KEGIATAN PENILAIAN HASIL BELAJAR', startIdx: 15, endIdx: 19 }
-    ];
-
-    const generateImplRowsHtml = () => {
+    // Section 3: Umpan Balik Perencanaan Pembelajaran Mendalam
+    const generateFeedbackPlanningRowsHtml = () => {
       let rows = '';
-      implGroups.forEach(group => {
+      DEEP_LEARNING_FEEDBACK_PLANNING_ITEMS.forEach((item) => {
         rows += `
-          <tr style="background-color: #f0f4f8; font-weight: bold;">
-            <td style="text-align: center;">${group.code}</td>
-            <td colspan="3" style="text-transform: uppercase; letter-spacing: 0.5px;">${group.title}</td>
+          <tr>
+            <td style="text-align: center; font-weight: bold;">${item.number}</td>
+            <td style="font-weight: 500;">${item.aspect}</td>
+            <td class="notes-line" style="vertical-align: middle; font-size: 8.5pt;">
+              <div style="min-height: 28px; width: 100%;"></div>
+            </td>
+            <td style="text-align: center;">
+              <div class="score-manual-boxes-4">
+                <span>[ &nbsp; ] 1</span>
+                <span>[ &nbsp; ] 2</span>
+                <span>[ &nbsp; ] 3</span>
+                <span>[ &nbsp; ] 4</span>
+              </div>
+            </td>
           </tr>
         `;
-        const groupComps = IMPLEMENTATION_COMPONENTS.slice(group.startIdx, group.endIdx);
-        groupComps.forEach((comp, idx) => {
-          rows += `
-            <tr>
-              <td style="text-align: center; font-weight: bold;">${group.startIdx + idx + 1}</td>
-              <td style="font-weight: 500;">${comp}</td>
-              <td style="text-align: center;">
-                <div class="score-manual-boxes-4">
-                  <span>[ &nbsp; ] 1</span>
-                  <span>[ &nbsp; ] 2</span>
-                  <span>[ &nbsp; ] 3</span>
-                  <span>[ &nbsp; ] 4</span>
-                </div>
-              </td>
-              <td class="notes-line"></td>
-            </tr>
-          `;
-        });
       });
       return rows;
     };
 
+    const section3SignaturesHtml = `
+      <div style="margin-top: 20px; display: flex; justify-content: flex-end; page-break-inside: avoid;">
+        <div style="width: 300px; text-align: center; font-size: 9pt;">
+          <div>${location || 'Tempat'}, ${supervisionDate ? new Date(supervisionDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '........................ 202...'}</div>
+          <div style="font-weight: bold; margin-top: 4px;">Pemberi Umpan Balik,</div>
+          <div style="height: 55px;"></div>
+          <strong style="text-decoration: underline;">${supervisorName || '...........................................'}</strong><br>
+          <span style="font-size: 8pt;">NIP. ${supervisorNip || '...........................................'}</span>
+        </div>
+      </div>
+    `;
+
     const section3Html = `
       <div class="instrument-section">
         ${letterheadHtml}
-        <h2 class="doc-title">INSTRUMEN OBSERVASI SUPERVISI AKADEMIK</h2>
-        <div class="doc-subtitle">BAGIAN III: PELAKSANAAN PROSES PEMBELAJARAN (OBSERVASI KELAS)</div>
+        <h2 class="doc-title">INSTRUMEN UMPAN BALIK</h2>
+        <div class="doc-subtitle">PERENCANAAN PEMBELAJARAN MENDALAM</div>
         
-        ${identityHtml}
+        <table class="identity-table" style="margin-bottom: 10px; border-collapse: collapse;">
+          <tr>
+            <td style="width: 320px; font-weight: bold;">Tautan Perencanaan Pembelajaran yang ditelaah</td>
+            <td style="width: 15px;">:</td>
+            <td style="border-bottom: 1px dotted #888;">${planningUrl || '....................................................................................................................'}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">Jenjang pada Perencanaan Pembelajaran</td>
+            <td>:</td>
+            <td style="border-bottom: 1px dotted #888;">${planningLevel || '........................................................................'}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">Mata Pelajaran pada Perencanaan Pembelajaran</td>
+            <td>:</td>
+            <td style="border-bottom: 1px dotted #888;">${planningSubject || subject || '........................................................................'}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">Kelas pada Perencanaan Pembelajaran</td>
+            <td>:</td>
+            <td style="border-bottom: 1px dotted #888;">${planningGradeClass || className || '........................................................................'}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">Judul Perencanaan Pembelajaran</td>
+            <td>:</td>
+            <td style="border-bottom: 1px dotted #888;">${planningTitle || topic || '....................................................................................................................'}</td>
+          </tr>
+        </table>
 
-        <div class="instructions-box">
+        <div class="instructions-box" style="margin-bottom: 8px;">
           <strong>Petunjuk Pengisian:</strong><br>
-          Lakukan observasi langsung terhadap aktivitas belajar-mengajar di kelas. Berilah tanda centang (✓) pada skor 1-4:<br>
-          <strong>1</strong> = Kurang &nbsp;&nbsp;|&nbsp;&nbsp; 
-          <strong>2</strong> = Cukup &nbsp;&nbsp;|&nbsp;&nbsp; 
-          <strong>3</strong> = Baik &nbsp;&nbsp;|&nbsp;&nbsp; 
-          <strong>4</strong> = Amat Baik / Sempurna
+          Telaah dokumen perencanaan pembelajaran dengan saksama. Berilah tanda centang (✓) pada skala 1-4 dan tuliskan Komentar Kritis pada kolom yang disediakan:<br>
+          <strong>1</strong> = Hampir tidak ada &nbsp;&nbsp;|&nbsp;&nbsp; 
+          <strong>2</strong> = Sedikit dan lemah &nbsp;&nbsp;|&nbsp;&nbsp; 
+          <strong>3</strong> = Cukup &nbsp;&nbsp;|&nbsp;&nbsp; 
+          <strong>4</strong> = Memadai
         </div>
 
         <table class="data-table">
           <thead>
             <tr>
               <th width="35">No</th>
-              <th>Aspek / Indikator Kegiatan Pembelajaran</th>
-              <th width="150">Skor Observasi<br><span style="font-size: 8pt; font-weight: normal;">(Skala 1 - 4)</span></th>
-              <th width="220">Catatan / Temuan Observasi Kelas</th>
+              <th>Aspek yang Diamati</th>
+              <th width="240">Komentar Kritis</th>
+              <th width="150">Skor (1 - 4)</th>
             </tr>
           </thead>
           <tbody>
-            ${generateImplRowsHtml()}
+            ${generateFeedbackPlanningRowsHtml()}
           </tbody>
           <tfoot>
             <tr style="font-weight: bold; background: #fafafa;">
-              <td colspan="2" style="text-align: right;">JUMLAH SKOR RIIL OBSERVASI</td>
-              <td style="text-align: center; font-size: 11pt;">...............</td>
-              <td style="font-size: 8pt; color: #555;">(Maksimum Skor Ideal = 76)</td>
+              <td colspan="2" style="text-align: right;">JUMLAH SKOR RIIL (Maksimal: 60)</td>
+              <td style="text-align: center; font-size: 10pt;">............... / 60</td>
+              <td style="font-size: 8pt; color: #555; text-align: center;">Skala 1 - 4</td>
             </tr>
             <tr style="font-weight: bold; background: #fafafa;">
-              <td colspan="2" style="text-align: right;">NILAI AKHIR = (Skor Riil / 76) x 100</td>
+              <td colspan="2" style="text-align: right;">NILAI AKHIR = (Skor Riil / 60) x 100</td>
               <td style="text-align: center; font-size: 11pt;">...............</td>
-              <td style="text-align: center; font-size: 9pt;">
-                Predikat: [ &nbsp; ] A (Amat Baik) &nbsp; [ &nbsp; ] B (Baik) &nbsp; [ &nbsp; ] C (Cukup) &nbsp; [ &nbsp; ] D (Kurang)
+              <td style="text-align: center; font-size: 8pt;">
+                Predikat: [ ] SB [ ] B [ ] K [ ] SK
               </td>
             </tr>
           </tfoot>
         </table>
 
-        <div class="coaching-manual-box">
-          <strong>Catatan Temuan & Rekomendasi Penguatan Guru Pasca Observasi Kelas:</strong>
-          <div class="manual-lined-area">
-            <div class="write-line"></div>
-            <div class="write-line"></div>
+        <div class="coaching-manual-box" style="margin-top: 8px; margin-bottom: 6px;">
+          <strong>No 16 . Tuliskan kelebihan Perencanaan Pembelajaran:</strong>
+          <div class="manual-lined-area" style="min-height: 44px; margin-top: 4px;">
+            ${advantages ? `<div style="padding: 2px 0; font-size: 8.5pt;">${advantages}</div>` : '<div class="write-line"></div><div class="write-line"></div>'}
           </div>
         </div>
 
-        ${signaturesHtml}
+        <div class="coaching-manual-box" style="margin-bottom: 6px;">
+          <strong>No 17 . Tuliskan hal yang perlu ditingkatkan dari Perencanaan Pembelajaran:</strong>
+          <div class="manual-lined-area" style="min-height: 44px; margin-top: 4px;">
+            ${areasToImprove ? `<div style="padding: 2px 0; font-size: 8.5pt;">${areasToImprove}</div>` : '<div class="write-line"></div><div class="write-line"></div>'}
+          </div>
+        </div>
+
+        <div class="coaching-manual-box" style="margin-bottom: 6px;">
+          <strong>No 18 . Tuliskan rekomendasi dan lanjutkan dengan revisi Perencanaan Pembelajaran sesuai prinsip PM:</strong>
+          <div class="manual-lined-area" style="min-height: 52px; margin-top: 4px;">
+            ${recommendations ? `<div style="padding: 2px 0; font-size: 8.5pt;">${recommendations}</div>` : '<div class="write-line"></div><div class="write-line"></div><div class="write-line"></div>'}
+          </div>
+        </div>
+
+        ${section3SignaturesHtml}
       </div>
     `;
 
@@ -844,7 +891,7 @@ export const PrintManualSupervisionModal: React.FC<PrintManualSupervisionModalPr
                 <FileText size={18} className={instrumentType === 'ALL' ? 'text-purple-600' : 'text-gray-400'} />
                 <div>
                   <div className="text-xs font-bold text-gray-800">Semua Instrumen (3 Bagian)</div>
-                  <div className="text-[10px] text-gray-500">Lengkap: Administrasi, RPP & Pelaksanaan</div>
+                  <div className="text-[10px] text-gray-500">Lengkap: Persiapan, Pelaksanaan & Umpan Balik PM</div>
                 </div>
               </button>
 
@@ -891,8 +938,8 @@ export const PrintManualSupervisionModal: React.FC<PrintManualSupervisionModalPr
               >
                 <CheckCircle size={18} className={instrumentType === 'IMPLEMENTATION' ? 'text-purple-600' : 'text-gray-400'} />
                 <div>
-                  <div className="text-xs font-bold text-gray-800">Bagian III: Pelaksanaan Pembelajaran</div>
-                  <div className="text-[10px] text-gray-500">19 Indikator Observasi Kelas Langsung</div>
+                  <div className="text-xs font-bold text-gray-800">Bagian III: Umpan Balik Perencanaan Pembelajaran Mendalam</div>
+                  <div className="text-[10px] text-gray-500">15 Indikator Telaah, Komentar Kritis & Rekomendasi 16-18</div>
                 </div>
               </button>
             </div>
@@ -1066,12 +1113,133 @@ export const PrintManualSupervisionModal: React.FC<PrintManualSupervisionModalPr
             </div>
           </div>
 
-          {/* Section 3: Data Pengesahan & Format Cetak */}
+          {/* Section: Data Khusus Umpan Balik Perencanaan Pembelajaran Mendalam */}
+          {(instrumentType === 'ALL' || instrumentType === 'IMPLEMENTATION') && (
+            <div className="bg-purple-50/50 p-4 rounded-xl border border-purple-100 space-y-4">
+              <div className="flex items-center gap-2 border-b border-purple-200/80 pb-2">
+                <FileText size={16} className="text-purple-700" />
+                <h4 className="text-xs font-black uppercase tracking-wider text-purple-900">
+                  3. Identitas Perencanaan Pembelajaran yang Ditelaah (Bagian III)
+                </h4>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="md:col-span-2">
+                  <label className="block text-[11px] font-bold text-gray-700 mb-1">
+                    Tautan Perencanaan Pembelajaran yang Ditelaah
+                  </label>
+                  <input
+                    type="url"
+                    value={planningUrl}
+                    onChange={(e) => setPlanningUrl(e.target.value)}
+                    placeholder="https://drive.google.com/... atau tautan dokumen modul ajar/RPP"
+                    className="w-full bg-white border border-gray-200 rounded-lg p-2 text-xs focus:ring-2 focus:ring-purple-500 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-1">
+                    Jenjang pada Perencanaan Pembelajaran
+                  </label>
+                  <input
+                    type="text"
+                    value={planningLevel}
+                    onChange={(e) => setPlanningLevel(e.target.value)}
+                    placeholder="Contoh: SMA / SMK / SMP / SD"
+                    className="w-full bg-white border border-gray-200 rounded-lg p-2 text-xs focus:ring-2 focus:ring-purple-500 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-1">
+                    Mata Pelajaran pada Perencanaan Pembelajaran
+                  </label>
+                  <input
+                    type="text"
+                    value={planningSubject || subject}
+                    onChange={(e) => setPlanningSubject(e.target.value)}
+                    placeholder="Contoh: Informatika / Matematika"
+                    className="w-full bg-white border border-gray-200 rounded-lg p-2 text-xs focus:ring-2 focus:ring-purple-500 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-1">
+                    Kelas pada Perencanaan Pembelajaran
+                  </label>
+                  <input
+                    type="text"
+                    value={planningGradeClass || className}
+                    onChange={(e) => setPlanningGradeClass(e.target.value)}
+                    placeholder="Contoh: X-A / Fase E"
+                    className="w-full bg-white border border-gray-200 rounded-lg p-2 text-xs focus:ring-2 focus:ring-purple-500 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-1">
+                    Judul Perencanaan Pembelajaran
+                  </label>
+                  <input
+                    type="text"
+                    value={planningTitle || topic}
+                    onChange={(e) => setPlanningTitle(e.target.value)}
+                    placeholder="Judul modul ajar / perencanaan pembelajaran"
+                    className="w-full bg-white border border-gray-200 rounded-lg p-2 text-xs focus:ring-2 focus:ring-purple-500 outline-none"
+                  />
+                </div>
+
+                <div className="md:col-span-2 space-y-2 pt-2 border-t border-purple-100">
+                  <div className="text-[11px] font-black text-purple-900 uppercase">
+                    Isian Refleksi Butir 16, 17, 18 (Opsional dicetak langsung atau tulis tangan):
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-600 mb-0.5">
+                      No 16 . Tuliskan kelebihan Perencanaan Pembelajaran:
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={advantages}
+                      onChange={(e) => setAdvantages(e.target.value)}
+                      placeholder="Biarkan kosong jika ingin ditulis tangan saat supervisi manual..."
+                      className="w-full bg-white border border-gray-200 rounded-lg p-2 text-xs focus:ring-2 focus:ring-purple-500 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-600 mb-0.5">
+                      No 17 . Tuliskan hal yang perlu ditingkatkan dari Perencanaan Pembelajaran:
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={areasToImprove}
+                      onChange={(e) => setAreasToImprove(e.target.value)}
+                      placeholder="Biarkan kosong jika ingin ditulis tangan..."
+                      className="w-full bg-white border border-gray-200 rounded-lg p-2 text-xs focus:ring-2 focus:ring-purple-500 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-600 mb-0.5">
+                      No 18 . Tuliskan rekomendasi dan lanjutkan dengan revisi Perencanaan Pembelajaran sesuai prinsip PM:
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={recommendations}
+                      onChange={(e) => setRecommendations(e.target.value)}
+                      placeholder="Biarkan kosong jika ingin ditulis tangan..."
+                      className="w-full bg-white border border-gray-200 rounded-lg p-2 text-xs focus:ring-2 focus:ring-purple-500 outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Section 4: Data Pengesahan & Format Cetak */}
           <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 space-y-4">
             <div className="flex items-center gap-2 border-b border-gray-200 pb-2">
               <Calendar size={16} className="text-blue-600" />
               <h4 className="text-xs font-black uppercase tracking-wider text-gray-700">
-                3. Data Pengesahan & Pengaturan Cetak
+                4. Data Pengesahan & Pengaturan Cetak
               </h4>
             </div>
 

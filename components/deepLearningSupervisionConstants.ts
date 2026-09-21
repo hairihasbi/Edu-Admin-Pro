@@ -406,3 +406,118 @@ export function calculateDeepLearningImplementationScore(scores: Record<string, 
   };
 }
 
+// -------------------------------------------------------------
+// INSTRUMEN UMPAN BALIK PERENCANAAN PEMBELAJARAN MENDALAM
+// -------------------------------------------------------------
+export interface DeepLearningFeedbackItem {
+  id: string; // '1' - '15'
+  number: number;
+  aspect: string;
+}
+
+export const DEEP_LEARNING_FEEDBACK_PLANNING_ITEMS: DeepLearningFeedbackItem[] = [
+  {
+    id: '1',
+    number: 1,
+    aspect: 'Tujuan pembelajaran, langkah pembelajaran sudah mengarah pada pencapaian Dimensi Profil Lulusan.'
+  },
+  {
+    id: '2',
+    number: 2,
+    aspect: 'Tujuan pembelajaran, langkah pembelajaran, dan asesmen pembelajaran sudah selaras.'
+  },
+  {
+    id: '3',
+    number: 3,
+    aspect: 'Praktik pedagogis yang dituliskan sudah tergambar pada langkah pembelajaran dan/atau asesmen pembelajaran.'
+  },
+  {
+    id: '4',
+    number: 4,
+    aspect: 'Lingkungan belajar yang dituliskan sudah tergambar pada langkah pembelajaran dan/atau asesmen pembelajaran.'
+  },
+  {
+    id: '5',
+    number: 5,
+    aspect: 'Kemitraan pembelajaran yang dituliskan sudah tergambar pada langkah pembelajaran dan/atau asesmen pembelajaran.'
+  },
+  {
+    id: '6',
+    number: 6,
+    aspect: 'Pemanfaatan digital yang dituliskan sudah tergambar pada langkah pembelajaran dan/atau asesmen pembelajaran.'
+  },
+  {
+    id: '7',
+    number: 7,
+    aspect: 'Langkah pembelajaran dapat memfasilitasi murid untuk merasakan pengalaman belajar MEMAHAMI (mengonstruksi pengetahuan dari berbagai sumber dan konteks, menghubungkan pengetahuan awal dengan konsep baru, penalaran kritis).'
+  },
+  {
+    id: '8',
+    number: 8,
+    aspect: 'Langkah pembelajaran dapat memfasilitasi murid untuk merasakan pengalaman belajar MENGAPLIKASI (menerapkan pemahaman secara kontekstual dalam kehidupan nyata).'
+  },
+  {
+    id: '9',
+    number: 9,
+    aspect: 'Langkah pembelajaran dapat memfasilitasi murid untuk merasakan pengalaman belajar MEREFLEKSI (mengevaluasi dan memaknai proses serta hasil tindakan/praktik nyata, menentukan tindak lanjut, mengelola proses belajar mandiri).'
+  },
+  {
+    id: '10',
+    number: 10,
+    aspect: 'Langkah perencanaan pembelajaran dapat memfasilitasi tindakan saling MEMULIAKAN antara guru dan murid, serta antarmurid yang tecermin dalam bahasa verbal dan nonverbal.'
+  },
+  {
+    id: '11',
+    number: 11,
+    aspect: 'Prinsip pembelajaran mendalam berupa berkesadaran, bermakna, dan/atau menggembirakan tergambar pada setiap pengalaman belajar di langkah pembelajaran.'
+  },
+  {
+    id: '12',
+    number: 12,
+    aspect: 'Perencanaan pembelajaran sudah mengakomodir pengalaman belajar yang sesuai dengan karakteristik peserta didik (diferensiasi konten, proses, produk, dan inklusivitas).'
+  },
+  {
+    id: '13',
+    number: 13,
+    aspect: 'Asesmen pada awal pembelajaran dirancang untuk mengumpulkan bukti kesiapan emosional, mental, pengetahuan awal, dan kebutuhan belajar peserta didik.'
+  },
+  {
+    id: '14',
+    number: 14,
+    aspect: 'Asesmen selama Proses Pembelajaran dirancang untuk memantau perkembangan belajar peserta didik dan memberikan umpan balik secara berkelanjutan.'
+  },
+  {
+    id: '15',
+    number: 15,
+    aspect: 'Asesmen hasil Pembelajaran dirancang untuk mengukur ketercapaian tujuan pembelajaran secara komprehensif.'
+  }
+];
+
+export function calculateDeepLearningFeedbackScore(scores: Record<string, number>) {
+  const totalRealScore = DEEP_LEARNING_FEEDBACK_PLANNING_ITEMS.reduce((sum, item) => {
+    const val = scores[item.id] ?? scores[item.number.toString()] ?? scores[item.aspect] ?? 0;
+    return sum + (typeof val === 'number' ? val : 0);
+  }, 0);
+
+  const maxScore = DEEP_LEARNING_FEEDBACK_PLANNING_ITEMS.length * 4; // 15 * 4 = 60
+  const finalScore = maxScore > 0 ? (totalRealScore / maxScore) * 100 : 0;
+
+  let predicate = 'Sangat Kurang';
+  if (finalScore >= 86) {
+    predicate = 'Sangat Baik (Memadai)';
+  } else if (finalScore >= 70) {
+    predicate = 'Baik (Cukup)';
+  } else if (finalScore >= 55) {
+    predicate = 'Kurang (Sedikit & Lemah)';
+  } else {
+    predicate = 'Sangat Kurang (Hampir Tidak Ada)';
+  }
+
+  return {
+    totalRealScore,
+    maxScore,
+    finalScore,
+    predicate
+  };
+}
+
