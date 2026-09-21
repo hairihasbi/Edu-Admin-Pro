@@ -618,14 +618,18 @@ export interface SupervisionResult extends Syncable {
     recommendations?: DeepLearningFollowUpRecommendations;
   };
 
-  // Section 2: RPP Guru
+  // Section 2: Instrumen Supervisi Pelaksanaan Pembelajaran Mendalam (sebelumnya RPP Guru)
   lessonPlan?: {
     scores: Record<string, number>;
     comments: Record<string, string>;
     totalRealScore: number;
+    maxScore?: number;
+    scaledTo80?: number;
     finalScore: number;
     predicate: string;
     coachingSuggestion?: string;
+    readinessCategory?: 'Sangat Kurang' | 'Kurang' | 'Baik' | 'Sangat Baik' | string;
+    recommendations?: DeepLearningFollowUpRecommendations;
   };
 
   // Section 3: Pelaksanaan Pembelajaran
