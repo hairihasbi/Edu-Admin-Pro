@@ -233,3 +233,176 @@ export function calculateDeepLearningScore(scores: Record<string, number>) {
     predicate: readinessCategory
   };
 }
+
+export const DEEP_LEARNING_IMPLEMENTATION_SUPERVISION_ITEMS: DeepLearningSupervisionItem[] = [
+  // A. Keterlaksanaan Tahapan Pembelajaran
+  {
+    id: 'IMP_A1',
+    groupLetter: 'A',
+    component: 'Keterlaksanaan Tahapan Pembelajaran',
+    indicator: 'Tahap Awal',
+    question: 'Apakah guru membuka pembelajaran dengan orientasi, apersepsi, dan motivasi sesuai prinsip berkesadaran, bermakna, dan menggembirakan?',
+    isFirstInGroup: true,
+    groupRowSpan: 5
+  },
+  {
+    id: 'IMP_A2',
+    groupLetter: 'A',
+    component: 'Keterlaksanaan Tahapan Pembelajaran',
+    indicator: 'Tahap Inti – Memahami',
+    question: 'Apakah guru memfasilitasi siswa untuk memahami konsep melalui aktivitas yang relevan dan kontekstual?'
+  },
+  {
+    id: 'IMP_A3',
+    groupLetter: 'A',
+    component: 'Keterlaksanaan Tahapan Pembelajaran',
+    indicator: 'Tahap Inti - Mengaplikasi',
+    question: 'Apakah guru memfasilitasi siswa mengaplikasikan konsep pada situasi nyata atau proyek pembelajaran?'
+  },
+  {
+    id: 'IMP_A4',
+    groupLetter: 'A',
+    component: 'Keterlaksanaan Tahapan Pembelajaran',
+    indicator: 'Tahap Inti – Merefleksi',
+    question: 'Apakah guru memfasilitasi siswa merefleksikan pembelajaran yang telah dilakukan?'
+  },
+  {
+    id: 'IMP_A5',
+    groupLetter: 'A',
+    component: 'Keterlaksanaan Tahapan Pembelajaran',
+    indicator: 'Tahap Penutup',
+    question: 'Apakah guru memberikan umpan balik konstruktif, menyimpulkan pembelajaran, dan melibatkan siswa dalam perencanaan pembelajaran selanjutnya?'
+  },
+
+  // B. Penerapan Prinsip Pembelajaran Mendalam
+  {
+    id: 'IMP_B1',
+    groupLetter: 'B',
+    component: 'Penerapan Prinsip Pembelajaran Mendalam',
+    indicator: 'Prinsip Berkesadaran',
+    question: 'Apakah guru menunjukkan sikap sadar tujuan dan proses pembelajaran serta membimbing siswa untuk menyadari pembelajarannya?',
+    isFirstInGroup: true,
+    groupRowSpan: 3
+  },
+  {
+    id: 'IMP_B2',
+    groupLetter: 'B',
+    component: 'Penerapan Prinsip Pembelajaran Mendalam',
+    indicator: 'Prinsip Bermakna',
+    question: 'Apakah pembelajaran mengaitkan materi dengan kehidupan nyata siswa sehingga menumbuhkan relevansi?'
+  },
+  {
+    id: 'IMP_B3',
+    groupLetter: 'B',
+    component: 'Penerapan Prinsip Pembelajaran Mendalam',
+    indicator: 'Prinsip Menggembirakan',
+    question: 'Apakah pembelajaran menciptakan suasana menyenangkan dan memotivasi siswa untuk aktif?'
+  },
+
+  // C. Pengelolaan Kelas dan Lingkungan Belajar
+  {
+    id: 'IMP_C1',
+    groupLetter: 'C',
+    component: 'Pengelolaan Kelas dan Lingkungan Belajar',
+    indicator: 'Lingkungan Fisik',
+    question: 'Apakah lingkungan fisik kelas mendukung pembelajaran mendalam (penataan ruang, alat, media)?',
+    isFirstInGroup: true,
+    groupRowSpan: 3
+  },
+  {
+    id: 'IMP_C2',
+    groupLetter: 'C',
+    component: 'Pengelolaan Kelas dan Lingkungan Belajar',
+    indicator: 'Lingkungan Virtual',
+    question: 'Apakah guru memanfaatkan media/teknologi digital secara efektif untuk mendukung pembelajaran?'
+  },
+  {
+    id: 'IMP_C3',
+    groupLetter: 'C',
+    component: 'Pengelolaan Kelas dan Lingkungan Belajar',
+    indicator: 'Budaya Belajar',
+    question: 'Apakah tercipta budaya belajar kolaboratif, kritis, dan reflektif di kelas?'
+  },
+
+  // D. Pelibatan Siswa
+  {
+    id: 'IMP_D1',
+    groupLetter: 'D',
+    component: 'Pelibatan Siswa',
+    indicator: 'Partisipasi Aktif',
+    question: 'Apakah siswa aktif bertanya, berdiskusi, mengemukakan pendapat, dan terlibat dalam pembelajaran?',
+    isFirstInGroup: true,
+    groupRowSpan: 2
+  },
+  {
+    id: 'IMP_D2',
+    groupLetter: 'D',
+    component: 'Pelibatan Siswa',
+    indicator: 'Kolaborasi',
+    question: 'Apakah siswa bekerja sama secara efektif dalam kelompok dan dengan pihak luar jika relevan?'
+  },
+
+  // E. Pelaksanaan Asesmen
+  {
+    id: 'IMP_E1',
+    groupLetter: 'E',
+    component: 'Pelaksanaan Asesmen',
+    indicator: 'Asesmen Awal',
+    question: 'Apakah guru melaksanakan asesmen awal sesuai rencana untuk mengetahui kesiapan belajar siswa?',
+    isFirstInGroup: true,
+    groupRowSpan: 4
+  },
+  {
+    id: 'IMP_E2',
+    groupLetter: 'E',
+    component: 'Pelaksanaan Asesmen',
+    indicator: 'Asesmen Proses',
+    question: 'Apakah guru melakukan asesmen formatif dan memberikan umpan balik selama pembelajaran berlangsung?'
+  },
+  {
+    id: 'IMP_E3',
+    groupLetter: 'E',
+    component: 'Pelaksanaan Asesmen',
+    indicator: 'Asesmen Akhir',
+    question: 'Apakah guru melaksanakan asesmen akhir yang autentik dan sesuai tujuan pembelajaran?'
+  },
+  {
+    id: 'IMP_E4',
+    groupLetter: 'E',
+    component: 'Pelaksanaan Asesmen',
+    indicator: 'Refleksi Hasil Asesmen',
+    question: 'Apakah guru dan siswa melakukan refleksi terhadap hasil asesmen untuk perbaikan ke depan?'
+  }
+];
+
+export function calculateDeepLearningImplementationScore(scores: Record<string, number>) {
+  const totalRealScore = DEEP_LEARNING_IMPLEMENTATION_SUPERVISION_ITEMS.reduce((sum, item) => {
+    const val = scores[item.id] ?? scores[item.question] ?? 0;
+    return sum + (typeof val === 'number' ? val : 0);
+  }, 0);
+
+  const maxScore = DEEP_LEARNING_IMPLEMENTATION_SUPERVISION_ITEMS.length * 4; // 17 * 4 = 68
+  const finalScore = maxScore > 0 ? (totalRealScore / maxScore) * 100 : 0;
+  const scaledTo80 = maxScore > 0 ? (totalRealScore / maxScore) * 80 : 0;
+
+  let readinessCategory: 'Sangat Kurang' | 'Kurang' | 'Baik' | 'Sangat Baik' = 'Sangat Kurang';
+  if (finalScore >= 86) {
+    readinessCategory = 'Sangat Baik';
+  } else if (finalScore >= 70) {
+    readinessCategory = 'Baik';
+  } else if (finalScore >= 55) {
+    readinessCategory = 'Kurang';
+  } else {
+    readinessCategory = 'Sangat Kurang';
+  }
+
+  return {
+    totalRealScore,
+    maxScore,
+    scaledTo80,
+    finalScore,
+    readinessCategory,
+    predicate: readinessCategory
+  };
+}
+
