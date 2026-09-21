@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { 
   User, 
   UserRole, 
@@ -129,12 +130,18 @@ const MONTH_NAMES: Record<string, string> = {
 };
 
 export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ user }) => {
+  const isAuthorized = user.role === UserRole.ADMIN || (
+    Boolean(user.isExtracurricularAdvisor) && 
+    Array.isArray(user.extracurriculars) && 
+    user.extracurriculars.length > 0
+  );
+
   // Available extracurriculars list for current user
   const userEkskuls = useMemo(() => {
-    const list = user.extracurriculars && user.extracurriculars.length > 0
-      ? user.extracurriculars
-      : DEFAULT_EXTRACURRICULARS;
-    return list;
+    if (user.extracurriculars && user.extracurriculars.length > 0) {
+      return user.extracurriculars;
+    }
+    return DEFAULT_EXTRACURRICULARS;
   }, [user.extracurriculars]);
 
   // Active state
@@ -144,6 +151,14 @@ export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ 
     }
     return 'Pramuka';
   });
+
+  useEffect(() => {
+    if (user.extracurriculars && user.extracurriculars.length > 0) {
+      if (!user.extracurriculars.includes(selectedEkskul)) {
+        setSelectedEkskul(user.extracurriculars[0]);
+      }
+    }
+  }, [user.extracurriculars, selectedEkskul]);
 
   const [selectedSemester, setSelectedSemester] = useState<'Ganjil' | 'Genap'>(
     new Date().getMonth() >= 6 ? 'Ganjil' : 'Genap'
@@ -826,6 +841,30 @@ export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ 
   const handlePrint = () => {
     window.print();
   };
+
+  if (!isAuthorized) {
+    return (
+      <div className="p-4 sm:p-6 max-w-3xl mx-auto my-12">
+        <div className="bg-white rounded-2xl shadow-sm border border-amber-200 p-8 text-center space-y-4">
+          <div className="w-16 h-16 bg-amber-100 text-amber-700 rounded-full flex items-center justify-center mx-auto shadow-inner">
+            <Trophy size={32} />
+          </div>
+          <h2 className="text-xl font-bold text-gray-900">Akses Pembina Ekstrakurikuler Belum Aktif</h2>
+          <p className="text-sm text-gray-600 max-w-md mx-auto leading-relaxed">
+            Akun Anda saat ini belum mengaktifkan tugas tambahan sebagai <strong>Pembina Ekstrakurikuler</strong> atau belum memilih cabang ekstrakurikuler yang dibina di profil Anda.
+          </p>
+          <div className="pt-2">
+            <Link
+              to="/profile"
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold rounded-xl transition shadow-xs"
+            >
+              Buka Pengaturan Profil Saya
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
