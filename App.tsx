@@ -1532,7 +1532,8 @@ const AppContent: React.FC = () => {
                       icon={UserCheck}
                       label="Bimbingan Guru Wali"
                     />
-                    {currentUser.isSupervisor && (
+                    {(currentUser.isSupervisor ||
+                      currentUser.additionalRole === "WAKASEK_KURIKULUM") && (
                       <NavLink
                         to="/supervision-assessment"
                         icon={ClipboardCheck}
@@ -2020,7 +2021,8 @@ const AppContent: React.FC = () => {
                   element={<TeacherSummative user={currentUser} />}
                 />
                 {(currentUser.isSupervisor ||
-                  currentUser.additionalRole === "KEPALA_SEKOLAH") && (
+                  currentUser.additionalRole === "KEPALA_SEKOLAH" ||
+                  currentUser.additionalRole === "WAKASEK_KURIKULUM") && (
                   <Route
                     path="/supervision-assessment"
                     element={<SupervisionAssessment user={currentUser} />}
