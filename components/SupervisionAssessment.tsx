@@ -309,11 +309,13 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
           });
         }
 
-        if (existingPlanning?.readinessCategory) {
+        const calcPlanning = calculateDeepLearningScore(existingPlanning?.scores || {});
+        if (calcPlanning.totalRealScore > 0) {
+          setReadinessCategory(calcPlanning.readinessCategory);
+        } else if (existingPlanning?.readinessCategory) {
           setReadinessCategory(existingPlanning.readinessCategory as any);
         } else {
-          const calc = calculateDeepLearningScore(existingPlanning?.scores || {});
-          setReadinessCategory(calc.readinessCategory);
+          setReadinessCategory(calcPlanning.readinessCategory);
         }
 
         // Load Tab 2: Pelaksanaan Pembelajaran Mendalam
@@ -335,10 +337,12 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
             resourcesNeeded: ''
           });
         }
-        if (existingLesson?.readinessCategory) {
+        const calcLesson = calculateDeepLearningImplementationScore(existingLesson?.scores || {});
+        if (calcLesson.totalRealScore > 0) {
+          setLessonPlanReadinessCategory(calcLesson.readinessCategory);
+        } else if (existingLesson?.readinessCategory) {
           setLessonPlanReadinessCategory(existingLesson.readinessCategory as any);
         } else {
-          const calcLesson = calculateDeepLearningImplementationScore(existingLesson?.scores || {});
           setLessonPlanReadinessCategory(calcLesson.readinessCategory);
         }
         setLessonPlanCoaching(existingLesson?.coachingSuggestion || '');
@@ -357,15 +361,18 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
         setImplAreasToImprove(existingImpl?.areasToImprove || '');
         setImplRecommendations(existingImpl?.recommendations || '');
         setImplCoaching(existingImpl?.coachingSuggestion || '');
-        if (existingImpl?.readinessCategory || existingImpl?.predicate) {
+        const calcImpl = calculateDeepLearningFeedbackScore(existingImpl?.scores || {});
+        if (calcImpl.totalRealScore > 0) {
+          setImplReadinessCategory(calcImpl.readinessCategory);
+        } else if (existingImpl?.readinessCategory || existingImpl?.predicate) {
           const cat = (existingImpl.readinessCategory || existingImpl.predicate) as any;
           if (['Sangat Kurang', 'Kurang', 'Baik', 'Sangat Baik'].includes(cat)) {
             setImplReadinessCategory(cat);
           } else {
-            setImplReadinessCategory(calculateDeepLearningFeedbackScore(existingImpl?.scores || {}).readinessCategory);
+            setImplReadinessCategory(calcImpl.readinessCategory);
           }
         } else {
-          setImplReadinessCategory(calculateDeepLearningFeedbackScore(existingImpl?.scores || {}).readinessCategory);
+          setImplReadinessCategory(calcImpl.readinessCategory);
         }
 
         // Load Legacy/Notes
@@ -432,36 +439,66 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
     }
   };
 
+  const handlePlanningScoreChange = (itemId: string, val: number) => {
+    setPlanningScores(prev => {
+      const updated = { ...prev, [itemId]: val };
+      const calc = calculateDeepLearningScore(updated);
+      setReadinessCategory(calc.readinessCategory);
+      return updated;
+    });
+  };
+
+  const handleLessonPlanScoreChange = (itemId: string, val: number) => {
+    setLessonPlanScores(prev => {
+      const updated = { ...prev, [itemId]: val };
+      const calc = calculateDeepLearningImplementationScore(updated);
+      setLessonPlanReadinessCategory(calc.readinessCategory);
+      return updated;
+    });
+  };
+
+  const handleImplScoreChange = (itemId: string, val: number) => {
+    setImplScores(prev => {
+      const updated = { ...prev, [itemId]: val };
+      const calc = calculateDeepLearningFeedbackScore(updated);
+      setImplReadinessCategory(calc.readinessCategory);
+      return updated;
+    });
+  };
+
   const calculatePlanningResults = () => {
     const calc = calculateDeepLearningScore(planningScores);
+    const category = readinessCategory || calc.readinessCategory;
     return {
       totalRealScore: calc.totalRealScore,
       maxScore: calc.maxScore,
       finalScore: calc.finalScore,
-      predicate: readinessCategory || calc.readinessCategory,
-      readinessCategory: readinessCategory || calc.readinessCategory
+      predicate: category,
+      readinessCategory: category
     };
   };
 
   const calculateLessonPlanResults = () => {
     const calc = calculateDeepLearningImplementationScore(lessonPlanScores);
+    const category = lessonPlanReadinessCategory || calc.readinessCategory;
     return {
       totalRealScore: calc.totalRealScore,
       maxScore: calc.maxScore,
       finalScore: calc.finalScore,
-      predicate: lessonPlanReadinessCategory || calc.readinessCategory,
-      readinessCategory: lessonPlanReadinessCategory || calc.readinessCategory
+      predicate: category,
+      readinessCategory: category
     };
   };
 
   const calculateImplementationResults = () => {
     const calc = calculateDeepLearningFeedbackScore(implScores);
+    const category = implReadinessCategory || calc.readinessCategory;
     return {
       totalRealScore: calc.totalRealScore,
       maxScore: calc.maxScore,
       finalScore: calc.finalScore,
-      predicate: implReadinessCategory || calc.readinessCategory,
-      readinessCategory: implReadinessCategory || calc.readinessCategory
+      predicate: category,
+      readinessCategory: category
     };
   };
 
@@ -933,7 +970,7 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
                                         key={val}
                                         type="button"
                                         title={SCORE_DESCRIPTIONS[val]}
-                                        onClick={() => setPlanningScores(prev => ({ ...prev, [item.id]: val }))}
+                                        onClick={() => handlePlanningScoreChange(item.id, val)}
                                         className={`w-8 h-8 rounded-lg font-black text-xs transition shadow-sm ${
                                           currentScore === val
                                             ? 'bg-purple-600 text-white ring-2 ring-purple-300 scale-105'
@@ -1026,33 +1063,39 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
 
                       <div className="bg-indigo-50/60 p-4 rounded-xl border border-indigo-100">
                         <h5 className="text-xs font-black text-indigo-900 uppercase mb-2 tracking-wider">
-                          Kategori Kesiapan:
+                          Kategori Kesiapan / Predikat:
                         </h5>
                         <div className="grid grid-cols-2 gap-2 text-xs">
                           {[
-                            { label: 'Sangat Kurang', range: '< 55', color: 'bg-rose-50 border-rose-200 text-rose-700' },
-                            { label: 'Kurang', range: '55.00 - 69.99', color: 'bg-amber-50 border-amber-200 text-amber-700' },
-                            { label: 'Baik', range: '70.00 - 85.99', color: 'bg-blue-50 border-blue-200 text-blue-700' },
-                            { label: 'Sangat Baik', range: '86.00 - 100.00', color: 'bg-emerald-50 border-emerald-200 text-emerald-700' },
+                            { label: 'Sangat Kurang', range: '< 55', activeBg: 'bg-rose-600 text-white border-rose-700 ring-2 ring-rose-300', inactiveBg: 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100' },
+                            { label: 'Kurang', range: '55.00 - 69.99', activeBg: 'bg-amber-600 text-white border-amber-700 ring-2 ring-amber-300', inactiveBg: 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100' },
+                            { label: 'Baik', range: '70.00 - 85.99', activeBg: 'bg-blue-600 text-white border-blue-700 ring-2 ring-blue-300', inactiveBg: 'bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100' },
+                            { label: 'Sangat Baik', range: '86.00 - 100.00', activeBg: 'bg-emerald-600 text-white border-emerald-700 ring-2 ring-emerald-300', inactiveBg: 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100' },
                           ].map(cat => {
-                            const isSelected = readinessCategory === cat.label;
+                            const isSelected = calculatePlanningResults().readinessCategory === cat.label;
                             return (
                               <button
                                 key={cat.label}
                                 type="button"
                                 onClick={() => setReadinessCategory(cat.label as any)}
-                                className={`p-2 rounded-lg border text-left transition flex items-center justify-between ${cat.color} ${
-                                  isSelected ? 'ring-2 ring-indigo-500 font-bold shadow-sm' : 'opacity-80 hover:opacity-100'
+                                className={`p-2.5 rounded-lg border text-left transition shadow-sm ${
+                                  isSelected ? `${cat.activeBg} font-bold shadow-md scale-[1.02]` : `${cat.inactiveBg} opacity-80 hover:opacity-100`
                                 }`}
                               >
-                                <span>{cat.label}</span>
-                                <span className="text-[10px] font-mono opacity-75">{cat.range}</span>
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-1.5">
+                                    {isSelected && <CheckCircle size={14} className="shrink-0" />}
+                                    <span>{cat.label}</span>
+                                  </div>
+                                  <span className={`text-[10px] font-mono ${isSelected ? 'text-white/90 font-bold' : 'opacity-75'}`}>{cat.range}</span>
+                                </div>
                               </button>
                             );
                           })}
                         </div>
-                        <p className="text-[10px] text-gray-500 mt-2 italic">
-                          *Kategori otomatis dihitung dari Nilai Akhir, namun supervisor dapat memilih/menyesuaikan jika ada pertimbangan khusus.
+                        <p className="text-[10px] text-gray-500 mt-2 italic flex items-center gap-1">
+                          <CheckCircle size={12} className="text-emerald-600 shrink-0" />
+                          <span>Nilai Akhir: <strong>{calculatePlanningResults().finalScore.toFixed(2)}</strong>. Predikat otomatis terpilih sesuai nilai akhir.</span>
                         </p>
                       </div>
                     </div>
@@ -1262,7 +1305,7 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
                                         key={val}
                                         type="button"
                                         title={SCORE_DESCRIPTIONS[val]}
-                                        onClick={() => setLessonPlanScores(prev => ({ ...prev, [item.id]: val }))}
+                                        onClick={() => handleLessonPlanScoreChange(item.id, val)}
                                         className={`w-8 h-8 rounded-lg font-black text-xs transition shadow-sm ${
                                           currentScore === val
                                             ? 'bg-blue-600 text-white ring-2 ring-blue-300 scale-105'
@@ -1358,33 +1401,39 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
 
                       <div className="bg-indigo-50/60 p-4 rounded-xl border border-indigo-100">
                         <h5 className="text-xs font-black text-indigo-900 uppercase mb-2 tracking-wider">
-                          Kategori Kesiapan:
+                          Kategori Kesiapan / Predikat:
                         </h5>
                         <div className="grid grid-cols-2 gap-2 text-xs">
                           {[
-                            { label: 'Sangat Kurang', range: '< 55', color: 'bg-rose-50 border-rose-200 text-rose-700' },
-                            { label: 'Kurang', range: '55.00 - 69.99', color: 'bg-amber-50 border-amber-200 text-amber-700' },
-                            { label: 'Baik', range: '70.00 - 85.99', color: 'bg-blue-50 border-blue-200 text-blue-700' },
-                            { label: 'Sangat Baik', range: '86.00 - 100.00', color: 'bg-emerald-50 border-emerald-200 text-emerald-700' },
+                            { label: 'Sangat Kurang', range: '< 55', activeBg: 'bg-rose-600 text-white border-rose-700 ring-2 ring-rose-300', inactiveBg: 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100' },
+                            { label: 'Kurang', range: '55.00 - 69.99', activeBg: 'bg-amber-600 text-white border-amber-700 ring-2 ring-amber-300', inactiveBg: 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100' },
+                            { label: 'Baik', range: '70.00 - 85.99', activeBg: 'bg-blue-600 text-white border-blue-700 ring-2 ring-blue-300', inactiveBg: 'bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100' },
+                            { label: 'Sangat Baik', range: '86.00 - 100.00', activeBg: 'bg-emerald-600 text-white border-emerald-700 ring-2 ring-emerald-300', inactiveBg: 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100' },
                           ].map(cat => {
-                            const isSelected = lessonPlanReadinessCategory === cat.label;
+                            const isSelected = calculateLessonPlanResults().readinessCategory === cat.label;
                             return (
                               <button
                                 key={cat.label}
                                 type="button"
                                 onClick={() => setLessonPlanReadinessCategory(cat.label as any)}
-                                className={`p-2 rounded-lg border text-left transition flex items-center justify-between ${cat.color} ${
-                                  isSelected ? 'ring-2 ring-indigo-500 font-bold shadow-sm' : 'opacity-80 hover:opacity-100'
+                                className={`p-2.5 rounded-lg border text-left transition shadow-sm ${
+                                  isSelected ? `${cat.activeBg} font-bold shadow-md scale-[1.02]` : `${cat.inactiveBg} opacity-80 hover:opacity-100`
                                 }`}
                               >
-                                <span>{cat.label}</span>
-                                <span className="text-[10px] font-mono opacity-75">{cat.range}</span>
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-1.5">
+                                    {isSelected && <CheckCircle size={14} className="shrink-0" />}
+                                    <span>{cat.label}</span>
+                                  </div>
+                                  <span className={`text-[10px] font-mono ${isSelected ? 'text-white/90 font-bold' : 'opacity-75'}`}>{cat.range}</span>
+                                </div>
                               </button>
                             );
                           })}
                         </div>
-                        <p className="text-[10px] text-gray-500 mt-2 italic">
-                          *Nilai Akhir: {calculateLessonPlanResults().finalScore.toFixed(2)} (Skor Riil: {calculateLessonPlanResults().totalRealScore} / 68). Kategori dihitung otomatis dari rumus, supervisor dapat menyesuaikan.
+                        <p className="text-[10px] text-gray-500 mt-2 italic flex items-center gap-1">
+                          <CheckCircle size={12} className="text-emerald-600 shrink-0" />
+                          <span>Nilai Akhir: <strong>{calculateLessonPlanResults().finalScore.toFixed(2)}</strong>. Predikat otomatis terpilih sesuai nilai akhir.</span>
                         </p>
                       </div>
                     </div>
@@ -1700,7 +1749,7 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
                                       <button
                                         key={val}
                                         type="button"
-                                        onClick={() => setImplScores(prev => ({ ...prev, [item.id]: val }))}
+                                        onClick={() => handleImplScoreChange(item.id, val)}
                                         className={`w-8 h-8 rounded-lg font-bold text-xs transition shadow-sm ${
                                           score === val 
                                             ? 'bg-purple-600 text-white ring-2 ring-purple-300 scale-105' 
@@ -1787,29 +1836,35 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
                         </h5>
                         <div className="grid grid-cols-2 gap-2 text-xs">
                           {[
-                            { label: 'Sangat Kurang', range: '< 55', color: 'bg-rose-50 border-rose-200 text-rose-700' },
-                            { label: 'Kurang', range: '55.00 - 69.99', color: 'bg-amber-50 border-amber-200 text-amber-700' },
-                            { label: 'Baik', range: '70.00 - 85.99', color: 'bg-blue-50 border-blue-200 text-blue-700' },
-                            { label: 'Sangat Baik', range: '86.00 - 100.00', color: 'bg-emerald-50 border-emerald-200 text-emerald-700' },
+                            { label: 'Sangat Kurang', range: '< 55', activeBg: 'bg-rose-600 text-white border-rose-700 ring-2 ring-rose-300', inactiveBg: 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100' },
+                            { label: 'Kurang', range: '55.00 - 69.99', activeBg: 'bg-amber-600 text-white border-amber-700 ring-2 ring-amber-300', inactiveBg: 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100' },
+                            { label: 'Baik', range: '70.00 - 85.99', activeBg: 'bg-blue-600 text-white border-blue-700 ring-2 ring-blue-300', inactiveBg: 'bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100' },
+                            { label: 'Sangat Baik', range: '86.00 - 100.00', activeBg: 'bg-emerald-600 text-white border-emerald-700 ring-2 ring-emerald-300', inactiveBg: 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100' },
                           ].map(cat => {
-                            const isSelected = implReadinessCategory === cat.label;
+                            const isSelected = calculateImplementationResults().readinessCategory === cat.label;
                             return (
                               <button
                                 key={cat.label}
                                 type="button"
                                 onClick={() => setImplReadinessCategory(cat.label as any)}
-                                className={`p-2 rounded-lg border text-left transition flex items-center justify-between ${cat.color} ${
-                                  isSelected ? 'ring-2 ring-indigo-500 font-bold shadow-sm' : 'opacity-80 hover:opacity-100'
+                                className={`p-2.5 rounded-lg border text-left transition shadow-sm ${
+                                  isSelected ? `${cat.activeBg} font-bold shadow-md scale-[1.02]` : `${cat.inactiveBg} opacity-80 hover:opacity-100`
                                 }`}
                               >
-                                <span>{cat.label}</span>
-                                <span className="text-[10px] font-mono opacity-75">{cat.range}</span>
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-1.5">
+                                    {isSelected && <CheckCircle size={14} className="shrink-0" />}
+                                    <span>{cat.label}</span>
+                                  </div>
+                                  <span className={`text-[10px] font-mono ${isSelected ? 'text-white/90 font-bold' : 'opacity-75'}`}>{cat.range}</span>
+                                </div>
                               </button>
                             );
                           })}
                         </div>
-                        <p className="text-[10px] text-gray-500 mt-2 italic">
-                          *Nilai Akhir: {calculateImplementationResults().finalScore.toFixed(2)} (Skor Riil: {calculateImplementationResults().totalRealScore} / 60). Kategori dihitung otomatis dari rumus, supervisor dapat menyesuaikan.
+                        <p className="text-[10px] text-gray-500 mt-2 italic flex items-center gap-1">
+                          <CheckCircle size={12} className="text-emerald-600 shrink-0" />
+                          <span>Nilai Akhir: <strong>{calculateImplementationResults().finalScore.toFixed(2)}</strong>. Predikat otomatis terpilih sesuai nilai akhir.</span>
                         </p>
                       </div>
                     </div>
