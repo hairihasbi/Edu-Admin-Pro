@@ -137,6 +137,7 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
   const [implAreasToImprove, setImplAreasToImprove] = useState('');
   const [implRecommendations, setImplRecommendations] = useState('');
   const [implCoaching, setImplCoaching] = useState('');
+  const [implReadinessCategory, setImplReadinessCategory] = useState<'Sangat Kurang' | 'Kurang' | 'Baik' | 'Sangat Baik'>('Sangat Kurang');
 
   // Tab 3: Legacy/Placeholder state
   const [scores, setScores] = useState<Record<string, number>>({});
@@ -356,6 +357,16 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
         setImplAreasToImprove(existingImpl?.areasToImprove || '');
         setImplRecommendations(existingImpl?.recommendations || '');
         setImplCoaching(existingImpl?.coachingSuggestion || '');
+        if (existingImpl?.readinessCategory || existingImpl?.predicate) {
+          const cat = (existingImpl.readinessCategory || existingImpl.predicate) as any;
+          if (['Sangat Kurang', 'Kurang', 'Baik', 'Sangat Baik'].includes(cat)) {
+            setImplReadinessCategory(cat);
+          } else {
+            setImplReadinessCategory(calculateDeepLearningFeedbackScore(existingImpl?.scores || {}).readinessCategory);
+          }
+        } else {
+          setImplReadinessCategory(calculateDeepLearningFeedbackScore(existingImpl?.scores || {}).readinessCategory);
+        }
 
         // Load Legacy/Notes
         setScores({}); // Aspect scores are legacy
@@ -405,6 +416,7 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
         setImplAreasToImprove('');
         setImplRecommendations('');
         setImplCoaching('');
+        setImplReadinessCategory('Sangat Kurang');
 
         // Reset Legacy
         setScores({});
@@ -424,7 +436,7 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
     const calc = calculateDeepLearningScore(planningScores);
     return {
       totalRealScore: calc.totalRealScore,
-      scaledTo80: calc.scaledTo80,
+      maxScore: calc.maxScore,
       finalScore: calc.finalScore,
       predicate: readinessCategory || calc.readinessCategory,
       readinessCategory: readinessCategory || calc.readinessCategory
@@ -436,7 +448,6 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
     return {
       totalRealScore: calc.totalRealScore,
       maxScore: calc.maxScore,
-      scaledTo80: calc.scaledTo80,
       finalScore: calc.finalScore,
       predicate: lessonPlanReadinessCategory || calc.readinessCategory,
       readinessCategory: lessonPlanReadinessCategory || calc.readinessCategory
@@ -444,7 +455,14 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
   };
 
   const calculateImplementationResults = () => {
-    return calculateDeepLearningFeedbackScore(implScores);
+    const calc = calculateDeepLearningFeedbackScore(implScores);
+    return {
+      totalRealScore: calc.totalRealScore,
+      maxScore: calc.maxScore,
+      finalScore: calc.finalScore,
+      predicate: implReadinessCategory || calc.readinessCategory,
+      readinessCategory: implReadinessCategory || calc.readinessCategory
+    };
   };
 
   const handleSaveTab = async () => {
@@ -468,6 +486,7 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
           scores: planningScores,
           comments: planningComments,
           totalRealScore: planningData.totalRealScore,
+          maxScore: planningData.maxScore,
           finalScore: planningData.finalScore,
           predicate: planningData.predicate,
           readinessCategory: planningData.readinessCategory,
@@ -479,7 +498,6 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
           comments: lessonPlanComments,
           totalRealScore: lessonPlanData.totalRealScore,
           maxScore: lessonPlanData.maxScore,
-          scaledTo80: lessonPlanData.scaledTo80,
           finalScore: lessonPlanData.finalScore,
           predicate: lessonPlanData.predicate,
           readinessCategory: lessonPlanData.readinessCategory,
@@ -493,6 +511,7 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
           maxScore: implData.maxScore,
           finalScore: implData.finalScore,
           predicate: implData.predicate,
+          readinessCategory: implData.readinessCategory,
           coachingSuggestion: implRecommendations || implAreasToImprove || implCoaching,
           planningUrl: implPlanningUrl,
           level: implLevel,
@@ -853,6 +872,17 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
                             {calculatePlanningResults().finalScore.toFixed(2)}
                           </div>
                         </div>
+                        <div className="h-8 w-px bg-purple-200"></div>
+                        <div className="text-right">
+                          <div className="text-[10px] uppercase font-bold text-gray-400">Predikat</div>
+                          <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-black text-white ${
+                            calculatePlanningResults().predicate === 'Sangat Baik' ? 'bg-emerald-600' :
+                            calculatePlanningResults().predicate === 'Baik' ? 'bg-blue-600' :
+                            calculatePlanningResults().predicate === 'Kurang' ? 'bg-amber-600' : 'bg-rose-600'
+                          }`}>
+                            {calculatePlanningResults().predicate}
+                          </span>
+                        </div>
                       </div>
                     </div>
 
@@ -944,7 +974,7 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
                               {calculatePlanningResults().totalRealScore}
                             </td>
                             <td className="border border-gray-200 p-3 text-gray-500 text-[11px] font-normal">
-                              Konversi Skala 80: <strong className="text-gray-800">{calculatePlanningResults().scaledTo80.toFixed(1)} / 80</strong>
+                              Murni perhitungan rumus (Skor Riil / 72 × 100)
                             </td>
                           </tr>
                           <tr>
@@ -1166,17 +1196,21 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
                         </div>
                         <div className="h-8 w-px bg-blue-200"></div>
                         <div className="text-right">
-                          <div className="text-[10px] uppercase font-bold text-gray-400">Skala 80</div>
-                          <div className="text-base font-black text-indigo-600">
-                            {calculateLessonPlanResults().scaledTo80.toFixed(1)} <span className="text-xs font-normal text-gray-500">/ 80</span>
-                          </div>
-                        </div>
-                        <div className="h-8 w-px bg-blue-200"></div>
-                        <div className="text-right">
                           <div className="text-[10px] uppercase font-bold text-gray-400">Nilai Akhir</div>
                           <div className="text-base font-black text-purple-700">
                             {calculateLessonPlanResults().finalScore.toFixed(2)}
                           </div>
+                        </div>
+                        <div className="h-8 w-px bg-blue-200"></div>
+                        <div className="text-right">
+                          <div className="text-[10px] uppercase font-bold text-gray-400">Predikat</div>
+                          <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-black text-white ${
+                            calculateLessonPlanResults().predicate === 'Sangat Baik' ? 'bg-emerald-600' :
+                            calculateLessonPlanResults().predicate === 'Baik' ? 'bg-blue-600' :
+                            calculateLessonPlanResults().predicate === 'Kurang' ? 'bg-amber-600' : 'bg-rose-600'
+                          }`}>
+                            {calculateLessonPlanResults().predicate}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -1269,7 +1303,7 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
                               {calculateLessonPlanResults().totalRealScore}
                             </td>
                             <td className="border border-gray-200 p-3 text-gray-500 text-[11px] font-normal">
-                              Total Skor Skala 80: <strong className="text-gray-800">{calculateLessonPlanResults().scaledTo80.toFixed(1)} / 80</strong>
+                              Murni perhitungan rumus (Skor Riil / 68 × 100)
                             </td>
                           </tr>
                           <tr>
@@ -1317,6 +1351,9 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
                             <span><strong>Lengkap dan sangat baik</strong> (Memenuhi prinsip pembelajaran mendalam)</span>
                           </li>
                         </ul>
+                        <div className="mt-3 pt-2.5 border-t border-blue-200/60 text-[11px] text-blue-800">
+                          <strong>Rumus Penilaian:</strong> Nilai Akhir = (Total Skor Riil / 68) × 100 <span className="text-gray-500 font-normal">(Murni rumus tanpa konversi skala 80)</span>
+                        </div>
                       </div>
 
                       <div className="bg-indigo-50/60 p-4 rounded-xl border border-indigo-100">
@@ -1347,7 +1384,7 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
                           })}
                         </div>
                         <p className="text-[10px] text-gray-500 mt-2 italic">
-                          *Total Skor: {calculateLessonPlanResults().scaledTo80.toFixed(1)} / 80. Kategori dihitung otomatis, supervisor dapat menyesuaikan.
+                          *Nilai Akhir: {calculateLessonPlanResults().finalScore.toFixed(2)} (Skor Riil: {calculateLessonPlanResults().totalRealScore} / 68). Kategori dihitung otomatis dari rumus, supervisor dapat menyesuaikan.
                         </p>
                       </div>
                     </div>
@@ -1565,6 +1602,47 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
                       </div>
                     </div>
 
+                    {/* Header Bagian 1: Instrumen Penilaian Umpan Balik */}
+                    <div className="bg-gradient-to-r from-purple-50 to-indigo-50/50 p-4 rounded-xl border border-purple-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="w-6 h-6 rounded-full bg-purple-600 text-white text-xs font-black flex items-center justify-center">1</span>
+                          <h4 className="text-sm font-black text-gray-900 uppercase tracking-wide">
+                            Instrumen Umpan Balik Perencanaan Pembelajaran
+                          </h4>
+                        </div>
+                        <p className="text-xs text-gray-600 mt-1 ml-8">
+                          Beri penilaian skor 1 sampai 4 dan catatan komentar kritis pada setiap aspek telaah perencanaan pembelajaran mendalam.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3 ml-8 md:ml-0">
+                        <div className="text-right">
+                          <div className="text-[10px] uppercase font-bold text-gray-400">Total Skor Riil</div>
+                          <div className="text-base font-black text-purple-700">
+                            {calculateImplementationResults().totalRealScore} <span className="text-xs font-normal text-gray-500">/ 60</span>
+                          </div>
+                        </div>
+                        <div className="h-8 w-px bg-purple-200"></div>
+                        <div className="text-right">
+                          <div className="text-[10px] uppercase font-bold text-gray-400">Nilai Akhir</div>
+                          <div className="text-base font-black text-indigo-700">
+                            {calculateImplementationResults().finalScore.toFixed(2)}
+                          </div>
+                        </div>
+                        <div className="h-8 w-px bg-purple-200"></div>
+                        <div className="text-right">
+                          <div className="text-[10px] uppercase font-bold text-gray-400">Predikat</div>
+                          <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-black text-white ${
+                            calculateImplementationResults().predicate === 'Sangat Baik' ? 'bg-emerald-600' :
+                            calculateImplementationResults().predicate === 'Baik' ? 'bg-blue-600' :
+                            calculateImplementationResults().predicate === 'Kurang' ? 'bg-amber-600' : 'bg-rose-600'
+                          }`}>
+                            {calculateImplementationResults().predicate}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
                     {/* Scale Guide */}
                     <div className="bg-amber-50/60 border border-amber-200/80 p-3.5 rounded-xl text-xs flex flex-col md:flex-row md:items-center justify-between gap-2 text-amber-900">
                       <div className="font-bold flex items-center gap-1.5">
@@ -1643,14 +1721,14 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
                         </tbody>
                         <tfoot className="bg-gray-50 font-bold border-t-2 border-gray-200">
                           <tr>
-                            <td colSpan={2} className="p-3 text-right text-gray-600">
+                            <td colSpan={2} className="p-3 text-right text-gray-700">
                               JUMLAH SKOR RIIL (Maksimal: 60)
                             </td>
-                            <td className="p-3 text-gray-500 font-normal italic text-right">
-                              Total Terisi: {Object.keys(implScores).filter(k => (implScores[k] || 0) > 0).length} / 15 Aspek
+                            <td className="p-3 text-gray-500 font-normal text-[11px] text-right">
+                              Murni perhitungan rumus (Skor Riil / 60 × 100)
                             </td>
                             <td className="p-3 text-center text-purple-700 text-base font-black">
-                              {calculateImplementationResults().totalRealScore} / 60
+                              {calculateImplementationResults().totalRealScore}
                             </td>
                           </tr>
                           <tr className="bg-purple-50/50">
@@ -1661,14 +1739,10 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
                               {calculateImplementationResults().finalScore.toFixed(2)}
                             </td>
                             <td className="p-3 text-center">
-                              <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold tracking-wider ${
-                                calculateImplementationResults().finalScore >= 86
-                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                                  : calculateImplementationResults().finalScore >= 70
-                                  ? 'bg-blue-100 text-blue-800 border border-blue-300'
-                                  : calculateImplementationResults().finalScore >= 55
-                                  ? 'bg-amber-100 text-amber-800 border border-amber-300'
-                                  : 'bg-rose-100 text-rose-800 border border-rose-300'
+                              <span className={`inline-block px-3 py-1 rounded-full text-xs font-black text-white ${
+                                calculateImplementationResults().predicate === 'Sangat Baik' ? 'bg-emerald-600' :
+                                calculateImplementationResults().predicate === 'Baik' ? 'bg-blue-600' :
+                                calculateImplementationResults().predicate === 'Kurang' ? 'bg-amber-600' : 'bg-rose-600'
                               }`}>
                                 {calculateImplementationResults().predicate}
                               </span>
@@ -1676,6 +1750,68 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
                           </tr>
                         </tfoot>
                       </table>
+                    </div>
+
+                    {/* Keterangan Skor & Kategori Kesiapan */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="bg-purple-50/60 p-4 rounded-xl border border-purple-100">
+                        <h5 className="text-xs font-black text-purple-900 uppercase mb-2 tracking-wider">
+                          Keterangan Skor:
+                        </h5>
+                        <ul className="space-y-1.5 text-xs text-gray-700">
+                          <li className="flex items-center gap-2">
+                            <span className="w-5 h-5 rounded bg-white text-purple-700 font-bold border border-purple-200 flex items-center justify-center text-[10px]">1</span>
+                            <span><strong>Hampir tidak ada</strong></span>
+                          </li>
+                          <li className="flex items-center gap-2">
+                            <span className="w-5 h-5 rounded bg-white text-purple-700 font-bold border border-purple-200 flex items-center justify-center text-[10px]">2</span>
+                            <span><strong>Sedikit dan lemah</strong></span>
+                          </li>
+                          <li className="flex items-center gap-2">
+                            <span className="w-5 h-5 rounded bg-white text-purple-700 font-bold border border-purple-200 flex items-center justify-center text-[10px]">3</span>
+                            <span><strong>Cukup</strong></span>
+                          </li>
+                          <li className="flex items-center gap-2">
+                            <span className="w-5 h-5 rounded bg-white text-purple-700 font-bold border border-purple-200 flex items-center justify-center text-[10px]">4</span>
+                            <span><strong>Memadai</strong></span>
+                          </li>
+                        </ul>
+                        <div className="mt-3 pt-2.5 border-t border-purple-200/60 text-[11px] text-purple-800">
+                          <strong>Rumus Penilaian:</strong> Nilai Akhir = (Total Skor Riil / 60) × 100 <span className="text-gray-500 font-normal">(Murni rumus tanpa konversi skala 80)</span>
+                        </div>
+                      </div>
+
+                      <div className="bg-indigo-50/60 p-4 rounded-xl border border-indigo-100">
+                        <h5 className="text-xs font-black text-indigo-900 uppercase mb-2 tracking-wider">
+                          Kategori Kesiapan / Predikat:
+                        </h5>
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          {[
+                            { label: 'Sangat Kurang', range: '< 55', color: 'bg-rose-50 border-rose-200 text-rose-700' },
+                            { label: 'Kurang', range: '55.00 - 69.99', color: 'bg-amber-50 border-amber-200 text-amber-700' },
+                            { label: 'Baik', range: '70.00 - 85.99', color: 'bg-blue-50 border-blue-200 text-blue-700' },
+                            { label: 'Sangat Baik', range: '86.00 - 100.00', color: 'bg-emerald-50 border-emerald-200 text-emerald-700' },
+                          ].map(cat => {
+                            const isSelected = implReadinessCategory === cat.label;
+                            return (
+                              <button
+                                key={cat.label}
+                                type="button"
+                                onClick={() => setImplReadinessCategory(cat.label as any)}
+                                className={`p-2 rounded-lg border text-left transition flex items-center justify-between ${cat.color} ${
+                                  isSelected ? 'ring-2 ring-indigo-500 font-bold shadow-sm' : 'opacity-80 hover:opacity-100'
+                                }`}
+                              >
+                                <span>{cat.label}</span>
+                                <span className="text-[10px] font-mono opacity-75">{cat.range}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <p className="text-[10px] text-gray-500 mt-2 italic">
+                          *Nilai Akhir: {calculateImplementationResults().finalScore.toFixed(2)} (Skor Riil: {calculateImplementationResults().totalRealScore} / 60). Kategori dihitung otomatis dari rumus, supervisor dapat menyesuaikan.
+                        </p>
+                      </div>
                     </div>
 
                     {/* Section Butir 16, 17, 18 Refleksi Kualitatif Manual */}

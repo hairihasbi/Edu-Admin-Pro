@@ -403,7 +403,7 @@ export const PrintManualSupervisionModal: React.FC<PrintManualSupervisionModalPr
               </td>
             </tr>
             <tr style="font-weight: bold; background: #fafafa;">
-              <td colspan="4" style="text-align: right;">Total Skor: ................ / 80 &nbsp;&nbsp;(Skor Riil: ................ / 72)</td>
+              <td colspan="4" style="text-align: right;">JUMLAH SKOR RIIL: ................ / 72 &nbsp;&nbsp;|&nbsp;&nbsp; NILAI AKHIR = (Skor Riil / 72) x 100: ................</td>
               <td colspan="2" style="font-size: 8.5pt;">
                 Kategori Kesiapan: [ &nbsp; ] Sangat Kurang &nbsp;&nbsp; [ &nbsp; ] Kurang &nbsp;&nbsp; [ &nbsp; ] Baik &nbsp;&nbsp; [ &nbsp; ] Sangat Baik
               </td>
@@ -507,7 +507,7 @@ export const PrintManualSupervisionModal: React.FC<PrintManualSupervisionModalPr
               </td>
             </tr>
             <tr style="font-weight: bold; background: #fafafa;">
-              <td colspan="4" style="text-align: right;">Total Skor: ................ / 80 &nbsp;&nbsp;(Skor Riil: ................ / 68)</td>
+              <td colspan="4" style="text-align: right;">JUMLAH SKOR RIIL: ................ / 68 &nbsp;&nbsp;|&nbsp;&nbsp; NILAI AKHIR = (Skor Riil / 68) x 100: ................</td>
               <td colspan="2" style="font-size: 8.5pt;">
                 Kategori Kesiapan: [ &nbsp; ] Sangat Kurang &nbsp;&nbsp; [ &nbsp; ] Kurang &nbsp;&nbsp; [ &nbsp; ] Baik &nbsp;&nbsp; [ &nbsp; ] Sangat Baik
               </td>

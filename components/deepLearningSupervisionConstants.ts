@@ -502,22 +502,23 @@ export function calculateDeepLearningFeedbackScore(scores: Record<string, number
   const maxScore = DEEP_LEARNING_FEEDBACK_PLANNING_ITEMS.length * 4; // 15 * 4 = 60
   const finalScore = maxScore > 0 ? (totalRealScore / maxScore) * 100 : 0;
 
-  let predicate = 'Sangat Kurang';
+  let readinessCategory: 'Sangat Kurang' | 'Kurang' | 'Baik' | 'Sangat Baik' = 'Sangat Kurang';
   if (finalScore >= 86) {
-    predicate = 'Sangat Baik (Memadai)';
+    readinessCategory = 'Sangat Baik';
   } else if (finalScore >= 70) {
-    predicate = 'Baik (Cukup)';
+    readinessCategory = 'Baik';
   } else if (finalScore >= 55) {
-    predicate = 'Kurang (Sedikit & Lemah)';
+    readinessCategory = 'Kurang';
   } else {
-    predicate = 'Sangat Kurang (Hampir Tidak Ada)';
+    readinessCategory = 'Sangat Kurang';
   }
 
   return {
     totalRealScore,
     maxScore,
     finalScore,
-    predicate
+    readinessCategory,
+    predicate: readinessCategory
   };
 }
 
