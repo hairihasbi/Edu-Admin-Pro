@@ -640,6 +640,7 @@ export interface SupervisionResult extends Syncable {
     maxScore?: number;
     finalScore: number;
     predicate: string;
+    readinessCategory?: 'Sangat Kurang' | 'Kurang' | 'Baik' | 'Sangat Baik' | string;
     coachingSuggestion?: string;
     // Metadata Header Umpan Balik Perencanaan Pembelajaran
     planningUrl?: string; // Tautan Perencanaan Pembelajaran yang ditelaah
