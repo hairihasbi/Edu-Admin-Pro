@@ -1345,11 +1345,6 @@ const AppContent: React.FC = () => {
                   label="Proposal & Fitur"
                 />
                 <NavLink
-                  to="/extracurricular"
-                  icon={Trophy}
-                  label="Pembina Ekskul"
-                />
-                <NavLink
                   to="/site-settings"
                   icon={Globe}
                   label="Pengaturan Situs"
