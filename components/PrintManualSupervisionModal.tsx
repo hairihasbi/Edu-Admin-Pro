@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { User, SupervisionAssignment } from '../types';
 import { Printer, X, FileText, School, User as UserIcon, Calendar, CheckCircle } from './Icons';
 import { DEEP_LEARNING_SUPERVISION_ITEMS, DEEP_LEARNING_IMPLEMENTATION_SUPERVISION_ITEMS, DEEP_LEARNING_FEEDBACK_PLANNING_ITEMS } from './deepLearningSupervisionConstants';
@@ -68,6 +68,7 @@ interface PrintManualSupervisionModalProps {
   selectedAssignment?: SupervisionAssignment | null;
   defaultTeacherId?: string;
   defaultSupervisorId?: string;
+  assignments?: SupervisionAssignment[];
 }
 
 export const PrintManualSupervisionModal: React.FC<PrintManualSupervisionModalProps> = ({
@@ -77,7 +78,8 @@ export const PrintManualSupervisionModal: React.FC<PrintManualSupervisionModalPr
   teachers,
   selectedAssignment,
   defaultTeacherId,
-  defaultSupervisorId
+  defaultSupervisorId,
+  assignments = []
 }) => {
   // Instrument selection
   const [instrumentType, setInstrumentType] = useState<'ALL' | 'PLANNING' | 'LESSON_PLAN' | 'IMPLEMENTATION'>('ALL');
@@ -88,6 +90,27 @@ export const PrintManualSupervisionModal: React.FC<PrintManualSupervisionModalPr
   const [teacherNip, setTeacherNip] = useState('');
   const [subject, setSubject] = useState('');
   const [className, setClassName] = useState('X / Ganjil');
+
+  // Resolve assigned teachers for this supervisor
+  const activeSupervisorId = selectedAssignment?.supervisorId || defaultSupervisorId || currentUser.id;
+  const assignedTeacherIds = useMemo(() => {
+    if (!assignments || assignments.length === 0) return new Set<string>();
+    return new Set(
+      assignments
+        .filter(a => a.supervisorId === activeSupervisorId)
+        .map(a => a.teacherId)
+    );
+  }, [assignments, activeSupervisorId]);
+
+  const assignedTeachers = useMemo(() => {
+    if (assignedTeacherIds.size === 0) return [];
+    return teachers.filter(t => assignedTeacherIds.has(t.id));
+  }, [teachers, assignedTeacherIds]);
+
+  const otherTeachers = useMemo(() => {
+    if (assignedTeacherIds.size === 0) return teachers;
+    return teachers.filter(t => !assignedTeacherIds.has(t.id));
+  }, [teachers, assignedTeacherIds]);
   const [supervisionDate, setSupervisionDate] = useState(new Date().toISOString().split('T')[0]);
   const [supervisionDayTime, setSupervisionDayTime] = useState('Jam ke 1 - 2 (07.30 - 09.00)');
   const [topic, setTopic] = useState('');
@@ -965,11 +988,32 @@ export const PrintManualSupervisionModal: React.FC<PrintManualSupervisionModalPr
                   className="w-full bg-white border border-gray-200 rounded-lg p-2 text-xs font-medium focus:ring-2 focus:ring-purple-500 outline-none"
                 >
                   <option value="">-- Pilih Guru atau Ketik Manual di Bawah --</option>
-                  {teachers.map(t => (
-                    <option key={t.id} value={t.id}>
-                      {t.fullName} {t.subject ? `(${t.subject})` : ''}
-                    </option>
-                  ))}
+                  {assignedTeachers.length > 0 ? (
+                    <>
+                      <optgroup label={`⭐ Guru Binaan Sesuai Penugasan (${assignedTeachers.length})`}>
+                        {assignedTeachers.map((t: User) => (
+                          <option key={t.id} value={t.id}>
+                            {t.fullName} {t.subject ? `(${t.subject})` : ''}
+                          </option>
+                        ))}
+                      </optgroup>
+                      {otherTeachers.length > 0 && (
+                        <optgroup label={`Guru Lainnya di Sekolah (${otherTeachers.length})`}>
+                          {otherTeachers.map((t: User) => (
+                            <option key={t.id} value={t.id}>
+                              {t.fullName} {t.subject ? `(${t.subject})` : ''}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                    </>
+                  ) : (
+                    teachers.map((t: User) => (
+                      <option key={t.id} value={t.id}>
+                        {t.fullName} {t.subject ? `(${t.subject})` : ''}
+                      </option>
+                    ))
+                  )}
                 </select>
               </div>
 

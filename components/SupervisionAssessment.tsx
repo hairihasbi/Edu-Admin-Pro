@@ -92,7 +92,7 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
   const [teachers, setTeachers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [selectedSupervisorFilter, setSelectedSupervisorFilter] = useState<string>('ALL');
+  const [selectedSupervisorFilter, setSelectedSupervisorFilter] = useState<string>(user.id);
   const [searchGuru, setSearchGuru] = useState<string>('');
   const [selectedAssignment, setSelectedAssignment] = useState<SupervisionAssignment | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -205,38 +205,78 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
     }
   };
 
+  // Helper to match supervisorId safely with fallback to NIP or username
+  const isSupervisorMatch = (assignment: SupervisionAssignment, targetSupId: string) => {
+    if (!assignment.supervisorId || !targetSupId) return false;
+    if (assignment.supervisorId === targetSupId) return true;
+    const targetUser = teachers.find(t => t.id === targetSupId);
+    if (targetUser) {
+      if (targetUser.nip && assignment.supervisorId === targetUser.nip) return true;
+      if (targetUser.username && assignment.supervisorId === targetUser.username) return true;
+    }
+    return false;
+  };
+
   // List of all supervisors available in the system
   const availableSupervisors = teachers.filter(t => 
     t.isSupervisor || 
     t.additionalRole === 'KEPALA_SEKOLAH' || 
+    t.additionalRole === 'WAKASEK_KURIKULUM' ||
     t.id === user.id ||
-    assignments.some(a => a.supervisorId === t.id)
+    assignments.some(a => isSupervisorMatch(a, t.id))
   );
 
-  const displayedAssignments = assignments.filter(a => {
-    // 1. Role / supervisor filtering
-    if (!isSchoolLeader) {
-      // Non-leader supervisor only sees their own assigned teachers
-      if (a.supervisorId !== user.id) return false;
-    } else {
-      // School leader can see ALL or filter by a specific supervisor
-      if (selectedSupervisorFilter !== 'ALL' && a.supervisorId !== selectedSupervisorFilter) {
-        return false;
+  // Active supervisor ID:
+  // Non-leaders are ALWAYS locked to user.id (can NEVER see other supervisor's assignments).
+  // School leaders switch between specific supervisors, defaulting to user.id or the first supervisor who has assignments.
+  const activeSupervisorId = isSchoolLeader 
+    ? (selectedSupervisorFilter && selectedSupervisorFilter !== 'ALL' ? selectedSupervisorFilter : user.id)
+    : user.id;
+
+  const activeSupervisorUser = teachers.find(t => t.id === activeSupervisorId) || (activeSupervisorId === user.id ? user : null);
+
+  // If school leader opens the page and user.id has no assignments, auto-select first supervisor who has assignments
+  useEffect(() => {
+    if (assignments.length > 0 && isSchoolLeader) {
+      const myCount = assignments.filter(a => isSupervisorMatch(a, user.id)).length;
+      if (myCount === 0 && (!selectedSupervisorFilter || selectedSupervisorFilter === user.id || selectedSupervisorFilter === 'ALL')) {
+        const firstWithAssignments = availableSupervisors.find(s => 
+          assignments.some(a => isSupervisorMatch(a, s.id))
+        );
+        if (firstWithAssignments) {
+          setSelectedSupervisorFilter(firstWithAssignments.id);
+        }
       }
     }
+  }, [assignments.length, isSchoolLeader, user.id]);
 
-    // 2. Search filtering
+  // STRICT FILTERING: Only teachers assigned to activeSupervisorId can EVER be displayed.
+  const displayedAssignments = assignments.filter(a => {
+    // 1. Strict supervisor matching: MUST match the active supervisor
+    if (!isSupervisorMatch(a, activeSupervisorId)) {
+      return false;
+    }
+
+    // 2. Search filtering (strictly within this supervisor's teachers)
     if (searchGuru.trim()) {
       const q = searchGuru.toLowerCase();
       const teacher = teachers.find(t => t.id === a.teacherId);
-      const supervisor = teachers.find(t => t.id === a.supervisorId);
-      const matchTeacher = teacher?.fullName.toLowerCase().includes(q) || (teacher?.nip && teacher.nip.includes(q)) || (teacher?.subject && teacher.subject.toLowerCase().includes(q));
-      const matchSupervisor = supervisor?.fullName.toLowerCase().includes(q);
-      return matchTeacher || matchSupervisor;
+      const matchTeacher = teacher?.fullName.toLowerCase().includes(q) || 
+                           (teacher?.nip && teacher.nip.includes(q)) || 
+                           (teacher?.subject && teacher.subject.toLowerCase().includes(q));
+      return matchTeacher;
     }
 
     return true;
   }).sort((a, b) => (a.status === 'PENDING' ? -1 : 1));
+
+  const handleSupervisorFilterChange = (newSupervisorId: string) => {
+    setSelectedSupervisorFilter(newSupervisorId);
+    // If current selected assignment belongs to a different supervisor, clear it
+    if (selectedAssignment && !isSupervisorMatch(selectedAssignment, newSupervisorId)) {
+      setSelectedAssignment(null);
+    }
+  };
 
   const handleSelectAssignment = async (assignment: SupervisionAssignment) => {
     setSelectedAssignment(assignment);
@@ -558,28 +598,46 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
             </div>
 
             {/* Supervisor Filter Dropdown (School Leader only) */}
-            {isSchoolLeader && (
-              <div className="space-y-1">
-                <label className="text-[11px] font-bold text-gray-500 flex items-center gap-1">
-                  <Filter size={12} className="text-gray-400" />
-                  Filter Supervisor:
+            {isSchoolLeader ? (
+              <div className="space-y-1.5 bg-purple-50/60 p-2.5 rounded-xl border border-purple-100">
+                <label className="text-[11px] font-bold text-purple-900 flex items-center justify-between">
+                  <span className="flex items-center gap-1">
+                    <Filter size={12} className="text-purple-600" />
+                    Pilih Supervisor:
+                  </span>
+                  <span className="text-[10px] text-purple-700 font-semibold">
+                    {displayedAssignments.length} Guru Binaan
+                  </span>
                 </label>
                 <select
-                  value={selectedSupervisorFilter}
-                  onChange={(e) => setSelectedSupervisorFilter(e.target.value)}
-                  className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2 text-xs font-semibold text-gray-700 outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer"
+                  value={activeSupervisorId}
+                  onChange={(e) => handleSupervisorFilterChange(e.target.value)}
+                  className="w-full bg-white border border-purple-200 rounded-lg p-2 text-xs font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer shadow-sm"
                 >
-                  <option value="ALL">Semua Supervisor ({assignments.length})</option>
-                  <option value={user.id}>Saya ({user.fullName}) ({assignments.filter(a => a.supervisorId === user.id).length})</option>
+                  <option value={user.id}>
+                    Saya ({user.fullName}) — ({assignments.filter(a => isSupervisorMatch(a, user.id)).length} guru)
+                  </option>
                   {availableSupervisors.filter(s => s.id !== user.id).map(s => {
-                    const count = assignments.filter(a => a.supervisorId === s.id).length;
+                    const count = assignments.filter(a => isSupervisorMatch(a, s.id)).length;
                     return (
                       <option key={s.id} value={s.id}>
-                        {s.fullName} ({count})
+                        {s.fullName} — ({count} guru)
                       </option>
                     );
                   })}
                 </select>
+              </div>
+            ) : (
+              <div className="bg-purple-50/60 p-2.5 rounded-xl border border-purple-100">
+                <div className="text-[10px] uppercase font-bold text-purple-700 tracking-wider">
+                  Supervisor:
+                </div>
+                <div className="text-xs font-bold text-gray-800 truncate mt-0.5">
+                  {user.fullName}
+                </div>
+                <div className="text-[10px] text-purple-600 font-medium mt-0.5">
+                  {displayedAssignments.length} Guru Binaan Ditugaskan
+                </div>
               </div>
             )}
 
@@ -588,29 +646,34 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
               <input
                 type="text"
-                placeholder="Cari guru / mapel / supervisor..."
+                placeholder="Cari guru / mapel binaan..."
                 value={searchGuru}
                 onChange={(e) => setSearchGuru(e.target.value)}
                 className="w-full pl-8 pr-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-purple-500"
               />
             </div>
 
-            <div className="text-[11px] text-gray-400 font-medium">
-              Menampilkan {displayedAssignments.length} dari {assignments.length} penugasan
+            <div className="text-[11px] text-gray-500 font-medium flex items-center justify-between">
+              <span>{displayedAssignments.length} guru binaan</span>
+              <span className="text-purple-600 font-semibold truncate max-w-[140px]">
+                {activeSupervisorUser?.fullName ? `Spv: ${activeSupervisorUser.fullName.split(' ')[0]}` : ''}
+              </span>
             </div>
             
             {displayedAssignments.length === 0 ? (
-              <div className="text-center py-10 bg-gray-50 rounded-lg border border-dashed border-gray-200">
-                <AlertCircle className="mx-auto text-gray-300 mb-2" size={32} />
-                <p className="text-xs text-gray-400 italic">
-                  {searchGuru ? "Tidak ada penugasan sesuai pencarian." : "Belum ada penugasan supervisi yang sesuai filter."}
+              <div className="text-center py-8 bg-gray-50 rounded-xl border border-dashed border-gray-200 p-4">
+                <AlertCircle className="mx-auto text-gray-300 mb-2" size={28} />
+                <p className="text-xs font-bold text-gray-600">
+                  {searchGuru ? "Tidak ada penugasan sesuai pencarian." : "Belum ada guru yang ditugaskan untuk supervisor ini."}
+                </p>
+                <p className="text-[10px] text-gray-400 mt-1 leading-relaxed">
+                  Daftar hanya menampilkan guru yang ditugaskan kepada supervisor ini sesuai SK/Penugasan.
                 </p>
               </div>
             ) : (
               <div className="space-y-2.5 max-h-[600px] overflow-y-auto pr-1">
                 {displayedAssignments.map(a => {
                   const teacher = teachers.find(t => t.id === a.teacherId);
-                  const supervisor = teachers.find(t => t.id === a.supervisorId);
                   const isSelected = selectedAssignment?.id === a.id;
                   const isCompleted = a.status === 'COMPLETED';
                   return (
@@ -632,14 +695,19 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
                         <div className={`text-xs font-bold truncate ${isSelected ? 'text-purple-700' : 'text-gray-800'}`}>
                           {teacher?.fullName || 'Guru'}
                         </div>
+                        {teacher?.nip && (
+                          <div className="text-[9px] text-gray-400 font-mono">
+                            NIP. {teacher.nip}
+                          </div>
+                        )}
                         {teacher?.subject && (
-                          <div className="text-[10px] text-gray-500 truncate">
+                          <div className="text-[10px] text-gray-500 truncate mt-0.5">
                             Mapel: {teacher.subject}
                           </div>
                         )}
                         <div className="mt-1">
-                          <span className="inline-block text-[9px] font-semibold bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded truncate max-w-full">
-                            Spv: {supervisor?.fullName || 'Belum Ditentukan'}
+                          <span className="inline-block text-[9px] font-semibold bg-purple-50 text-purple-700 border border-purple-100 px-1.5 py-0.5 rounded truncate max-w-full">
+                            Supervisor: {activeSupervisorUser?.fullName || user.fullName}
                           </span>
                         </div>
                         <div className="text-[10px] text-gray-400 mt-1 flex flex-col gap-0.5">
@@ -1722,6 +1790,8 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
         currentUser={user}
         teachers={teachers}
         selectedAssignment={manualPrintAssignment}
+        defaultSupervisorId={activeSupervisorId}
+        assignments={assignments}
       />
     </div>
   );
