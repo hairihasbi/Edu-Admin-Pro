@@ -130,7 +130,7 @@ const MONTH_NAMES: Record<string, string> = {
 };
 
 export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ user }) => {
-  const isAuthorized = user.role === UserRole.ADMIN || (
+  const isAuthorized = user.role !== UserRole.ADMIN && (
     Boolean(user.isExtracurricularAdvisor) && 
     Array.isArray(user.extracurriculars) && 
     user.extracurriculars.length > 0
@@ -843,22 +843,33 @@ export const ExtracurricularManager: React.FC<ExtracurricularManagerProps> = ({ 
   };
 
   if (!isAuthorized) {
+    const isAdmin = user.role === UserRole.ADMIN;
     return (
       <div className="p-4 sm:p-6 max-w-3xl mx-auto my-12">
         <div className="bg-white rounded-2xl shadow-sm border border-amber-200 p-8 text-center space-y-4">
           <div className="w-16 h-16 bg-amber-100 text-amber-700 rounded-full flex items-center justify-center mx-auto shadow-inner">
             <Trophy size={32} />
           </div>
-          <h2 className="text-xl font-bold text-gray-900">Akses Pembina Ekstrakurikuler Belum Aktif</h2>
+          <h2 className="text-xl font-bold text-gray-900">
+            {isAdmin ? 'Akses Khusus Pembina Ekstrakurikuler' : 'Akses Pembina Ekstrakurikuler Belum Aktif'}
+          </h2>
           <p className="text-sm text-gray-600 max-w-md mx-auto leading-relaxed">
-            Akun Anda saat ini belum mengaktifkan tugas tambahan sebagai <strong>Pembina Ekstrakurikuler</strong> atau belum memilih cabang ekstrakurikuler yang dibina di profil Anda.
+            {isAdmin ? (
+              <>
+                Akun Administrator tidak memiliki kewenangan sebagai <strong>Pembina Ekstrakurikuler</strong>. Halaman ini dikhususkan bagi Guru Pembina yang telah ditugaskan membina cabang ekstrakurikuler.
+              </>
+            ) : (
+              <>
+                Akun Anda saat ini belum mengaktifkan tugas tambahan sebagai <strong>Pembina Ekstrakurikuler</strong> atau belum memilih cabang ekstrakurikuler yang dibina di profil Anda.
+              </>
+            )}
           </p>
           <div className="pt-2">
             <Link
-              to="/profile"
+              to={isAdmin ? "/admin-dashboard" : "/profile"}
               className="inline-flex items-center gap-2 px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold rounded-xl transition shadow-xs"
             >
-              Buka Pengaturan Profil Saya
+              {isAdmin ? "Kembali ke Dashboard Admin" : "Buka Pengaturan Profil Saya"}
             </Link>
           </div>
         </div>
