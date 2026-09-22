@@ -203,77 +203,34 @@ export const FOLLOW_UP_QUESTIONS = [
   }
 ];
 
-export type DeepLearningPredicate = 
-  | 'A (Sangat Baik / Baik Sekali)'
-  | 'B (Baik)'
-  | 'C (Cukup)'
-  | 'D (Kurang)';
-
-export interface DeepLearningPredicateOption {
-  grade: 'A' | 'B' | 'C' | 'D';
-  label: DeepLearningPredicate;
-  title: string;
-  rangeText: string;
-  colorClass: string;
-}
-
-export const DEEP_LEARNING_PREDICATE_OPTIONS: DeepLearningPredicateOption[] = [
-  {
-    grade: 'A',
-    label: 'A (Sangat Baik / Baik Sekali)',
-    title: 'Sangat Baik / Baik Sekali',
-    rangeText: 'Nilai 91 - 100',
-    colorClass: 'bg-emerald-50 border-emerald-200 text-emerald-700'
-  },
-  {
-    grade: 'B',
-    label: 'B (Baik)',
-    title: 'Baik',
-    rangeText: 'Nilai 81 - 90',
-    colorClass: 'bg-blue-50 border-blue-200 text-blue-700'
-  },
-  {
-    grade: 'C',
-    label: 'C (Cukup)',
-    title: 'Cukup',
-    rangeText: 'Nilai 70 - 80',
-    colorClass: 'bg-amber-50 border-amber-200 text-amber-700'
-  },
-  {
-    grade: 'D',
-    label: 'D (Kurang)',
-    title: 'Kurang',
-    rangeText: 'Nilai < 70',
-    colorClass: 'bg-rose-50 border-rose-200 text-rose-700'
-  }
-];
-
-export function getDeepLearningPredicate(finalScore: number): DeepLearningPredicate {
-  if (finalScore >= 91) return 'A (Sangat Baik / Baik Sekali)';
-  if (finalScore >= 81) return 'B (Baik)';
-  if (finalScore >= 70) return 'C (Cukup)';
-  return 'D (Kurang)';
-}
-
 export function calculateDeepLearningScore(scores: Record<string, number>) {
   const totalRealScore = DEEP_LEARNING_SUPERVISION_ITEMS.reduce((sum, item) => {
     const val = scores[item.id] ?? scores[item.question] ?? 0;
     return sum + (typeof val === 'number' ? val : 0);
   }, 0);
 
-  // Rumus: Nilai Akhir = (Jumlah Skor yang Dicapai / Skor Maksimum) * 100
   const maxScore = DEEP_LEARNING_SUPERVISION_ITEMS.length * 4; // 18 * 4 = 72
   const finalScore = maxScore > 0 ? (totalRealScore / maxScore) * 100 : 0;
   const scaledTo80 = maxScore > 0 ? (totalRealScore / maxScore) * 80 : 0;
-  const predicate = getDeepLearningPredicate(finalScore);
+
+  let readinessCategory: 'Sangat Kurang' | 'Kurang' | 'Baik' | 'Sangat Baik' = 'Sangat Kurang';
+  if (finalScore >= 86) {
+    readinessCategory = 'Sangat Baik';
+  } else if (finalScore >= 70) {
+    readinessCategory = 'Baik';
+  } else if (finalScore >= 55) {
+    readinessCategory = 'Kurang';
+  } else {
+    readinessCategory = 'Sangat Kurang';
+  }
 
   return {
     totalRealScore,
     maxScore,
     scaledTo80,
     finalScore,
-    readinessCategory: predicate,
-    predicate
+    readinessCategory,
+    predicate: readinessCategory
   };
 }
 
@@ -424,19 +381,28 @@ export function calculateDeepLearningImplementationScore(scores: Record<string, 
     return sum + (typeof val === 'number' ? val : 0);
   }, 0);
 
-  // Rumus: Nilai Akhir = (Jumlah Skor yang Dicapai / Skor Maksimum) * 100
   const maxScore = DEEP_LEARNING_IMPLEMENTATION_SUPERVISION_ITEMS.length * 4; // 17 * 4 = 68
   const finalScore = maxScore > 0 ? (totalRealScore / maxScore) * 100 : 0;
   const scaledTo80 = maxScore > 0 ? (totalRealScore / maxScore) * 80 : 0;
-  const predicate = getDeepLearningPredicate(finalScore);
+
+  let readinessCategory: 'Sangat Kurang' | 'Kurang' | 'Baik' | 'Sangat Baik' = 'Sangat Kurang';
+  if (finalScore >= 86) {
+    readinessCategory = 'Sangat Baik';
+  } else if (finalScore >= 70) {
+    readinessCategory = 'Baik';
+  } else if (finalScore >= 55) {
+    readinessCategory = 'Kurang';
+  } else {
+    readinessCategory = 'Sangat Kurang';
+  }
 
   return {
     totalRealScore,
     maxScore,
     scaledTo80,
     finalScore,
-    readinessCategory: predicate,
-    predicate
+    readinessCategory,
+    predicate: readinessCategory
   };
 }
 
@@ -533,10 +499,19 @@ export function calculateDeepLearningFeedbackScore(scores: Record<string, number
     return sum + (typeof val === 'number' ? val : 0);
   }, 0);
 
-  // Rumus: Nilai Akhir = (Jumlah Skor yang Dicapai / Skor Maksimum) * 100
   const maxScore = DEEP_LEARNING_FEEDBACK_PLANNING_ITEMS.length * 4; // 15 * 4 = 60
   const finalScore = maxScore > 0 ? (totalRealScore / maxScore) * 100 : 0;
-  const predicate = getDeepLearningPredicate(finalScore);
+
+  let predicate = 'Sangat Kurang';
+  if (finalScore >= 86) {
+    predicate = 'Sangat Baik (Memadai)';
+  } else if (finalScore >= 70) {
+    predicate = 'Baik (Cukup)';
+  } else if (finalScore >= 55) {
+    predicate = 'Kurang (Sedikit & Lemah)';
+  } else {
+    predicate = 'Sangat Kurang (Hampir Tidak Ada)';
+  }
 
   return {
     totalRealScore,

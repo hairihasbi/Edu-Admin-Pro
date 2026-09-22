@@ -13,10 +13,7 @@ import {
   FOLLOW_UP_QUESTIONS, 
   calculateDeepLearningScore,
   calculateDeepLearningImplementationScore,
-  calculateDeepLearningFeedbackScore,
-  DEEP_LEARNING_PREDICATE_OPTIONS,
-  DeepLearningPredicate,
-  getDeepLearningPredicate 
+  calculateDeepLearningFeedbackScore 
 } from './deepLearningSupervisionConstants';
 
 interface SupervisionAssessmentProps {
@@ -113,8 +110,7 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
     longTermStrategy: '',
     resourcesNeeded: ''
   });
-  const [readinessCategory, setReadinessCategory] = useState<string>('D (Kurang)');
-  const [manualPlanningPredicate, setManualPlanningPredicate] = useState<string | null>(null);
+  const [readinessCategory, setReadinessCategory] = useState<'Sangat Kurang' | 'Kurang' | 'Baik' | 'Sangat Baik'>('Sangat Kurang');
   const [coachingSuggestion, setCoachingSuggestion] = useState('');
 
   // Tab 2: Instrumen Supervisi Pelaksanaan Pembelajaran Mendalam (sebelumnya RPP)
@@ -126,8 +122,7 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
     longTermStrategy: '',
     resourcesNeeded: ''
   });
-  const [lessonPlanReadinessCategory, setLessonPlanReadinessCategory] = useState<string>('D (Kurang)');
-  const [manualLessonPlanPredicate, setManualLessonPlanPredicate] = useState<string | null>(null);
+  const [lessonPlanReadinessCategory, setLessonPlanReadinessCategory] = useState<'Sangat Kurang' | 'Kurang' | 'Baik' | 'Sangat Baik'>('Sangat Kurang');
   const [lessonPlanCoaching, setLessonPlanCoaching] = useState('');
 
   // Tab 3: Instrumen Umpan Balik Perencanaan Pembelajaran Mendalam
@@ -138,8 +133,6 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
   const [implTitle, setImplTitle] = useState('');
   const [implScores, setImplScores] = useState<Record<string, number>>({});
   const [implComments, setImplComments] = useState<Record<string, string>>({});
-  const [implPredicate, setImplPredicate] = useState<string>('D (Kurang)');
-  const [manualImplPredicate, setManualImplPredicate] = useState<string | null>(null);
   const [implAdvantages, setImplAdvantages] = useState('');
   const [implAreasToImprove, setImplAreasToImprove] = useState('');
   const [implRecommendations, setImplRecommendations] = useState('');
@@ -275,14 +268,11 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
           });
         }
 
-        if (existingPlanning?.readinessCategory || existingPlanning?.predicate) {
-          const loadedPred = existingPlanning.readinessCategory || existingPlanning.predicate;
-          setReadinessCategory(loadedPred);
-          setManualPlanningPredicate(loadedPred);
+        if (existingPlanning?.readinessCategory) {
+          setReadinessCategory(existingPlanning.readinessCategory as any);
         } else {
           const calc = calculateDeepLearningScore(existingPlanning?.scores || {});
-          setReadinessCategory(calc.predicate);
-          setManualPlanningPredicate(null);
+          setReadinessCategory(calc.readinessCategory);
         }
 
         // Load Tab 2: Pelaksanaan Pembelajaran Mendalam
@@ -304,14 +294,11 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
             resourcesNeeded: ''
           });
         }
-        if (existingLesson?.readinessCategory || existingLesson?.predicate) {
-          const loadedLessonPred = existingLesson.readinessCategory || existingLesson.predicate;
-          setLessonPlanReadinessCategory(loadedLessonPred);
-          setManualLessonPlanPredicate(loadedLessonPred);
+        if (existingLesson?.readinessCategory) {
+          setLessonPlanReadinessCategory(existingLesson.readinessCategory as any);
         } else {
           const calcLesson = calculateDeepLearningImplementationScore(existingLesson?.scores || {});
-          setLessonPlanReadinessCategory(calcLesson.predicate);
-          setManualLessonPlanPredicate(null);
+          setLessonPlanReadinessCategory(calcLesson.readinessCategory);
         }
         setLessonPlanCoaching(existingLesson?.coachingSuggestion || '');
 
@@ -325,15 +312,6 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
         setImplTitle(existingImpl?.title || '');
         setImplScores(existingImpl?.scores || {});
         setImplComments(existingImpl?.comments || {});
-        if (existingImpl?.predicate || (existingImpl as any)?.readinessCategory) {
-          const loadedImplPred = existingImpl.predicate || (existingImpl as any).readinessCategory;
-          setImplPredicate(loadedImplPred);
-          setManualImplPredicate(loadedImplPred);
-        } else {
-          const calcImpl = calculateDeepLearningFeedbackScore(existingImpl?.scores || {});
-          setImplPredicate(calcImpl.predicate);
-          setManualImplPredicate(null);
-        }
         setImplAdvantages(existingImpl?.advantages || '');
         setImplAreasToImprove(existingImpl?.areasToImprove || '');
         setImplRecommendations(existingImpl?.recommendations || '');
@@ -356,8 +334,7 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
           longTermStrategy: '',
           resourcesNeeded: ''
         });
-        setReadinessCategory('D (Kurang)');
-        setManualPlanningPredicate(null);
+        setReadinessCategory('Sangat Kurang');
         setCoachingSuggestion('');
 
         // Reset Tab 2: Pelaksanaan Pembelajaran Mendalam
@@ -371,8 +348,7 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
           longTermStrategy: '',
           resourcesNeeded: ''
         });
-        setLessonPlanReadinessCategory('D (Kurang)');
-        setManualLessonPlanPredicate(null);
+        setLessonPlanReadinessCategory('Sangat Kurang');
         setLessonPlanCoaching('');
 
         // Reset Tab 3: Instrumen Umpan Balik Perencanaan Pembelajaran Mendalam
@@ -385,8 +361,6 @@ const SupervisionAssessment: React.FC<SupervisionAssessmentProps> = ({ user }) =
         setImplTitle('');
         setImplScores(initialImplScores);
         setImplComments({});
-        setImplPredicate('D (Kurang)');
-        setManualImplPredicate(null);
         setImplAdvantages('');
         setImplAreasToImprove('');
         setImplRecommendations('');

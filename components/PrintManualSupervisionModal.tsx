@@ -380,11 +380,9 @@ export const PrintManualSupervisionModal: React.FC<PrintManualSupervisionModalPr
               </td>
             </tr>
             <tr style="font-weight: bold; background: #fafafa;">
-              <td colspan="4" style="text-align: right; font-size: 8.5pt;">Jumlah Skor Riil: ................ / 72 &nbsp;|&nbsp; Nilai Akhir = (Skor Riil / 72) × 100 = ................</td>
-              <td colspan="2" style="font-size: 8pt;">
-                <strong>Predikat:</strong><br/>
-                [ &nbsp; ] A (91–100) &nbsp; [ &nbsp; ] B (81–90)<br/>
-                [ &nbsp; ] C (70–80) &nbsp;&nbsp;&nbsp; [ &nbsp; ] D (&lt;70)
+              <td colspan="4" style="text-align: right;">Total Skor: ................ / 80 &nbsp;&nbsp;(Skor Riil: ................ / 72)</td>
+              <td colspan="2" style="font-size: 8.5pt;">
+                Kategori Kesiapan: [ &nbsp; ] Sangat Kurang &nbsp;&nbsp; [ &nbsp; ] Kurang &nbsp;&nbsp; [ &nbsp; ] Baik &nbsp;&nbsp; [ &nbsp; ] Sangat Baik
               </td>
             </tr>
           </tfoot>
@@ -486,11 +484,9 @@ export const PrintManualSupervisionModal: React.FC<PrintManualSupervisionModalPr
               </td>
             </tr>
             <tr style="font-weight: bold; background: #fafafa;">
-              <td colspan="4" style="text-align: right; font-size: 8.5pt;">Jumlah Skor Riil: ................ / 68 &nbsp;|&nbsp; Nilai Akhir = (Skor Riil / 68) × 100 = ................</td>
-              <td colspan="2" style="font-size: 8pt;">
-                <strong>Predikat:</strong><br/>
-                [ &nbsp; ] A (91–100) &nbsp; [ &nbsp; ] B (81–90)<br/>
-                [ &nbsp; ] C (70–80) &nbsp;&nbsp;&nbsp; [ &nbsp; ] D (&lt;70)
+              <td colspan="4" style="text-align: right;">Total Skor: ................ / 80 &nbsp;&nbsp;(Skor Riil: ................ / 68)</td>
+              <td colspan="2" style="font-size: 8.5pt;">
+                Kategori Kesiapan: [ &nbsp; ] Sangat Kurang &nbsp;&nbsp; [ &nbsp; ] Kurang &nbsp;&nbsp; [ &nbsp; ] Baik &nbsp;&nbsp; [ &nbsp; ] Sangat Baik
               </td>
             </tr>
           </tfoot>

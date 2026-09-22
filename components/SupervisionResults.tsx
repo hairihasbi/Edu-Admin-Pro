@@ -155,30 +155,30 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
     };
 
     const getPredicateLabel = (score: number) => {
-      if (score >= 91) return 'A (Sangat Baik / Baik Sekali)';
-      if (score >= 81) return 'B (Baik)';
-      if (score >= 70) return 'C (Cukup)';
-      return 'D (Kurang)';
+      if (score >= 91) return 'AMAT BAIK (A)';
+      if (score >= 81) return 'BAIK (B)';
+      if (score >= 71) return 'CUKUP (C)';
+      return 'KURANG (D)';
     };
 
     const getKetercapaian = (score: number) => {
-      if (score >= 91) return 'Sangat Baik / Baik Sekali';
-      if (score >= 81) return 'Baik';
-      if (score >= 70) return 'Cukup';
-      return 'Kurang';
+      if (score >= 91) return 'Sangat Memuaskan';
+      if (score >= 81) return 'Memenuhi Standar';
+      if (score >= 71) return 'Cukup Memenuhi Standar';
+      return 'Perlu Pembinaan Khusus';
     };
 
     // Calculate real component scores from actual supervisor inputs
     const adminScores = printResult.planningAdmin?.scores || {};
     const adminPerolehan = Object.values(adminScores).reduce((acc: number, curr: any) => acc + (typeof curr === 'number' ? curr : 0), 0);
-    const adminMaxScore = printResult.planningAdmin?.maxScore || 72;
-    const adminFinalScore = printResult.planningAdmin?.finalScore ?? (adminMaxScore > 0 ? (adminPerolehan / adminMaxScore) * 100 : 0);
+    const adminMaxScore = printResult.planningAdmin?.maxScore || (Object.keys(adminScores).length > 12 ? 72 : 24);
+    const adminFinalScore = printResult.planningAdmin?.finalScore ?? (Object.keys(adminScores).length ? (adminPerolehan / adminMaxScore) * 100 : 0);
     const adminPredicate = printResult.planningAdmin?.predicate || getPredicateLabel(adminFinalScore);
 
     const rppScores = printResult.lessonPlan?.scores || {};
     const rppPerolehan = Object.values(rppScores).reduce((acc: number, curr: any) => acc + (typeof curr === 'number' ? curr : 0), 0);
-    const rppMaxScore = printResult.lessonPlan?.maxScore || 68;
-    const rppFinalScore = printResult.lessonPlan?.finalScore ?? (rppMaxScore > 0 ? (rppPerolehan / rppMaxScore) * 100 : 0);
+    const rppMaxScore = printResult.lessonPlan?.maxScore || (Object.keys(rppScores).length > 15 ? 68 : 34);
+    const rppFinalScore = printResult.lessonPlan?.finalScore ?? (Object.keys(rppScores).length ? (rppPerolehan / rppMaxScore) * 100 : 0);
     const rppPredicate = printResult.lessonPlan?.predicate || getPredicateLabel(rppFinalScore);
 
     const implScores = printResult.implementation?.scores || {};
@@ -313,10 +313,6 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
           </tr>
         </tfoot>
       </table>
-      <div style="font-size: 7.5pt; color: #475569; margin-top: 5px; margin-bottom: 10px; line-height: 1.4; border-left: 3px solid #6366f1; padding-left: 8px;">
-        <div><strong>* Rumus Perhitungan Nilai:</strong> Nilai Akhir = (Jumlah Skor yang Dicapai / Skor Maksimum) × 100</div>
-        <div><strong>* Konversi Predikat Nilai (Umum):</strong> A (Sangat Baik / Baik Sekali): 91 - 100 &nbsp;|&nbsp; B (Baik): 81 - 90 &nbsp;|&nbsp; C (Cukup): 70 - 80 &nbsp;|&nbsp; D (Kurang): &lt; 70</div>
-      </div>
     `;
 
     // Catatan dan Rekomendasi Pembinaan Supervisor
@@ -877,9 +873,9 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
                                 </span>
                               )}
                               <span className={`px-3 py-1 rounded-full text-[10px] font-black text-white ${
-                                (result.planningAdmin.predicate || '').startsWith('A') || (result.planningAdmin.predicate || '').includes('Sangat Baik') || (result.planningAdmin.predicate || '') === 'BAIK SEKALI' ? 'bg-emerald-600' :
-                                (result.planningAdmin.predicate || '').startsWith('B') || (result.planningAdmin.predicate || '') === 'Baik' || (result.planningAdmin.predicate || '') === 'BAIK' ? 'bg-blue-600' :
-                                (result.planningAdmin.predicate || '').startsWith('C') || (result.planningAdmin.predicate || '').includes('Cukup') || (result.planningAdmin.predicate || '') === 'CUKUP' ? 'bg-amber-600' : 'bg-rose-600'
+                                result.planningAdmin.predicate === 'BAIK SEKALI' || result.planningAdmin.predicate === 'Sangat Baik' ? 'bg-green-500' :
+                                result.planningAdmin.predicate === 'BAIK' || result.planningAdmin.predicate === 'Baik' ? 'bg-blue-500' :
+                                result.planningAdmin.predicate === 'CUKUP' || result.planningAdmin.predicate === 'Kurang' ? 'bg-yellow-500' : 'bg-red-500'
                               }`}>
                                 {result.planningAdmin.predicate} ({result.planningAdmin.finalScore.toFixed(2)})
                               </span>
@@ -948,9 +944,9 @@ const SupervisionResults: React.FC<SupervisionResultsProps> = ({ user }) => {
                             <div className="bg-blue-50 p-3 border-b border-gray-100 flex justify-between items-center">
                               <h5 className="text-xs font-black text-blue-600 uppercase tracking-widest">INSTRUMEN SUPERVISI PELAKSANAAN PEMBELAJARAN MENDALAM</h5>
                               <span className={`px-3 py-1 rounded-full text-[10px] font-black text-white ${
-                                (result.lessonPlan.predicate || '').startsWith('A') || (result.lessonPlan.predicate || '').includes('Sangat Baik') || (result.lessonPlan.predicate || '') === 'BAIK SEKALI' ? 'bg-emerald-600' :
-                                (result.lessonPlan.predicate || '').startsWith('B') || (result.lessonPlan.predicate || '') === 'Baik' || (result.lessonPlan.predicate || '') === 'BAIK' ? 'bg-blue-600' :
-                                (result.lessonPlan.predicate || '').startsWith('C') || (result.lessonPlan.predicate || '').includes('Cukup') || (result.lessonPlan.predicate || '') === 'CUKUP' ? 'bg-amber-600' : 'bg-rose-600'
+                                result.lessonPlan.predicate === 'BAIK SEKALI' ? 'bg-green-500' :
+                                result.lessonPlan.predicate === 'BAIK' ? 'bg-blue-500' :
+                                result.lessonPlan.predicate === 'CUKUP' ? 'bg-yellow-500' : 'bg-red-500'
                               }`}>
                                 {result.lessonPlan.predicate} ({result.lessonPlan.finalScore.toFixed(2)})
                               </span>
