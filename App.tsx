@@ -95,6 +95,8 @@ import {
   Calculator,
   NotebookPen,
   ChevronLeft,
+  ChevronDown,
+  Search,
   DatabaseBackup,
   Heart,
   FileQuestion,
@@ -196,6 +198,42 @@ const AppContent: React.FC = () => {
 
   // UI State
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
+    try {
+      const saved = localStorage.getItem("eduadmin_sidebar_groups");
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    const hasSeenTour = localStorage.getItem("hasSeenTour");
+    if (!hasSeenTour) {
+      return {
+        admin_users: true,
+        admin_comm: true,
+        admin_config: true,
+        admin_system: true,
+        admin_account: true,
+        kepsek_supervisi: true,
+        kepsek_rfid: true,
+        kepsek_ekskul: true,
+        kepsek_system: true,
+        guru_kbm: true,
+        guru_ai: true,
+        guru_classes: true,
+        guru_presence: true,
+        guru_manajerial: true,
+        guru_utilitas: true,
+        tendik_services: true,
+        tendik_system: true,
+      };
+    }
+    return {
+      admin_users: true,
+      kepsek_supervisi: true,
+      guru_kbm: true,
+      guru_classes: true,
+      tendik_services: true,
+    };
+  });
+  const [sidebarSearch, setSidebarSearch] = useState("");
   const [syncStatus, setSyncStatus] = useState<
     "idle" | "syncing" | "error" | "success"
   >("idle");
@@ -758,10 +796,14 @@ const AppContent: React.FC = () => {
     to,
     icon: Icon,
     label,
+    badge,
+    isChild = false,
   }: {
     to: string;
     icon: any;
     label: string;
+    badge?: string;
+    isChild?: boolean;
   }) => {
     const isActive =
       location.pathname === to || location.pathname.startsWith(to + "/");
@@ -769,17 +811,383 @@ const AppContent: React.FC = () => {
       <Link
         to={to}
         onClick={() => setIsSidebarOpen(false)}
-        className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition ${
+        className={`w-full flex items-center justify-between px-3 ${
+          isChild ? "py-2 text-[13px]" : "py-2.5 text-sm"
+        } rounded-lg transition-all duration-150 group ${
           isActive
-            ? "bg-blue-50 text-blue-600 font-medium"
-            : "text-gray-600 hover:bg-gray-50"
+            ? "bg-blue-600 text-white font-medium shadow-xs shadow-blue-500/20 dark:bg-blue-600 dark:text-white"
+            : "text-gray-600 hover:bg-gray-100/80 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700/60 dark:hover:text-white"
         }`}
       >
-        <Icon size={20} />
-        <span>{label}</span>
+        <div className="flex items-center gap-2.5 min-w-0">
+          <Icon
+            size={isChild ? 16 : 18}
+            className={`shrink-0 ${
+              isActive
+                ? "text-white"
+                : "text-gray-400 group-hover:text-gray-600 dark:text-gray-400 dark:group-hover:text-gray-200"
+            }`}
+          />
+          <span className="truncate">{label}</span>
+        </div>
+        {badge && (
+          <span
+            className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider shrink-0 ml-1 ${
+              isActive
+                ? "bg-white/20 text-white"
+                : "bg-blue-100 text-blue-700 dark:bg-blue-900/60 dark:text-blue-300"
+            }`}
+          >
+            {badge}
+          </span>
+        )}
       </Link>
     );
   };
+
+  const toggleGroup = (groupId: string) => {
+    setOpenGroups((prev) => {
+      const next = { ...prev, [groupId]: !prev[groupId] };
+      try {
+        localStorage.setItem("eduadmin_sidebar_groups", JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+  };
+
+  const toggleAllGroups = (expand: boolean, groupIds: string[]) => {
+    const next: Record<string, boolean> = {};
+    groupIds.forEach((id) => {
+      next[id] = expand;
+    });
+    setOpenGroups(next);
+    try {
+      localStorage.setItem("eduadmin_sidebar_groups", JSON.stringify(next));
+    } catch (e) {}
+  };
+
+  interface SidebarNavItem {
+    to: string;
+    icon: any;
+    label: string;
+    badge?: string;
+  }
+
+  interface SidebarNavGroup {
+    id: string;
+    title: string;
+    icon: any;
+    badge?: string;
+    items: SidebarNavItem[];
+  }
+
+  const getSidebarGroups = (user: User | null): SidebarNavGroup[] => {
+    if (!user) return [];
+
+    if (user.role === UserRole.ADMIN) {
+      return [
+        {
+          id: "admin_users",
+          title: "Data & Pengguna",
+          icon: Users,
+          items: [
+            { to: "/teachers", icon: Users, label: "Manajemen Guru" },
+            { to: "/students", icon: GraduationCap, label: "Data Siswa" },
+          ],
+        },
+        {
+          id: "admin_comm",
+          title: "Komunikasi & Informasi",
+          icon: Megaphone,
+          items: [
+            { to: "/announcements", icon: Megaphone, label: "Live Announcements" },
+            { to: "/broadcast", icon: Send, label: "Broadcast WhatsApp" },
+          ],
+        },
+        {
+          id: "admin_config",
+          title: "Pengaturan & Konfigurasi",
+          icon: Settings,
+          items: [
+            { to: "/site-settings", icon: Globe, label: "Pengaturan Situs" },
+            { to: "/settings", icon: Settings, label: "Konfigurasi Sistem" },
+            { to: "/donations", icon: CreditCard, label: "Riwayat Donasi" },
+            { to: "/proposal", icon: FileText, label: "Proposal & Fitur" },
+          ],
+        },
+        {
+          id: "admin_system",
+          title: "Database & Pemeliharaan",
+          icon: DatabaseBackup,
+          items: [
+            { to: "/sync", icon: ArrowLeftRight, label: "Sinkronisasi Data" },
+            { to: "/backup", icon: DatabaseBackup, label: "Backup & Restore" },
+            { to: "/system-logs", icon: Activity, label: "System Logs" },
+          ],
+        },
+        {
+          id: "admin_account",
+          title: "Bantuan & Akun",
+          icon: LifeBuoy,
+          items: [
+            { to: "/help-center", icon: LifeBuoy, label: "Pusat Bantuan" },
+            { to: "/profile", icon: UserIcon, label: "Profil Saya" },
+          ],
+        },
+      ];
+    }
+
+    if (user.role === UserRole.GURU) {
+      if (user.additionalRole === "KEPALA_SEKOLAH") {
+        const groups: SidebarNavGroup[] = [
+          {
+            id: "kepsek_supervisi",
+            title: "Supervisi Akademik",
+            icon: ClipboardCheck,
+            items: [
+              { to: "/supervision-assessment", icon: ClipboardCheck, label: "Instrumen Supervisi" },
+              { to: "/supervision-results", icon: ClipboardCheck, label: "Hasil Supervisi" },
+            ],
+          },
+          {
+            id: "kepsek_rfid",
+            title: "Presensi & Terminal RFID",
+            icon: IdCard,
+            items: [
+              { to: "/monitoring-kurikulum", icon: Activity, label: "Monitoring RFID & KBM" },
+              { to: "/attendance-monitoring", icon: Clock, label: "Monitoring Absensi RFID" },
+              { to: "/absensi-rfid", icon: IdCard, label: "Terminal RFID" },
+              { to: "/rfid-officers", icon: UserCheck, label: "Petugas RFID" },
+            ],
+          },
+        ];
+
+        if (
+          user.isExtracurricularAdvisor &&
+          user.extracurriculars &&
+          user.extracurriculars.length > 0
+        ) {
+          groups.push({
+            id: "kepsek_ekskul",
+            title: "Ekstrakurikuler",
+            icon: Trophy,
+            items: [{ to: "/extracurricular", icon: Trophy, label: "Pembina Ekskul" }],
+          });
+        }
+
+        groups.push({
+          id: "kepsek_system",
+          title: "Sistem, Bantuan & Akun",
+          icon: Settings,
+          items: [
+            { to: "/sync", icon: ArrowLeftRight, label: "Sinkronisasi Data" },
+            { to: "/backup", icon: DatabaseBackup, label: "Backup & Restore" },
+            { to: "/help-center", icon: LifeBuoy, label: "Pusat Bantuan" },
+            { to: "/profile", icon: UserIcon, label: "Profil & Akun" },
+            { to: "/donation", icon: Heart, label: "Dukungan Aplikasi" },
+          ],
+        });
+
+        return groups;
+      }
+
+      // Regular Guru / Wakasek / Wali Kelas / BK
+      const groups: SidebarNavGroup[] = [
+        {
+          id: "guru_kbm",
+          title: "KBM & Penilaian",
+          icon: BookOpen,
+          items: [
+            { to: "/attendance", icon: CalendarCheck, label: "Daftar Hadir" },
+            { to: "/journal", icon: NotebookPen, label: "Jurnal Mengajar" },
+            { to: "/scope-material", icon: List, label: "Lingkup Materi" },
+            { to: "/summative", icon: Calculator, label: "Asesmen Sumatif" },
+            { to: "/cbt", icon: FileQuestion, label: "CBT (Ujian Online)" },
+            { to: "/cocurricular-journal", icon: Layers, label: "Jurnal Kokurikuler" },
+          ],
+        },
+        {
+          id: "guru_ai",
+          title: "Asisten AI Guru",
+          icon: BrainCircuit,
+          badge: "AI",
+          items: [
+            { to: "/rpp-generator", icon: BrainCircuit, label: "AI RPP Generator" },
+            { to: "/gen-quiz", icon: FileQuestion, label: "AI Generator Soal" },
+          ],
+        },
+        {
+          id: "guru_classes",
+          title: "Kelas & Bimbingan",
+          icon: Users,
+          items: [
+            { to: "/classes", icon: BookOpen, label: "Manajemen Kelas" },
+            ...(user.homeroomClassId
+              ? [
+                  { to: "/homeroom", icon: Users, label: "Wali Kelas" },
+                  { to: "/learning-style", icon: Activity, label: "Gaya Belajar" },
+                ]
+              : []),
+            { to: "/guru-wali-mentoring", icon: UserCheck, label: "Bimbingan Guru Wali" },
+            ...(user.subject === "Bimbingan Konseling"
+              ? [{ to: "/guidance", icon: ShieldAlert, label: "Bimbingan Konseling" }]
+              : []),
+          ],
+        },
+        {
+          id: "guru_presence",
+          title: "Presensi & Piket",
+          icon: CalendarCheck,
+          items: [
+            { to: "/picket", icon: CalendarCheck, label: "Piket Harian" },
+            { to: "/absensi-rfid", icon: IdCard, label: "Terminal RFID" },
+            ...(user.additionalRole === "WAKASEK_KURIKULUM" ||
+            user.additionalRole === "WALI_KELAS" ||
+            user.homeroomClassId ||
+            user.isRfidOfficer ||
+            user.subject === "Bimbingan Konseling"
+              ? [
+                  {
+                    to: "/attendance-monitoring",
+                    icon: Clock,
+                    label: "Monitoring Absensi RFID",
+                  },
+                ]
+              : []),
+            ...(user.isRfidOfficer
+              ? [
+                  {
+                    to: "/rfid-security",
+                    icon: Shield,
+                    label: "Manajemen & Keamanan RFID",
+                  },
+                ]
+              : []),
+          ],
+        },
+      ];
+
+      // Manajerial & Kurikulum
+      const manajerialItems: SidebarNavItem[] = [];
+      if (user.additionalRole === "WAKASEK_KURIKULUM") {
+        manajerialItems.push(
+          { to: "/monitoring-kurikulum", icon: Activity, label: "Monitoring RFID & KBM" },
+          { to: "/academic-management", icon: GraduationCap, label: "Kenaikan & Kelulusan" },
+          { to: "/manage-schedules", icon: Calendar, label: "Manajemen Jadwal" },
+          { to: "/guru-wali-manager", icon: Users, label: "Manajemen Guru Wali" }
+        );
+      }
+      if (user.isSupervisor || user.additionalRole === "WAKASEK_KURIKULUM") {
+        manajerialItems.push({
+          to: "/supervision-assessment",
+          icon: ClipboardCheck,
+          label: "Instrumen Supervisi",
+        });
+      }
+      manajerialItems.push({
+        to: "/supervision-results",
+        icon: ClipboardCheck,
+        label: "Hasil Supervisi",
+      });
+      if (
+        user.isExtracurricularAdvisor &&
+        user.extracurriculars &&
+        user.extracurriculars.length > 0
+      ) {
+        manajerialItems.push({
+          to: "/extracurricular",
+          icon: Trophy,
+          label: "Pembina Ekskul",
+        });
+      }
+
+      if (manajerialItems.length > 0) {
+        groups.push({
+          id: "guru_manajerial",
+          title: "Manajerial & Kurikulum",
+          icon: ClipboardCheck,
+          items: manajerialItems,
+        });
+      }
+
+      groups.push({
+        id: "guru_utilitas",
+        title: "Utilitas & Akun",
+        icon: Settings,
+        items: [
+          { to: "/broadcast", icon: Send, label: "Broadcast WhatsApp" },
+          { to: "/sync", icon: ArrowLeftRight, label: "Sinkronisasi Data" },
+          { to: "/backup", icon: DatabaseBackup, label: "Backup & Restore" },
+          { to: "/help-center", icon: LifeBuoy, label: "Pusat Bantuan" },
+          { to: "/profile", icon: UserIcon, label: "Profil & Akun" },
+          { to: "/donation", icon: Heart, label: "Dukungan Aplikasi" },
+        ],
+      });
+
+      return groups;
+    }
+
+    if (user.role === UserRole.TENDIK) {
+      return [
+        {
+          id: "tendik_services",
+          title: "Layanan & Piket",
+          icon: CalendarCheck,
+          items: [
+            { to: "/picket", icon: CalendarCheck, label: "Piket Harian" },
+            { to: "/absensi-rfid", icon: IdCard, label: "Terminal RFID" },
+          ],
+        },
+        {
+          id: "tendik_system",
+          title: "Utilitas & Akun",
+          icon: Settings,
+          items: [
+            { to: "/sync", icon: ArrowLeftRight, label: "Sinkronisasi Data" },
+            { to: "/backup", icon: DatabaseBackup, label: "Backup & Restore" },
+            { to: "/help-center", icon: LifeBuoy, label: "Pusat Bantuan" },
+            { to: "/profile", icon: UserIcon, label: "Profil & Akun" },
+            { to: "/donation", icon: Heart, label: "Dukungan Aplikasi" },
+          ],
+        },
+      ];
+    }
+
+    if (user.role === UserRole.SISWA) {
+      return [
+        {
+          id: "siswa_account",
+          title: "Akun Siswa",
+          icon: UserIcon,
+          items: [{ to: "/profile", icon: UserIcon, label: "Profil Saya" }],
+        },
+      ];
+    }
+
+    return [];
+  };
+
+  // Automatically expand group containing active route whenever route changes
+  useEffect(() => {
+    if (!currentUser) return;
+    const path = location.pathname;
+    const groups = getSidebarGroups(currentUser);
+    const activeGroup = groups.find((g) =>
+      g.items.some(
+        (item) => path === item.to || path.startsWith(item.to + "/")
+      )
+    );
+    if (activeGroup) {
+      setOpenGroups((prev) => {
+        if (prev[activeGroup.id]) return prev;
+        const next = { ...prev, [activeGroup.id]: true };
+        try {
+          localStorage.setItem("eduadmin_sidebar_groups", JSON.stringify(next));
+        } catch (e) {}
+        return next;
+      });
+    }
+  }, [location.pathname, currentUser]);
 
   const getPageTitle = () => {
     const path = location.pathname;
@@ -1279,6 +1687,22 @@ const AppContent: React.FC = () => {
     );
   }
 
+  const sidebarGroups = getSidebarGroups(currentUser);
+  const allGroupIds = sidebarGroups.map((g) => g.id);
+  const areAllOpen =
+    sidebarGroups.length > 0 && sidebarGroups.every((g) => openGroups[g.id]);
+
+  const displayedGroups = sidebarSearch.trim()
+    ? sidebarGroups
+        .map((g) => ({
+          ...g,
+          items: g.items.filter((item) =>
+            item.label.toLowerCase().includes(sidebarSearch.toLowerCase())
+          ),
+        }))
+        .filter((g) => g.items.length > 0)
+    : sidebarGroups;
+
   return (
     <div className="min-h-screen bg-gray-50 flex dark:bg-gray-900 dark:text-gray-100">
       <OnboardingTour user={currentUser} />
@@ -1301,368 +1725,135 @@ const AppContent: React.FC = () => {
             )}
           </div>
 
-          <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
+          <nav className="flex-1 px-3 py-4 space-y-2 overflow-y-auto">
+            {/* Top-Level Quick Link */}
             <NavLink to="/dashboard" icon={LayoutDashboard} label="Dashboard" />
 
-            {currentUser.role === UserRole.ADMIN && (
-              <>
-                <NavLink to="/teachers" icon={Users} label="Manajemen Guru" />
-                <NavLink
-                  to="/students"
-                  icon={GraduationCap}
-                  label="Data Siswa"
+            {/* Quick Search for Menus */}
+            {sidebarGroups.length > 1 && (
+              <div className="relative pt-1 pb-1">
+                <Search
+                  size={13}
+                  className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 pointer-events-none"
                 />
-                <NavLink
-                  to="/announcements"
-                  icon={Megaphone}
-                  label="Live Announcements"
+                <input
+                  type="text"
+                  value={sidebarSearch}
+                  onChange={(e) => setSidebarSearch(e.target.value)}
+                  placeholder="Cari menu..."
+                  className="w-full pl-8 pr-7 py-1.5 bg-gray-100 dark:bg-gray-700/60 text-gray-700 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 text-xs rounded-lg border border-transparent focus:border-blue-400 focus:bg-white dark:focus:bg-gray-700 outline-none transition"
                 />
-                <NavLink
-                  to="/broadcast"
-                  icon={Send}
-                  label="Broadcast WhatsApp"
-                />
-                <NavLink
-                  to="/backup"
-                  icon={DatabaseBackup}
-                  label="Backup & Restore"
-                />
-                <NavLink
-                  to="/donations"
-                  icon={CreditCard}
-                  label="Riwayat Donasi"
-                />{" "}
-                {/* NEW LINK */}
-                <NavLink
-                  to="/sync"
-                  icon={ArrowLeftRight}
-                  label="Sinkronisasi Data"
-                />{" "}
-                {/* NEW LINK */}
-                <NavLink
-                  to="/proposal"
-                  icon={FileText}
-                  label="Proposal & Fitur"
-                />
-                <NavLink
-                  to="/site-settings"
-                  icon={Globe}
-                  label="Pengaturan Situs"
-                />
-                <NavLink
-                  to="/settings"
-                  icon={Settings}
-                  label="Konfigurasi Sistem"
-                />
-                <NavLink
-                  to="/system-logs"
-                  icon={Activity}
-                  label="System Logs"
-                />
-                <NavLink
-                  to="/help-center"
-                  icon={LifeBuoy}
-                  label="Pusat Bantuan"
-                />
-                <NavLink to="/profile" icon={UserIcon} label="Profil Saya" />
-              </>
-            )}
-
-            {currentUser.role === UserRole.GURU && (
-              <>
-                {/* Special Menu for Kepala Sekolah */}
-                {currentUser.additionalRole === "KEPALA_SEKOLAH" ? (
-                  <>
-                    <NavLink
-                      to="/absensi-rfid"
-                      icon={IdCard}
-                      label="Terminal RFID"
-                    />
-                    <NavLink
-                      to="/monitoring-kurikulum"
-                      icon={Activity}
-                      label="Monitoring RFID & KBM"
-                    />
-                    <NavLink
-                      to="/attendance-monitoring"
-                      icon={Clock}
-                      label="Monitoring Absensi RFID"
-                    />
-                    <NavLink
-                      to="/rfid-officers"
-                      icon={UserCheck}
-                      label="Petugas RFID"
-                    />
-                    <NavLink
-                      to="/supervision-assessment"
-                      icon={ClipboardCheck}
-                      label="Instrumen Supervisi"
-                    />
-                    <NavLink
-                      to="/supervision-results"
-                      icon={ClipboardCheck}
-                      label="Hasil Supervisi"
-                    />
-                    {Boolean(
-                      currentUser.isExtracurricularAdvisor &&
-                        currentUser.extracurriculars &&
-                        currentUser.extracurriculars.length > 0
-                    ) && (
-                      <NavLink
-                        to="/extracurricular"
-                        icon={Trophy}
-                        label="Pembina Ekskul"
-                      />
-                    )}
-                    <NavLink
-                      to="/sync"
-                      icon={ArrowLeftRight}
-                      label="Sinkronisasi Data"
-                    />
-                    <NavLink
-                      to="/backup"
-                      icon={DatabaseBackup}
-                      label="Backup & Restore"
-                    />
-                    <NavLink
-                      to="/help-center"
-                      icon={LifeBuoy}
-                      label="Pusat Bantuan"
-                    />
-                    <NavLink
-                      to="/profile"
-                      icon={UserIcon}
-                      label="Profil & Akun"
-                    />
-                    <NavLink
-                      to="/donation"
-                      icon={Heart}
-                      label="Dukungan Aplikasi"
-                    />
-                  </>
-                ) : (
-                  <>
-                    {currentUser.additionalRole === "WAKASEK_KURIKULUM" && (
-                      <NavLink
-                        to="/monitoring-kurikulum"
-                        icon={Activity}
-                        label="Monitoring RFID & KBM"
-                      />
-                    )}
-                    {currentUser.additionalRole === "WAKASEK_KURIKULUM" && (
-                      <NavLink
-                        to="/academic-management"
-                        icon={GraduationCap}
-                        label="Kenaikan & Kelulusan"
-                      />
-                    )}
-                    {currentUser.additionalRole === "WAKASEK_KURIKULUM" && (
-                      <NavLink
-                        to="/manage-schedules"
-                        icon={Calendar}
-                        label="Manajemen Jadwal"
-                      />
-                    )}
-                    <NavLink
-                      to="/classes"
-                      icon={BookOpen}
-                      label="Manajemen Kelas"
-                    />
-                    {currentUser.homeroomClassId && (
-                      <>
-                        <NavLink
-                          to="/homeroom"
-                          icon={Users}
-                          label="Wali Kelas"
-                        />
-                        <NavLink
-                          to="/learning-style"
-                          icon={Activity}
-                          label="Gaya Belajar"
-                        />
-                      </>
-                    )}
-                    <NavLink
-                      to="/picket"
-                      icon={CalendarCheck}
-                      label="Piket Harian"
-                    />
-                    <NavLink
-                      to="/absensi-rfid"
-                      icon={IdCard}
-                      label="Terminal RFID"
-                    />
-                    {currentUser.isRfidOfficer && (
-                      <NavLink
-                        to="/rfid-security"
-                        icon={Shield}
-                        label="Manajemen & Keamanan RFID"
-                      />
-                    )}
-                    {(currentUser.additionalRole === "WAKASEK_KURIKULUM" ||
-                      currentUser.additionalRole === "WALI_KELAS" ||
-                      currentUser.homeroomClassId ||
-                      currentUser.isRfidOfficer ||
-                      currentUser.subject === "Bimbingan Konseling") && (
-                      <NavLink
-                        to="/attendance-monitoring"
-                        icon={Clock}
-                        label="Monitoring Absensi RFID"
-                      />
-                    )}
-                    <NavLink
-                      to="/supervision-results"
-                      icon={ClipboardCheck}
-                      label="Hasil Supervisi"
-                    />
-                    {currentUser.additionalRole === "WAKASEK_KURIKULUM" && (
-                      <NavLink
-                        to="/guru-wali-manager"
-                        icon={Users}
-                        label="Manajemen Guru Wali"
-                      />
-                    )}
-                    <NavLink
-                      to="/guru-wali-mentoring"
-                      icon={UserCheck}
-                      label="Bimbingan Guru Wali"
-                    />
-                    {(currentUser.isSupervisor ||
-                      currentUser.additionalRole === "WAKASEK_KURIKULUM") && (
-                      <NavLink
-                        to="/supervision-assessment"
-                        icon={ClipboardCheck}
-                        label="Instrumen Supervisi"
-                      />
-                    )}
-                    {currentUser.subject === "Bimbingan Konseling" && (
-                      <NavLink
-                        to="/guidance"
-                        icon={ShieldAlert}
-                        label="Bimbingan Konseling"
-                      />
-                    )}
-                    <NavLink
-                      to="/attendance"
-                      icon={CalendarCheck}
-                      label="Daftar Hadir"
-                    />
-                    <NavLink
-                      to="/cbt"
-                      icon={FileQuestion}
-                      label="CBT (Ujian Online)"
-                    />
-                    <NavLink
-                      to="/scope-material"
-                      icon={List}
-                      label="Lingkup Materi"
-                    />
-                    <NavLink
-                      to="/journal"
-                      icon={NotebookPen}
-                      label="Jurnal Mengajar"
-                    />
-                    <NavLink
-                      to="/cocurricular-journal"
-                      icon={Layers}
-                      label="Jurnal Kokurikuler"
-                    />
-                    {Boolean(
-                      currentUser.isExtracurricularAdvisor &&
-                        currentUser.extracurriculars &&
-                        currentUser.extracurriculars.length > 0
-                    ) && (
-                      <NavLink
-                        to="/extracurricular"
-                        icon={Trophy}
-                        label="Pembina Ekskul"
-                      />
-                    )}
-                    <NavLink
-                      to="/summative"
-                      icon={Calculator}
-                      label="Asesmen Sumatif"
-                    />
-                    <NavLink
-                      to="/rpp-generator"
-                      icon={BrainCircuit}
-                      label="AI RPP Generator"
-                    />
-                    <NavLink
-                      to="/gen-quiz"
-                      icon={FileQuestion}
-                      label="AI Generator Soal"
-                    />
-                    <NavLink
-                      to="/broadcast"
-                      icon={Send}
-                      label="Broadcast WhatsApp"
-                    />
-                    <NavLink
-                      to="/sync"
-                      icon={ArrowLeftRight}
-                      label="Sinkronisasi Data"
-                    />
-                    <NavLink
-                      to="/backup"
-                      icon={DatabaseBackup}
-                      label="Backup & Restore"
-                    />
-                    <NavLink
-                      to="/help-center"
-                      icon={LifeBuoy}
-                      label="Pusat Bantuan"
-                    />
-                    <NavLink
-                      to="/profile"
-                      icon={UserIcon}
-                      label="Profil & Akun"
-                    />
-                    <NavLink
-                      to="/donation"
-                      icon={Heart}
-                      label="Dukungan Aplikasi"
-                    />
-                  </>
+                {sidebarSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setSidebarSearch("")}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xs p-0.5"
+                    title="Hapus pencarian"
+                  >
+                    <X size={12} />
+                  </button>
                 )}
-              </>
+              </div>
             )}
 
-            {currentUser.role === UserRole.TENDIK && (
-              <>
-                <NavLink
-                  to="/picket"
-                  icon={CalendarCheck}
-                  label="Piket Harian"
-                />
-                <NavLink
-                  to="/absensi-rfid"
-                  icon={IdCard}
-                  label="Terminal RFID"
-                />
-                <NavLink
-                  to="/sync"
-                  icon={ArrowLeftRight}
-                  label="Sinkronisasi Data"
-                />
-                <NavLink
-                  to="/backup"
-                  icon={DatabaseBackup}
-                  label="Backup & Restore"
-                />
-                <NavLink
-                  to="/help-center"
-                  icon={LifeBuoy}
-                  label="Pusat Bantuan"
-                />
-                <NavLink to="/profile" icon={UserIcon} label="Profil & Akun" />
-                <NavLink
-                  to="/donation"
-                  icon={Heart}
-                  label="Dukungan Aplikasi"
-                />
-              </>
+            {/* Header with Expand / Collapse All Toggle */}
+            {sidebarGroups.length > 0 && !sidebarSearch && (
+              <div className="flex items-center justify-between px-2 pt-1 text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                <span>Kelompok Menu</span>
+                <button
+                  type="button"
+                  onClick={() => toggleAllGroups(!areAllOpen, allGroupIds)}
+                  className="hover:text-blue-600 dark:hover:text-blue-400 font-semibold lowercase tracking-normal text-[11px] transition-colors"
+                >
+                  {areAllOpen ? "tutup semua" : "buka semua"}
+                </button>
+              </div>
             )}
+
+            {/* Grouped Accordion Navigation */}
+            <div className="space-y-1.5 pt-1">
+              {displayedGroups.length === 0 ? (
+                <div className="text-center py-6 px-3 text-xs text-gray-400 dark:text-gray-500">
+                  Tidak ada menu "{sidebarSearch}"
+                </div>
+              ) : (
+                displayedGroups.map((group) => {
+                  const isOpen = sidebarSearch
+                    ? true
+                    : Boolean(openGroups[group.id]);
+                  const isGroupActive = group.items.some(
+                    (item) =>
+                      location.pathname === item.to ||
+                      location.pathname.startsWith(item.to + "/")
+                  );
+
+                  return (
+                    <div key={group.id} className="space-y-1">
+                      <button
+                        type="button"
+                        onClick={() => toggleGroup(group.id)}
+                        className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-semibold uppercase tracking-wider transition-all duration-150 select-none ${
+                          isGroupActive
+                            ? "bg-blue-50/80 text-blue-700 border border-blue-200/70 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900/60 shadow-xs"
+                            : "text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-700/50 dark:hover:text-gray-200"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div
+                            className={`p-1 rounded-md ${
+                              isGroupActive
+                                ? "bg-blue-100 text-blue-700 dark:bg-blue-900/80 dark:text-blue-300"
+                                : "bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
+                            }`}
+                          >
+                            <group.icon size={14} />
+                          </div>
+                          <span className="truncate">{group.title}</span>
+                          {group.badge && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300">
+                              {group.badge}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0 ml-1">
+                          <span
+                            className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                              isGroupActive
+                                ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+                                : "bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
+                            }`}
+                          >
+                            {group.items.length}
+                          </span>
+                          <ChevronDown
+                            size={14}
+                            className={`transition-transform duration-200 text-gray-400 ${
+                              isOpen ? "rotate-180 text-blue-600 dark:text-blue-400" : ""
+                            }`}
+                          />
+                        </div>
+                      </button>
+
+                      {isOpen && (
+                        <div className="pl-2 ml-3.5 border-l-2 border-blue-100 dark:border-gray-700 space-y-1 my-1">
+                          {group.items.map((item) => (
+                            <NavLink
+                              key={item.to}
+                              to={item.to}
+                              icon={item.icon}
+                              label={item.label}
+                              badge={item.badge}
+                              isChild
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </nav>
 
           <div className="p-4 border-t border-gray-100 space-y-2">
