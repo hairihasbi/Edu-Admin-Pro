@@ -251,6 +251,10 @@ const AppContent: React.FC = () => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isNotifPanelOpen, setIsNotifPanelOpen] = useState(false);
 
+  // User Dropdown Menu State
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+
   // PWA Install Prompt State
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
@@ -264,12 +268,37 @@ const AppContent: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Close dropdowns on route changes
+  useEffect(() => {
+    setIsUserMenuOpen(false);
+    setIsNotifPanelOpen(false);
+  }, [location.pathname]);
+
+  // Handle click outside user dropdown menu
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        userMenuRef.current &&
+        !userMenuRef.current.contains(event.target as Node)
+      ) {
+        setIsUserMenuOpen(false);
+      }
+    };
+    if (isUserMenuOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isUserMenuOpen]);
+
   // --- LOGOUT HANDLER ---
   const handleLogout = useCallback(() => {
     localStorage.removeItem("eduadmin_user");
     setCurrentUser(null);
     setIsSidebarOpen(false);
     setIsNotifPanelOpen(false);
+    setIsUserMenuOpen(false);
     if (sessionTimerRef.current) {
       clearTimeout(sessionTimerRef.current);
       sessionTimerRef.current = null;
@@ -1956,22 +1985,152 @@ const AppContent: React.FC = () => {
               />
             </div>
 
-            <div className="flex items-center gap-3 pl-4 border-l border-gray-200">
-              <div className="text-right hidden sm:block">
-                <p className="text-sm font-semibold text-gray-800">
-                  {currentUser.fullName}
-                </p>
-                <p className="text-xs text-gray-500">
-                  {currentUser.role === UserRole.ADMIN
-                    ? "Administrator"
-                    : "Guru"}
-                </p>
-              </div>
-              <img
-                src={currentUser.avatar}
-                alt="Avatar"
-                className="w-9 h-9 rounded-full border border-gray-200"
-              />
+            {/* User Profile Dropdown Trigger */}
+            <div
+              className="relative pl-3 border-l border-gray-200 dark:border-gray-700"
+              ref={userMenuRef}
+            >
+              <button
+                type="button"
+                onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                className="flex items-center gap-2.5 p-1 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700/60 transition focus:outline-none select-none text-left group"
+                aria-expanded={isUserMenuOpen}
+                aria-label="Menu Pengguna"
+                title="Buka menu akun"
+              >
+                <div className="text-right hidden sm:block">
+                  <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors max-w-[160px] truncate">
+                    {currentUser.fullName}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {currentUser.role === UserRole.ADMIN
+                      ? "Administrator"
+                      : currentUser.role === UserRole.TENDIK
+                      ? "Tendik"
+                      : currentUser.role === UserRole.SISWA
+                      ? "Siswa"
+                      : currentUser.additionalRole === "KEPALA_SEKOLAH"
+                      ? "Kepala Sekolah"
+                      : currentUser.additionalRole === "WAKASEK_KURIKULUM"
+                      ? "Wakasek Kurikulum"
+                      : currentUser.additionalRole === "WALI_KELAS" || currentUser.homeroomClassId
+                      ? "Wali Kelas"
+                      : "Guru"}
+                  </p>
+                </div>
+                <div className="relative shrink-0">
+                  {currentUser.avatar ? (
+                    <img
+                      src={currentUser.avatar}
+                      alt="Avatar"
+                      className="w-9 h-9 rounded-full border border-gray-200 dark:border-gray-700 object-cover"
+                    />
+                  ) : (
+                    <div className="w-9 h-9 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 font-bold flex items-center justify-center text-xs border border-blue-200 dark:border-blue-800">
+                      {currentUser.fullName
+                        ? currentUser.fullName
+                            .split(" ")
+                            .map((n) => n[0])
+                            .join("")
+                            .slice(0, 2)
+                            .toUpperCase()
+                        : "U"}
+                    </div>
+                  )}
+                  <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 border-2 border-white dark:border-gray-800 rounded-full"></span>
+                </div>
+                <ChevronDown
+                  size={14}
+                  className={`text-gray-400 transition-transform duration-200 ${
+                    isUserMenuOpen ? "rotate-180 text-blue-600 dark:text-blue-400" : ""
+                  }`}
+                />
+              </button>
+
+              {/* User Dropdown Menu Card */}
+              {isUserMenuOpen && (
+                <div className="absolute right-0 top-full mt-2 w-64 bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 py-2 z-50 animate-fadeIn">
+                  {/* User Profile Header in Dropdown */}
+                  <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700 flex items-center gap-3">
+                    {currentUser.avatar ? (
+                      <img
+                        src={currentUser.avatar}
+                        alt="Avatar"
+                        className="w-10 h-10 rounded-full border border-gray-200 dark:border-gray-700 object-cover shrink-0"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 font-bold flex items-center justify-center text-sm shrink-0">
+                        {currentUser.fullName
+                          ? currentUser.fullName
+                              .split(" ")
+                              .map((n) => n[0])
+                              .join("")
+                              .slice(0, 2)
+                              .toUpperCase()
+                          : "U"}
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-bold text-gray-800 dark:text-gray-100 truncate">
+                        {currentUser.fullName}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                        {currentUser.email || currentUser.username}
+                      </p>
+                      <span className="inline-block mt-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-900">
+                        {currentUser.role === UserRole.ADMIN
+                          ? "Administrator"
+                          : currentUser.role === UserRole.TENDIK
+                          ? "Tendik"
+                          : currentUser.role === UserRole.SISWA
+                          ? "Siswa"
+                          : currentUser.additionalRole === "KEPALA_SEKOLAH"
+                          ? "Kepala Sekolah"
+                          : currentUser.additionalRole === "WAKASEK_KURIKULUM"
+                          ? "Wakasek Kurikulum"
+                          : currentUser.additionalRole === "WALI_KELAS" || currentUser.homeroomClassId
+                          ? "Wali Kelas"
+                          : "Guru"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Navigation Links inside Dropdown */}
+                  <div className="px-2 py-1.5 space-y-1">
+                    <Link
+                      to="/profile"
+                      onClick={() => setIsUserMenuOpen(false)}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/60 transition"
+                    >
+                      <UserIcon size={16} className="text-gray-400 dark:text-gray-400" />
+                      <span>Profil & Pengaturan Akun</span>
+                    </Link>
+                    <Link
+                      to="/help-center"
+                      onClick={() => setIsUserMenuOpen(false)}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/60 transition"
+                    >
+                      <LifeBuoy size={16} className="text-gray-400 dark:text-gray-400" />
+                      <span>Pusat Bantuan</span>
+                    </Link>
+                  </div>
+
+                  {/* Logout Action */}
+                  <div className="px-2 pt-1 border-t border-gray-100 dark:border-gray-700">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsUserMenuOpen(false);
+                        handleLogout();
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 transition text-left cursor-pointer"
+                    >
+                      <LogOut size={16} />
+                      <span>Keluar dari Akun</span>
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </header>
@@ -1984,6 +2143,7 @@ const AppContent: React.FC = () => {
           className="flex-1 overflow-y-auto p-4 md:p-6 pb-24 md:pb-6"
           onClick={() => {
             setIsNotifPanelOpen(false);
+            setIsUserMenuOpen(false);
             if (window.innerWidth < 1024) setIsSidebarOpen(false);
           }}
         >
